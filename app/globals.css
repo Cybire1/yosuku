@@ -1,26 +1,166 @@
 @import "tailwindcss";
 
+@theme {
+  --font-sans: var(--font-outfit);
+  --font-mono: var(--font-space);
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --background: #000000;
+  --foreground: #ffffff;
 }
 
 body {
-  background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--background);
+  font-family: var(--font-sans), sans-serif;
+  overflow-x: hidden;
+}
+
+/* Vibrant Accents */
+.text-new-blue {
+  color: var(--color-new-blue);
+}
+
+.text-new-mint {
+  color: var(--color-new-mint);
+}
+
+.text-new-pink {
+  color: var(--color-new-pink);
+}
+
+.text-new-orange {
+  color: var(--color-new-orange);
+}
+
+.bg-new-blue {
+  background-color: var(--color-new-blue);
+}
+
+.bg-new-mint {
+  background-color: var(--color-new-mint);
+}
+
+.bg-new-pink {
+  background-color: var(--color-new-pink);
+}
+
+.bg-new-orange {
+  background-color: var(--color-new-orange);
+}
+
+.border-new-blue {
+  border-color: var(--color-new-blue);
+}
+
+.border-new-mint {
+  border-color: var(--color-new-mint);
+}
+
+.border-new-pink {
+  border-color: var(--color-new-pink);
+}
+
+.border-new-orange {
+  border-color: var(--color-new-orange);
+}
+
+/* Monochrome Utilities */
+.mono-panel {
+  background: #0a0a0a;
+  border: 1px solid #333;
+}
+
+.mono-card {
+  background: #000;
+  border: 1px solid #222;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  --color-aleo-blue: #3B82F6;
+  --color-aleo-mint: #4ADE80;
+  --color-aleo-pink: #F472B6;
+  --color-aleo-orange: #FB923C;
+  /* Modern Off-Colors (Minimalist Trending) */
+  --color-off-blue: #60A5FA;
+  /* Soft Blue */
+  --color-off-red: #F43F5E;
+  --color-off-green: #34D399;
+  /* Soft Emerald */
+
+  --color-new-blue: #60A5FA;
+  --color-new-mint: #34D399;
+  --color-new-pink: #F43F5E;
+  --color-new-orange: #FB923C;
+}
+
+.mono-card:hover {
+  background: #0a0a0a;
+  border-color: #fff;
+}
+
+/* Invert Effects */
+.btn-invert {
+  background: #fff;
+  color: #000;
+  border: 1px solid #fff;
+  transition: all 0.2s ease;
+}
+
+.btn-invert:hover {
+  background: #000;
+  color: #fff;
+}
+
+.btn-outline {
+  background: transparent;
+  color: #fff;
+  border: 1px solid #333;
+  transition: all 0.2s ease;
+}
+
+.btn-outline:hover {
+  border-color: #fff;
+}
+
+html.lenis {
+  height: auto;
+}
+
+.lenis.lenis-smooth {
+  scroll-behavior: auto;
+}
+
+.lenis.lenis-smooth [data-lenis-prevent] {
+  overscroll-behavior: contain;
+}
+
+.lenis.lenis-stopped {
+  overflow: hidden;
+}
+
+.lenis.lenis-scrolling iframe {
+  pointer-events: none;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #000;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #333;
+}
+
+/* Hide scrollbar utility */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
 }
