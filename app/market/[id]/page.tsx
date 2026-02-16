@@ -14,11 +14,11 @@ export default function MarketDetailPage() {
   const router = useRouter();
   const params = useParams();
   const { publicKey } = useWallet();
-  const [market, setMarket] = useState<Market | null>(null);
+  const [market, setMarket] = useState<(Market & { yes_odds?: number; no_odds?: number; creator?: string }) | null>(null);
   const [loading, setLoading] = useState(true);
   const [showBetModal, setShowBetModal] = useState(false);
   const [selectedSide, setSelectedSide] = useState<'YES' | 'NO'>('YES');
-  const [relatedMarkets, setRelatedMarkets] = useState<Market[]>([]);
+  const [relatedMarkets, setRelatedMarkets] = useState<(Market & { yes_odds?: number; no_odds?: number })[]>([]);
 
   useEffect(() => {
     fetchMarketDetails();

@@ -3,22 +3,47 @@
 import { useWallet } from '@demox-labs/aleo-wallet-adapter-react';
 import { WalletMultiButton } from '@demox-labs/aleo-wallet-adapter-reactui';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Target, Menu, X, ArrowUpRight } from 'lucide-react';
+import { Target, Menu, X, ArrowUpRight, Droplets, Loader, Check } from 'lucide-react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useState } from 'react';
+import { PRED_TOKEN_PROGRAM, PRED_MULTIPLIER } from '@/lib/predictionContract';
 
 const NAV_LINKS = [
-  { name: 'home', href: '/' },
   { name: 'markets', href: '/markets' },
   { name: 'portfolio', href: '/portfolio' },
-  { name: 'leaderboard', href: '/leaderboard' },
-  { name: 'create', href: '/create' },
+  { name: 'how it works', href: '/how-it-works' },
 ];
 
 export default function Header() {
-  const { publicKey } = useWallet();
+  const { publicKey, requestTransaction } = useWallet();
   const router = useRouter();
   const pathname = usePathname();
+  const [mintState, setMintState] = useState<'idle' | 'loading' | 'done'>('idle');
+
+  const handleMint = async () => {
+    if (!publicKey || !requestTransaction || mintState === 'loading') return;
+    setMintState('loading');
+    try {
+      const microAmount = 1000 * PRED_MULTIPLIER;
+      await requestTransaction({
+        address: publicKey,
+        chainId: 'testnetbeta',
+        transitions: [{
+          program: PRED_TOKEN_PROGRAM,
+          functionName: 'mint_public',
+          inputs: [`${microAmount}u64`],
+        }],
+        fee: 500000,
+        feePrivate: false,
+      });
+      const cur = parseInt(localStorage.getItem('dart_balance') || '0', 10);
+      localStorage.setItem('dart_balance', String(cur + microAmount));
+      setMintState('done');
+      setTimeout(() => setMintState('idle'), 2000);
+    } catch {
+      setMintState('idle');
+    }
+  };
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -29,13 +54,13 @@ export default function Header() {
           initial={{ y: -100, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ type: "spring", stiffness: 300, damping: 30 }}
-          className="pointer-events-auto bg-black/60 backdrop-blur-2xl border border-white/5 rounded-full p-1.5 flex items-center justify-between shadow-2xl shadow-black/50 max-w-5xl w-full"
+          className="pointer-events-auto bg-black/60 backdrop-blur-2xl border border-white/5 rounded-full p-1.5 flex items-center shadow-2xl shadow-black/50"
         >
 
-          {/* Logo Section */}
+          {/* Logo */}
           <div
-            className="pl-4 md:pl-5 pr-2 md:pr-6 cursor-pointer group flex items-center gap-2"
-            onClick={() => router.push('/')}
+            className="pl-4 pr-5 cursor-pointer group flex items-center gap-2"
+            onClick={() => router.push('/markets')}
           >
             <div className="relative">
               <Target className="w-5 h-5 text-white group-hover:text-new-mint transition-colors duration-300" strokeWidth={2.5} />
@@ -44,10 +69,10 @@ export default function Header() {
             <span className="font-bold tracking-tight text-white group-hover:text-white/90 transition-colors hidden sm:block">DART</span>
           </div>
 
-          {/* Desktop Separator */}
-          <div className="hidden md:block h-4 w-[1px] bg-white/10 mr-1" />
+          {/* Separator */}
+          <div className="hidden md:block h-4 w-[1px] bg-white/10" />
 
-          {/* Desktop Navigation - Sliding Pill */}
+          {/* Desktop Nav */}
           <nav className="hidden md:flex items-center">
             {NAV_LINKS.map((link, index) => {
               const isActive = pathname === link.href || (link.href !== '/' && pathname?.startsWith(link.href));
@@ -56,17 +81,14 @@ export default function Header() {
                 <a
                   key={link.name}
                   href={link.href}
-                  className="relative px-4 lg:px-5 py-2 text-sm font-medium transition-colors duration-300"
+                  className="relative px-5 py-2 text-sm font-medium transition-colors duration-300"
                   onMouseEnter={() => setHoveredIndex(index)}
                   onMouseLeave={() => setHoveredIndex(null)}
                 >
-                  {/* Active/Hover Text Color Logic */}
-                  <span className={`relative z-10 transition-colors duration-300 ${isActive ? 'text-white' : hoveredIndex === index ? 'text-white' : 'text-gray-400'
-                    }`}>
+                  <span className={`relative z-10 transition-colors duration-300 ${isActive ? 'text-white' : hoveredIndex === index ? 'text-white' : 'text-gray-400'}`}>
                     {link.name}
                   </span>
 
-                  {/* Sliding Glass Background with Glow */}
                   <AnimatePresence>
                     {hoveredIndex === index && (
                       <motion.div
@@ -79,7 +101,6 @@ export default function Header() {
                     )}
                   </AnimatePresence>
 
-                  {/* Active Indicator Dot */}
                   {isActive && (
                     <motion.div
                       layoutId="active-dot"
@@ -94,24 +115,30 @@ export default function Header() {
           {/* Mobile Spacer */}
           <div className="md:hidden flex-1" />
 
-          {/* Desktop Separator */}
-          <div className="hidden md:block h-4 w-[1px] bg-white/10 ml-1 mr-2" />
+          {/* Separator */}
+          <div className="hidden md:block h-4 w-[1px] bg-white/10 mr-1" />
 
-          {/* Wallet & Actions (Desktop & Mobile) */}
-          <div className="flex items-center gap-2 pl-2 pr-1.5">
+          {/* Actions */}
+          <div className="flex items-center gap-1.5 pl-1 pr-1.5">
             {publicKey && (
               <button
-                onClick={() => router.push('/create')}
-                className="group relative flex items-center justify-center w-9 h-9 rounded-full bg-white/5 hover:bg-new-mint border border-white/10 hover:border-new-mint text-new-mint hover:text-black transition-all duration-300 backdrop-blur-md"
+                onClick={handleMint}
+                disabled={mintState === 'loading'}
+                className="hidden sm:flex items-center gap-1.5 h-9 px-3.5 rounded-full text-xs font-bold text-gray-400 hover:text-new-mint bg-white/[0.03] hover:bg-new-mint/10 border border-white/5 hover:border-new-mint/20 transition-all disabled:opacity-50"
               >
-                <Plus className="w-4 h-4" />
+                {mintState === 'loading' ? (
+                  <Loader className="w-3.5 h-3.5 animate-spin" />
+                ) : mintState === 'done' ? (
+                  <Check className="w-3.5 h-3.5 text-new-mint" />
+                ) : (
+                  <Droplets className="w-3.5 h-3.5" />
+                )}
+                {mintState === 'done' ? 'Minted' : 'Mint'}
               </button>
             )}
-
             <div className="transform transition-transform hover:scale-105 active:scale-95 hidden sm:block">
               <WalletMultiButton className="!bg-white/5 !backdrop-blur-md !text-white !border !border-white/10 !rounded-full !font-bold !h-9 !px-5 !text-xs hover:!bg-white hover:!text-black hover:!border-white hover:shadow-[0_0_20px_rgba(255,255,255,0.3)] transition-all duration-300 uppercase tracking-wider" />
             </div>
-            {/* Small Mobile Wallet Button (Icon Only if needed, or just keep MultiButton handled by library) */}
             <div className="sm:hidden transform scale-90">
               <WalletMultiButton style={{ padding: '0 12px', height: '32px', fontSize: '10px' }} />
             </div>
@@ -128,7 +155,7 @@ export default function Header() {
         </motion.div>
       </header>
 
-      {/* Mobile Menu Overlay - Award Winning Liquid Glass */}
+      {/* Mobile Menu Overlay */}
       <AnimatePresence>
         {isMobileMenuOpen && (
           <motion.div
@@ -138,7 +165,6 @@ export default function Header() {
             transition={{ duration: 0.4 }}
             className="fixed inset-0 z-[60] bg-black/90 backdrop-blur-[40px] md:hidden flex flex-col"
           >
-            {/* Background Gradient Orbs */}
             <div className="absolute top-0 right-0 w-[300px] h-[300px] bg-new-mint/20 blur-[120px] rounded-full pointer-events-none" />
             <div className="absolute bottom-0 left-0 w-[300px] h-[300px] bg-new-blue/20 blur-[120px] rounded-full pointer-events-none" />
 
@@ -157,7 +183,7 @@ export default function Header() {
                 </button>
               </div>
 
-              {/* Navigation Links - Staggered Reveal */}
+              {/* Navigation Links */}
               <nav className="flex flex-col gap-6 flex-1 justify-center">
                 {NAV_LINKS.map((link, index) => (
                   <motion.a
@@ -178,7 +204,7 @@ export default function Header() {
                     <span className="text-sm font-mono text-new-mint/40 group-hover:text-new-mint transition-colors w-8">
                       0{index + 1}
                     </span>
-                    <span className="text-6xl font-black text-white/50 group-hover:text-white transition-all duration-300 tracking-tighter group-hover:tracking-normal group-hover:translate-x-4">
+                    <span className="text-5xl font-black text-white/50 group-hover:text-white transition-all duration-300 tracking-tighter group-hover:tracking-normal group-hover:translate-x-4">
                       {link.name}
                     </span>
                     <ArrowUpRight className="w-8 h-8 text-new-mint opacity-0 group-hover:opacity-100 -translate-x-4 group-hover:translate-x-0 transition-all duration-300" />
@@ -186,7 +212,7 @@ export default function Header() {
                 ))}
               </nav>
 
-              {/* Footer Info */}
+              {/* Footer */}
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}

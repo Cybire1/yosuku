@@ -250,7 +250,7 @@ export default function AdminPage() {
                               Category: <span className="text-white">{market.category}</span>
                             </span>
                             <span className="text-gray-400">
-                              End Date: <span className="text-white">{new Date(market.end_date * 1000).toLocaleDateString()}</span>
+                              End Date: <span className="text-white">{new Date((market.end_date ?? 0) * 1000).toLocaleDateString()}</span>
                             </span>
                           </div>
 
