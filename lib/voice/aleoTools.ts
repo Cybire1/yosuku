@@ -427,7 +427,8 @@ export async function getSmartRecommendations(publicKey: string | undefined): Pr
     positions.forEach((p: any) => {
       const market = markets.find(m => m.id.toString() === p.marketId);
       if (market && !market.resolved) {
-        userCategories[market.category] = (userCategories[market.category] || 0) + 1;
+        const cat = market.category ?? 'Other';
+        userCategories[cat] = (userCategories[cat] || 0) + 1;
         userSides[p.side] = (userSides[p.side] || 0) + 1;
       }
     });

@@ -15,8 +15,8 @@ export default function FeaturedHero({ market }: FeaturedHeroProps) {
 
     // Mock data for the detailed view
     const outcomes = [
-        { name: 'Jannik Sinner', price: 88, change: 14, isUp: true },
-        { name: 'Novak Djokovic', price: 14, change: 3, isUp: false }
+        { name: 'Jannik Sinner', price: 86, change: 14, isUp: true },
+        { name: 'Novak Djokovic', price: 12, change: 3, isUp: false }
     ];
 
     return (

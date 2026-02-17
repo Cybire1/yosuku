@@ -8,6 +8,21 @@
 :root {
   --background: #000000;
   --foreground: #ffffff;
+
+  /* Global Color Palette */
+  --color-aleo-blue: #3B82F6;
+  --color-aleo-mint: #4ADE80;
+  --color-aleo-pink: #F472B6;
+  --color-aleo-orange: #FB923C;
+
+  --color-off-blue: #60A5FA;
+  --color-off-red: #F43F5E;
+  --color-off-green: #34D399;
+
+  --color-new-blue: #60A5FA;
+  --color-new-mint: #34D399;
+  --color-new-pink: #F43F5E;
+  --color-new-orange: #FB923C;
 }
 
 body {

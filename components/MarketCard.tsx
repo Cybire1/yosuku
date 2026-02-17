@@ -40,9 +40,9 @@ export default function MarketCard({ market }: MarketCardProps) {
   const noOdds = 100 - yesOdds;
 
   // Time remaining
-  const timeRemaining = formatDistance(market.end_timestamp * 1000, Date.now(), {
-    addSuffix: true,
-  });
+  const timeRemaining = market.end_timestamp && !isNaN(market.end_timestamp)
+    ? formatDistance(market.end_timestamp * 1000, Date.now(), { addSuffix: true })
+    : 'TBD';
 
   const handleBet = (side: 'YES' | 'NO') => {
     setSelectedSide(side);

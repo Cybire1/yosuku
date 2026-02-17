@@ -47,7 +47,7 @@ export default function SimpleVoiceButton() {
 
   const { appState, startSession, toggleListening, sendTextMessage, isConnected } = useVoiceSession({
     apiKey: process.env.NEXT_PUBLIC_GEMINI_API_KEY || '',
-    publicKey,
+    publicKey: publicKey ?? undefined,
     onMessage: handleMessage,
   });
 

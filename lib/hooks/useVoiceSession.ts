@@ -18,6 +18,8 @@ export interface VoiceMessage {
   sender: 'user' | 'ai';
   text: string;
   isFinal: boolean;
+  data?: any;
+  displayType?: 'market_list' | 'market_detail' | 'portfolio' | 'text';
 }
 
 interface UseVoiceSessionProps {
@@ -168,7 +170,7 @@ export function useVoiceSession({
           },
         },
         // Enable Google Search for real-time information
-        googleSearch: {} as any,
+        ...({ googleSearch: {} } as any),
         systemInstruction: {
           parts: [{
             text: `You are DART, a professional prediction market voice assistant for the Aleo blockchain.
@@ -348,14 +350,26 @@ CRITICAL RULE:
                   const toolResult = await getActiveMarkets(category);
                   result = toolResult.success ? toolResult.message : `Error: ${toolResult.error}`;
                   if (toolResult.success) {
-                    onMessage({ sender: 'ai', text: `Success: Found markets`, isFinal: true });
+                    onMessage({
+                      sender: 'ai',
+                      text: `Found ${toolResult.data?.length || 0} active markets.`,
+                      isFinal: true,
+                      data: toolResult.data,
+                      displayType: 'market_list'
+                    });
                   }
                 } else if (fc.name === 'getTrendingMarkets') {
                   onMessage({ sender: 'ai', text: '✓ Getting trending markets...', isFinal: true });
                   const toolResult = await getTrendingMarkets();
                   result = toolResult.success ? toolResult.message : `Error: ${toolResult.error}`;
                   if (toolResult.success) {
-                    onMessage({ sender: 'ai', text: `Success: Found ${toolResult.data?.length || 0} trending markets`, isFinal: true });
+                    onMessage({
+                      sender: 'ai',
+                      text: `Here are the top trending markets right now.`,
+                      isFinal: true,
+                      data: toolResult.data,
+                      displayType: 'market_list'
+                    });
                   }
                 } else if (fc.name === 'getMarketDetails' && fc.args) {
                   const { marketId } = fc.args;

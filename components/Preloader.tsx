@@ -4,10 +4,18 @@ import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function Preloader() {
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(() => {
+        if (typeof window !== 'undefined') {
+            return !sessionStorage.getItem('preloaderShown');
+        }
+        return true;
+    });
     const [count, setCount] = useState(0);
 
     useEffect(() => {
+        // Skip if already shown this session
+        if (!loading) return;
+
         // Simulating loading progress
         const duration = 2000; // 2 seconds total load time
         const interval = 20;
@@ -19,7 +27,10 @@ export default function Preloader() {
                 const next = prev + increment;
                 if (next >= 100) {
                     clearInterval(timer);
-                    setTimeout(() => setLoading(false), 800); // Slight delay at 100%
+                    setTimeout(() => {
+                        sessionStorage.setItem('preloaderShown', '1');
+                        setLoading(false);
+                    }, 800); // Slight delay at 100%
                     return 100;
                 }
                 return next;
@@ -27,7 +38,7 @@ export default function Preloader() {
         }, interval);
 
         return () => clearInterval(timer);
-    }, []);
+    }, [loading]);
 
     return (
         <AnimatePresence mode="wait">
