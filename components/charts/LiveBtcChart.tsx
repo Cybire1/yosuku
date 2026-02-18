@@ -15,11 +15,33 @@ interface LiveBtcChartProps {
   height?: number;
 }
 
-const MAX_POINTS = 120;
+const MAX_POINTS = 300;
+const STORAGE_KEY = 'dart_btc_chart';
 
 function formatTime(ts: number) {
   const d = new Date(ts);
   return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+/** Load cached chart data from sessionStorage (discard if older than 10 min) */
+function loadCachedData(): PricePoint[] {
+  try {
+    const raw = sessionStorage.getItem(STORAGE_KEY);
+    if (!raw) return [];
+    const points: PricePoint[] = JSON.parse(raw);
+    const cutoff = Date.now() - 10 * 60 * 1000;
+    return points.filter(p => p.timestamp > cutoff);
+  } catch {
+    return [];
+  }
+}
+
+function saveCachedData(points: PricePoint[]) {
+  try {
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(points.slice(-MAX_POINTS)));
+  } catch {
+    // storage full, ignore
+  }
 }
 
 const CustomTooltip = ({ active, payload }: any) => {
@@ -51,36 +73,40 @@ const LiveDot = ({ cx, cy, index, total, color }: any) => {
 
 export default function LiveBtcChart({ targetPrice, height = 370 }: LiveBtcChartProps) {
   const { price } = useBtcPrice();
-  const [data, setData] = useState<PricePoint[]>([]);
-  const lastAddTime = useRef(0);
+  const [data, setData] = useState<PricePoint[]>(() => loadCachedData());
+  const priceRef = useRef(0);
 
   const targetUsd = targetPrice ? targetPrice / 100 : undefined;
 
-  // Seed chart instantly on first price, then add points every ~1s
+  // Keep ref in sync with latest price
   useEffect(() => {
-    if (price <= 0) return;
-
-    const now = Date.now();
-
-    // First price: seed two points so chart renders immediately
-    if (data.length === 0) {
-      lastAddTime.current = now;
-      setData([
-        { time: formatTime(now - 1000), price, timestamp: now - 1000 },
-        { time: formatTime(now), price, timestamp: now },
-      ]);
-      return;
-    }
-
-    // Throttle to one point per second for smooth spacing
-    if (now - lastAddTime.current < 900) return;
-    lastAddTime.current = now;
-
-    setData(prev => {
-      const next = [...prev, { time: formatTime(now), price, timestamp: now }];
-      return next.slice(-MAX_POINTS);
-    });
+    if (price > 0) priceRef.current = price;
   }, [price]);
+
+  // Add a new data point every second, persist to sessionStorage
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const p = priceRef.current;
+      if (p <= 0) return;
+      const now = Date.now();
+      setData(prev => {
+        const point: PricePoint = { time: formatTime(now), price: p, timestamp: now };
+        // If no data, seed with 2 points for immediate line
+        if (prev.length === 0) {
+          const seeded = [
+            { time: formatTime(now - 1000), price: p, timestamp: now - 1000 },
+            point,
+          ];
+          saveCachedData(seeded);
+          return seeded;
+        }
+        const next = [...prev, point].slice(-MAX_POINTS);
+        saveCachedData(next);
+        return next;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Compute chart bounds — always include target price in view
   const { minY, maxY, isAboveTarget } = useMemo(() => {

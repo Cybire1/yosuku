@@ -3,6 +3,7 @@
 import { WalletProvider as AleoWalletProvider } from '@demox-labs/aleo-wallet-adapter-react';
 import { WalletModalProvider } from '@demox-labs/aleo-wallet-adapter-reactui';
 import { LeoWalletAdapter } from '@demox-labs/aleo-wallet-adapter-leo';
+import { ShieldWalletAdapter } from '@/lib/ShieldWalletAdapter';
 import { useMemo } from 'react';
 
 // Import wallet adapter CSS
@@ -18,6 +19,7 @@ export default function WalletProvider({
       new LeoWalletAdapter({
         appName: 'Dart',
       }),
+      new ShieldWalletAdapter(),
     ],
     []
   );

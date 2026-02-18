@@ -10,7 +10,15 @@ interface BtcPriceData {
   timestamp: number;
 }
 
-const BINANCE_WS_URL = 'wss://stream.binance.com:9443/ws/btcusdt@ticker';
+// Pyth BTC/USD feed ID
+const PYTH_BTC_FEED = 'e62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43';
+const PYTH_SSE_URL = `https://hermes.pyth.network/v2/updates/price/stream?ids[]=${PYTH_BTC_FEED}&parsed=true`;
+const PYTH_REST_URL = `https://hermes.pyth.network/v2/updates/price/latest?ids[]=${PYTH_BTC_FEED}&parsed=true`;
+
+function parsePythPrice(parsed: any): number {
+  const p = parsed.price;
+  return Number(p.price) * Math.pow(10, p.expo);
+}
 
 export function useBtcPrice() {
   const [data, setData] = useState<BtcPriceData>({
@@ -21,17 +29,43 @@ export function useBtcPrice() {
     timestamp: Date.now(),
   });
   const [connected, setConnected] = useState(false);
-  const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimer = useRef<NodeJS.Timeout | null>(null);
+  const eventSourceRef = useRef<EventSource | null>(null);
+  const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const firstPrice = useRef(0);
 
-  const connect = useCallback(() => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) return;
+  // Fetch initial price via REST (immediate)
+  const fetchInitial = useCallback(async () => {
+    try {
+      const res = await fetch(PYTH_REST_URL);
+      if (!res.ok) return;
+      const json = await res.json();
+      const parsed = json.parsed?.[0];
+      if (!parsed) return;
+      const price = parsePythPrice(parsed);
+      if (price > 0) {
+        if (firstPrice.current === 0) firstPrice.current = price;
+        setData(prev => ({
+          ...prev,
+          price,
+          timestamp: Date.now(),
+        }));
+      }
+    } catch {
+      // silent
+    }
+  }, []);
+
+  // Connect to Pyth SSE stream
+  const connectSSE = useCallback(() => {
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+    }
 
     try {
-      const ws = new WebSocket(BINANCE_WS_URL);
-      wsRef.current = ws;
+      const es = new EventSource(PYTH_SSE_URL);
+      eventSourceRef.current = es;
 
-      ws.onopen = () => {
+      es.onopen = () => {
         setConnected(true);
         if (reconnectTimer.current) {
           clearTimeout(reconnectTimer.current);
@@ -39,49 +73,59 @@ export function useBtcPrice() {
         }
       };
 
-      ws.onmessage = (event) => {
+      es.onmessage = (event) => {
         try {
-          const msg = JSON.parse(event.data);
-          setData({
-            price: parseFloat(msg.c),       // Current price
-            change24h: parseFloat(msg.P),    // Price change percent 24h
-            high24h: parseFloat(msg.h),      // High 24h
-            low24h: parseFloat(msg.l),       // Low 24h
+          const json = JSON.parse(event.data);
+          const parsed = json.parsed?.[0];
+          if (!parsed) return;
+          const price = parsePythPrice(parsed);
+          if (price <= 0) return;
+
+          if (firstPrice.current === 0) firstPrice.current = price;
+          const change24h = firstPrice.current > 0
+            ? ((price - firstPrice.current) / firstPrice.current) * 100
+            : 0;
+
+          setData(prev => ({
+            price,
+            change24h,
+            high24h: Math.max(prev.high24h, price),
+            low24h: prev.low24h === 0 ? price : Math.min(prev.low24h, price),
             timestamp: Date.now(),
-          });
+          }));
         } catch {
           // ignore parse errors
         }
       };
 
-      ws.onclose = () => {
+      es.onerror = () => {
         setConnected(false);
-        // Reconnect after 3 seconds
-        reconnectTimer.current = setTimeout(connect, 3000);
-      };
-
-      ws.onerror = () => {
-        ws.close();
+        es.close();
+        eventSourceRef.current = null;
+        // Reconnect after 3s
+        reconnectTimer.current = setTimeout(connectSSE, 3000);
       };
     } catch {
-      // Reconnect on error
-      reconnectTimer.current = setTimeout(connect, 3000);
+      reconnectTimer.current = setTimeout(connectSSE, 3000);
     }
   }, []);
 
   useEffect(() => {
-    connect();
+    // Get initial price immediately via REST
+    fetchInitial();
+    // Then connect SSE for streaming updates
+    connectSSE();
 
     return () => {
-      if (wsRef.current) {
-        wsRef.current.close();
-        wsRef.current = null;
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
       }
       if (reconnectTimer.current) {
         clearTimeout(reconnectTimer.current);
       }
     };
-  }, [connect]);
+  }, [fetchInitial, connectSSE]);
 
   return { ...data, connected };
 }

@@ -4,22 +4,29 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Clock } from 'lucide-react';
 import { useBtcPrice } from '@/lib/hooks/useBtcPrice';
-import { formatPred, estimateProb, type RoundState } from '@/lib/predictionContract';
+import {
+  formatPred,
+  calcOdds,
+  estimateProb,
+  type RoundState,
+} from '@/lib/predictionContract';
 import LiveBtcChart from './charts/LiveBtcChart';
 import BitcoinIcon from './icons/BitcoinIcon';
+import PriceTicker from './PriceTicker';
 
-interface RoundCardProps {
+interface TradingCardProps {
   round: RoundState;
   userYesDeposit?: number;
   userNoDeposit?: number;
 }
 
-export default function RoundCard({
+export default function TradingCard({
   round,
   userYesDeposit = 0,
   userNoDeposit = 0,
-}: RoundCardProps) {
+}: TradingCardProps) {
   const { price, connected } = useBtcPrice();
+
   const [mins, setMins] = useState(0);
   const [secs, setSecs] = useState(0);
   const [progress, setProgress] = useState(100);
@@ -29,7 +36,7 @@ export default function RoundCard({
   const priceDelta = price > 0 ? price - targetUsd : 0;
   const isAbove = price >= targetUsd;
 
-  // Countdown timer using round.endTime
+  // Countdown timer
   useEffect(() => {
     const tick = () => {
       const remaining = Math.max(0, round.endTime - Date.now());
@@ -38,24 +45,20 @@ export default function RoundCard({
       setSecs(totalSecs % 60);
       setProgress((remaining / round.durationMs) * 100);
     };
-
     tick();
     const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
   }, [round.id, round.endTime, round.durationMs]);
 
-  // Calculate estimated payout for user
-  const calcEstPayout = (deposit: number, side: 'yes' | 'no') => {
-    const winPool = side === 'yes' ? round.yesPool : round.noPool;
-    if (winPool === 0 || deposit === 0) return 0;
-    return (deposit / winPool) * totalPool * 0.9;
-  };
-
+  // User position calculations
   const userSide = userYesDeposit > 0 ? 'YES' : userNoDeposit > 0 ? 'NO' : null;
   const userDeposit = userYesDeposit || userNoDeposit;
-  const estPayout = userSide === 'YES'
-    ? calcEstPayout(userYesDeposit, 'yes')
-    : calcEstPayout(userNoDeposit, 'no');
+  const positionPayout = (() => {
+    if (!userSide) return 0;
+    const winPool = userSide === 'YES' ? round.yesPool : round.noPool;
+    if (winPool === 0) return 0;
+    return ((userSide === 'YES' ? userYesDeposit : userNoDeposit) / winPool) * totalPool * 0.9;
+  })();
 
   return (
     <div className="relative">
@@ -72,92 +75,95 @@ export default function RoundCard({
           />
         </div>
 
-        <div className="p-6 md:p-8">
-          {/* Top row: Price to Beat | Current Price | Countdown */}
-          <div className="flex items-start justify-between mb-6">
-            {/* Price to Beat */}
+        <div className="p-5 md:p-7">
+          {/* Header: Round ID + Countdown */}
+          <div className="flex items-center justify-between mb-5">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-black uppercase tracking-widest text-gray-400">Round</span>
+              <span className="text-lg font-mono font-black text-white">#{round.id}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Clock className="w-3.5 h-3.5 text-gray-500" />
+              {mins === 0 && secs === 0 ? (
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" />
+                  <span className="text-sm font-bold text-yellow-400">Resolving on-chain...</span>
+                </div>
+              ) : (
+                <>
+                  <span className="text-2xl font-mono font-black text-white">
+                    {String(mins).padStart(2, '0')}:{String(secs).padStart(2, '0')}
+                  </span>
+                  <span className="text-[10px] font-bold text-gray-500 uppercase">left</span>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Price row */}
+          <div className="flex items-start justify-between mb-5">
             <div>
               <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500 block mb-1">
                 Price to Beat
               </span>
-              <span className="text-xl md:text-2xl font-mono font-bold text-gray-400">
+              <span className="text-xl font-mono font-bold text-gray-400">
                 ${targetUsd.toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </span>
             </div>
-
-            {/* Current Price + delta */}
-            <div>
-              <div className="flex items-center gap-2 mb-1">
+            <div className="text-right">
+              <div className="flex items-center gap-2 mb-1 justify-end">
                 <BitcoinIcon className="w-4 h-4" />
                 <div className={`w-1.5 h-1.5 rounded-full ${connected ? 'bg-new-mint animate-pulse' : 'bg-red-500'}`} />
-                <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">
-                  BTC Price
-                </span>
-                {price > 0 && (
-                  <span className={`text-[10px] font-mono font-bold ${isAbove ? 'text-new-mint' : 'text-off-red'}`}>
-                    {isAbove ? '+' : ''}{priceDelta.toFixed(2)}
-                  </span>
-                )}
+                <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Live BTC</span>
               </div>
-              <span className={`text-xl md:text-2xl font-mono font-black ${isAbove ? 'text-new-mint' : 'text-off-red'}`}>
-                ${price > 0 ? price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '---'}
-              </span>
+              <PriceTicker price={price} className={`text-xl font-mono font-black ${isAbove ? 'text-new-mint' : 'text-off-red'}`} />
+              {price > 0 && (
+                <span className={`block text-xs font-mono font-bold mt-0.5 ${isAbove ? 'text-new-mint/70' : 'text-off-red/70'}`}>
+                  {isAbove ? '+' : ''}{priceDelta.toFixed(2)} {isAbove ? 'Above' : 'Below'} Target
+                </span>
+              )}
             </div>
+          </div>
 
-            {/* Countdown — Polymarket style */}
-            <div className="text-right">
-              <div className="flex items-center gap-2 justify-end mb-1">
-                <Clock className="w-3 h-3 text-gray-500" />
-                <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">
-                  Round #{round.id}
-                </span>
-              </div>
-              <div className="flex items-baseline gap-1">
-                <span className="text-3xl font-mono font-black text-white">{String(mins).padStart(2, '0')}</span>
-                <span className="text-[10px] font-bold text-gray-500 uppercase mr-2">mins</span>
-                <span className="text-3xl font-mono font-black text-white">{String(secs).padStart(2, '0')}</span>
-                <span className="text-[10px] font-bold text-gray-500 uppercase">secs</span>
-              </div>
-            </div>
+          {/* Live BTC Chart */}
+          <div className="mb-5 bg-white/[0.02] border border-white/5 rounded-2xl overflow-hidden">
+            <LiveBtcChart targetPrice={round.targetPrice} height={280} />
           </div>
 
           {/* Probability bar */}
           {price > 0 && mins + secs > 0 && (
-            <div className="mb-4">
+            <div className="mb-5">
               {(() => {
                 const prob = estimateProb(price, targetUsd, mins + secs / 60);
                 const yesPct = Math.round(prob * 100);
                 const noPct = 100 - yesPct;
                 return (
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-bold text-new-mint w-10 text-right">{yesPct}%</span>
-                    <div className="flex-1 h-2 rounded-full overflow-hidden flex bg-white/5">
-                      <div
-                        className="h-full bg-gradient-to-r from-new-mint to-new-mint/60 transition-all duration-700"
-                        style={{ width: `${yesPct}%` }}
-                      />
-                      <div
-                        className="h-full bg-gradient-to-l from-off-red to-off-red/60 transition-all duration-700"
-                        style={{ width: `${noPct}%` }}
-                      />
+                  <>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-bold text-new-mint w-10 text-right">{yesPct}%</span>
+                      <div className="flex-1 h-2.5 rounded-full overflow-hidden flex bg-white/5">
+                        <div
+                          className="h-full bg-gradient-to-r from-new-mint to-new-mint/60 transition-all duration-700"
+                          style={{ width: `${yesPct}%` }}
+                        />
+                        <div
+                          className="h-full bg-gradient-to-l from-off-red to-off-red/60 transition-all duration-700"
+                          style={{ width: `${noPct}%` }}
+                        />
+                      </div>
+                      <span className="text-[10px] font-bold text-off-red w-10">{noPct}%</span>
                     </div>
-                    <span className="text-[10px] font-bold text-off-red w-10">{noPct}%</span>
-                  </div>
+                    <div className="text-center mt-1">
+                      <span className="text-[9px] uppercase tracking-widest text-gray-600">Probability</span>
+                    </div>
+                  </>
                 );
               })()}
-              <div className="text-center mt-1">
-                <span className="text-[9px] uppercase tracking-widest text-gray-600">Probability Estimate</span>
-              </div>
             </div>
           )}
 
-          {/* Live BTC Chart */}
-          <div className="mb-6 bg-white/[0.02] border border-white/5 rounded-2xl overflow-hidden">
-            <LiveBtcChart targetPrice={round.targetPrice} height={370} />
-          </div>
-
-          {/* Pool info bar */}
-          <div className="mb-4 flex items-center gap-4 px-1">
+          {/* Pool stats */}
+          <div className="flex items-center gap-4 px-1">
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Pool</span>
               <span className="text-sm font-mono font-bold text-new-mint">{formatPred(totalPool)} DART</span>
@@ -176,7 +182,7 @@ export default function RoundCard({
 
           {/* User position */}
           {userSide && (
-            <div className="p-4 bg-white/[0.03] border border-white/5 rounded-2xl">
+            <div className="mt-4 p-4 bg-white/[0.03] border border-white/5 rounded-2xl">
               <div className="flex items-center justify-between">
                 <div>
                   <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500 block mb-1">Your Position</span>
@@ -187,7 +193,7 @@ export default function RoundCard({
                 <div className="text-right">
                   <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500 block mb-1">Est. Payout</span>
                   <span className="text-sm font-mono font-bold text-white">
-                    {formatPred(estPayout)} DART
+                    {formatPred(positionPayout)} DART
                   </span>
                 </div>
               </div>

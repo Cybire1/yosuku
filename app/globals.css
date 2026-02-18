@@ -1,12 +1,13 @@
 @import "tailwindcss";
 
 @theme {
+  --color-black: var(--background);
   --font-sans: var(--font-outfit);
   --font-mono: var(--font-space);
 }
 
 :root {
-  --background: #000000;
+  --background: #080808;
   --foreground: #ffffff;
 
   /* Global Color Palette */
@@ -27,6 +28,7 @@
 
 body {
   color: var(--foreground);
+  background: var(--background);
   font-family: var(--font-sans), sans-serif;
   overflow-x: hidden;
 }
@@ -87,7 +89,7 @@ body {
 }
 
 .mono-card {
-  background: #000;
+  background: var(--background);
   border: 1px solid #222;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   --color-aleo-blue: #3B82F6;
@@ -115,13 +117,13 @@ body {
 /* Invert Effects */
 .btn-invert {
   background: #fff;
-  color: #000;
+  color: var(--background);
   border: 1px solid #fff;
   transition: all 0.2s ease;
 }
 
 .btn-invert:hover {
-  background: #000;
+  background: var(--background);
   color: #fff;
 }
 
@@ -162,7 +164,7 @@ html.lenis {
 }
 
 ::-webkit-scrollbar-track {
-  background: #000;
+  background: var(--background);
 }
 
 ::-webkit-scrollbar-thumb {
@@ -178,4 +180,3 @@ html.lenis {
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }
-

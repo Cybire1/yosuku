@@ -22,9 +22,6 @@ export default function VoiceAgent() {
     setMounted(true);
   }, []);
 
-  // Only show on /markets page
-  if (mounted && pathname !== '/markets') return null;
-
   // Auto-scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -55,8 +52,8 @@ export default function VoiceAgent() {
     }
   };
 
-  // Don't render until mounted to avoid hydration issues
-  if (!mounted) return null;
+  // Don't render until mounted or if not on /markets page
+  if (!mounted || pathname !== '/markets') return null;
 
   return (
     <>
@@ -75,7 +72,7 @@ export default function VoiceAgent() {
             {/* Button Background - Gradient Glass */}
             <div className="absolute inset-0 bg-neutral-900/90 backdrop-blur-xl border border-white/10 rounded-full" />
             <div className="absolute inset-0 bg-gradient-to-r from-new-mint/10 to-new-blue/10 rounded-full opacity-50 group-hover:opacity-100 transition-opacity duration-300" />
-            <div className="absolute -inset-[1px] bg-gradient-to-r from-new-mint to-new-blue rounded-full opacity-30 blur-sm group-hover:opacity-60 transition-opacity duration-500" />
+            <div className="absolute -inset-[2px] bg-gradient-to-r from-new-mint to-new-blue rounded-full opacity-40 blur-md group-hover:opacity-70 transition-all duration-500 animate-[pulse_3s_ease-in-out_infinite]" />
 
             {/* Icon Container - Living Orb */}
             <div className="relative w-8 h-8 flex items-center justify-center">

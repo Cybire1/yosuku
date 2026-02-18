@@ -126,6 +126,11 @@ export default function PortfolioPage() {
   const [positions, setPositions] = useState<UserPosition[]>([]);
   const [loading, setLoading] = useState(true);
   const [claimingId, setClaimingId] = useState<number | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const scan = useCallback(async () => {
     setLoading(true);
@@ -253,16 +258,29 @@ export default function PortfolioPage() {
             </p>
           </div>
 
-          {!publicKey ? (
+          {!mounted ? (
+            <div className="text-center py-20">
+              <div className="inline-block animate-spin rounded-full h-10 w-10 border-4 border-white/10 border-t-new-mint" />
+              <p className="mt-4 text-gray-500 text-sm font-bold uppercase tracking-widest">
+                Loading...
+              </p>
+            </div>
+          ) : !publicKey ? (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="bg-neutral-900/60 backdrop-blur-xl border border-white/10 rounded-2xl p-16 text-center"
+              className="relative overflow-hidden bg-neutral-900/40 backdrop-blur-2xl border border-white/10 rounded-[32px] p-20 text-center shadow-2xl"
             >
-              <Wallet className="w-12 h-12 mx-auto text-gray-600 mb-4" />
-              <h2 className="text-lg font-bold text-gray-400 mb-2">Connect Your Wallet</h2>
-              <p className="text-sm text-gray-500">
-                Connect your wallet to view your portfolio.
+              {/* Premium Glow */}
+              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3/4 h-32 bg-new-mint/20 blur-[100px] rounded-full pointer-events-none" />
+
+              <div className="relative z-10 w-24 h-24 mx-auto mb-6 bg-gradient-to-b from-neutral-800 to-black rounded-full border border-white/10 flex items-center justify-center shadow-inner">
+                <div className="absolute inset-0 bg-new-mint/20 blur-xl rounded-full animate-pulse" />
+                <Wallet className="w-10 h-10 text-white/70 relative z-10" />
+              </div>
+              <h2 className="relative z-10 text-3xl font-black text-white tracking-tight mb-3">Connect Your Wallet</h2>
+              <p className="relative z-10 text-gray-400 max-w-sm mx-auto">
+                Connect your Aleo wallet to track your positions, view your P&L, and claim your winnings.
               </p>
             </motion.div>
           ) : loading ? (
@@ -276,16 +294,22 @@ export default function PortfolioPage() {
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="bg-neutral-900/60 backdrop-blur-xl border border-white/10 rounded-2xl p-16 text-center"
+              className="relative overflow-hidden bg-neutral-900/40 backdrop-blur-2xl border border-white/10 rounded-[32px] p-20 text-center shadow-2xl"
             >
-              <Clock className="w-12 h-12 mx-auto text-gray-600 mb-4" />
-              <h2 className="text-lg font-bold text-gray-400 mb-2">No Positions Yet</h2>
-              <p className="text-sm text-gray-500 mb-6">
-                Place your first bet to start tracking your performance.
+              {/* Premium Glow */}
+              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3/4 h-32 bg-new-blue/20 blur-[100px] rounded-full pointer-events-none" />
+
+              <div className="relative z-10 w-24 h-24 mx-auto mb-6 bg-gradient-to-b from-neutral-800 to-black rounded-full border border-white/10 flex items-center justify-center shadow-inner group">
+                <div className="absolute inset-0 bg-new-blue/20 blur-xl rounded-full group-hover:bg-new-blue/30 transition-all duration-500" />
+                <Clock className="w-10 h-10 text-white/70 relative z-10 group-hover:scale-110 transition-transform duration-500" />
+              </div>
+              <h2 className="relative z-10 text-3xl font-black text-white tracking-tight mb-3">No Active Positions</h2>
+              <p className="relative z-10 text-gray-400 max-w-sm mx-auto mb-8">
+                You haven't placed any predictions yet. Head over to the markets to make your first trade.
               </p>
               <button
                 onClick={() => router.push('/markets')}
-                className="px-6 py-3 bg-new-mint text-black font-bold text-xs uppercase tracking-wider rounded-xl hover:shadow-[0_0_20px_rgba(52,211,153,0.3)] transition-all"
+                className="relative z-10 px-8 py-4 bg-new-blue text-white font-bold text-sm uppercase tracking-widest rounded-2xl hover:bg-new-blue/90 shadow-[0_0_30px_rgba(59,130,246,0.3)] hover:shadow-[0_0_40px_rgba(59,130,246,0.5)] hover:scale-105 active:scale-95 transition-all"
               >
                 Go to Markets
               </button>
@@ -365,9 +389,8 @@ export default function PortfolioPage() {
                                 </span>
                               </div>
                               <span
-                                className={`text-[10px] font-bold uppercase tracking-wider ${
-                                  side === 'YES' ? 'text-new-mint' : 'text-off-red'
-                                }`}
+                                className={`text-[10px] font-bold uppercase tracking-wider ${side === 'YES' ? 'text-new-mint' : 'text-off-red'
+                                  }`}
                               >
                                 {side} &middot; {formatPred(deposit)} DART
                               </span>
@@ -414,9 +437,8 @@ export default function PortfolioPage() {
                         >
                           <div className="flex items-center gap-3">
                             <div
-                              className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                                isWinner ? 'bg-new-mint/10' : 'bg-off-red/10'
-                              }`}
+                              className={`w-8 h-8 rounded-full flex items-center justify-center ${isWinner ? 'bg-new-mint/10' : 'bg-off-red/10'
+                                }`}
                             >
                               {isWinner ? (
                                 <Check className="w-4 h-4 text-new-mint" />
@@ -433,9 +455,8 @@ export default function PortfolioPage() {
                                   ${(round.targetPrice / 100).toFixed(2)}
                                 </span>
                                 <span
-                                  className={`text-[10px] font-bold uppercase ${
-                                    round.outcome ? 'text-new-mint' : 'text-off-red'
-                                  }`}
+                                  className={`text-[10px] font-bold uppercase ${round.outcome ? 'text-new-mint' : 'text-off-red'
+                                    }`}
                                 >
                                   {round.outcome ? 'YES' : 'NO'} Won
                                 </span>

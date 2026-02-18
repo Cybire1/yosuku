@@ -5,11 +5,10 @@ import { WalletMultiButton } from '@demox-labs/aleo-wallet-adapter-reactui';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Target, Menu, X, ArrowUpRight, Droplets, Loader, Check } from 'lucide-react';
 import { useRouter, usePathname } from 'next/navigation';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { PRED_TOKEN_PROGRAM, PRED_MULTIPLIER } from '@/lib/predictionContract';
 
 const NAV_LINKS = [
-  { name: 'home', href: '/' },
   { name: 'markets', href: '/markets' },
   { name: 'portfolio', href: '/portfolio' },
   { name: 'how it works', href: '/how-it-works' },
@@ -20,6 +19,13 @@ export default function Header() {
   const router = useRouter();
   const pathname = usePathname();
   const [mintState, setMintState] = useState<'idle' | 'loading' | 'done'>('idle');
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const handleMint = async () => {
     if (!publicKey || !requestTransaction || mintState === 'loading') return;
@@ -45,8 +51,6 @@ export default function Header() {
       setMintState('idle');
     }
   };
-  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   return (
     <>
@@ -61,7 +65,7 @@ export default function Header() {
           {/* Logo */}
           <div
             className="pl-5 pr-6 cursor-pointer group flex items-center gap-2.5"
-            onClick={() => router.push('/')}
+            onClick={() => router.push('/markets')}
           >
             <div className="relative">
               <Target className="w-6 h-6 text-white group-hover:text-new-mint transition-colors duration-300" strokeWidth={2.5} />
@@ -121,28 +125,32 @@ export default function Header() {
 
           {/* Actions */}
           <div className="flex items-center gap-2 pl-1.5 pr-2">
-            {publicKey && (
-              <button
-                onClick={handleMint}
-                disabled={mintState === 'loading'}
-                className="hidden sm:flex items-center gap-1.5 h-10 px-4 rounded-full text-xs font-bold text-gray-400 hover:text-new-mint bg-white/[0.03] hover:bg-new-mint/10 border border-white/5 hover:border-new-mint/20 transition-all disabled:opacity-50"
-              >
-                {mintState === 'loading' ? (
-                  <Loader className="w-3.5 h-3.5 animate-spin" />
-                ) : mintState === 'done' ? (
-                  <Check className="w-3.5 h-3.5 text-new-mint" />
-                ) : (
-                  <Droplets className="w-3.5 h-3.5" />
+            {mounted && (
+              <>
+                {publicKey && (
+                  <button
+                    onClick={handleMint}
+                    disabled={mintState === 'loading'}
+                    className="hidden sm:flex items-center gap-1.5 h-10 px-4 rounded-full text-xs font-bold text-gray-400 hover:text-new-mint bg-white/[0.03] hover:bg-new-mint/10 border border-white/5 hover:border-new-mint/20 transition-all disabled:opacity-50"
+                  >
+                    {mintState === 'loading' ? (
+                      <Loader className="w-3.5 h-3.5 animate-spin" />
+                    ) : mintState === 'done' ? (
+                      <Check className="w-3.5 h-3.5 text-new-mint" />
+                    ) : (
+                      <Droplets className="w-3.5 h-3.5" />
+                    )}
+                    {mintState === 'done' ? 'Minted' : 'Mint'}
+                  </button>
                 )}
-                {mintState === 'done' ? 'Minted' : 'Mint'}
-              </button>
+                <div className="transform transition-transform hover:scale-105 active:scale-95 hidden sm:block">
+                  <WalletMultiButton className="!bg-white/5 !backdrop-blur-md !text-white !border !border-white/10 !rounded-full !font-bold !h-10 !px-6 !text-xs hover:!bg-white hover:!text-black hover:!border-white hover:shadow-[0_0_20px_rgba(255,255,255,0.3)] transition-all duration-300 uppercase tracking-wider" />
+                </div>
+                <div className="sm:hidden transform scale-90">
+                  <WalletMultiButton style={{ padding: '0 12px', height: '32px', fontSize: '10px' }} />
+                </div>
+              </>
             )}
-            <div className="transform transition-transform hover:scale-105 active:scale-95 hidden sm:block">
-              <WalletMultiButton className="!bg-white/5 !backdrop-blur-md !text-white !border !border-white/10 !rounded-full !font-bold !h-10 !px-6 !text-xs hover:!bg-white hover:!text-black hover:!border-white hover:shadow-[0_0_20px_rgba(255,255,255,0.3)] transition-all duration-300 uppercase tracking-wider" />
-            </div>
-            <div className="sm:hidden transform scale-90">
-              <WalletMultiButton style={{ padding: '0 12px', height: '32px', fontSize: '10px' }} />
-            </div>
 
             {/* Mobile Menu Toggle */}
             <button

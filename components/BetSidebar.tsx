@@ -2,12 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { TrendingUp, TrendingDown, Loader, Wallet } from 'lucide-react';
+import { TrendingUp, TrendingDown, Loader, Wallet, Droplets, Check } from 'lucide-react';
 import { useWallet } from '@demox-labs/aleo-wallet-adapter-react';
+import { useBtcPrice } from '@/lib/hooks/useBtcPrice';
 import {
   BTC_PREDICTION_PROGRAM,
   PRED_TOKEN_PROGRAM,
-  POOL_ADDRESS,
   PRED_MULTIPLIER,
   formatPred,
   calcOdds,
@@ -15,18 +15,64 @@ import {
   getConfidenceLabel,
   type RoundState,
 } from '@/lib/predictionContract';
-import { useBtcPrice } from '@/lib/hooks/useBtcPrice';
+import { savePosition } from '@/lib/roundHelpers';
 
 const BALANCE_KEY = 'dart_balance';
+const QUICK_AMOUNTS = [50, 100, 250, 500];
 
-interface BetPanelProps {
+function MintButton() {
+  const { publicKey, requestTransaction } = useWallet();
+  const [state, setState] = useState<'idle' | 'loading' | 'done'>('idle');
+
+  const handleMint = async () => {
+    if (!publicKey || !requestTransaction || state === 'loading') return;
+    setState('loading');
+    try {
+      const microAmount = 1000 * PRED_MULTIPLIER;
+      await requestTransaction({
+        address: publicKey,
+        chainId: 'testnetbeta',
+        transitions: [{
+          program: PRED_TOKEN_PROGRAM,
+          functionName: 'mint_public',
+          inputs: [`${microAmount}u64`],
+        }],
+        fee: 500000,
+        feePrivate: false,
+      });
+      const cur = parseInt(localStorage.getItem(BALANCE_KEY) || '0', 10);
+      localStorage.setItem(BALANCE_KEY, String(cur + microAmount));
+      setState('done');
+      setTimeout(() => setState('idle'), 2000);
+    } catch {
+      setState('idle');
+    }
+  };
+
+  return (
+    <button
+      onClick={handleMint}
+      disabled={state === 'loading'}
+      className="w-full py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 bg-white/[0.04] border border-white/10 text-gray-400 hover:text-new-mint hover:bg-new-mint/10 hover:border-new-mint/20 transition-all disabled:opacity-50"
+    >
+      {state === 'loading' ? (
+        <Loader className="w-3.5 h-3.5 animate-spin" />
+      ) : state === 'done' ? (
+        <Check className="w-3.5 h-3.5 text-new-mint" />
+      ) : (
+        <Droplets className="w-3.5 h-3.5" />
+      )}
+      {state === 'done' ? 'Minted 1,000 DART!' : 'Mint 1,000 DART (Testnet)'}
+    </button>
+  );
+}
+
+interface BetSidebarProps {
   round: RoundState;
   onSuccess?: () => void;
 }
 
-const QUICK_AMOUNTS = [50, 100, 250, 500];
-
-export default function BetPanel({ round, onSuccess }: BetPanelProps) {
+export default function BetSidebar({ round, onSuccess }: BetSidebarProps) {
   const { publicKey, requestTransaction } = useWallet();
   const { price } = useBtcPrice();
   const [side, setSide] = useState<'YES' | 'NO'>('YES');
@@ -35,6 +81,10 @@ export default function BetPanel({ round, onSuccess }: BetPanelProps) {
   const [error, setError] = useState('');
   const [balance, setBalance] = useState(0);
   const [minsLeft, setMinsLeft] = useState(0);
+
+  const odds = calcOdds(round.yesPool, round.noPool);
+  const microAmount = Math.floor(parseFloat(amount || '0') * PRED_MULTIPLIER);
+  const totalPool = round.yesPool + round.noPool;
 
   // Track minutes remaining for probability
   useEffect(() => {
@@ -47,28 +97,20 @@ export default function BetPanel({ round, onSuccess }: BetPanelProps) {
     return () => clearInterval(interval);
   }, [round.endTime]);
 
-  const odds = calcOdds(round.yesPool, round.noPool);
-  const microAmount = Math.floor(parseFloat(amount || '0') * PRED_MULTIPLIER);
-
-  const yesPrice = odds.yes;
-  const noPrice = odds.no;
-
-  // Read balance from localStorage
+  // Read balance
   useEffect(() => {
-    const read = () => {
-      setBalance(parseInt(localStorage.getItem(BALANCE_KEY) || '0', 10));
-    };
+    const read = () => setBalance(parseInt(localStorage.getItem(BALANCE_KEY) || '0', 10));
     read();
     const interval = setInterval(read, 2000);
     return () => clearInterval(interval);
   }, []);
 
-  // Estimate payout if this bet wins
+  // Estimated payout — odds-based (Polymarket-style)
   const estPayout = (() => {
     if (!microAmount) return 0;
-    const totalPool = round.yesPool + round.noPool + microAmount;
-    const winPool = (side === 'YES' ? round.yesPool : round.noPool) + microAmount;
-    return (microAmount / winPool) * totalPool * 0.9;
+    const sideOdds = side === 'YES' ? odds.yes : odds.no;
+    if (sideOdds <= 0 || sideOdds >= 100) return microAmount * 0.9;
+    return (microAmount / (sideOdds / 100)) * 0.9;
   })();
 
   const handleQuickAdd = (val: number) => {
@@ -95,18 +137,10 @@ export default function BetPanel({ round, onSuccess }: BetPanelProps) {
 
     try {
       const betFunction = side === 'YES' ? 'bet_yes' : 'bet_no';
-
       const transaction = {
         address: publicKey,
         chainId: 'testnetbeta',
         transitions: [
-          // 1. Transfer DART from user to pool
-          {
-            program: PRED_TOKEN_PROGRAM,
-            functionName: 'transfer_public',
-            inputs: [POOL_ADDRESS, `${microAmount}u64`],
-          },
-          // 2. Record the bet
           {
             program: BTC_PREDICTION_PROGRAM,
             functionName: betFunction,
@@ -119,20 +153,11 @@ export default function BetPanel({ round, onSuccess }: BetPanelProps) {
 
       await requestTransaction(transaction);
 
-      // Deduct from local balance tracker
       const newBalance = Math.max(0, balance - microAmount);
       localStorage.setItem(BALANCE_KEY, String(newBalance));
       setBalance(newBalance);
 
-      // Save position
-      const positions = JSON.parse(localStorage.getItem('pred_positions') || '[]');
-      positions.push({
-        roundId: round.id,
-        side,
-        amount: microAmount,
-        timestamp: Date.now(),
-      });
-      localStorage.setItem('pred_positions', JSON.stringify(positions));
+      savePosition(round.id, side, microAmount);
 
       setAmount('');
       onSuccess?.();
@@ -153,37 +178,35 @@ export default function BetPanel({ round, onSuccess }: BetPanelProps) {
   const isYes = side === 'YES';
 
   return (
-    <div className="bg-neutral-900/60 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden">
+    <div className="bg-neutral-900/60 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden lg:sticky lg:top-28">
       {/* YES / NO toggle */}
       <div className="p-4 pb-0">
         <div className="grid grid-cols-2 gap-2">
           <button
             onClick={() => setSide('YES')}
-            className={`relative py-3 rounded-xl font-bold text-sm transition-all ${
-              isYes
-                ? 'bg-new-mint/20 text-new-mint border-2 border-new-mint/40'
-                : 'bg-white/[0.03] text-gray-500 border-2 border-transparent hover:bg-white/5 hover:text-gray-300'
-            }`}
+            className={`relative py-3 rounded-xl font-bold text-sm transition-all hover:scale-[1.02] active:scale-95 ${isYes
+                ? 'bg-new-mint/20 text-new-mint border-2 border-new-mint/40 shadow-[0_0_15px_rgba(52,211,153,0.15)]'
+                : 'bg-white/[0.03] text-gray-500 border-2 border-transparent hover:bg-white/5 hover:text-gray-300 hover:shadow-[0_0_10px_rgba(255,255,255,0.05)]'
+              }`}
           >
             <div className="flex items-center justify-center gap-2">
               <TrendingUp className="w-4 h-4" />
               <span>Yes</span>
-              <span className="font-mono">{yesPrice}%</span>
+              <span className="font-mono">{odds.yes}%</span>
             </div>
           </button>
 
           <button
             onClick={() => setSide('NO')}
-            className={`relative py-3 rounded-xl font-bold text-sm transition-all ${
-              !isYes
-                ? 'bg-off-red/20 text-off-red border-2 border-off-red/40'
-                : 'bg-white/[0.03] text-gray-500 border-2 border-transparent hover:bg-white/5 hover:text-gray-300'
-            }`}
+            className={`relative py-3 rounded-xl font-bold text-sm transition-all hover:scale-[1.02] active:scale-95 ${!isYes
+                ? 'bg-off-red/20 text-off-red border-2 border-off-red/40 shadow-[0_0_15px_rgba(244,63,94,0.15)]'
+                : 'bg-white/[0.03] text-gray-500 border-2 border-transparent hover:bg-white/5 hover:text-gray-300 hover:shadow-[0_0_10px_rgba(255,255,255,0.05)]'
+              }`}
           >
             <div className="flex items-center justify-center gap-2">
               <TrendingDown className="w-4 h-4" />
               <span>No</span>
-              <span className="font-mono">{noPrice}%</span>
+              <span className="font-mono">{odds.no}%</span>
             </div>
           </button>
         </div>
@@ -205,7 +228,7 @@ export default function BetPanel({ round, onSuccess }: BetPanelProps) {
             value={amount}
             onChange={(e) => { setAmount(e.target.value); setError(''); }}
             placeholder="0"
-            className="w-full bg-black/40 border border-white/10 rounded-xl pl-4 pr-16 py-3.5 text-2xl font-mono font-bold text-white placeholder-gray-700 focus:border-white/20 focus:outline-none transition-all text-right"
+            className="w-full bg-black/40 border border-white/10 rounded-xl pl-16 pr-4 py-3.5 text-2xl font-mono font-bold text-white placeholder-gray-700 focus:border-white/20 focus:outline-none transition-all text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
             step="1"
             min="0"
           />
@@ -260,19 +283,15 @@ export default function BetPanel({ round, onSuccess }: BetPanelProps) {
                   <span className={`text-[11px] font-bold ${color}`}>{label}</span>
                 </div>
                 <div className="relative h-2 bg-white/5 rounded-full overflow-hidden">
-                  {/* NO side (red from left) */}
                   <div
                     className="absolute left-0 top-0 h-full bg-gradient-to-r from-off-red to-off-red/30 transition-all duration-700"
                     style={{ width: `${100 - pct}%` }}
                   />
-                  {/* YES side (green from right) */}
                   <div
                     className="absolute right-0 top-0 h-full bg-gradient-to-l from-new-mint to-new-mint/30 transition-all duration-700"
                     style={{ width: `${pct}%` }}
                   />
-                  {/* Center marker */}
                   <div className="absolute left-1/2 top-0 w-px h-full bg-white/20" />
-                  {/* Position indicator */}
                   <div
                     className="absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full border-2 border-white bg-neutral-900 transition-all duration-700 z-10"
                     style={{ left: `calc(${pct}% - 5px)` }}
@@ -294,11 +313,10 @@ export default function BetPanel({ round, onSuccess }: BetPanelProps) {
             whileTap={{ scale: 0.98 }}
             onClick={handleBet}
             disabled={loading || !amount || parseFloat(amount) <= 0 || round.resolved}
-            className={`w-full py-3.5 rounded-xl font-bold text-sm uppercase tracking-wider transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed ${
-              isYes
-                ? 'bg-new-mint text-black shadow-[0_0_20px_rgba(52,211,153,0.2)] hover:shadow-[0_0_30px_rgba(52,211,153,0.3)]'
-                : 'bg-off-red text-white shadow-[0_0_20px_rgba(244,63,94,0.2)] hover:shadow-[0_0_30px_rgba(244,63,94,0.3)]'
-            }`}
+            className={`w-full py-3.5 rounded-xl font-bold text-sm uppercase tracking-wider transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed hover:scale-[1.02] active:scale-95 ${isYes
+                ? 'bg-new-mint text-black shadow-[0_0_20px_rgba(52,211,153,0.3)] hover:shadow-[0_0_30px_rgba(52,211,153,0.5)] border border-new-mint/30'
+                : 'bg-off-red text-white shadow-[0_0_20px_rgba(244,63,94,0.3)] hover:shadow-[0_0_30px_rgba(244,63,94,0.5)] border border-off-red/30'
+              }`}
           >
             {loading ? (
               <>
@@ -314,6 +332,11 @@ export default function BetPanel({ round, onSuccess }: BetPanelProps) {
             <Wallet className="w-4 h-4" />
             Connect wallet to bet
           </div>
+        )}
+
+        {/* Mint DART shortcut */}
+        {publicKey && (
+          <MintButton />
         )}
       </div>
     </div>
