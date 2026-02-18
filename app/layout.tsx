@@ -4,6 +4,7 @@ import "./globals.css";
 import WalletProvider from "@/components/WalletProvider";
 import SmoothScroll from "@/components/SmoothScroll";
 import VoiceAgent from "@/components/VoiceAgent";
+import AnimatedBackground from "@/components/AnimatedBackground";
 
 import Preloader from "@/components/Preloader";
 
@@ -52,10 +53,11 @@ export default function RootLayout({
         />
       </head>
       <body
-        className={`${outfit.variable} ${spaceGrotesk.variable} antialiased bg-black text-white font-sans`}
+        className={`${outfit.variable} ${spaceGrotesk.variable} antialiased text-white font-sans`}
         suppressHydrationWarning
       >
         <WalletProvider>
+          <AnimatedBackground />
           <Preloader />
           <SmoothScroll />
           {children}

@@ -26,10 +26,28 @@ import {
   type UserPosition,
 } from '@/lib/predictionContract';
 
+// Avg block time on Aleo testnet (~3.5s)
+const AVG_BLOCK_TIME_MS = 3500;
+
+let cachedHeight = 0;
+let heightFetchedAt = 0;
+async function getBlockHeight(): Promise<number> {
+  if (cachedHeight > 0 && Date.now() - heightFetchedAt < 10_000) return cachedHeight;
+  try {
+    const res = await fetch(`https://api.explorer.provable.com/v1/testnet/latest/height`);
+    if (!res.ok) return cachedHeight;
+    cachedHeight = parseInt(await res.text(), 10);
+    heightFetchedAt = Date.now();
+    return cachedHeight;
+  } catch {
+    return cachedHeight;
+  }
+}
+
 // Fetch a round's state from on-chain mappings
 async function fetchRound(roundId: number): Promise<RoundState | null> {
   try {
-    const [targetRaw, deadlineRaw, durationRaw, resolvedRaw, outcomeRaw, yesRaw, noRaw] =
+    const [targetRaw, deadlineRaw, durationRaw, resolvedRaw, outcomeRaw, yesRaw, noRaw, currentHeight] =
       await Promise.all([
         fetchMapping(BTC_PREDICTION_PROGRAM, 'round_target_price', `${roundId}u64`),
         fetchMapping(BTC_PREDICTION_PROGRAM, 'round_deadline', `${roundId}u64`),
@@ -38,22 +56,28 @@ async function fetchRound(roundId: number): Promise<RoundState | null> {
         fetchMapping(BTC_PREDICTION_PROGRAM, 'round_outcome', `${roundId}u64`),
         fetchMapping(BTC_PREDICTION_PROGRAM, 'round_yes_pool', `${roundId}u64`),
         fetchMapping(BTC_PREDICTION_PROGRAM, 'round_no_pool', `${roundId}u64`),
+        getBlockHeight(),
       ]);
 
     if (!targetRaw) return null;
 
     const targetPrice = parseU64(targetRaw);
+    const deadline = parseInt(deadlineRaw?.replace('u32', '').trim() || '0', 10);
     const durationSecs = parseInt(durationRaw?.replace('u32', '').trim() || '300', 10);
     const durationMs = durationSecs * 1000;
     const resolved = resolvedRaw?.trim() === 'true';
     const outcome = resolved ? outcomeRaw?.trim() === 'true' : null;
 
+    const blocksLeft = Math.max(0, deadline - currentHeight);
+    const msLeft = blocksLeft * AVG_BLOCK_TIME_MS;
+    const endTime = Date.now() + msLeft;
+
     return {
       id: roundId,
       targetPrice,
-      deadline: parseInt(deadlineRaw?.replace('u32', '').trim() || '0', 10),
+      deadline,
       durationMs,
-      endTime: Date.now() + durationMs,
+      endTime,
       yesPool: parseU64(yesRaw),
       noPool: parseU64(noRaw),
       resolved,
@@ -122,6 +146,20 @@ export default function PortfolioPage() {
 
   const handleClaim = async (roundId: number) => {
     if (!publicKey || !requestTransaction) return;
+
+    // Calculate expected payout for contract verification
+    const round = rounds.find((r) => r.id === roundId);
+    const pos = positions.find((p) => p.roundId === roundId);
+    if (!round || !pos) return;
+
+    const deposit = Math.max(pos.yesDeposit, pos.noDeposit);
+    const totalPool = round.yesPool + round.noPool;
+    const winPool = round.outcome ? round.yesPool : round.noPool;
+    if (winPool === 0) return;
+    const gross = Math.floor(deposit * totalPool / winPool);
+    const fee = Math.floor(gross / 10);
+    const netPayout = gross - fee;
+
     setClaimingId(roundId);
     try {
       await requestTransaction({
@@ -131,7 +169,7 @@ export default function PortfolioPage() {
           {
             program: BTC_PREDICTION_PROGRAM,
             functionName: 'claim',
-            inputs: [`${roundId}u64`],
+            inputs: [`${roundId}u64`, `${netPayout}u64`],
           },
         ],
         fee: 1000000,
@@ -195,7 +233,7 @@ export default function PortfolioPage() {
     .filter(({ pos }) => pos);
 
   return (
-    <div className="min-h-screen bg-neutral-950 overflow-x-hidden selection:bg-white selection:text-black">
+    <div className="min-h-screen overflow-x-hidden selection:bg-white selection:text-black">
       <Header />
 
       <main className="pt-28 pb-12 relative">

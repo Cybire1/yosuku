@@ -56,11 +56,22 @@ export default function LiveBtcChart({ targetPrice, height = 370 }: LiveBtcChart
 
   const targetUsd = targetPrice ? targetPrice / 100 : undefined;
 
-  // Add points at a steady interval (every ~1s) for smooth cadence
+  // Seed chart instantly on first price, then add points every ~1s
   useEffect(() => {
     if (price <= 0) return;
 
     const now = Date.now();
+
+    // First price: seed two points so chart renders immediately
+    if (data.length === 0) {
+      lastAddTime.current = now;
+      setData([
+        { time: formatTime(now - 1000), price, timestamp: now - 1000 },
+        { time: formatTime(now), price, timestamp: now },
+      ]);
+      return;
+    }
+
     // Throttle to one point per second for smooth spacing
     if (now - lastAddTime.current < 900) return;
     lastAddTime.current = now;

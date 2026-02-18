@@ -27,7 +27,6 @@
 
 body {
   color: var(--foreground);
-  background: var(--background);
   font-family: var(--font-sans), sans-serif;
   overflow-x: hidden;
 }
@@ -179,3 +178,4 @@ html.lenis {
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }
+

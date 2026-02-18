@@ -13,6 +13,13 @@ export const PLATFORM_FEE_BPS = 1000;
 // Round duration in seconds
 export const ROUND_DURATION_SECONDS = 300; // 5 minutes
 
+// Default seed liquidity per side when creating a round (500 DART)
+export const DEFAULT_SEED_AMOUNT = 500 * PRED_MULTIPLIER;
+
+// Pool address: btc_prediction.aleo program address in dart_token balances
+// Update this after deploying the contract
+export const POOL_ADDRESS = 'btc_prediction.aleo';
+
 // Aleo API endpoints
 export const ALEO_API_URL = 'https://api.explorer.provable.com/v1';
 export const ALEO_NETWORK = 'testnet';
@@ -44,7 +51,9 @@ export async function fetchMapping(
     if (!res.ok) return null;
     const text = await res.text();
     // Remove quotes and whitespace
-    return text.replace(/"/g, '').trim();
+    const cleaned = text.replace(/"/g, '').trim();
+    if (cleaned === 'null' || cleaned === '') return null;
+    return cleaned;
   } catch {
     return null;
   }

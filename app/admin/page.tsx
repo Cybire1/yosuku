@@ -99,7 +99,7 @@ export default function AdminPage() {
 
   if (!publicKey) {
     return (
-      <div className="min-h-screen bg-black text-white selection:bg-off-blue/30 overflow-x-hidden">
+      <div className="min-h-screen text-white selection:bg-off-blue/30 overflow-x-hidden">
         <div className="fixed inset-0 bg-noise opacity-[0.03] pointer-events-none z-50"></div>
         <Header />
 
@@ -116,7 +116,7 @@ export default function AdminPage() {
 
   if (!isAdmin) {
     return (
-      <div className="min-h-screen bg-black text-white selection:bg-off-blue/30 overflow-x-hidden">
+      <div className="min-h-screen text-white selection:bg-off-blue/30 overflow-x-hidden">
         <div className="fixed inset-0 bg-noise opacity-[0.03] pointer-events-none z-50"></div>
         <Header />
 
@@ -141,7 +141,7 @@ export default function AdminPage() {
   const resolvedMarkets = markets.filter(m => m.resolved);
 
   return (
-    <div className="min-h-screen bg-black text-white selection:bg-off-blue/30 overflow-x-hidden">
+    <div className="min-h-screen text-white selection:bg-off-blue/30 overflow-x-hidden">
       <div className="fixed inset-0 bg-noise opacity-[0.03] pointer-events-none z-50"></div>
       <div className="fixed inset-0 pointer-events-none">
         <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-off-blue/10 blur-[120px] rounded-full"></div>

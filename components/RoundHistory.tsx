@@ -22,6 +22,19 @@ export default function RoundHistory({ rounds, positions, onClaim }: RoundHistor
   const handleClaim = async (roundId: number) => {
     if (!publicKey || !requestTransaction) return;
 
+    // Calculate expected payout to pass to contract
+    const round = rounds.find(r => r.id === roundId);
+    const pos = getPosition(roundId);
+    if (!round || !pos) return;
+
+    const deposit = Math.max(pos.yesDeposit, pos.noDeposit);
+    const totalPool = round.yesPool + round.noPool;
+    const winPool = round.outcome ? round.yesPool : round.noPool;
+    if (winPool === 0) return;
+    const gross = Math.floor(deposit * totalPool / winPool);
+    const fee = Math.floor(gross / 10);
+    const netPayout = gross - fee;
+
     setClaimingId(roundId);
     try {
       const transaction = {
@@ -30,7 +43,7 @@ export default function RoundHistory({ rounds, positions, onClaim }: RoundHistor
         transitions: [{
           program: BTC_PREDICTION_PROGRAM,
           functionName: 'claim',
-          inputs: [`${roundId}u64`],
+          inputs: [`${roundId}u64`, `${netPayout}u64`],
         }],
         fee: 1000000,
         feePrivate: false,
@@ -45,11 +58,14 @@ export default function RoundHistory({ rounds, positions, onClaim }: RoundHistor
     }
   };
 
-  if (rounds.length === 0) {
+  // Only show rounds the user participated in
+  const participatedRounds = rounds.filter(r => getPosition(r.id));
+
+  if (participatedRounds.length === 0) {
     return (
       <div className="text-center py-12">
         <Clock className="w-8 h-8 text-gray-600 mx-auto mb-3" />
-        <p className="text-gray-500 text-sm">No past rounds yet</p>
+        <p className="text-gray-500 text-sm">No rounds with positions yet</p>
       </div>
     );
   }
@@ -60,11 +76,9 @@ export default function RoundHistory({ rounds, positions, onClaim }: RoundHistor
         Round History
       </h3>
 
-      {rounds.map((round, index) => {
-        const position = getPosition(round.id);
-        const userSide = position
-          ? position.yesDeposit > 0 ? 'YES' : position.noDeposit > 0 ? 'NO' : null
-          : null;
+      {participatedRounds.map((round, index) => {
+        const position = getPosition(round.id)!;
+        const userSide = position.yesDeposit > 0 ? 'YES' : position.noDeposit > 0 ? 'NO' : null;
         const userDeposit = position
           ? Math.max(position.yesDeposit, position.noDeposit)
           : 0;
@@ -133,44 +147,38 @@ export default function RoundHistory({ rounds, positions, onClaim }: RoundHistor
 
               {/* Right: User result */}
               <div className="text-right">
-                {userSide ? (
-                  <>
-                    {isWinner ? (
-                      <div>
-                        <span className="text-sm font-bold text-new-mint">+{formatPred(payout)}</span>
-                        <span className="block text-[10px] text-gray-500">DART</span>
-                        {canClaim && (
-                          <button
-                            onClick={() => handleClaim(round.id)}
-                            disabled={claimingId === round.id}
-                            className="mt-1 px-3 py-1 bg-new-mint/10 hover:bg-new-mint/20 border border-new-mint/30 rounded-lg text-[10px] font-bold text-new-mint uppercase tracking-wider transition-all disabled:opacity-50"
-                          >
-                            {claimingId === round.id ? '...' : 'Claim'}
-                          </button>
-                        )}
-                        {position?.claimed && (
-                          <div className="flex items-center gap-1 justify-end mt-1">
-                            <Trophy className="w-3 h-3 text-new-mint" />
-                            <span className="text-[10px] text-new-mint font-bold">Claimed</span>
-                          </div>
-                        )}
-                      </div>
-                    ) : round.resolved ? (
-                      <div>
-                        <span className="text-sm font-bold text-off-red">-{formatPred(userDeposit)}</span>
-                        <span className="block text-[10px] text-gray-500">DART</span>
-                      </div>
-                    ) : (
-                      <div>
-                        <span className="text-sm font-mono text-white">{formatPred(userDeposit)}</span>
-                        <span className={`block text-[10px] font-bold ${userSide === 'YES' ? 'text-new-mint' : 'text-off-red'}`}>
-                          {userSide}
-                        </span>
+                {isWinner ? (
+                  <div>
+                    <span className="text-sm font-bold text-new-mint">+{formatPred(payout)}</span>
+                    <span className="block text-[10px] text-gray-500">DART</span>
+                    {canClaim && (
+                      <button
+                        onClick={() => handleClaim(round.id)}
+                        disabled={claimingId === round.id}
+                        className="mt-1 px-3 py-1 bg-new-mint/10 hover:bg-new-mint/20 border border-new-mint/30 rounded-lg text-[10px] font-bold text-new-mint uppercase tracking-wider transition-all disabled:opacity-50"
+                      >
+                        {claimingId === round.id ? '...' : 'Claim'}
+                      </button>
+                    )}
+                    {position.claimed && (
+                      <div className="flex items-center gap-1 justify-end mt-1">
+                        <Trophy className="w-3 h-3 text-new-mint" />
+                        <span className="text-[10px] text-new-mint font-bold">Claimed</span>
                       </div>
                     )}
-                  </>
+                  </div>
+                ) : round.resolved ? (
+                  <div>
+                    <span className="text-sm font-bold text-off-red">-{formatPred(userDeposit)}</span>
+                    <span className="block text-[10px] text-gray-500">DART</span>
+                  </div>
                 ) : (
-                  <span className="text-[10px] text-gray-600">No position</span>
+                  <div>
+                    <span className="text-sm font-mono text-white">{formatPred(userDeposit)}</span>
+                    <span className={`block text-[10px] font-bold ${userSide === 'YES' ? 'text-new-mint' : 'text-off-red'}`}>
+                      {userSide}
+                    </span>
+                  </div>
                 )}
               </div>
             </div>

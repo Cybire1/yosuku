@@ -112,7 +112,7 @@ export default function MarketDetailPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-black text-white flex items-center justify-center">
+      <div className="min-h-screen text-white flex items-center justify-center">
         <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-white/10 border-t-new-mint"></div>
       </div>
     );
@@ -120,7 +120,7 @@ export default function MarketDetailPage() {
 
   if (!market) {
     return (
-      <div className="min-h-screen bg-black text-white">
+      <div className="min-h-screen text-white">
         <Header />
         <main className="container mx-auto px-4 py-32 text-center">
           <h1 className="text-4xl font-black mb-4">Market Not Found</h1>
@@ -136,7 +136,7 @@ export default function MarketDetailPage() {
   }
 
   return (
-    <div className="min-h-screen bg-black text-white selection:bg-off-blue/30 overflow-x-hidden">
+    <div className="min-h-screen text-white selection:bg-off-blue/30 overflow-x-hidden">
       <div className="fixed inset-0 bg-noise opacity-[0.03] pointer-events-none z-50"></div>
       <div className="fixed inset-0 pointer-events-none">
         <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-off-green/10 blur-[120px] rounded-full"></div>

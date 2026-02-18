@@ -6,6 +6,8 @@ import { TrendingUp, TrendingDown, Loader, Wallet } from 'lucide-react';
 import { useWallet } from '@demox-labs/aleo-wallet-adapter-react';
 import {
   BTC_PREDICTION_PROGRAM,
+  PRED_TOKEN_PROGRAM,
+  POOL_ADDRESS,
   PRED_MULTIPLIER,
   formatPred,
   calcOdds,
@@ -98,6 +100,13 @@ export default function BetPanel({ round, onSuccess }: BetPanelProps) {
         address: publicKey,
         chainId: 'testnetbeta',
         transitions: [
+          // 1. Transfer DART from user to pool
+          {
+            program: PRED_TOKEN_PROGRAM,
+            functionName: 'transfer_public',
+            inputs: [POOL_ADDRESS, `${microAmount}u64`],
+          },
+          // 2. Record the bet
           {
             program: BTC_PREDICTION_PROGRAM,
             functionName: betFunction,

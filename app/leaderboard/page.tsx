@@ -69,7 +69,7 @@ export default function LeaderboardPage() {
   };
 
   return (
-    <div className="min-h-screen bg-black text-white selection:bg-off-blue/30 overflow-x-hidden">
+    <div className="min-h-screen text-white selection:bg-off-blue/30 overflow-x-hidden">
       <div className="fixed inset-0 bg-noise opacity-[0.03] pointer-events-none z-50"></div>
       <div className="fixed inset-0 pointer-events-none">
         <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-new-mint/10 blur-[120px] rounded-full"></div>

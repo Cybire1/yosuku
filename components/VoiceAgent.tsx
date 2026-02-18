@@ -3,12 +3,14 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Mic, X, Send, Loader2, ArrowUpRight, Sparkles } from 'lucide-react';
+import { usePathname } from 'next/navigation';
 import { useWallet } from '@demox-labs/aleo-wallet-adapter-react';
 import { useVoiceSession, type VoiceMessage } from '@/lib/hooks/useVoiceSession';
 import MarketCard from './MarketCard';
 
 export default function VoiceAgent() {
   const { publicKey } = useWallet();
+  const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<VoiceMessage[]>([]);
   const [textInput, setTextInput] = useState('');
@@ -19,6 +21,9 @@ export default function VoiceAgent() {
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // Only show on /markets page
+  if (mounted && pathname !== '/markets') return null;
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -65,7 +70,7 @@ export default function VoiceAgent() {
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             onClick={handleOpen}
-            className="fixed bottom-6 right-6 h-14 pl-4 pr-6 rounded-full flex items-center gap-3 z-50 group shadow-[0_4px_20px_rgba(52,211,153,0.3)] hover:shadow-[0_4px_30px_rgba(52,211,153,0.5)] transition-all duration-300 pointer-events-auto"
+            className="fixed bottom-6 right-6 h-14 pl-4 pr-5 rounded-full flex items-center gap-2.5 z-50 group shadow-[0_4px_20px_rgba(52,211,153,0.3)] hover:shadow-[0_4px_30px_rgba(52,211,153,0.5)] transition-all duration-300 pointer-events-auto"
           >
             {/* Button Background - Gradient Glass */}
             <div className="absolute inset-0 bg-neutral-900/90 backdrop-blur-xl border border-white/10 rounded-full" />
@@ -83,10 +88,7 @@ export default function VoiceAgent() {
             </div>
 
             {/* Text Label */}
-            <div className="relative z-10 flex flex-col items-start mt-0.5">
-              <span className="text-xs font-bold text-new-mint leading-none uppercase tracking-wider mb-0.5">Dart</span>
-              <span className="text-lg font-black text-white leading-none tracking-tight group-hover:text-transparent group-hover:bg-clip-text group-hover:bg-gradient-to-r group-hover:from-white group-hover:to-gray-200">AI AGENT</span>
-            </div>
+            <span className="relative z-10 text-lg font-black text-white leading-none tracking-tight">DART AI</span>
           </motion.button>
         )}
       </AnimatePresence >
@@ -128,7 +130,7 @@ export default function VoiceAgent() {
                       <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-black transition-colors duration-300 ${isConnected ? 'bg-new-mint shadow-[0_0_10px_rgba(52,211,153,0.8)]' : 'bg-gray-500'}`} />
                     </div>
                     <div>
-                      <h2 className="text-lg font-black text-white tracking-tight leading-none">A.I. AGENT</h2>
+                      <h2 className="text-lg font-black text-white tracking-tight leading-none">DART AI</h2>
                       <div className="flex items-center gap-2 mt-1">
                         <span className={`w-1 h-1 rounded-full ${isConnected ? 'bg-new-mint animate-pulse' : 'bg-gray-500'}`} />
                         <p className="text-[10px] font-mono text-gray-400 uppercase tracking-widest">

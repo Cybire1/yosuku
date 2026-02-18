@@ -24,12 +24,32 @@ import {
   type RoundState,
   type UserPosition,
 } from '@/lib/predictionContract';
-import { Activity, Zap, Timer, Radio, Trophy, XCircle } from 'lucide-react';
+import { Activity, Timer, Radio, Trophy, XCircle } from 'lucide-react';
+import BitcoinIcon from '@/components/icons/BitcoinIcon';
+
+// Avg block time on Aleo testnet (~3.5s)
+const AVG_BLOCK_TIME_MS = 3500;
+
+// Fetch current block height (cached briefly)
+let cachedHeight = 0;
+let heightFetchedAt = 0;
+async function getBlockHeight(): Promise<number> {
+  if (cachedHeight > 0 && Date.now() - heightFetchedAt < 10_000) return cachedHeight;
+  try {
+    const res = await fetch(`https://api.explorer.provable.com/v1/testnet/latest/height`);
+    if (!res.ok) return cachedHeight;
+    cachedHeight = parseInt(await res.text(), 10);
+    heightFetchedAt = Date.now();
+    return cachedHeight;
+  } catch {
+    return cachedHeight;
+  }
+}
 
 // Fetch a round's state from on-chain mappings
 async function fetchRound(roundId: number): Promise<RoundState | null> {
   try {
-    const [targetRaw, deadlineRaw, durationRaw, resolvedRaw, outcomeRaw, yesRaw, noRaw] = await Promise.all([
+    const [targetRaw, deadlineRaw, durationRaw, resolvedRaw, outcomeRaw, yesRaw, noRaw, currentHeight] = await Promise.all([
       fetchMapping(BTC_PREDICTION_PROGRAM, 'round_target_price', `${roundId}u64`),
       fetchMapping(BTC_PREDICTION_PROGRAM, 'round_deadline', `${roundId}u64`),
       fetchMapping(BTC_PREDICTION_PROGRAM, 'round_duration', `${roundId}u64`),
@@ -37,22 +57,29 @@ async function fetchRound(roundId: number): Promise<RoundState | null> {
       fetchMapping(BTC_PREDICTION_PROGRAM, 'round_outcome', `${roundId}u64`),
       fetchMapping(BTC_PREDICTION_PROGRAM, 'round_yes_pool', `${roundId}u64`),
       fetchMapping(BTC_PREDICTION_PROGRAM, 'round_no_pool', `${roundId}u64`),
+      getBlockHeight(),
     ]);
 
     if (!targetRaw) return null;
 
     const targetPrice = parseU64(targetRaw);
+    const deadline = parseInt(deadlineRaw?.replace('u32', '').trim() || '0', 10);
     const durationSecs = parseInt(durationRaw?.replace('u32', '').trim() || '300', 10);
     const durationMs = durationSecs * 1000;
     const resolved = resolvedRaw?.trim() === 'true';
     const outcome = resolved ? outcomeRaw?.trim() === 'true' : null;
 
+    // Calculate endTime from blocks remaining, not from duration
+    const blocksLeft = Math.max(0, deadline - currentHeight);
+    const msLeft = blocksLeft * AVG_BLOCK_TIME_MS;
+    const endTime = Date.now() + msLeft;
+
     return {
       id: roundId,
       targetPrice,
-      deadline: parseInt(deadlineRaw?.replace('u32', '').trim() || '0', 10),
+      deadline,
       durationMs,
-      endTime: Date.now() + durationMs,
+      endTime,
       yesPool: parseU64(yesRaw),
       noPool: parseU64(noRaw),
       resolved,
@@ -160,11 +187,28 @@ export default function MarketsPage() {
   // Active round: on-chain takes priority, fallback to demo
   const currentRound = onChainRound ?? demoRound;
 
-  // Scan for rounds on-chain (parallel fetch)
+  // Find highest round via binary search, then fetch recent rounds
   const scanForRounds = useCallback(async () => {
     setLoading(true);
 
-    const ids = Array.from({ length: 21 }, (_, i) => i);
+    // Binary search for highest existing round ID
+    let lo = 0, hi = 500;
+    while (lo < hi) {
+      const mid = Math.floor((lo + hi + 1) / 2);
+      const exists = await fetchMapping(BTC_PREDICTION_PROGRAM, 'round_target_price', `${mid}u64`);
+      if (exists) lo = mid; else hi = mid - 1;
+    }
+    const highestId = lo;
+
+    // If no rounds exist at all
+    if (highestId === 0) {
+      const r0 = await fetchRound(0);
+      if (!r0) { setLoading(false); return; }
+    }
+
+    // Fetch the last ~10 rounds in parallel (enough for history + active)
+    const startId = Math.max(0, highestId - 9);
+    const ids = Array.from({ length: highestId - startId + 1 }, (_, i) => startId + i);
     const results = await Promise.all(ids.map(id => fetchRound(id)));
 
     const foundRounds: RoundState[] = [];
@@ -287,7 +331,7 @@ export default function MarketsPage() {
     : undefined;
 
   return (
-    <div className="min-h-screen bg-neutral-950 overflow-x-hidden selection:bg-white selection:text-black">
+    <div className="min-h-screen overflow-x-hidden selection:bg-white selection:text-black">
       <Header />
 
       {/* Win/Lose notification */}
@@ -337,9 +381,7 @@ export default function MarketsPage() {
           <div className="flex items-center justify-between mb-8">
             <div>
               <div className="flex items-center gap-3 mb-2">
-                <div className="w-8 h-8 bg-new-mint/10 rounded-lg flex items-center justify-center">
-                  <Zap className="w-4 h-4 text-new-mint" />
-                </div>
+                <BitcoinIcon className="w-8 h-8" />
                 <h1 className="text-2xl font-black uppercase tracking-tight text-white">
                   BTC Predictions
                 </h1>

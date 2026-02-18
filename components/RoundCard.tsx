@@ -6,6 +6,7 @@ import { Clock } from 'lucide-react';
 import { useBtcPrice } from '@/lib/hooks/useBtcPrice';
 import { formatPred, estimateProb, type RoundState } from '@/lib/predictionContract';
 import LiveBtcChart from './charts/LiveBtcChart';
+import BitcoinIcon from './icons/BitcoinIcon';
 
 interface RoundCardProps {
   round: RoundState;
@@ -87,9 +88,10 @@ export default function RoundCard({
             {/* Current Price + delta */}
             <div>
               <div className="flex items-center gap-2 mb-1">
+                <BitcoinIcon className="w-4 h-4" />
                 <div className={`w-1.5 h-1.5 rounded-full ${connected ? 'bg-new-mint animate-pulse' : 'bg-red-500'}`} />
                 <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">
-                  Current Price
+                  BTC Price
                 </span>
                 {price > 0 && (
                   <span className={`text-[10px] font-mono font-bold ${isAbove ? 'text-new-mint' : 'text-off-red'}`}>

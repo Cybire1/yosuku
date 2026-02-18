@@ -94,7 +94,7 @@ export default function HowItWorksPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-neutral-950 text-white overflow-x-hidden selection:bg-white selection:text-black">
+    <div className="min-h-screen text-white overflow-x-hidden selection:bg-white selection:text-black">
       <div className="fixed inset-0 pointer-events-none">
         <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-new-mint/5 blur-[120px] rounded-full" />
         <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-new-blue/5 blur-[120px] rounded-full" />
