@@ -16,6 +16,7 @@ import {
   type RoundState,
 } from '@/lib/predictionContract';
 import { savePosition } from '@/lib/roundHelpers';
+import AnimatedNumber from './AnimatedNumber';
 
 const BALANCE_KEY = 'dart_balance';
 const QUICK_AMOUNTS = [50, 100, 250, 500];
@@ -37,7 +38,7 @@ function MintButton() {
           functionName: 'mint_public',
           inputs: [`${microAmount}u64`],
         }],
-        fee: 500000,
+        fee: 2_000_000,
         feePrivate: false,
       });
       const cur = parseInt(localStorage.getItem(BALANCE_KEY) || '0', 10);
@@ -81,10 +82,22 @@ export default function BetSidebar({ round, onSuccess }: BetSidebarProps) {
   const [error, setError] = useState('');
   const [balance, setBalance] = useState(0);
   const [minsLeft, setMinsLeft] = useState(0);
+  const [flashType, setFlashType] = useState<'none' | 'YES' | 'NO'>('none');
 
-  const odds = calcOdds(round.yesPool, round.noPool);
+  const targetUsd = round.targetPrice / 100;
   const microAmount = Math.floor(parseFloat(amount || '0') * PRED_MULTIPLIER);
   const totalPool = round.yesPool + round.noPool;
+
+  // Dynamic odds from live BTC price + time remaining (Polymarket-style)
+  const odds = (() => {
+    if (price > 0 && minsLeft > 0) {
+      const prob = estimateProb(price, targetUsd, minsLeft);
+      const yesPct = Math.round(prob * 100);
+      return { yes: Math.max(1, Math.min(99, yesPct)), no: Math.max(1, Math.min(99, 100 - yesPct)) };
+    }
+    // Fallback to pool-based if no price data
+    return calcOdds(round.yesPool, round.noPool);
+  })();
 
   // Track minutes remaining for probability
   useEffect(() => {
@@ -135,6 +148,10 @@ export default function BetSidebar({ round, onSuccess }: BetSidebarProps) {
     setLoading(true);
     setError('');
 
+    // Trigger intense visual feedback punch
+    setFlashType(side);
+    setTimeout(() => setFlashType('none'), 400);
+
     try {
       const betFunction = side === 'YES' ? 'bet_yes' : 'bet_no';
       const transaction = {
@@ -147,7 +164,7 @@ export default function BetSidebar({ round, onSuccess }: BetSidebarProps) {
             inputs: [`${round.id}u64`, `${microAmount}u64`],
           },
         ],
-        fee: 500000,
+        fee: 2_000_000,
         feePrivate: false,
       };
 
@@ -178,167 +195,187 @@ export default function BetSidebar({ round, onSuccess }: BetSidebarProps) {
   const isYes = side === 'YES';
 
   return (
-    <div className="bg-neutral-900/60 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden lg:sticky lg:top-28">
-      {/* YES / NO toggle */}
-      <div className="p-4 pb-0">
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            onClick={() => setSide('YES')}
-            className={`relative py-3 rounded-xl font-bold text-sm transition-all hover:scale-[1.02] active:scale-95 ${isYes
+    <>
+      <div className="bg-neutral-900/60 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden lg:sticky lg:top-28">
+
+        {/* Full screen intense bet flash */}
+        {flashType !== 'none' && (
+          <motion.div
+            initial={{ opacity: 0.8, scale: 0.9 }}
+            animate={{ opacity: 0, scale: 1.1 }}
+            transition={{ duration: 0.5, ease: "easeOut" }}
+            className={`fixed inset-0 z-50 pointer-events-none rounded-full blur-[150px]
+              ${flashType === 'YES' ? 'bg-new-mint/30' : 'bg-off-red/30'}`}
+          />
+        )}
+        {/* YES / NO toggle */}
+        <div className="p-4 pb-0">
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => setSide('YES')}
+              className={`relative py-3 rounded-xl font-bold text-sm transition-all hover:scale-[1.02] active:scale-95 ${isYes
                 ? 'bg-new-mint/20 text-new-mint border-2 border-new-mint/40 shadow-[0_0_15px_rgba(52,211,153,0.15)]'
                 : 'bg-white/[0.03] text-gray-500 border-2 border-transparent hover:bg-white/5 hover:text-gray-300 hover:shadow-[0_0_10px_rgba(255,255,255,0.05)]'
-              }`}
-          >
-            <div className="flex items-center justify-center gap-2">
-              <TrendingUp className="w-4 h-4" />
-              <span>Yes</span>
-              <span className="font-mono">{odds.yes}%</span>
-            </div>
-          </button>
+                }`}
+            >
+              <div className="flex items-center justify-center gap-2">
+                <TrendingUp className="w-4 h-4" />
+                <span>Yes</span>
+                <span className="font-mono">{odds.yes}%</span>
+              </div>
+            </button>
 
-          <button
-            onClick={() => setSide('NO')}
-            className={`relative py-3 rounded-xl font-bold text-sm transition-all hover:scale-[1.02] active:scale-95 ${!isYes
+            <button
+              onClick={() => setSide('NO')}
+              className={`relative py-3 rounded-xl font-bold text-sm transition-all hover:scale-[1.02] active:scale-95 ${!isYes
                 ? 'bg-off-red/20 text-off-red border-2 border-off-red/40 shadow-[0_0_15px_rgba(244,63,94,0.15)]'
                 : 'bg-white/[0.03] text-gray-500 border-2 border-transparent hover:bg-white/5 hover:text-gray-300 hover:shadow-[0_0_10px_rgba(255,255,255,0.05)]'
-              }`}
-          >
-            <div className="flex items-center justify-center gap-2">
-              <TrendingDown className="w-4 h-4" />
-              <span>No</span>
-              <span className="font-mono">{odds.no}%</span>
-            </div>
-          </button>
-        </div>
-      </div>
-
-      {/* Amount section */}
-      <div className="p-4 space-y-3">
-        <div className="flex items-baseline justify-between">
-          <span className="text-sm font-semibold text-gray-300">Amount</span>
-          <span className="text-[11px] text-gray-500">
-            Balance: <span className="font-mono text-gray-400">{formatPred(balance)}</span>
-          </span>
-        </div>
-
-        {/* Amount input */}
-        <div className="relative">
-          <input
-            type="number"
-            value={amount}
-            onChange={(e) => { setAmount(e.target.value); setError(''); }}
-            placeholder="0"
-            className="w-full bg-black/40 border border-white/10 rounded-xl pl-16 pr-4 py-3.5 text-2xl font-mono font-bold text-white placeholder-gray-700 focus:border-white/20 focus:outline-none transition-all text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-            step="1"
-            min="0"
-          />
-          <div className="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-500 uppercase">
-            DART
-          </div>
-        </div>
-
-        {/* Quick-add buttons */}
-        <div className="flex gap-1.5">
-          {QUICK_AMOUNTS.map((qa) => (
-            <button
-              key={qa}
-              onClick={() => handleQuickAdd(qa)}
-              className="flex-1 py-1.5 rounded-lg text-xs font-bold bg-white/[0.04] text-gray-400 border border-white/5 hover:bg-white/[0.08] hover:text-white transition-all"
+                }`}
             >
-              +{qa}
+              <div className="flex items-center justify-center gap-2">
+                <TrendingDown className="w-4 h-4" />
+                <span>No</span>
+                <span className="font-mono">{odds.no}%</span>
+              </div>
             </button>
-          ))}
-          <button
-            onClick={() => setAmount(formatPred(balance).replace(/,/g, ''))}
-            className="px-3 py-1.5 rounded-lg text-xs font-bold bg-white/[0.04] text-gray-400 border border-white/5 hover:bg-white/[0.08] hover:text-white transition-all"
-          >
-            Max
-          </button>
+          </div>
         </div>
 
-        {/* Payout estimate */}
-        {estPayout > 0 && (
-          <div className="flex justify-between items-center text-xs px-1 pt-1">
-            <span className="text-gray-500">Est. payout</span>
-            <span className="font-mono font-bold text-new-mint">{formatPred(estPayout)} DART</span>
+        {/* Amount section */}
+        <div className="p-4 space-y-3">
+          <div className="flex items-baseline justify-between">
+            <span className="text-sm font-semibold text-gray-300">Amount</span>
+            <span className="text-[11px] text-gray-500">
+              Balance: <span className="font-mono text-gray-400">{formatPred(balance)}</span>
+            </span>
           </div>
-        )}
 
-        {/* Error */}
-        {error && (
-          <p className="text-off-red text-xs font-bold text-center animate-pulse">{error}</p>
-        )}
+          {/* Amount input */}
+          <div className="relative">
+            <input
+              type="number"
+              value={amount}
+              onChange={(e) => { setAmount(e.target.value); setError(''); }}
+              placeholder="0"
+              className="w-full bg-black/40 border border-white/10 rounded-xl pl-16 pr-4 py-3.5 text-2xl font-mono font-bold text-white placeholder-gray-700 focus:border-white/20 focus:outline-none transition-all text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              step="1"
+              min="0"
+            />
+            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-500 uppercase">
+              DART
+            </div>
+          </div>
 
-        {/* Confidence meter */}
-        {price > 0 && minsLeft > 0 && (
-          (() => {
-            const targetUsd = round.targetPrice / 100;
-            const prob = estimateProb(price, targetUsd, minsLeft);
-            const { label, color } = getConfidenceLabel(prob);
-            const pct = Math.round(prob * 100);
-            return (
-              <div className="py-2">
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Confidence</span>
-                  <span className={`text-[11px] font-bold ${color}`}>{label}</span>
-                </div>
-                <div className="relative h-2 bg-white/5 rounded-full overflow-hidden">
-                  <div
-                    className="absolute left-0 top-0 h-full bg-gradient-to-r from-off-red to-off-red/30 transition-all duration-700"
-                    style={{ width: `${100 - pct}%` }}
-                  />
-                  <div
-                    className="absolute right-0 top-0 h-full bg-gradient-to-l from-new-mint to-new-mint/30 transition-all duration-700"
-                    style={{ width: `${pct}%` }}
-                  />
-                  <div className="absolute left-1/2 top-0 w-px h-full bg-white/20" />
-                  <div
-                    className="absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full border-2 border-white bg-neutral-900 transition-all duration-700 z-10"
-                    style={{ left: `calc(${pct}% - 5px)` }}
-                  />
-                </div>
-                <div className="flex justify-between mt-1">
-                  <span className="text-[9px] text-off-red/60">NO</span>
-                  <span className="text-[9px] text-new-mint/60">YES</span>
-                </div>
+          {/* Quick-add buttons */}
+          <div className="flex gap-1.5">
+            {QUICK_AMOUNTS.map((qa) => (
+              <button
+                key={qa}
+                onClick={() => handleQuickAdd(qa)}
+                className="flex-1 py-1.5 rounded-lg text-xs font-bold bg-white/[0.04] text-gray-400 border border-white/5 hover:bg-white/[0.08] hover:text-white transition-all"
+              >
+                +{qa}
+              </button>
+            ))}
+            <button
+              onClick={() => setAmount(formatPred(balance).replace(/,/g, ''))}
+              className="px-3 py-1.5 rounded-lg text-xs font-bold bg-white/[0.04] text-gray-400 border border-white/5 hover:bg-white/[0.08] hover:text-white transition-all"
+            >
+              Max
+            </button>
+          </div>
+
+          {estPayout > 0 && (
+            <div className="flex justify-between items-center text-xs px-1 pt-1">
+              <span className="text-gray-500">Est. payout</span>
+              <div className="flex items-center gap-1 font-mono font-bold text-new-mint">
+                <AnimatedNumber value={formatPred(estPayout)} />
+                <span>DART</span>
               </div>
-            );
-          })()
-        )}
+            </div>
+          )}
 
-        {/* CTA button */}
-        {publicKey ? (
-          <motion.button
-            whileHover={{ scale: 1.01 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={handleBet}
-            disabled={loading || !amount || parseFloat(amount) <= 0 || round.resolved}
-            className={`w-full py-3.5 rounded-xl font-bold text-sm uppercase tracking-wider transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed hover:scale-[1.02] active:scale-95 ${isYes
-                ? 'bg-new-mint text-black shadow-[0_0_20px_rgba(52,211,153,0.3)] hover:shadow-[0_0_30px_rgba(52,211,153,0.5)] border border-new-mint/30'
-                : 'bg-off-red text-white shadow-[0_0_20px_rgba(244,63,94,0.3)] hover:shadow-[0_0_30px_rgba(244,63,94,0.5)] border border-off-red/30'
-              }`}
-          >
-            {loading ? (
-              <>
-                <Loader className="w-4 h-4 animate-spin" />
-                Processing...
-              </>
-            ) : (
-              `Buy ${isYes ? 'Yes' : 'No'}`
-            )}
-          </motion.button>
-        ) : (
-          <div className="w-full py-3.5 rounded-xl bg-white/[0.05] border border-white/10 text-center text-sm text-gray-500 flex items-center justify-center gap-2">
-            <Wallet className="w-4 h-4" />
-            Connect wallet to bet
-          </div>
-        )}
+          {/* Error */}
+          {error && (
+            <p className="text-off-red text-xs font-bold text-center animate-pulse">{error}</p>
+          )}
 
-        {/* Mint DART shortcut */}
-        {publicKey && (
-          <MintButton />
-        )}
+          {/* Confidence meter */}
+          {price > 0 && minsLeft > 0 && (
+            (() => {
+              const targetUsd = round.targetPrice / 100;
+              const prob = estimateProb(price, targetUsd, minsLeft);
+              const { label, color } = getConfidenceLabel(prob);
+              const pct = Math.round(prob * 100);
+              return (
+                <div className="py-2">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Confidence</span>
+                    <span className={`text-[11px] font-bold ${color}`}>{label}</span>
+                  </div>
+                  <div className="relative h-2 bg-white/5 rounded-full overflow-hidden">
+                    <div
+                      className="absolute left-0 top-0 h-full bg-gradient-to-r from-off-red to-off-red/30 transition-all duration-700"
+                      style={{ width: `${100 - pct}%` }}
+                    />
+                    <div
+                      className="absolute right-0 top-0 h-full bg-gradient-to-l from-new-mint to-new-mint/30 transition-all duration-700"
+                      style={{ width: `${pct}%` }}
+                    />
+                    <div className="absolute left-1/2 top-0 w-px h-full bg-white/20" />
+                    <div
+                      className="absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full border-2 border-white bg-neutral-900 transition-all duration-700 z-10"
+                      style={{ left: `calc(${pct}% - 5px)` }}
+                    />
+                  </div>
+                  <div className="flex justify-between mt-1">
+                    <span className="text-[9px] text-off-red/60">NO</span>
+                    <span className="text-[9px] text-new-mint/60">YES</span>
+                  </div>
+                </div>
+              );
+            })()
+          )}
+
+          {/* CTA button */}
+          {publicKey ? (
+            <motion.button
+              whileHover={{ scale: 1.01 }}
+              whileTap={{ scale: 0.95 }}
+              animate={flashType !== 'none' ? {
+                scale: [1, 0.9, 1.05, 1],
+                filter: ['brightness(1)', 'brightness(1.5)', 'brightness(1)']
+              } : {}}
+              transition={{ duration: 0.3 }}
+              onClick={handleBet}
+              disabled={loading || !amount || parseFloat(amount) <= 0 || round.resolved}
+              className={`relative w-full py-3.5 rounded-xl font-black text-sm uppercase tracking-wider transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed ${isYes
+                ? 'bg-new-mint text-black border border-new-mint/30 shadow-[0_0_20px_rgba(52,211,153,0.3)] hover:shadow-[0_0_40px_rgba(52,211,153,0.6)]'
+                : 'bg-off-red text-white border border-off-red/30 shadow-[0_0_20px_rgba(244,63,94,0.3)] hover:shadow-[0_0_40px_rgba(244,63,94,0.6)]'
+                }`}
+            >
+              {loading ? (
+                <>
+                  <Loader className="w-4 h-4 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                `Buy ${isYes ? 'Yes' : 'No'}`
+              )}
+            </motion.button>
+          ) : (
+            <div className="w-full py-3.5 rounded-xl bg-white/[0.05] border border-white/10 text-center text-sm text-gray-500 flex items-center justify-center gap-2">
+              <Wallet className="w-4 h-4" />
+              Connect wallet to bet
+            </div>
+          )}
+
+          {/* Mint DART shortcut */}
+          {publicKey && (
+            <MintButton />
+          )}
+        </div>
       </div>
-    </div>
+    </>
   );
 }

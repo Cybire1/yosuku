@@ -6,12 +6,14 @@ import { motion, AnimatePresence, useMotionValue, useTransform, animate } from '
 const WORDS = ['PREDICT', 'PRIVATE', 'PROFIT'];
 
 export default function Preloader() {
-  const [loading, setLoading] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return !sessionStorage.getItem('preloaderShown');
+  const [loading, setLoading] = useState(true);
+
+  // Check sessionStorage after hydration to avoid mismatch
+  useEffect(() => {
+    if (sessionStorage.getItem('preloaderShown')) {
+      setLoading(false);
     }
-    return true;
-  });
+  }, []);
   const [wordIndex, setWordIndex] = useState(0);
   const progress = useMotionValue(0);
   const displayCount = useTransform(progress, (v) => Math.round(v));

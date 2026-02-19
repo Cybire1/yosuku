@@ -20,104 +20,10 @@ import PnLChart from '@/components/PnLChart';
 import {
   BTC_PREDICTION_PROGRAM,
   formatPred,
-  fetchMapping,
-  parseU64,
   type RoundState,
   type UserPosition,
 } from '@/lib/predictionContract';
-
-// Avg block time on Aleo testnet (~3.5s)
-const AVG_BLOCK_TIME_MS = 3500;
-
-let cachedHeight = 0;
-let heightFetchedAt = 0;
-async function getBlockHeight(): Promise<number> {
-  if (cachedHeight > 0 && Date.now() - heightFetchedAt < 10_000) return cachedHeight;
-  try {
-    const res = await fetch(`https://api.explorer.provable.com/v1/testnet/latest/height`);
-    if (!res.ok) return cachedHeight;
-    cachedHeight = parseInt(await res.text(), 10);
-    heightFetchedAt = Date.now();
-    return cachedHeight;
-  } catch {
-    return cachedHeight;
-  }
-}
-
-// Fetch a round's state from on-chain mappings
-async function fetchRound(roundId: number): Promise<RoundState | null> {
-  try {
-    const [targetRaw, deadlineRaw, durationRaw, resolvedRaw, outcomeRaw, yesRaw, noRaw, currentHeight] =
-      await Promise.all([
-        fetchMapping(BTC_PREDICTION_PROGRAM, 'round_target_price', `${roundId}u64`),
-        fetchMapping(BTC_PREDICTION_PROGRAM, 'round_deadline', `${roundId}u64`),
-        fetchMapping(BTC_PREDICTION_PROGRAM, 'round_duration', `${roundId}u64`),
-        fetchMapping(BTC_PREDICTION_PROGRAM, 'round_resolved', `${roundId}u64`),
-        fetchMapping(BTC_PREDICTION_PROGRAM, 'round_outcome', `${roundId}u64`),
-        fetchMapping(BTC_PREDICTION_PROGRAM, 'round_yes_pool', `${roundId}u64`),
-        fetchMapping(BTC_PREDICTION_PROGRAM, 'round_no_pool', `${roundId}u64`),
-        getBlockHeight(),
-      ]);
-
-    if (!targetRaw) return null;
-
-    const targetPrice = parseU64(targetRaw);
-    const deadline = parseInt(deadlineRaw?.replace('u32', '').trim() || '0', 10);
-    const durationSecs = parseInt(durationRaw?.replace('u32', '').trim() || '300', 10);
-    const durationMs = durationSecs * 1000;
-    const resolved = resolvedRaw?.trim() === 'true';
-    const outcome = resolved ? outcomeRaw?.trim() === 'true' : null;
-
-    const blocksLeft = Math.max(0, deadline - currentHeight);
-    const msLeft = blocksLeft * AVG_BLOCK_TIME_MS;
-    const endTime = Date.now() + msLeft;
-
-    return {
-      id: roundId,
-      targetPrice,
-      deadline,
-      durationMs,
-      endTime,
-      yesPool: parseU64(yesRaw),
-      noPool: parseU64(noRaw),
-      resolved,
-      outcome,
-    };
-  } catch {
-    return null;
-  }
-}
-
-function loadPositions(): UserPosition[] {
-  try {
-    const saved: { roundId: number; side: string; amount: number }[] = JSON.parse(
-      localStorage.getItem('pred_positions') || '[]'
-    );
-    const map = new Map<number, UserPosition>();
-    for (const p of saved) {
-      const existing = map.get(p.roundId);
-      if (existing) {
-        if (p.side === 'YES') existing.yesDeposit += p.amount;
-        else existing.noDeposit += p.amount;
-      } else {
-        map.set(p.roundId, {
-          roundId: p.roundId,
-          yesDeposit: p.side === 'YES' ? p.amount : 0,
-          noDeposit: p.side === 'NO' ? p.amount : 0,
-          claimed: false,
-        });
-      }
-    }
-    const claimed: number[] = JSON.parse(localStorage.getItem('pred_claimed') || '[]');
-    for (const id of claimed) {
-      const pos = map.get(id);
-      if (pos) pos.claimed = true;
-    }
-    return Array.from(map.values());
-  } catch {
-    return [];
-  }
-}
+import { fetchRound, loadPositions } from '@/lib/roundHelpers';
 
 export default function PortfolioPage() {
   const router = useRouter();
@@ -134,14 +40,26 @@ export default function PortfolioPage() {
 
   const scan = useCallback(async () => {
     setLoading(true);
-    const ids = Array.from({ length: 21 }, (_, i) => i);
-    const results = await Promise.all(ids.map((id) => fetchRound(id)));
+    const allPositions = loadPositions();
+    setPositions(allPositions);
+
+    // Only fetch rounds that the user has positions in
+    const roundIds = [...new Set(allPositions.map(p => p.roundId))];
+
+    // Also fetch the latest few rounds for context
+    const lastKnown = parseInt(localStorage.getItem('dart_last_round_id') || '0', 10);
+    if (lastKnown > 0) {
+      for (let i = Math.max(0, lastKnown - 4); i <= lastKnown; i++) {
+        if (!roundIds.includes(i)) roundIds.push(i);
+      }
+    }
+
+    const results = await Promise.all(roundIds.map(id => fetchRound(id)));
     const found: RoundState[] = [];
     for (const r of results) {
       if (r) found.push(r);
     }
     setRounds(found.sort((a, b) => b.id - a.id));
-    setPositions(loadPositions());
     setLoading(false);
   }, []);
 
@@ -152,7 +70,6 @@ export default function PortfolioPage() {
   const handleClaim = async (roundId: number) => {
     if (!publicKey || !requestTransaction) return;
 
-    // Calculate expected payout for contract verification
     const round = rounds.find((r) => r.id === roundId);
     const pos = positions.find((p) => p.roundId === roundId);
     if (!round || !pos) return;
@@ -174,12 +91,16 @@ export default function PortfolioPage() {
           {
             program: BTC_PREDICTION_PROGRAM,
             functionName: 'claim',
-            inputs: [`${roundId}u64`, `${netPayout}u64`],
+            inputs: [`${roundId}u64`],
           },
         ],
-        fee: 1000000,
+        fee: 2_000_000,
         feePrivate: false,
       });
+      // Credit payout to localStorage balance
+      const curBalance = parseInt(localStorage.getItem('dart_balance') || '0', 10);
+      localStorage.setItem('dart_balance', String(curBalance + netPayout));
+
       const claimed: number[] = JSON.parse(localStorage.getItem('pred_claimed') || '[]');
       if (!claimed.includes(roundId)) {
         claimed.push(roundId);
@@ -242,9 +163,26 @@ export default function PortfolioPage() {
       <Header />
 
       <main className="pt-28 pb-12 relative">
-        <div className="max-w-[1100px] mx-auto px-6">
+        <motion.div
+          className="max-w-[1100px] mx-auto px-6"
+          initial="hidden"
+          animate="visible"
+          variants={{
+            hidden: { opacity: 0 },
+            visible: {
+              opacity: 1,
+              transition: { staggerChildren: 0.1 }
+            }
+          }}
+        >
           {/* Page Header */}
-          <div className="mb-8">
+          <motion.div
+            variants={{
+              hidden: { opacity: 0, y: 30 },
+              visible: { opacity: 1, y: 0, transition: { type: 'spring', damping: 25, stiffness: 200 } }
+            }}
+            className="mb-8"
+          >
             <div className="flex items-center gap-3 mb-2">
               <div className="w-8 h-8 bg-new-mint/10 rounded-lg flex items-center justify-center">
                 <Zap className="w-4 h-4 text-new-mint" />
@@ -256,7 +194,7 @@ export default function PortfolioPage() {
             <p className="text-sm text-gray-500">
               Your BTC prediction performance and positions.
             </p>
-          </div>
+          </motion.div>
 
           {!mounted ? (
             <div className="text-center py-20">
@@ -315,7 +253,13 @@ export default function PortfolioPage() {
               </button>
             </motion.div>
           ) : (
-            <div className="space-y-6">
+            <motion.div
+              variants={{
+                hidden: { opacity: 0, scale: 0.95 },
+                visible: { opacity: 1, scale: 1, transition: { type: 'spring', damping: 25, stiffness: 200 } }
+              }}
+              className="space-y-6"
+            >
               {/* Stats overview cards */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <StatCard
@@ -509,9 +453,9 @@ export default function PortfolioPage() {
                   </div>
                 </div>
               )}
-            </div>
+            </motion.div>
           )}
-        </div>
+        </motion.div>
       </main>
     </div>
   );

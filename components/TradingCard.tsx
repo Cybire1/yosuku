@@ -6,13 +6,13 @@ import { Clock } from 'lucide-react';
 import { useBtcPrice } from '@/lib/hooks/useBtcPrice';
 import {
   formatPred,
-  calcOdds,
   estimateProb,
   type RoundState,
 } from '@/lib/predictionContract';
 import LiveBtcChart from './charts/LiveBtcChart';
 import BitcoinIcon from './icons/BitcoinIcon';
 import PriceTicker from './PriceTicker';
+import AnimatedNumber from './AnimatedNumber';
 
 interface TradingCardProps {
   round: RoundState;
@@ -55,9 +55,16 @@ export default function TradingCard({
   const userDeposit = userYesDeposit || userNoDeposit;
   const positionPayout = (() => {
     if (!userSide) return 0;
-    const winPool = userSide === 'YES' ? round.yesPool : round.noPool;
-    if (winPool === 0) return 0;
-    return ((userSide === 'YES' ? userYesDeposit : userNoDeposit) / winPool) * totalPool * 0.9;
+    const deposit = userSide === 'YES' ? userYesDeposit : userNoDeposit;
+    // Include user's own deposit in pool if on-chain hasn't updated yet
+    const yesWithLocal = Math.max(round.yesPool, userYesDeposit);
+    const noWithLocal = Math.max(round.noPool, userNoDeposit);
+    const opposingPool = userSide === 'YES' ? noWithLocal : yesWithLocal;
+    // No opposition → full refund, no fee taken from your own money
+    if (opposingPool === 0) return deposit;
+    const effectiveTotal = yesWithLocal + noWithLocal;
+    const winPool = userSide === 'YES' ? yesWithLocal : noWithLocal;
+    return (deposit / winPool) * effectiveTotal * 0.9;
   })();
 
   return (
@@ -166,7 +173,8 @@ export default function TradingCard({
           <div className="flex items-center gap-4 px-1">
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Pool</span>
-              <span className="text-sm font-mono font-bold text-new-mint">{formatPred(totalPool)} DART</span>
+              <AnimatedNumber value={formatPred(totalPool)} className="text-sm font-mono font-bold text-new-mint" />
+              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">DART</span>
             </div>
             <div className="flex-1 h-2 bg-white/5 rounded-full overflow-hidden">
               <div
@@ -175,8 +183,14 @@ export default function TradingCard({
               />
             </div>
             <div className="flex items-center gap-3 text-[10px] font-bold">
-              <span className="text-new-mint">YES {formatPred(round.yesPool)}</span>
-              <span className="text-off-red">NO {formatPred(round.noPool)}</span>
+              <div className="flex items-center gap-1 text-new-mint">
+                <span>YES</span>
+                <AnimatedNumber value={formatPred(round.yesPool)} />
+              </div>
+              <div className="flex items-center gap-1 text-off-red">
+                <span>NO</span>
+                <AnimatedNumber value={formatPred(round.noPool)} />
+              </div>
             </div>
           </div>
 

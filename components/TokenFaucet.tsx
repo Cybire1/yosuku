@@ -38,7 +38,7 @@ export default function TokenFaucet({ onMinted }: TokenFaucetProps) {
           functionName: 'mint_public',
           inputs: [`${microAmount}u64`],
         }],
-        fee: 500000,
+        fee: 2_000_000,
         feePrivate: false,
       };
 

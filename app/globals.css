@@ -4,6 +4,7 @@
   --color-black: var(--background);
   --font-sans: var(--font-outfit);
   --font-mono: var(--font-space);
+  --font-hand: var(--font-hand), cursive;
 }
 
 :root {
@@ -179,4 +180,21 @@ html.lenis {
 
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
+}
+
+/* Wallet button overrides — hide icon, lowercase text */
+.wallet-adapter-button-trigger i,
+.wallet-adapter-button-trigger img,
+.wallet-adapter-button-trigger svg,
+.wallet-adapter-button i,
+.wallet-adapter-button img,
+.wallet-adapter-button svg {
+  display: none !important;
+}
+
+.wallet-adapter-button-trigger,
+.wallet-adapter-button {
+  text-transform: lowercase !important;
+  font-size: 11px !important;
+  letter-spacing: 0.02em !important;
 }

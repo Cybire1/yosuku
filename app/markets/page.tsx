@@ -23,6 +23,9 @@ import {
 } from '@/lib/predictionContract';
 import { Activity, Timer, Trophy, XCircle, BarChart3, MessageCircle, BookOpen, History } from 'lucide-react';
 import BitcoinIcon from '@/components/icons/BitcoinIcon';
+import NewsFeed from '@/components/NewsFeed';
+import TickerTape from '@/components/TickerTape';
+import DoodleStrip from '@/components/DoodleStrip';
 
 type BottomTab = 'activity' | 'comments' | 'stats' | 'rules';
 
@@ -124,11 +127,10 @@ export default function MarketsPage() {
             transition={{ type: 'spring', damping: 20 }}
             className="fixed top-20 left-1/2 -translate-x-1/2 z-[55]"
           >
-            <div className={`flex items-center gap-3 px-6 py-3.5 rounded-2xl border backdrop-blur-xl shadow-2xl ${
-              notification.type === 'win'
-                ? 'bg-new-mint/15 border-new-mint/30 shadow-new-mint/10'
-                : 'bg-off-red/15 border-off-red/30 shadow-off-red/10'
-            }`}>
+            <div className={`flex items-center gap-3 px-6 py-3.5 rounded-2xl border backdrop-blur-xl shadow-2xl ${notification.type === 'win'
+              ? 'bg-new-mint/15 border-new-mint/30 shadow-new-mint/10'
+              : 'bg-off-red/15 border-off-red/30 shadow-off-red/10'
+              }`}>
               {notification.type === 'win' ? (
                 <Trophy className="w-5 h-5 text-new-mint" />
               ) : (
@@ -154,11 +156,29 @@ export default function MarketsPage() {
         )}
       </AnimatePresence>
 
+      <DoodleStrip />
       <main className="pt-28 pb-24 sm:pb-12 relative">
-        <div className="max-w-[1400px] mx-auto px-4 sm:px-6">
+        <motion.div
+          className="max-w-[1400px] mx-auto px-4 sm:px-6"
+          initial="hidden"
+          animate="visible"
+          variants={{
+            hidden: { opacity: 0 },
+            visible: {
+              opacity: 1,
+              transition: { staggerChildren: 0.1 }
+            }
+          }}
+        >
 
           {/* Top bar: Duration tabs + Balance */}
-          <div className="flex items-center justify-between mb-6">
+          <motion.div
+            variants={{
+              hidden: { opacity: 0, y: 30 },
+              visible: { opacity: 1, y: 0, transition: { type: 'spring', damping: 25, stiffness: 200 } }
+            }}
+            className="flex items-center justify-between mb-6"
+          >
             <div className="flex items-center gap-2 flex-wrap">
               <div className="flex items-center gap-1.5 mr-2">
                 <BitcoinIcon className="w-5 h-5" />
@@ -169,11 +189,10 @@ export default function MarketsPage() {
                 <button
                   key={opt.label}
                   onClick={() => setSelectedDuration(opt.label)}
-                  className={`px-3 sm:px-4 py-1.5 rounded-lg text-[11px] font-bold tracking-wide transition-all ${
-                    selectedDuration === opt.label
-                      ? 'bg-new-mint/15 text-new-mint border border-new-mint/30'
-                      : 'bg-white/[0.03] text-gray-500 border border-white/5 hover:text-white hover:bg-white/5'
-                  }`}
+                  className={`px-3 sm:px-4 py-1.5 rounded-lg text-[11px] font-bold tracking-wide transition-all ${selectedDuration === opt.label
+                    ? 'bg-new-mint/15 text-new-mint border border-new-mint/30'
+                    : 'bg-white/[0.03] text-gray-500 border border-white/5 hover:text-white hover:bg-white/5'
+                    }`}
                 >
                   {opt.label.replace(' Minutes', 'm').replace(' Minute', 'm').replace(' Hour', 'h')}
                 </button>
@@ -185,17 +204,34 @@ export default function MarketsPage() {
                 <TokenBalance refreshTrigger={mintTrigger} />
               </div>
             )}
+          </motion.div>
+
+          {/* Scrolling ticker tape */}
+          <div className="-mx-4 sm:-mx-6">
+            <TickerTape />
           </div>
 
           {/* Faucet */}
           {publicKey && (
-            <div className="mb-5">
+            <motion.div
+              variants={{
+                hidden: { opacity: 0, y: 30 },
+                visible: { opacity: 1, y: 0, transition: { type: 'spring', damping: 25, stiffness: 200 } }
+              }}
+              className="mb-5"
+            >
               <TokenFaucet onMinted={() => setMintTrigger(prev => prev + 1)} />
-            </div>
+            </motion.div>
           )}
 
           {/* Two-column: Card + Sidebar */}
-          <div className="flex gap-6">
+          <motion.div
+            variants={{
+              hidden: { opacity: 0, scale: 0.95 },
+              visible: { opacity: 1, scale: 1, transition: { type: 'spring', damping: 25, stiffness: 200 } }
+            }}
+            className="flex gap-6"
+          >
             {/* Main content */}
             <div className="flex-1 min-w-0">
               {/* Main Trading Card */}
@@ -228,17 +264,21 @@ export default function MarketsPage() {
                 </div>
               )}
 
+              {/* BTC News Feed — mobile */}
+              <div className="lg:hidden">
+                <NewsFeed />
+              </div>
+
               {/* Bottom tab bar */}
               <div className="mt-8 flex items-center gap-1 border-b border-white/5 mb-4">
                 {BOTTOM_TABS.map(({ key, label, icon: Icon }) => (
                   <button
                     key={key}
                     onClick={() => setBottomTab(key)}
-                    className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold transition-all border-b-2 ${
-                      bottomTab === key
-                        ? 'text-white border-new-mint'
-                        : 'text-gray-500 border-transparent hover:text-gray-300'
-                    }`}
+                    className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold transition-all border-b-2 ${bottomTab === key
+                      ? 'text-white border-new-mint'
+                      : 'text-gray-500 border-transparent hover:text-gray-300'
+                      }`}
                   >
                     <Icon className="w-3.5 h-3.5" />
                     {label}
@@ -337,14 +377,15 @@ export default function MarketsPage() {
               </div>
             </div>
 
-            {/* Sidebar — bet panel (desktop only) */}
+            {/* Sidebar — bet panel + news (desktop only) */}
             {roundMatchesTab && activeRound && (
               <div className="hidden lg:block w-[340px] flex-shrink-0">
                 <BetSidebar round={activeRound} onSuccess={handleBetSuccess} />
+                <NewsFeed />
               </div>
             )}
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       </main>
     </div>
   );

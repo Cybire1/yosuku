@@ -40,7 +40,7 @@ export default function Header() {
           functionName: 'mint_public',
           inputs: [`${microAmount}u64`],
         }],
-        fee: 500000,
+        fee: 2_000_000,
         feePrivate: false,
       });
       const cur = parseInt(localStorage.getItem('dart_balance') || '0', 10);
@@ -144,7 +144,7 @@ export default function Header() {
                   </button>
                 )}
                 <div className="transform transition-transform hover:scale-105 active:scale-95 hidden sm:block">
-                  <WalletMultiButton className="!bg-white/5 !backdrop-blur-md !text-white !border !border-white/10 !rounded-full !font-bold !h-10 !px-6 !text-xs hover:!bg-white hover:!text-black hover:!border-white hover:shadow-[0_0_20px_rgba(255,255,255,0.3)] transition-all duration-300 uppercase tracking-wider" />
+                  <WalletMultiButton className="!bg-white/5 !backdrop-blur-md !text-white !border !border-white/10 !rounded-full !font-bold !h-10 !px-6 !text-xs hover:!bg-white hover:!text-black hover:!border-white hover:shadow-[0_0_20px_rgba(255,255,255,0.3)] transition-all duration-300 lowercase tracking-wide" />
                 </div>
                 <div className="sm:hidden transform scale-90">
                   <WalletMultiButton style={{ padding: '0 12px', height: '32px', fontSize: '10px' }} />

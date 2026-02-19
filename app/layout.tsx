@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Outfit, Space_Grotesk } from "next/font/google";
+import { Outfit, Space_Grotesk, Caveat } from "next/font/google";
 import "./globals.css";
 import WalletProvider from "@/components/WalletProvider";
 import SmoothScroll from "@/components/SmoothScroll";
@@ -16,6 +16,12 @@ const outfit = Outfit({
 
 const spaceGrotesk = Space_Grotesk({
   variable: "--font-space",
+  subsets: ["latin"],
+  display: 'swap',
+});
+
+const caveat = Caveat({
+  variable: "--font-hand",
   subsets: ["latin"],
   display: 'swap',
 });
@@ -53,7 +59,7 @@ export default function RootLayout({
         />
       </head>
       <body
-        className={`${outfit.variable} ${spaceGrotesk.variable} antialiased text-white font-sans`}
+        className={`${outfit.variable} ${spaceGrotesk.variable} ${caveat.variable} antialiased text-white font-sans`}
         suppressHydrationWarning
       >
         <WalletProvider>

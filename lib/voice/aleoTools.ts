@@ -1,5 +1,12 @@
-// Aleo voice tools for prediction market interactions
-import type { Market } from '@/components/MarketCard';
+// Voice tools for BTC Prediction round-based system
+import { fetchRound, loadPositions, getBlockHeight } from '@/lib/roundHelpers';
+import {
+  BTC_PREDICTION_PROGRAM,
+  fetchMapping,
+  formatPred,
+  PRED_MULTIPLIER,
+  type RoundState,
+} from '@/lib/predictionContract';
 
 export interface VoiceToolResult {
   success: boolean;
@@ -8,577 +15,387 @@ export interface VoiceToolResult {
   error?: string;
 }
 
-// Fetch public balance from Aleo blockchain
+// ── Helpers ──────────────────────────────────────────
+
 async function fetchAleoBalance(address: string): Promise<number> {
   try {
-    const response = await fetch('https://api.explorer.provable.com/v1/testnet/program/credits.aleo/mapping/account/' + address);
-
-    if (!response.ok) {
-      // Address might not have any credits yet
-      if (response.status === 404) return 0;
-      throw new Error(`API error: ${response.status}`);
-    }
-
-    const data = await response.json();
-
-    // Aleo returns balance in microcredits (1 ALEO = 1,000,000 microcredits)
+    const res = await fetch(
+      `https://api.explorer.provable.com/v1/testnet/program/credits.aleo/mapping/account/${address}`
+    );
+    if (!res.ok) return 0;
+    const data = await res.json();
     if (data && typeof data === 'string') {
-      // Response format: "123456789u64"
-      const microcredits = parseInt(data.replace('u64', ''));
-      return microcredits / 1_000_000;
+      return parseInt(data.replace('u64', '')) / 1_000_000;
     }
-
     return 0;
-  } catch (error) {
-    console.error('[Voice] Error fetching Aleo balance:', error);
-    throw error;
+  } catch {
+    return 0;
   }
 }
 
-// Get active markets filtered by category
-export async function getActiveMarkets(category: string = 'All'): Promise<VoiceToolResult> {
+async function fetchDartBalance(address: string): Promise<number> {
   try {
-    const markets = JSON.parse(localStorage.getItem('aleomarkets') || '[]') as Market[];
+    const res = await fetch(
+      `https://api.explorer.provable.com/v1/testnet/program/dart_token.aleo/mapping/balances/${address}`
+    );
+    if (!res.ok) return 0;
+    const data = await res.json();
+    if (data && typeof data === 'string') {
+      return parseInt(data.replace('u64', '')) / PRED_MULTIPLIER;
+    }
+    return 0;
+  } catch {
+    return 0;
+  }
+}
 
-    let filteredMarkets = markets.filter(m => !m.resolved);
+/** Find the latest round ID using localStorage hint + forward scan */
+async function findLatestRoundId(): Promise<number> {
+  const lastKnown = parseInt(
+    (typeof window !== 'undefined' ? localStorage.getItem('dart_last_round_id') : null) || '0',
+    10
+  );
 
-    if (category !== 'All') {
-      filteredMarkets = filteredMarkets.filter(m => m.category === category);
+  if (lastKnown <= 0) return 0;
+
+  // Check forward
+  for (let offset = 3; offset >= 0; offset--) {
+    const id = lastKnown + offset;
+    const exists = await fetchMapping(BTC_PREDICTION_PROGRAM, 'round_target_price', `${id}u64`);
+    if (exists && exists !== 'null') return id;
+  }
+
+  return lastKnown;
+}
+
+// ── Voice Tool Functions ─────────────────────────────
+
+/** Get current active round info */
+export async function getCurrentRound(): Promise<VoiceToolResult> {
+  try {
+    const highestId = await findLatestRoundId();
+    if (highestId <= 0) {
+      return { success: true, message: 'No rounds found on-chain yet.', data: null };
     }
 
-    // Sort by volume
-    filteredMarkets.sort((a, b) => b.total_volume - a.total_volume);
+    const round = await fetchRound(highestId);
+    if (!round) {
+      return { success: true, message: 'Could not fetch the latest round.', data: null };
+    }
 
-    if (filteredMarkets.length === 0) {
+    const targetUsd = (round.targetPrice / 100).toFixed(2);
+    const totalPool = round.yesPool + round.noPool;
+    const yesPoolDart = formatPred(round.yesPool);
+    const noPoolDart = formatPred(round.noPool);
+    const totalDart = formatPred(totalPool);
+
+    if (round.resolved) {
+      const outcome = round.outcome ? 'YES (above target)' : 'NO (below target)';
       return {
         success: true,
-        message: `No active markets found${category !== 'All' ? ` in ${category} category` : ''}.`,
-        data: []
+        message: `Round #${round.id} is resolved. Target was $${targetUsd}. Outcome: ${outcome}. Total pool: ${totalDart} DART (YES: ${yesPoolDart}, NO: ${noPoolDart}). Next round should start soon.`,
+        data: round,
       };
     }
 
-    // Format for voice response
-    const marketList = filteredMarkets.slice(0, 5).map((m, idx) => {
-      const yesOdds = ((m.total_yes_shares / (m.total_yes_shares + m.total_no_shares)) * 100).toFixed(0);
-      return `${idx + 1}. ${m.question} - ${yesOdds}% YES - ${m.total_volume.toFixed(1)} ALEO volume`;
-    }).join('\n');
+    const secsLeft = Math.max(0, Math.floor((round.endTime - Date.now()) / 1000));
+    const mins = Math.floor(secsLeft / 60);
+    const secs = secsLeft % 60;
+    const timeStr = secsLeft > 0 ? `${mins}m ${secs}s left` : 'Resolving soon';
 
     return {
       success: true,
-      message: `Found ${filteredMarkets.length} active markets${category !== 'All' ? ` in ${category}` : ''}:\n${marketList}`,
-      data: filteredMarkets
+      message: `Round #${round.id} is active. BTC target: $${targetUsd}. ${timeStr}. Pool: ${totalDart} DART (YES: ${yesPoolDart}, NO: ${noPoolDart}).`,
+      data: round,
     };
   } catch (error: any) {
-    return {
-      success: false,
-      message: 'Failed to fetch markets',
-      error: error.message
-    };
+    return { success: false, message: 'Failed to fetch current round.', error: error.message };
   }
 }
 
-// Get trending markets by volume
-export async function getTrendingMarkets(): Promise<VoiceToolResult> {
+/** Get recent round history */
+export async function getRoundHistory(): Promise<VoiceToolResult> {
   try {
-    const markets = JSON.parse(localStorage.getItem('aleomarkets') || '[]') as Market[];
-
-    const activeMarkets = markets.filter(m => !m.resolved);
-
-    // Sort by volume (descending)
-    const trending = activeMarkets
-      .sort((a, b) => b.total_volume - a.total_volume)
-      .slice(0, 3);
-
-    if (trending.length === 0) {
-      return {
-        success: true,
-        message: 'No trending markets found.',
-        data: []
-      };
+    const highestId = await findLatestRoundId();
+    if (highestId <= 0) {
+      return { success: true, message: 'No rounds found.', data: [] };
     }
 
-    const trendingList = trending.map((m, idx) => {
-      const yesOdds = ((m.total_yes_shares / (m.total_yes_shares + m.total_no_shares)) * 100).toFixed(0);
-      return `${idx + 1}. ${m.question} - ${yesOdds}% YES - ${m.total_volume.toFixed(1)} ALEO volume`;
-    }).join('\n');
+    const startId = Math.max(0, highestId - 4);
+    const ids = Array.from({ length: highestId - startId + 1 }, (_, i) => startId + i);
+    const rounds = await Promise.all(ids.map(id => fetchRound(id)));
+
+    const resolved = rounds.filter((r): r is RoundState => !!r && r.resolved);
+    if (resolved.length === 0) {
+      return { success: true, message: 'No resolved rounds yet.', data: [] };
+    }
+
+    const list = resolved
+      .sort((a, b) => b.id - a.id)
+      .slice(0, 5)
+      .map(r => {
+        const outcome = r.outcome ? 'YES' : 'NO';
+        const targetUsd = (r.targetPrice / 100).toFixed(2);
+        return `#${r.id}: Target $${targetUsd} → ${outcome} won | Pool: ${formatPred(r.yesPool + r.noPool)} DART`;
+      })
+      .join('\n');
 
     return {
       success: true,
-      message: `Top trending markets:\n${trendingList}`,
-      data: trending
+      message: `Recent rounds:\n${list}`,
+      data: resolved,
     };
   } catch (error: any) {
-    return {
-      success: false,
-      message: 'Failed to fetch trending markets',
-      error: error.message
-    };
+    return { success: false, message: 'Failed to fetch round history.', error: error.message };
   }
 }
 
-// Get market details by ID
-export async function getMarketDetails(marketId: number): Promise<VoiceToolResult> {
-  try {
-    const markets = JSON.parse(localStorage.getItem('aleomarkets') || '[]') as Market[];
-    const market = markets.find(m => m.id === marketId);
-
-    if (!market) {
-      return {
-        success: false,
-        message: `Market ${marketId} not found.`,
-        error: 'Market not found'
-      };
-    }
-
-    const totalShares = market.total_yes_shares + market.total_no_shares;
-    const yesOdds = totalShares > 0 ? ((market.total_yes_shares / totalShares) * 100).toFixed(0) : '50';
-    const noOdds = totalShares > 0 ? ((market.total_no_shares / totalShares) * 100).toFixed(0) : '50';
-
-    const endDate = new Date(market.end_timestamp * 1000).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric'
-    });
-
-    const yesPayout = totalShares > 0 ? (totalShares / market.total_yes_shares).toFixed(2) : '2.00';
-    const noPayout = totalShares > 0 ? (totalShares / market.total_no_shares).toFixed(2) : '2.00';
-
-    const message = `Market ${marketId}: ${market.question}
-Status: ${market.resolved ? 'Resolved' : 'Active'}
-Odds: ${yesOdds}% YES, ${noOdds}% NO
-Volume: ${market.total_volume.toFixed(1)} ALEO
-Ends: ${endDate}
-If you bet 1 ALEO on YES, you'd win ${yesPayout} ALEO total.
-If you bet 1 ALEO on NO, you'd win ${noPayout} ALEO total.`;
-
-    return {
-      success: true,
-      message,
-      data: market
-    };
-  } catch (error: any) {
-    return {
-      success: false,
-      message: 'Failed to fetch market details',
-      error: error.message
-    };
-  }
-}
-
-// Get user's wallet balance
+/** Get wallet balance (ALEO credits + DART tokens) */
 export async function getWalletBalance(publicKey: string | undefined): Promise<VoiceToolResult> {
   try {
     if (!publicKey) {
       return {
         success: false,
         message: 'Wallet not connected. Please connect your Leo wallet first.',
-        error: 'No wallet connected'
+        error: 'No wallet connected',
       };
     }
 
-    // Fetch real on-chain balance
-    let totalBalance = 0;
-    try {
-      totalBalance = await fetchAleoBalance(publicKey);
-    } catch (balanceError) {
-      console.error('[Voice] Could not fetch on-chain balance:', balanceError);
-      // Continue with staked-only info if blockchain fetch fails
+    const [aleoBalance, dartBalance] = await Promise.all([
+      fetchAleoBalance(publicKey),
+      fetchDartBalance(publicKey),
+    ]);
+
+    const positions = loadPositions();
+    const activeCount = positions.filter(p => !p.claimed).length;
+    const totalStaked = positions.reduce(
+      (sum, p) => sum + Math.max(p.yesDeposit, p.noDeposit),
+      0
+    );
+
+    let message = `Your wallet:\n`;
+    message += `ALEO Credits: ${aleoBalance.toFixed(2)} ALEO\n`;
+    message += `DART Balance: ${(dartBalance).toFixed(0)} DART\n`;
+    if (totalStaked > 0) {
+      message += `Staked in rounds: ${formatPred(totalStaked)} DART\n`;
     }
-
-    // Get staked amounts from positions
-    const positions = JSON.parse(localStorage.getItem(`positions_${publicKey}`) || '[]');
-    const totalStaked = positions.reduce((sum: number, p: any) => sum + p.shares, 0);
-
-    // Count active positions
-    const markets = JSON.parse(localStorage.getItem('aleomarkets') || '[]');
-    const activePositions = positions.filter((p: any) => {
-      const market = markets.find((m: any) => m.id.toString() === p.marketId);
-      return market && !market.resolved;
-    });
-
-    // Calculate available balance
-    const available = totalBalance - totalStaked;
-
-    let message = '';
-    if (totalBalance > 0) {
-      message = `Your wallet balance:\n\nTotal: ${totalBalance.toFixed(2)} ALEO\nStaked in markets: ${totalStaked.toFixed(2)} ALEO\nAvailable: ${available.toFixed(2)} ALEO`;
-
-      if (activePositions.length > 0) {
-        message += `\n\nYou have ${activePositions.length} active position${activePositions.length !== 1 ? 's' : ''}.`;
-      }
-    } else if (totalStaked > 0) {
-      // Blockchain balance is 0 but has staked positions (unlikely but handle it)
-      message = `You have ${totalStaked.toFixed(2)} ALEO staked across ${activePositions.length} active market${activePositions.length !== 1 ? 's' : ''}.\n\nNote: Your on-chain balance shows 0 ALEO. This might be because positions are in private records.`;
-    } else {
-      message = `Your balance is 0 ALEO.\n\nGet testnet credits from the Aleo faucet: https://faucet.aleo.org/`;
+    if (activeCount > 0) {
+      message += `Active positions: ${activeCount}`;
     }
 
     return {
       success: true,
       message,
-      data: {
-        totalBalance,
-        staked: totalStaked,
-        available,
-        activePositionsCount: activePositions.length
-      }
+      data: { aleoBalance, dartBalance, activeCount, totalStaked },
     };
   } catch (error: any) {
-    return {
-      success: false,
-      message: 'Failed to fetch wallet balance. Please try again.',
-      error: error.message
-    };
+    return { success: false, message: 'Failed to fetch wallet balance.', error: error.message };
   }
 }
 
-// Get user's active positions
+/** Get user's active positions in current/recent rounds */
 export async function getActivePositions(publicKey: string | undefined): Promise<VoiceToolResult> {
   try {
     if (!publicKey) {
       return {
         success: false,
         message: 'Wallet not connected. Please connect your Leo wallet first.',
-        error: 'No wallet connected'
+        error: 'No wallet connected',
       };
     }
 
-    const positions = JSON.parse(localStorage.getItem(`positions_${publicKey}`) || '[]');
-    const markets = JSON.parse(localStorage.getItem('aleomarkets') || '[]') as Market[];
-
+    const positions = loadPositions();
     if (positions.length === 0) {
-      return {
-        success: true,
-        message: 'You have no active positions.',
-        data: []
-      };
+      return { success: true, message: 'You have no positions. Place a bet on the markets page!', data: [] };
     }
 
-    const positionDetails = positions.map((p: any, idx: number) => {
-      const market = markets.find(m => m.id.toString() === p.marketId);
-      if (!market) return null;
+    // Fetch round data for each position
+    const roundIds = [...new Set(positions.map(p => p.roundId))];
+    const rounds = await Promise.all(roundIds.map(id => fetchRound(id)));
+    const roundMap = new Map<number, RoundState>();
+    for (const r of rounds) {
+      if (r) roundMap.set(r.id, r);
+    }
 
-      const totalShares = market.total_yes_shares + market.total_no_shares;
-      const currentOdds = totalShares > 0
-        ? ((p.side === 'YES' ? market.total_yes_shares : market.total_no_shares) / totalShares * 100).toFixed(0)
-        : '50';
+    const lines = positions.map(pos => {
+      const round = roundMap.get(pos.roundId);
+      const side = pos.yesDeposit > 0 ? 'YES' : 'NO';
+      const deposit = Math.max(pos.yesDeposit, pos.noDeposit);
 
-      return `${idx + 1}. ${market.question.slice(0, 50)}... - ${p.shares} ALEO on ${p.side} (${currentOdds}% odds)`;
-    }).filter(Boolean);
+      if (!round) return `Round #${pos.roundId}: ${formatPred(deposit)} DART on ${side} (data unavailable)`;
 
-    const totalAtRisk = positions.reduce((sum: number, p: any) => sum + p.shares, 0);
-    const potentialWinnings = positions.reduce((sum: number, p: any) => sum + (p.shares * 2), 0);
+      const targetUsd = (round.targetPrice / 100).toFixed(2);
+
+      if (round.resolved) {
+        const winningSide = round.outcome ? 'YES' : 'NO';
+        const won = side === winningSide;
+        if (won) {
+          const totalPool = round.yesPool + round.noPool;
+          const winPool = round.outcome ? round.yesPool : round.noPool;
+          const payout = winPool > 0 ? (deposit / winPool) * totalPool * 0.9 : 0;
+          return `Round #${pos.roundId} ($${targetUsd}): ${formatPred(deposit)} DART on ${side} → WON ${formatPred(payout)} DART${pos.claimed ? ' (claimed)' : ' (claimable!)'}`;
+        }
+        return `Round #${pos.roundId} ($${targetUsd}): ${formatPred(deposit)} DART on ${side} → LOST`;
+      }
+
+      return `Round #${pos.roundId} ($${targetUsd}): ${formatPred(deposit)} DART on ${side} (active)`;
+    });
+
+    const totalStaked = positions.reduce((s, p) => s + Math.max(p.yesDeposit, p.noDeposit), 0);
 
     return {
       success: true,
-      message: `You have ${positions.length} active positions:\n${positionDetails.join('\n')}\n\nTotal at risk: ${totalAtRisk.toFixed(2)} ALEO\nPotential winnings: ${potentialWinnings.toFixed(2)} ALEO`,
-      data: positions
+      message: `Your ${positions.length} positions:\n${lines.join('\n')}\n\nTotal staked: ${formatPred(totalStaked)} DART`,
+      data: positions,
     };
   } catch (error: any) {
-    return {
-      success: false,
-      message: 'Failed to fetch active positions',
-      error: error.message
-    };
+    return { success: false, message: 'Failed to fetch positions.', error: error.message };
   }
 }
 
-// PHASE 2: TRADING ACTIONS
-
-// Prepare bet (validation only, returns confirmation data)
+/** Validate a bet on the current active round (does NOT execute) */
 export async function prepareBet(
   publicKey: string | undefined,
-  marketId: number,
   side: 'YES' | 'NO',
   amount: number
 ): Promise<VoiceToolResult> {
   try {
     if (!publicKey) {
-      return {
-        success: false,
-        message: 'Please connect your wallet first to place bets.',
-        error: 'No wallet connected'
-      };
+      return { success: false, message: 'Please connect your wallet first.', error: 'No wallet connected' };
     }
-
-    // Validate amount
     if (amount <= 0) {
-      return {
-        success: false,
-        message: 'Bet amount must be greater than 0 ALEO.',
-        error: 'Invalid amount'
-      };
+      return { success: false, message: 'Bet amount must be greater than 0 DART.', error: 'Invalid amount' };
     }
 
-    // Check balance
-    let totalBalance = 0;
-    try {
-      totalBalance = await fetchAleoBalance(publicKey);
-    } catch (e) {
-      console.error('[Voice] Balance check failed:', e);
+    const highestId = await findLatestRoundId();
+    const round = highestId > 0 ? await fetchRound(highestId) : null;
+
+    if (!round || round.resolved) {
+      return { success: false, message: 'No active round right now. Wait for the next round to start.', error: 'No active round' };
     }
 
-    const positions = JSON.parse(localStorage.getItem(`positions_${publicKey}`) || '[]');
-    const totalStaked = positions.reduce((sum: number, p: any) => sum + p.shares, 0);
-    const available = totalBalance - totalStaked;
-
-    if (amount > available) {
-      return {
-        success: false,
-        message: `Insufficient balance. You have ${available.toFixed(2)} ALEO available, but you're trying to bet ${amount} ALEO.`,
-        error: 'Insufficient balance'
-      };
+    const secsLeft = Math.max(0, Math.floor((round.endTime - Date.now()) / 1000));
+    if (secsLeft <= 0) {
+      return { success: false, message: 'This round is about to resolve. Wait for the next round.', error: 'Round ending' };
     }
 
-    // Get market details
-    const markets = JSON.parse(localStorage.getItem('aleomarkets') || '[]') as Market[];
-    const market = markets.find(m => m.id === marketId);
+    const microAmount = amount * PRED_MULTIPLIER;
+    const targetUsd = (round.targetPrice / 100).toFixed(2);
+    const totalPool = round.yesPool + round.noPool + microAmount;
+    const sidePool = (side === 'YES' ? round.yesPool : round.noPool) + microAmount;
+    const opposingPool = side === 'YES' ? round.noPool : round.yesPool;
 
-    if (!market) {
-      return {
-        success: false,
-        message: `Market ${marketId} not found.`,
-        error: 'Market not found'
-      };
+    let estPayout: number;
+    if (opposingPool === 0) {
+      estPayout = microAmount; // Full refund if no opposition
+    } else {
+      estPayout = (microAmount / sidePool) * totalPool * 0.9;
     }
 
-    if (market.resolved) {
-      return {
-        success: false,
-        message: `Market ${marketId} is already resolved. You can't place new bets.`,
-        error: 'Market resolved'
-      };
-    }
+    const message = `Ready to place bet on Round #${round.id}:
 
-    // Check if market has ended
-    const now = Math.floor(Date.now() / 1000);
-    if (market.end_timestamp < now) {
-      return {
-        success: false,
-        message: `Market ${marketId} has ended. You can't place new bets.`,
-        error: 'Market ended'
-      };
-    }
+BTC Target: $${targetUsd}
+Side: ${side} (BTC will be ${side === 'YES' ? 'above' : 'below'} target)
+Amount: ${amount} DART
+Time left: ${Math.floor(secsLeft / 60)}m ${secsLeft % 60}s
+Est. payout if you win: ${formatPred(estPayout)} DART
+Profit if you win: ${formatPred(estPayout - microAmount)} DART
 
-    // Calculate expected payout
-    const totalShares = market.total_yes_shares + market.total_no_shares;
-    const newTotalShares = totalShares + amount;
-    const sideShares = side === 'YES' ? market.total_yes_shares : market.total_no_shares;
-    const newSideShares = sideShares + amount;
-
-    const expectedPayout = (newTotalShares / newSideShares) * amount;
-    const currentOdds = totalShares > 0 ? ((sideShares / totalShares) * 100).toFixed(0) : '50';
-    const newOdds = ((newSideShares / newTotalShares) * 100).toFixed(0);
-
-    const confirmationMessage = `Ready to place bet:
-
-Market: ${market.question}
-Side: ${side}
-Amount: ${amount} ALEO
-Current odds: ${currentOdds}% ${side}
-New odds after bet: ${newOdds}% ${side}
-Expected payout if you win: ${expectedPayout.toFixed(2)} ALEO
-Profit if you win: ${(expectedPayout - amount).toFixed(2)} ALEO
-
-Say "confirm" to place this bet, or "cancel" to abort.`;
-
-    return {
-      success: true,
-      message: confirmationMessage,
-      data: {
-        marketId,
-        side,
-        amount,
-        market,
-        expectedPayout,
-        currentOdds,
-        newOdds,
-        confirmed: false
-      }
-    };
-  } catch (error: any) {
-    return {
-      success: false,
-      message: 'Failed to prepare bet. Please try again.',
-      error: error.message
-    };
-  }
-}
-
-// Smart recommendations based on user's portfolio
-export async function getSmartRecommendations(publicKey: string | undefined): Promise<VoiceToolResult> {
-  try {
-    if (!publicKey) {
-      return {
-        success: false,
-        message: 'Please connect your wallet to get personalized recommendations.',
-        error: 'No wallet connected'
-      };
-    }
-
-    const positions = JSON.parse(localStorage.getItem(`positions_${publicKey}`) || '[]');
-    const markets = JSON.parse(localStorage.getItem('aleomarkets') || '[]') as Market[];
-    const activeMarkets = markets.filter(m => !m.resolved);
-
-    // Analyze user's betting patterns
-    const userCategories: Record<string, number> = {};
-    const userSides: Record<string, number> = { YES: 0, NO: 0 };
-
-    positions.forEach((p: any) => {
-      const market = markets.find(m => m.id.toString() === p.marketId);
-      if (market && !market.resolved) {
-        const cat = market.category ?? 'Other';
-        userCategories[cat] = (userCategories[cat] || 0) + 1;
-        userSides[p.side] = (userSides[p.side] || 0) + 1;
-      }
-    });
-
-    const favoriteCategory = Object.entries(userCategories).sort((a, b) => b[1] - a[1])[0]?.[0];
-
-    // Find high-volume markets user hasn't bet on
-    const recommendations = activeMarkets
-      .filter(m => {
-        // User hasn't bet on this market
-        const hasPosition = positions.some((p: any) => p.marketId === m.id.toString());
-        return !hasPosition && m.total_volume > 1; // At least 1 ALEO volume
-      })
-      .sort((a, b) => b.total_volume - a.total_volume)
-      .slice(0, 3);
-
-    if (recommendations.length === 0) {
-      return {
-        success: true,
-        message: favoriteCategory
-          ? `You've bet on all high-volume ${favoriteCategory} markets! Check back later for new opportunities.`
-          : 'No new recommendations at the moment. Try creating a market or explore different categories!',
-        data: []
-      };
-    }
-
-    const recList = recommendations.map((m, idx) => {
-      const totalShares = m.total_yes_shares + m.total_no_shares;
-      const yesOdds = ((m.total_yes_shares / totalShares) * 100).toFixed(0);
-      const noOdds = ((m.total_no_shares / totalShares) * 100).toFixed(0);
-
-      // Suggest underdog if user tends to bet on favorites
-      const suggestion = parseInt(yesOdds) > 60 ? 'NO' : 'YES';
-
-      return `${idx + 1}. ${m.question} (${m.category})
-   Current odds: ${yesOdds}% YES, ${noOdds}% NO
-   Volume: ${m.total_volume.toFixed(1)} ALEO
-   Suggestion: Consider ${suggestion} - underdog opportunity`;
-    }).join('\n\n');
-
-    let message = 'Smart recommendations based on your portfolio:\n\n';
-    if (favoriteCategory) {
-      message += `You seem to like ${favoriteCategory} markets! Here are some opportunities:\n\n`;
-    }
-    message += recList;
+Use the betting panel on the Markets page to complete this bet.`;
 
     return {
       success: true,
       message,
-      data: recommendations
+      data: { roundId: round.id, side, amount, estPayout: formatPred(estPayout) },
     };
   } catch (error: any) {
-    return {
-      success: false,
-      message: 'Failed to generate recommendations.',
-      error: error.message
-    };
+    return { success: false, message: 'Failed to prepare bet.', error: error.message };
   }
 }
 
-// Portfolio performance analysis
+/** Analyze portfolio performance across all rounds */
 export async function analyzePortfolio(publicKey: string | undefined): Promise<VoiceToolResult> {
   try {
     if (!publicKey) {
-      return {
-        success: false,
-        message: 'Please connect your wallet to analyze your portfolio.',
-        error: 'No wallet connected'
-      };
+      return { success: false, message: 'Please connect your wallet to analyze your portfolio.', error: 'No wallet connected' };
     }
 
-    const positions = JSON.parse(localStorage.getItem(`positions_${publicKey}`) || '[]');
-    const markets = JSON.parse(localStorage.getItem('aleomarkets') || '[]') as Market[];
-
+    const positions = loadPositions();
     if (positions.length === 0) {
-      return {
-        success: true,
-        message: 'You have no positions yet. Start by exploring trending markets!',
-        data: {}
-      };
+      return { success: true, message: 'No positions yet. Start by placing a bet on the markets page!', data: {} };
     }
 
-    // Calculate portfolio metrics
-    const totalInvested = positions.reduce((sum: number, p: any) => sum + p.shares, 0);
+    // Fetch round data for all positions
+    const roundIds = [...new Set(positions.map(p => p.roundId))];
+    const rounds = await Promise.all(roundIds.map(id => fetchRound(id)));
+    const roundMap = new Map<number, RoundState>();
+    for (const r of rounds) {
+      if (r) roundMap.set(r.id, r);
+    }
 
-    let winningPositions = 0;
-    let losingPositions = 0;
-    let unresolvedPositions = 0;
-    let totalValue = 0;
+    let totalInvested = 0;
+    let totalPnL = 0;
+    let wins = 0;
+    let losses = 0;
+    let active = 0;
+    let claimable = 0;
 
-    positions.forEach((p: any) => {
-      const market = markets.find(m => m.id.toString() === p.marketId);
-      if (!market) return;
+    for (const pos of positions) {
+      const round = roundMap.get(pos.roundId);
+      const deposit = Math.max(pos.yesDeposit, pos.noDeposit);
+      totalInvested += deposit;
 
-      if (market.resolved) {
-        if (market.winning_side === p.side) {
-          winningPositions++;
-          totalValue += p.shares * 2; // Approximate 2x payout
-        } else {
-          losingPositions++;
-        }
-      } else {
-        unresolvedPositions++;
-        // Calculate current value based on odds
-        const totalShares = market.total_yes_shares + market.total_no_shares;
-        const currentPayout = (totalShares / (p.side === 'YES' ? market.total_yes_shares : market.total_no_shares)) * p.shares;
-        totalValue += currentPayout;
+      if (!round || !round.resolved) {
+        active++;
+        continue;
       }
-    });
 
-    const roi = totalInvested > 0 ? ((totalValue - totalInvested) / totalInvested * 100).toFixed(1) : '0.0';
-    const winRate = (winningPositions + losingPositions) > 0
-      ? ((winningPositions / (winningPositions + losingPositions)) * 100).toFixed(0)
-      : '0';
+      const userSide = pos.yesDeposit > 0 ? 'YES' : 'NO';
+      const winningSide = round.outcome ? 'YES' : 'NO';
+
+      if (userSide === winningSide) {
+        wins++;
+        const totalPool = round.yesPool + round.noPool;
+        const winPool = round.outcome ? round.yesPool : round.noPool;
+        const payout = winPool > 0 ? (deposit / winPool) * totalPool * 0.9 : 0;
+        totalPnL += payout - deposit;
+        if (!pos.claimed) claimable += payout;
+      } else {
+        losses++;
+        totalPnL -= deposit;
+      }
+    }
+
+    const resolvedCount = wins + losses;
+    const winRate = resolvedCount > 0 ? ((wins / resolvedCount) * 100).toFixed(0) : '0';
+    const roi = totalInvested > 0 ? ((totalPnL / totalInvested) * 100).toFixed(1) : '0.0';
 
     const message = `Portfolio Analysis:
 
 Total Positions: ${positions.length}
-Active: ${unresolvedPositions}
-Resolved: ${winningPositions + losingPositions} (${winningPositions} wins, ${losingPositions} losses)
-
-Total Invested: ${totalInvested.toFixed(2)} ALEO
-Current Value: ${totalValue.toFixed(2)} ALEO
-Profit/Loss: ${(totalValue - totalInvested).toFixed(2)} ALEO
-ROI: ${roi}%
+Active: ${active} | Resolved: ${resolvedCount} (${wins} wins, ${losses} losses)
 Win Rate: ${winRate}%
 
-${parseFloat(roi) > 0 ? '🎉 Great job! You\'re making profits!' : parseFloat(roi) < 0 ? '📊 Keep learning and improve your strategy!' : '📈 You\'re breaking even. Consider diversifying!'}`;
+Total Invested: ${formatPred(totalInvested)} DART
+P&L: ${totalPnL >= 0 ? '+' : ''}${formatPred(totalPnL)} DART
+ROI: ${roi}%${claimable > 0 ? `\nClaimable: ${formatPred(claimable)} DART` : ''}`;
 
     return {
       success: true,
       message,
       data: {
         totalPositions: positions.length,
-        activePositions: unresolvedPositions,
-        resolvedPositions: winningPositions + losingPositions,
-        winningPositions,
-        losingPositions,
+        active,
+        wins,
+        losses,
+        winRate: parseFloat(winRate),
         totalInvested,
-        totalValue,
-        profitLoss: totalValue - totalInvested,
+        totalPnL,
         roi: parseFloat(roi),
-        winRate: parseFloat(winRate)
-      }
+        claimable,
+      },
     };
   } catch (error: any) {
-    return {
-      success: false,
-      message: 'Failed to analyze portfolio.',
-      error: error.message
-    };
+    return { success: false, message: 'Failed to analyze portfolio.', error: error.message };
   }
 }

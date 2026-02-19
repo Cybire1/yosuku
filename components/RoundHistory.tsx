@@ -22,7 +22,6 @@ export default function RoundHistory({ rounds, positions, onClaim }: RoundHistor
   const handleClaim = async (roundId: number) => {
     if (!publicKey || !requestTransaction) return;
 
-    // Calculate expected payout to pass to contract
     const round = rounds.find(r => r.id === roundId);
     const pos = getPosition(roundId);
     if (!round || !pos) return;
@@ -37,19 +36,25 @@ export default function RoundHistory({ rounds, positions, onClaim }: RoundHistor
 
     setClaimingId(roundId);
     try {
+      // Deployed contract claim takes only round_id
       const transaction = {
         address: publicKey,
         chainId: 'testnetbeta',
         transitions: [{
           program: BTC_PREDICTION_PROGRAM,
           functionName: 'claim',
-          inputs: [`${roundId}u64`, `${netPayout}u64`],
+          inputs: [`${roundId}u64`],
         }],
         fee: 1000000,
         feePrivate: false,
       };
 
       await requestTransaction(transaction);
+
+      // Credit payout to local balance
+      const curBalance = parseInt(localStorage.getItem('dart_balance') || '0', 10);
+      localStorage.setItem('dart_balance', String(curBalance + netPayout));
+
       onClaim?.(roundId);
     } catch (err) {
       console.error('Claim error:', err);

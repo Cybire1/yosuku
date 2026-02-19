@@ -25,7 +25,7 @@ export default function WalletProvider({
   );
 
   return (
-    <AleoWalletProvider wallets={wallets}>
+    <AleoWalletProvider wallets={wallets} autoConnect>
       <WalletModalProvider>{children}</WalletModalProvider>
     </AleoWalletProvider>
   );

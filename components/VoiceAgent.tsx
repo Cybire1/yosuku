@@ -2,11 +2,329 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Mic, X, Send, Loader2, ArrowUpRight, Sparkles } from 'lucide-react';
+import { Mic, MicOff, X, Send, Loader2, Sparkles, Zap, BarChart3, Target, Clock, TrendingUp, TrendingDown, Wallet, Trophy, Check } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { useWallet } from '@demox-labs/aleo-wallet-adapter-react';
 import { useVoiceSession, type VoiceMessage } from '@/lib/hooks/useVoiceSession';
-import MarketCard from './MarketCard';
+import { formatPred } from '@/lib/predictionContract';
+
+// ── Rich Card Components ─────────────────────────────
+
+function RoundInfoCard({ data }: { data: any }) {
+  if (!data) return null;
+  const targetUsd = (data.targetPrice / 100).toFixed(2);
+  const totalPool = data.yesPool + data.noPool;
+  const secsLeft = Math.max(0, Math.floor((data.endTime - Date.now()) / 1000));
+  const mins = Math.floor(secsLeft / 60);
+  const secs = secsLeft % 60;
+  const yesPct = totalPool > 0 ? Math.round((data.yesPool / totalPool) * 100) : 50;
+
+  return (
+    <div className="w-full rounded-xl bg-white/[0.04] border border-white/10 overflow-hidden">
+      {/* Header bar */}
+      <div className="flex items-center justify-between px-3 py-2 bg-white/[0.03]">
+        <div className="flex items-center gap-2">
+          <Target className="w-3.5 h-3.5 text-new-mint" />
+          <span className="text-xs font-bold text-white">Round #{data.id}</span>
+        </div>
+        {data.resolved ? (
+          <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${data.outcome ? 'bg-new-mint/15 text-new-mint' : 'bg-off-red/15 text-off-red'}`}>
+            {data.outcome ? 'YES Won' : 'NO Won'}
+          </span>
+        ) : (
+          <div className="flex items-center gap-1.5">
+            <Clock className="w-3 h-3 text-gray-500" />
+            <span className="text-xs font-mono font-bold text-white">
+              {secsLeft > 0 ? `${mins}:${String(secs).padStart(2, '0')}` : 'Resolving...'}
+            </span>
+          </div>
+        )}
+      </div>
+      {/* Body */}
+      <div className="px-3 py-3 space-y-2.5">
+        <div className="flex items-center justify-between">
+          <div>
+            <span className="text-[9px] font-bold uppercase tracking-wider text-gray-500 block">Target</span>
+            <span className="text-sm font-mono font-bold text-gray-300">${targetUsd}</span>
+          </div>
+          <div className="text-right">
+            <span className="text-[9px] font-bold uppercase tracking-wider text-gray-500 block">Pool</span>
+            <span className="text-sm font-mono font-bold text-new-mint">{formatPred(totalPool)} DART</span>
+          </div>
+        </div>
+        {/* Pool bar */}
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-bold text-new-mint w-8 text-right">{yesPct}%</span>
+          <div className="flex-1 h-1.5 rounded-full overflow-hidden flex bg-white/5">
+            <div className="h-full bg-new-mint/70 rounded-full" style={{ width: `${yesPct}%` }} />
+            <div className="h-full bg-off-red/70 rounded-full" style={{ width: `${100 - yesPct}%` }} />
+          </div>
+          <span className="text-[10px] font-bold text-off-red w-8">{100 - yesPct}%</span>
+        </div>
+        <div className="flex justify-between text-[10px] text-gray-500">
+          <span>YES: {formatPred(data.yesPool)}</span>
+          <span>NO: {formatPred(data.noPool)}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RoundHistoryCard({ data }: { data: any[] }) {
+  if (!data?.length) return null;
+  return (
+    <div className="w-full rounded-xl bg-white/[0.04] border border-white/10 overflow-hidden">
+      <div className="px-3 py-2 bg-white/[0.03] flex items-center gap-2">
+        <Clock className="w-3.5 h-3.5 text-new-blue" />
+        <span className="text-xs font-bold text-white">Recent Rounds</span>
+      </div>
+      <div className="divide-y divide-white/5">
+        {data.slice(0, 5).map((r: any) => (
+          <div key={r.id} className="flex items-center justify-between px-3 py-2">
+            <div className="flex items-center gap-2">
+              <div className={`w-5 h-5 rounded-full flex items-center justify-center ${r.outcome ? 'bg-new-mint/15' : 'bg-off-red/15'}`}>
+                {r.outcome ? <TrendingUp className="w-3 h-3 text-new-mint" /> : <TrendingDown className="w-3 h-3 text-off-red" />}
+              </div>
+              <span className="text-xs font-bold text-gray-300">#{r.id}</span>
+              <span className="text-[10px] font-mono text-gray-500">${(r.targetPrice / 100).toFixed(2)}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className={`text-[10px] font-bold ${r.outcome ? 'text-new-mint' : 'text-off-red'}`}>
+                {r.outcome ? 'YES' : 'NO'}
+              </span>
+              <span className="text-[10px] font-mono text-gray-500">{formatPred(r.yesPool + r.noPool)}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function WalletBalanceCard({ data }: { data: any }) {
+  if (!data) return null;
+  return (
+    <div className="w-full rounded-xl bg-white/[0.04] border border-white/10 overflow-hidden">
+      <div className="px-3 py-2 bg-white/[0.03] flex items-center gap-2">
+        <Wallet className="w-3.5 h-3.5 text-new-mint" />
+        <span className="text-xs font-bold text-white">Wallet</span>
+      </div>
+      <div className="px-3 py-3 space-y-2">
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-gray-500">ALEO Credits</span>
+          <span className="text-sm font-mono font-bold text-white">{data.aleoBalance?.toFixed(2)}</span>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-gray-500">DART Tokens</span>
+          <span className="text-sm font-mono font-bold text-new-mint">{data.dartBalance?.toFixed(0)}</span>
+        </div>
+        {data.totalStaked > 0 && (
+          <div className="flex items-center justify-between pt-1 border-t border-white/5">
+            <span className="text-xs text-gray-500">Staked</span>
+            <span className="text-xs font-mono text-yellow-400">{formatPred(data.totalStaked)} DART</span>
+          </div>
+        )}
+        {data.activeCount > 0 && (
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-gray-500">Active Bets</span>
+            <span className="text-xs font-mono text-new-blue">{data.activeCount}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PositionsCard({ data }: { data: any[] }) {
+  if (!data?.length) return null;
+  return (
+    <div className="w-full rounded-xl bg-white/[0.04] border border-white/10 overflow-hidden">
+      <div className="px-3 py-2 bg-white/[0.03] flex items-center gap-2">
+        <Zap className="w-3.5 h-3.5 text-yellow-400" />
+        <span className="text-xs font-bold text-white">{data.length} Position{data.length !== 1 ? 's' : ''}</span>
+      </div>
+      <div className="divide-y divide-white/5">
+        {data.map((pos: any, i: number) => {
+          const side = pos.yesDeposit > 0 ? 'YES' : 'NO';
+          const deposit = Math.max(pos.yesDeposit || 0, pos.noDeposit || 0);
+          return (
+            <div key={i} className="flex items-center justify-between px-3 py-2">
+              <div className="flex items-center gap-2">
+                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${side === 'YES' ? 'bg-new-mint/15 text-new-mint' : 'bg-off-red/15 text-off-red'}`}>
+                  {side}
+                </span>
+                <span className="text-xs text-gray-400">Round #{pos.roundId}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-mono font-bold text-white">{formatPred(deposit)}</span>
+                <span className="text-[10px] text-gray-500">DART</span>
+                {pos.claimed && <Check className="w-3 h-3 text-new-mint" />}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function BetPrepCard({ data }: { data: any }) {
+  if (!data) return null;
+  return (
+    <div className="w-full rounded-xl border overflow-hidden bg-white/[0.04] border-new-mint/20">
+      <div className="px-3 py-2 bg-new-mint/10 flex items-center gap-2">
+        <Check className="w-3.5 h-3.5 text-new-mint" />
+        <span className="text-xs font-bold text-new-mint">Bet Ready</span>
+      </div>
+      <div className="px-3 py-3 space-y-2">
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-gray-500">Round</span>
+          <span className="text-xs font-bold text-white">#{data.roundId}</span>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-gray-500">Side</span>
+          <span className={`text-xs font-bold ${data.side === 'YES' ? 'text-new-mint' : 'text-off-red'}`}>{data.side}</span>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-gray-500">Amount</span>
+          <span className="text-xs font-mono font-bold text-white">{data.amount} DART</span>
+        </div>
+        <div className="flex items-center justify-between pt-1 border-t border-white/5">
+          <span className="text-xs text-gray-500">Est. Payout</span>
+          <span className="text-xs font-mono font-bold text-new-mint">{data.estPayout} DART</span>
+        </div>
+        <p className="text-[10px] text-gray-500 pt-1">Use the betting panel to confirm.</p>
+      </div>
+    </div>
+  );
+}
+
+function PortfolioCard({ data }: { data: any }) {
+  if (!data) return null;
+  const isProfit = data.totalPnL >= 0;
+  return (
+    <div className="w-full rounded-xl bg-white/[0.04] border border-white/10 overflow-hidden">
+      <div className="px-3 py-2 bg-white/[0.03] flex items-center gap-2">
+        <BarChart3 className="w-3.5 h-3.5 text-new-blue" />
+        <span className="text-xs font-bold text-white">Portfolio</span>
+      </div>
+      <div className="px-3 py-3 space-y-2">
+        {/* Stats row */}
+        <div className="grid grid-cols-3 gap-2">
+          <div className="text-center p-2 rounded-lg bg-white/[0.03]">
+            <span className="text-[9px] uppercase tracking-wider text-gray-500 block">Win Rate</span>
+            <span className="text-sm font-mono font-bold text-white">{data.winRate || 0}%</span>
+          </div>
+          <div className="text-center p-2 rounded-lg bg-white/[0.03]">
+            <span className="text-[9px] uppercase tracking-wider text-gray-500 block">ROI</span>
+            <span className={`text-sm font-mono font-bold ${isProfit ? 'text-new-mint' : 'text-off-red'}`}>
+              {data.roi > 0 ? '+' : ''}{data.roi?.toFixed(1)}%
+            </span>
+          </div>
+          <div className="text-center p-2 rounded-lg bg-white/[0.03]">
+            <span className="text-[9px] uppercase tracking-wider text-gray-500 block">Rounds</span>
+            <span className="text-sm font-mono font-bold text-white">{data.totalPositions || 0}</span>
+          </div>
+        </div>
+        {/* P&L */}
+        <div className="flex items-center justify-between pt-1">
+          <span className="text-xs text-gray-500">P&L</span>
+          <div className="flex items-center gap-1.5">
+            {isProfit ? <TrendingUp className="w-3 h-3 text-new-mint" /> : <TrendingDown className="w-3 h-3 text-off-red" />}
+            <span className={`text-sm font-mono font-bold ${isProfit ? 'text-new-mint' : 'text-off-red'}`}>
+              {isProfit ? '+' : ''}{formatPred(data.totalPnL || 0)} DART
+            </span>
+          </div>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-gray-500">Invested</span>
+          <span className="text-xs font-mono text-gray-300">{formatPred(data.totalInvested || 0)} DART</span>
+        </div>
+        {data.wins > 0 && (
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-gray-500">Record</span>
+            <span className="text-xs">
+              <span className="text-new-mint font-bold">{data.wins}W</span>
+              <span className="text-gray-600 mx-1">/</span>
+              <span className="text-off-red font-bold">{data.losses}L</span>
+            </span>
+          </div>
+        )}
+        {data.claimable > 0 && (
+          <div className="flex items-center justify-between pt-1 border-t border-white/5">
+            <span className="text-xs text-gray-500">Claimable</span>
+            <div className="flex items-center gap-1">
+              <Trophy className="w-3 h-3 text-yellow-400" />
+              <span className="text-xs font-mono font-bold text-yellow-400">{formatPred(data.claimable)} DART</span>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function LoadingCard({ text }: { text: string }) {
+  return (
+    <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/[0.03] border border-white/5">
+      <Loader2 className="w-3.5 h-3.5 text-new-mint animate-spin" />
+      <span className="text-xs text-gray-400">{text}</span>
+    </div>
+  );
+}
+
+// ── Message Renderer ─────────────────────────────────
+
+function MessageBubble({ msg }: { msg: VoiceMessage }) {
+  const isUser = msg.sender === 'user';
+
+  // Loading state
+  if (msg.displayType === 'loading') {
+    return (
+      <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}>
+        <LoadingCard text={msg.text} />
+      </motion.div>
+    );
+  }
+
+  // Rich cards
+  if (msg.displayType && msg.displayType !== 'text' && msg.data) {
+    return (
+      <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="w-full">
+        {msg.displayType === 'round_info' && <RoundInfoCard data={msg.data} />}
+        {msg.displayType === 'round_history' && <RoundHistoryCard data={msg.data} />}
+        {msg.displayType === 'wallet_balance' && <WalletBalanceCard data={msg.data} />}
+        {msg.displayType === 'positions' && <PositionsCard data={msg.data} />}
+        {msg.displayType === 'bet_prep' && <BetPrepCard data={msg.data} />}
+        {msg.displayType === 'portfolio' && <PortfolioCard data={msg.data} />}
+      </motion.div>
+    );
+  }
+
+  // Skip empty text messages
+  if (!msg.text) return null;
+
+  // Regular text bubble
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}
+    >
+      <div
+        className={`max-w-[80%] px-3.5 py-2.5 rounded-2xl text-[13px] leading-relaxed ${
+          isUser
+            ? 'bg-new-mint/15 text-white rounded-br-md'
+            : 'bg-white/[0.05] text-gray-300 rounded-bl-md'
+        }`}
+      >
+        <p className="whitespace-pre-wrap">{msg.text}</p>
+      </div>
+    </motion.div>
+  );
+}
+
+// ── Main Component ───────────────────────────────────
 
 export default function VoiceAgent() {
   const { publicKey } = useWallet();
@@ -17,18 +335,21 @@ export default function VoiceAgent() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [mounted, setMounted] = useState(false);
 
-  // Ensure component only renders on client
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  useEffect(() => { setMounted(true); }, []);
 
-  // Auto-scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
   const handleMessage = useCallback((message: VoiceMessage) => {
-    setMessages((prev) => [...prev, message]);
+    setMessages((prev) => {
+      // Replace loading messages with the final result
+      if (message.displayType && message.displayType !== 'loading' && message.displayType !== 'text') {
+        const filtered = prev.filter(m => m.displayType !== 'loading');
+        return [...filtered, message];
+      }
+      return [...prev, message];
+    });
   }, []);
 
   const { appState, startSession, toggleListening, sendTextMessage, isConnected } = useVoiceSession({
@@ -45,264 +366,205 @@ export default function VoiceAgent() {
     }
   };
 
+  const handleQuickPrompt = (text: string) => {
+    if (isConnected) sendTextMessage(text);
+  };
+
+  const pendingMicRef = useRef(false);
+
   const handleOpen = () => {
     setIsOpen(true);
     if (!isConnected) {
+      pendingMicRef.current = true;
       startSession();
+    } else {
+      toggleListening();
     }
   };
 
-  // Don't render until mounted or if not on /markets page
+  useEffect(() => {
+    if (isConnected && pendingMicRef.current) {
+      pendingMicRef.current = false;
+      toggleListening();
+    }
+  }, [isConnected, toggleListening]);
+
   if (!mounted || pathname !== '/markets') return null;
+
+  const stateLabel = appState === 'listening' ? 'Listening...'
+    : appState === 'speaking' ? 'Speaking...'
+    : appState === 'thinking' ? 'Thinking...'
+    : isConnected ? 'Ready' : 'Connecting...';
 
   return (
     <>
-      {/* Floating Button - Living Orb Trigger (No Icon) */}
+      {/* Floating Trigger */}
       <AnimatePresence>
         {!isOpen && (
           <motion.button
-            initial={{ scale: 0, opacity: 0, y: 20 }}
-            animate={{ scale: 1, opacity: 1, y: 0 }}
-            exit={{ scale: 0, opacity: 0, y: 20 }}
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0, opacity: 0 }}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             onClick={handleOpen}
-            className="fixed bottom-6 right-6 h-14 pl-4 pr-5 rounded-full flex items-center gap-2.5 z-50 group shadow-[0_4px_20px_rgba(52,211,153,0.3)] hover:shadow-[0_4px_30px_rgba(52,211,153,0.5)] transition-all duration-300 pointer-events-auto"
+            className="fixed bottom-6 right-6 z-50 pointer-events-auto"
           >
-            {/* Button Background - Gradient Glass */}
-            <div className="absolute inset-0 bg-neutral-900/90 backdrop-blur-xl border border-white/10 rounded-full" />
-            <div className="absolute inset-0 bg-gradient-to-r from-new-mint/10 to-new-blue/10 rounded-full opacity-50 group-hover:opacity-100 transition-opacity duration-300" />
-            <div className="absolute -inset-[2px] bg-gradient-to-r from-new-mint to-new-blue rounded-full opacity-40 blur-md group-hover:opacity-70 transition-all duration-500 animate-[pulse_3s_ease-in-out_infinite]" />
-
-            {/* Icon Container - Living Orb */}
-            <div className="relative w-8 h-8 flex items-center justify-center">
-              <div className="absolute inset-0 bg-new-mint blur-md rounded-full opacity-50 animate-pulse" />
-              <div className="relative z-10 w-full h-full bg-gradient-to-br from-new-mint to-new-blue rounded-full flex items-center justify-center text-black">
-                <Sparkles className="w-4 h-4" fill="currentColor" />
-              </div>
-              {/* Orbiting Ring */}
-              <div className="absolute inset-[-4px] border border-white/20 rounded-full animate-[spin_4s_linear_infinite]" />
+            <div className="relative h-12 pl-3.5 pr-5 rounded-full flex items-center gap-2.5 bg-new-mint shadow-[0_4px_24px_rgba(52,211,153,0.35)] hover:shadow-[0_4px_32px_rgba(52,211,153,0.5)] hover:brightness-110 transition-all">
+              <Sparkles className="w-4 h-4 text-black/70" fill="currentColor" />
+              <span className="text-sm font-black text-black tracking-tight">DART AI</span>
             </div>
-
-            {/* Text Label */}
-            <span className="relative z-10 text-lg font-black text-white leading-none tracking-tight">DART AI</span>
           </motion.button>
         )}
-      </AnimatePresence >
+      </AnimatePresence>
 
-      {/* Voice Agent Modal - "Floating Intelligence" */}
+      {/* Modal */}
       <AnimatePresence>
-        {
-          isOpen && (
-            <>
-              {/* Deep Glass Backdrop */}
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                onClick={() => setIsOpen(false)}
-                className="fixed inset-0 bg-black/80 backdrop-blur-[20px] z-50 transition-all duration-700"
-              />
+        {isOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsOpen(false)}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
+            />
 
-              {/* Modal Container */}
-              <motion.div
-                initial={{ opacity: 0, scale: 0.9, y: 40 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.9, y: 40 }}
-                transition={{ type: "spring", stiffness: 300, damping: 25 }}
-                className="fixed inset-4 md:inset-auto md:right-8 md:bottom-8 md:top-24 md:w-[480px] bg-neutral-950/90 rounded-[32px] border border-white/10 shadow-2xl z-50 flex flex-col overflow-hidden ring-1 ring-white/5"
-              >
-                {/* Cinematic Background Orbs */}
-                <div className="absolute top-[-50px] right-[-50px] w-60 h-60 bg-new-mint/10 blur-[100px] rounded-full pointer-events-none animate-pulse" />
-                <div className="absolute bottom-[-50px] left-[-50px] w-60 h-60 bg-new-blue/10 blur-[100px] rounded-full pointer-events-none animate-pulse delay-1000" />
-
-                {/* Header */}
-                <div className="relative z-10 p-6 flex items-center justify-between border-b border-white/5 bg-white/5 backdrop-blur-md">
-                  <div className="flex items-center gap-4">
-                    <div className="relative">
-                      <div className="w-10 h-10 bg-gradient-to-br from-neutral-800 to-black rounded-full flex items-center justify-center border border-white/10 shadow-inner">
-                        <Mic className={`w-5 h-5 transition-colors duration-300 ${isConnected ? 'text-new-mint' : 'text-gray-500'}`} />
-                      </div>
-                      {/* Status Dot */}
-                      <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-black transition-colors duration-300 ${isConnected ? 'bg-new-mint shadow-[0_0_10px_rgba(52,211,153,0.8)]' : 'bg-gray-500'}`} />
-                    </div>
-                    <div>
-                      <h2 className="text-lg font-black text-white tracking-tight leading-none">DART AI</h2>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className={`w-1 h-1 rounded-full ${isConnected ? 'bg-new-mint animate-pulse' : 'bg-gray-500'}`} />
-                        <p className="text-[10px] font-mono text-gray-400 uppercase tracking-widest">
-                          {isConnected ? 'System Online' : 'Initializing...'}
-                        </p>
-                      </div>
+            <motion.div
+              initial={{ opacity: 0, y: 20, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 20, scale: 0.95 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+              className="fixed bottom-4 right-4 w-[calc(100%-2rem)] max-w-[420px] h-[min(600px,calc(100vh-6rem))] bg-neutral-950 rounded-2xl border border-white/10 shadow-2xl z-50 flex flex-col overflow-hidden"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-new-mint to-new-blue flex items-center justify-center">
+                    <Sparkles className="w-4 h-4 text-black" fill="currentColor" />
+                  </div>
+                  <div>
+                    <span className="text-sm font-bold text-white block leading-none">DART AI</span>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <span className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-new-mint' : 'bg-gray-500'} ${appState === 'listening' ? 'bg-off-red animate-pulse' : appState === 'speaking' ? 'animate-pulse' : ''}`} />
+                      <span className="text-[10px] font-mono text-gray-500 uppercase tracking-wider">{stateLabel}</span>
                     </div>
                   </div>
-                  <button
-                    onClick={() => setIsOpen(false)}
-                    className="w-10 h-10 rounded-full bg-black/20 hover:bg-white/10 border border-white/5 flex items-center justify-center transition-all hover:rotate-90 duration-300 group"
-                  >
-                    <X className="w-5 h-5 text-gray-400 group-hover:text-white" />
-                  </button>
                 </div>
-
-                {/* Messages Area - Glass Scroll */}
-                <div
-                  data-lenis-prevent
-                  className="relative z-10 flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar overscroll-contain"
+                <button
+                  onClick={() => setIsOpen(false)}
+                  className="w-8 h-8 rounded-full hover:bg-white/5 flex items-center justify-center transition-colors"
                 >
-                  {messages.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-full text-center space-y-8">
+                  <X className="w-4 h-4 text-gray-500" />
+                </button>
+              </div>
 
-                      {/* Zero State Orb */}
-                      <div className="relative w-32 h-32 flex items-center justify-center">
-                        <div className="absolute inset-0 bg-new-mint/20 blur-[60px] rounded-full animate-pulse" />
-                        <div className="w-24 h-24 bg-gradient-to-b from-neutral-800 to-black rounded-full border border-white/10 flex items-center justify-center shadow-2xl relative z-10">
-                          <Mic className="w-8 h-8 text-white/50" />
-                        </div>
-                        {/* Spinning Rings */}
-                        <div className="absolute inset-0 border border-white/5 rounded-full animate-[spin_10s_linear_infinite]" />
-                        <div className="absolute inset-4 border border-white/5 rounded-full animate-[spin_15s_linear_infinite_reverse]" />
-                      </div>
-
-                      <div>
-                        <h3 className="text-xl font-bold text-white mb-2 tracking-tight">How can I help you?</h3>
-                        <p className="text-sm text-gray-500 max-w-[260px] mx-auto leading-relaxed">
-                          I can analyze markets, place bets, or check your portfolio. Just ask.
-                        </p>
-                      </div>
-
-                      {/* Quick Prompts Grid */}
-                      <div className="grid grid-cols-1 gap-3 w-full">
-                        {[
-                          { label: "Trending Markets", icon: "Trending", color: "border-new-mint/20 text-new-mint" },
-                          { label: "Check Portfolio", icon: "Chart", color: "border-new-blue/20 text-new-blue" },
-                        ].map((prompt, i) => (
-                          <button key={i} className={`w-full p-4 rounded-2xl bg-white/5 hover:bg-white/10 border ${prompt.color} transition-all flex items-center justify-between group`}>
-                            <span className="text-sm font-bold text-gray-300 group-hover:text-white transition-colors">{prompt.label}</span>
-                            <div className="w-6 h-6 rounded-full bg-white/5 flex items-center justify-center">
-                              <ArrowUpRight className="w-3 h-3 text-gray-400 group-hover:text-white" />
-                            </div>
-                          </button>
-                        ))}
-                      </div>
+              {/* Messages */}
+              <div
+                data-lenis-prevent
+                className="flex-1 overflow-y-auto px-3 py-3 space-y-2.5 overscroll-contain"
+              >
+                {messages.length === 0 && isConnected ? (
+                  <div className="flex flex-col items-center justify-center h-full gap-5 py-6">
+                    <div className="w-14 h-14 rounded-2xl bg-white/5 border border-white/5 flex items-center justify-center">
+                      <Mic className="w-6 h-6 text-gray-600" />
                     </div>
-                  ) : (
-                    messages.map((msg, idx) => {
-                      const isUser = msg.sender === 'user';
-                      return (
-                        <motion.div
-                          key={idx}
-                          initial={{ opacity: 0, scale: 0.95, y: 10 }}
-                          animate={{ opacity: 1, scale: 1, y: 0 }}
-                          className={`flex flex-col ${isUser ? 'items-end' : 'items-start'}`}
+                    <div className="text-center">
+                      <p className="text-sm font-bold text-white mb-1">Ask DART anything</p>
+                      <p className="text-[11px] text-gray-600 max-w-[220px]">
+                        Current round, positions, portfolio, or BTC price.
+                      </p>
+                    </div>
+                    <div className="w-full space-y-1.5">
+                      {[
+                        { label: 'Current Round', icon: Target, text: "What's the current round?" },
+                        { label: 'My Positions', icon: Zap, text: 'Show my positions' },
+                        { label: 'Portfolio Stats', icon: BarChart3, text: 'Analyze my portfolio' },
+                      ].map((p) => (
+                        <button
+                          key={p.label}
+                          onClick={() => handleQuickPrompt(p.text)}
+                          className="w-full flex items-center gap-3 p-2.5 rounded-xl bg-white/[0.03] border border-white/5 hover:bg-white/[0.06] hover:border-white/10 transition-all text-left group"
                         >
-                          <div
-                            className={`max-w-[85%] p-4 rounded-3xl backdrop-blur-md border ${isUser
-                              ? 'bg-new-mint/10 border-new-mint/20 text-white rounded-br-none'
-                              : 'bg-neutral-900/80 border-white/10 text-gray-300 rounded-bl-none shadow-lg'
-                              }`}
-                          >
-                            <p className="text-sm leading-relaxed whitespace-pre-wrap font-medium">{msg.text}</p>
-                            {!msg.isFinal && <span className="text-xs text-new-mint animate-pulse mt-2 block">processing...</span>}
-                          </div>
-
-                          {/* Rich Content Rendering */}
-                          {msg.displayType === 'market_list' && msg.data && (
-                            <div className="w-full mt-4 pl-4 overflow-x-auto pb-4 snap-x flex gap-4 no-scrollbar">
-                              {msg.data.map((market: any) => (
-                                <div key={market.id} className="min-w-[280px] max-w-[280px] flex-shrink-0 snap-center">
-                                  <div className="scale-90 origin-top-left transform">
-                                    <MarketCard market={market} />
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </motion.div>
-                      );
-                    })
-                  )}
-                  <div ref={messagesEndRef} />
-                </div>
-
-                {/* Footer / Input Area */}
-                <div className="relative z-10 p-6 bg-neutral-900/90 backdrop-blur-xl border-t border-white/10">
-
-                  {/* Voice Visualization - The Glowing Orb */}
-                  <div className={`transition-all duration-500 ease-in-out flex items-center justify-center ${appState === 'listening' || appState === 'speaking' || appState === 'thinking' ? 'h-24 mb-4' : 'h-6 mb-2'}`}>
-                    {appState === 'listening' || appState === 'speaking' ? (
-                      <div className="relative w-20 h-20 flex items-center justify-center">
-                        {/* Core */}
-                        <div className={`w-12 h-12 rounded-full blur-[20px] transition-all duration-300 ${appState === 'listening' ? 'bg-off-red animate-pulse' : 'bg-new-mint animate-pulse'}`} />
-                        <div className={`absolute inset-0 rounded-full border opacity-50 transition-all duration-300 ${appState === 'listening' ? 'border-off-red animate-[ping_1.5s_ease-out_infinite]' : 'border-new-mint animate-[ping_2s_ease-out_infinite]'}`} />
-                        <Mic className={`relative z-10 w-6 h-6 transition-colors ${appState === 'listening' ? 'text-off-red' : 'text-new-mint'}`} />
-                      </div>
-                    ) : appState === 'thinking' ? (
-                      <div className="flex items-center gap-2">
-                        <Loader2 className="w-5 h-5 text-new-blue animate-spin" />
-                        <span className="text-xs font-mono text-new-blue uppercase tracking-widest">Thinking...</span>
-                      </div>
-                    ) : (
-                      <p className="text-[10px] text-gray-500 font-mono uppercase tracking-widest opacity-60">Mic Ready</p>
-                    )}
-                  </div>
-
-                  {/* Input Bar */}
-                  <form onSubmit={handleSendText} className="relative flex items-end gap-2">
-                    <div className="relative flex-1 group">
-                      {/* Glow effect on focus */}
-                      <div className="absolute -inset-0.5 bg-gradient-to-r from-new-mint to-new-blue opacity-0 group-focus-within:opacity-30 blur transition-opacity duration-500 rounded-2xl" />
-                      <textarea
-                        value={textInput}
-                        onChange={(e) => setTextInput(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && !e.shiftKey) {
-                            e.preventDefault();
-                            handleSendText(e);
-                          }
-                        }}
-                        placeholder="Type a message..."
-                        disabled={!isConnected}
-                        className="relative w-full bg-black/40 border border-white/10 rounded-2xl px-5 py-4 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-white/20 focus:bg-black/60 transition-all resize-none min-h-[56px] max-h-[120px]"
-                        rows={1}
-                      />
+                          <p.icon className="w-3.5 h-3.5 text-gray-600 group-hover:text-new-mint transition-colors" />
+                          <span className="text-[11px] font-medium text-gray-400 group-hover:text-gray-200 transition-colors">{p.label}</span>
+                        </button>
+                      ))}
                     </div>
+                  </div>
+                ) : messages.length === 0 ? (
+                  <div className="flex items-center justify-center h-full">
+                    <Loader2 className="w-5 h-5 text-gray-600 animate-spin" />
+                  </div>
+                ) : (
+                  messages.map((msg, idx) => <MessageBubble key={idx} msg={msg} />)
+                )}
+                <div ref={messagesEndRef} />
+              </div>
 
-                    {/* Voice Toggle */}
+              {/* Voice state indicator */}
+              <AnimatePresence>
+                {(appState === 'listening' || appState === 'speaking') && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 36, opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="flex items-center justify-center gap-2 border-t border-white/5 overflow-hidden"
+                  >
+                    <div className="flex gap-0.5">
+                      {[0, 1, 2, 3, 4].map(i => (
+                        <motion.div
+                          key={i}
+                          className={`w-0.5 rounded-full ${appState === 'listening' ? 'bg-off-red' : 'bg-new-mint'}`}
+                          animate={{ height: [3, appState === 'listening' ? 10 : 14, 3] }}
+                          transition={{ duration: appState === 'listening' ? 0.6 : 0.8, repeat: Infinity, delay: i * 0.1 }}
+                        />
+                      ))}
+                    </div>
+                    <span className={`text-[10px] font-mono uppercase tracking-wider ${appState === 'listening' ? 'text-off-red' : 'text-new-mint'}`}>
+                      {appState === 'listening' ? 'Listening' : 'Speaking'}
+                    </span>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Input */}
+              <div className="px-3 py-3 border-t border-white/5">
+                <form onSubmit={handleSendText} className="flex items-center gap-2">
+                  <input
+                    value={textInput}
+                    onChange={(e) => setTextInput(e.target.value)}
+                    placeholder={isConnected ? 'Ask something...' : 'Connecting...'}
+                    disabled={!isConnected}
+                    className="flex-1 bg-white/[0.04] border border-white/5 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-white/15 transition-colors"
+                  />
+                  {textInput.trim() ? (
+                    <button
+                      type="submit"
+                      className="w-11 h-11 shrink-0 rounded-xl bg-new-mint flex items-center justify-center text-black hover:bg-new-mint/90 transition-colors"
+                    >
+                      <Send className="w-4 h-4" />
+                    </button>
+                  ) : (
                     <button
                       type="button"
                       onClick={toggleListening}
                       disabled={!isConnected}
-                      className={`w-14 h-14 shrink-0 rounded-2xl flex items-center justify-center transition-all duration-300 border border-white/5 ${appState === 'listening' ? 'bg-off-red text-white shadow-[0_0_20px_rgba(239,68,68,0.4)]' :
-                        appState === 'speaking' ? 'bg-new-mint text-black shadow-[0_0_20px_rgba(52,211,153,0.4)]' :
-                          'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'
-                        }`}
+                      className={`w-11 h-11 shrink-0 rounded-xl flex items-center justify-center transition-all ${
+                        appState === 'listening'
+                          ? 'bg-off-red text-white'
+                          : 'bg-white/[0.04] border border-white/5 text-gray-500 hover:text-white hover:bg-white/[0.08]'
+                      }`}
                     >
-                      {appState === 'listening' ? <Mic className="w-6 h-6 animate-pulse" /> : <Mic className="w-6 h-6" />}
+                      {appState === 'listening' ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
                     </button>
-
-                    {/* Send Button (Only shows when typing) */}
-                    <AnimatePresence>
-                      {textInput.trim() && (
-                        <motion.button
-                          initial={{ scale: 0, width: 0, opacity: 0, marginLeft: 0 }}
-                          animate={{ scale: 1, width: 56, opacity: 1, marginLeft: 8 }}
-                          exit={{ scale: 0, width: 0, opacity: 0, marginLeft: 0 }}
-                          type="submit"
-                          className="w-14 h-14 shrink-0 bg-new-blue rounded-2xl flex items-center justify-center text-white hover:bg-new-blue/90 shadow-[0_0_20px_rgba(59,130,246,0.4)]"
-                        >
-                          <Send className="w-5 h-5" />
-                        </motion.button>
-                      )}
-                    </AnimatePresence>
-
-                  </form>
-                </div>
-
-              </motion.div>
-            </>
-          )
-        }
-      </AnimatePresence >
+                  )}
+                </form>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </>
   );
 }

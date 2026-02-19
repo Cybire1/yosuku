@@ -1,15 +1,15 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, TrendingUp, Activity, Loader } from 'lucide-react';
 import { useWallet } from '@demox-labs/aleo-wallet-adapter-react';
+import { useBtcPrice } from '@/lib/hooks/useBtcPrice';
 import {
   BTC_PREDICTION_PROGRAM,
-  PRED_TOKEN_PROGRAM,
   PRED_MULTIPLIER,
   formatPred,
-  calcOdds,
+  estimateProb,
   type RoundState,
 } from '@/lib/predictionContract';
 
@@ -24,12 +24,23 @@ const QUICK_AMOUNTS = [50, 100, 250, 500];
 
 export default function QuickBet({ round, side, onClose, onSuccess }: QuickBetProps) {
   const { publicKey, requestTransaction } = useWallet();
+  const { price } = useBtcPrice();
   const [amount, setAmount] = useState('100');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const odds = calcOdds(round.yesPool, round.noPool);
   const microAmount = Math.floor(parseFloat(amount || '0') * PRED_MULTIPLIER);
+
+  const odds = useMemo(() => {
+    const targetUsd = round.targetPrice / 100;
+    const minsLeft = Math.max(0, (round.endTime - Date.now()) / 60000);
+    if (price > 0 && minsLeft > 0) {
+      const prob = estimateProb(price, targetUsd, minsLeft);
+      const yesPct = Math.round(prob * 100);
+      return { yes: Math.max(1, Math.min(99, yesPct)), no: Math.max(1, Math.min(99, 100 - yesPct)) };
+    }
+    return { yes: 50, no: 50 };
+  }, [price, round.targetPrice, round.endTime]);
 
   // Estimate payout if this bet wins
   const estPayout = (() => {
@@ -63,15 +74,6 @@ export default function QuickBet({ round, side, onClose, onSuccess }: QuickBetPr
         chainId: 'testnetbeta',
         transitions: [
           {
-            program: PRED_TOKEN_PROGRAM,
-            functionName: 'transfer_public',
-            inputs: [
-              // Transfer to self (tokens tracked in prediction contract mappings)
-              publicKey,
-              `${microAmount}u64`,
-            ],
-          },
-          {
             program: BTC_PREDICTION_PROGRAM,
             functionName: betFunction,
             inputs: [
@@ -80,7 +82,7 @@ export default function QuickBet({ round, side, onClose, onSuccess }: QuickBetPr
             ],
           },
         ],
-        fee: 1000000,
+        fee: 2_000_000,
         feePrivate: false,
       };
 

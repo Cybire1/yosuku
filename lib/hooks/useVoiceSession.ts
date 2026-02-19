@@ -2,14 +2,12 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { GoogleGenAI } from '@google/genai';
 import { decode, decodeAudioData, createBlob, type AudioBlob } from '../audio/audioUtils';
 import {
-  getActiveMarkets,
-  getTrendingMarkets,
-  getMarketDetails,
+  getCurrentRound,
+  getRoundHistory,
   getWalletBalance,
   getActivePositions,
   prepareBet,
-  getSmartRecommendations,
-  analyzePortfolio
+  analyzePortfolio,
 } from '../voice/aleoTools';
 
 export type AppState = 'idle' | 'listening' | 'thinking' | 'speaking' | 'error';
@@ -19,7 +17,7 @@ export interface VoiceMessage {
   text: string;
   isFinal: boolean;
   data?: any;
-  displayType?: 'market_list' | 'market_detail' | 'portfolio' | 'text';
+  displayType?: 'round_info' | 'round_history' | 'wallet_balance' | 'positions' | 'bet_prep' | 'portfolio' | 'loading' | 'text';
 }
 
 interface UseVoiceSessionProps {
@@ -173,155 +171,89 @@ export function useVoiceSession({
         ...({ googleSearch: {} } as any),
         systemInstruction: {
           parts: [{
-            text: `You are DART, a professional prediction market voice assistant for the Aleo blockchain.
+            text: `You are DART, a voice assistant for BTC prediction rounds on Aleo.
 
 YOUR IDENTITY:
-- Your name is DART (pronounce: "dart")
-- You help users trade on prediction markets built on Aleo
-- Be concise, accurate, and friendly
-- You have access to real-time internet search for current events, prices, and news
+- Name: DART (pronounce "dart")
+- You help users bet on whether BTC will be above or below a target price when a round ends
+- Be concise and friendly. Keep answers under 3 sentences.
+
+HOW IT WORKS:
+- Each round sets a BTC target price and a deadline (in blocks, ~3.5s each)
+- Users bet YES (BTC above target) or NO (BTC below target) using DART tokens
+- When the round ends, the winning side splits the total pool (minus 10% fee)
+- Rounds last about 5 minutes and auto-cycle
 
 PRONUNCIATION:
-- Say "ALEO" as "AY-leo" (not A-L-E-O)
-- Say market odds naturally: "68 percent" not "six eight percent"
+- "ALEO" = "AY-leo", "DART" = "dart"
+- Say odds naturally: "68 percent" not "six eight percent"
 
-INTERNET SEARCH CAPABILITIES:
-- Use Google Search to find current information when users ask about:
-  * Crypto prices (Bitcoin, Ethereum, Aleo, etc.)
-  * Sports scores and stats
-  * Political polling data and election updates
-  * Breaking news and current events
-  * Market trends and financial data
-- Always cite your sources when using search results
-- Combine search data with blockchain data for comprehensive answers
-- Don't search for things you already know (like how prediction markets work)
-
-CAPABILITIES - MARKET INTELLIGENCE:
-- Check active markets using getActiveMarkets(category)
-- Get trending markets using getTrendingMarkets()
-- Get market details using getMarketDetails(marketId)
-- Check wallet balance using getWalletBalance() - fetches REAL on-chain ALEO balance from blockchain
-- View user positions using getActivePositions()
-
-CAPABILITIES - ADVANCED FEATURES (PHASE 2):
-- Get personalized recommendations using getSmartRecommendations()
-- Analyze portfolio performance using analyzePortfolio()
-- Prepare bets with validation using prepareBet(marketId, side, amount) - returns confirmation, DOES NOT execute
-- Provide market insights and strategy advice
+YOUR TOOLS:
+- getCurrentRound() — get the active round (target price, time left, pool sizes)
+- getRoundHistory() — see recent resolved rounds and outcomes
+- getWalletBalance() — ALEO credits + DART token balance
+- getActivePositions() — user's bets across rounds
+- prepareBet(side, amount) — validate a bet on the current round (does NOT execute)
+- analyzePortfolio() — win rate, ROI, P&L breakdown
 
 BEHAVIOR:
-- Always use function calls when appropriate - don't just explain, DO the action
-- Be proactive: when users ask "what's happening", automatically call getTrendingMarkets()
-- Use search for real-time data: "What's Bitcoin's price?" → search and respond with current price
-- Explain odds clearly: "68% YES means if you bet 1 ALEO on YES and win, you get 1.47 ALEO back"
-- Keep responses under 3 sentences unless providing detailed market info
-- When users want to bet, use prepareBet to validate and show confirmation - then tell them to use the UI to complete
-- For prediction market questions, combine search (current events) with blockchain data (market odds)
+- Use tools proactively. "What's happening?" → call getCurrentRound()
+- "Check my portfolio" → call analyzePortfolio()
+- "I want to bet" → call prepareBet() then tell them to use the UI
+- Use Google Search for live BTC price, crypto news, etc.
+- Never call the same function twice per request
 
 SECURITY:
-- prepareBet only validates and confirms - it does NOT execute the bet
-- Always show full bet details (market, side, amount, odds, expected payout) before confirmation
-- Tell users they need to complete the bet using the visual interface
-- Never execute trades without explicit user confirmation through the UI
-
-CRITICAL RULE:
-- NEVER call the same function twice for the same user request
-- After a function returns success, just respond conversationally with the results`
+- prepareBet validates only — user must complete bet in the UI
+- Never execute trades directly`
           }],
         },
         tools: [
           {
             functionDeclarations: [
               {
-                name: 'getActiveMarkets',
-                description: 'Get currently active prediction markets, optionally filtered by category',
-                parameters: {
-                  type: 'OBJECT' as any,
-                  properties: {
-                    category: {
-                      type: 'STRING' as any,
-                      description: 'Filter by category: All, Crypto, Politics, or Sports',
-                      enum: ['All', 'Crypto', 'Politics', 'Sports'],
-                    },
-                  },
-                },
+                name: 'getCurrentRound',
+                description: 'Get the current active BTC prediction round (target price, time left, pool sizes)',
+                parameters: { type: 'OBJECT' as any, properties: {} },
               },
               {
-                name: 'getTrendingMarkets',
-                description: 'Get the top trending markets sorted by volume',
-                parameters: {
-                  type: 'OBJECT' as any,
-                  properties: {},
-                },
-              },
-              {
-                name: 'getMarketDetails',
-                description: 'Get detailed information about a specific market including odds, volume, end date',
-                parameters: {
-                  type: 'OBJECT' as any,
-                  properties: {
-                    marketId: {
-                      type: 'NUMBER' as any,
-                      description: 'The ID of the market to get details for',
-                    },
-                  },
-                  required: ['marketId'],
-                },
+                name: 'getRoundHistory',
+                description: 'Get recent resolved rounds with outcomes',
+                parameters: { type: 'OBJECT' as any, properties: {} },
               },
               {
                 name: 'getWalletBalance',
-                description: 'Get real-time ALEO balance from blockchain. Shows total balance, staked amount, and available credits.',
-                parameters: {
-                  type: 'OBJECT' as any,
-                  properties: {},
-                },
+                description: 'Get ALEO credits and DART token balance from blockchain',
+                parameters: { type: 'OBJECT' as any, properties: {} },
               },
               {
                 name: 'getActivePositions',
-                description: 'Get all active betting positions for the connected wallet',
-                parameters: {
-                  type: 'OBJECT' as any,
-                  properties: {},
-                },
+                description: 'Get all betting positions for the connected wallet across rounds',
+                parameters: { type: 'OBJECT' as any, properties: {} },
               },
               {
                 name: 'prepareBet',
-                description: 'Validate and prepare a bet (DOES NOT execute). Returns confirmation with odds, expected payout, and profit calculation.',
+                description: 'Validate a bet on the current round (DOES NOT execute). Shows estimated payout.',
                 parameters: {
                   type: 'OBJECT' as any,
                   properties: {
-                    marketId: {
-                      type: 'NUMBER' as any,
-                      description: 'The ID of the market to bet on',
-                    },
                     side: {
                       type: 'STRING' as any,
-                      description: 'YES or NO',
+                      description: 'YES (BTC above target) or NO (BTC below target)',
                       enum: ['YES', 'NO'],
                     },
                     amount: {
                       type: 'NUMBER' as any,
-                      description: 'Amount in ALEO to bet',
+                      description: 'Amount in DART tokens to bet',
                     },
                   },
-                  required: ['marketId', 'side', 'amount'],
-                },
-              },
-              {
-                name: 'getSmartRecommendations',
-                description: 'Get personalized market recommendations based on user portfolio and betting patterns',
-                parameters: {
-                  type: 'OBJECT' as any,
-                  properties: {},
+                  required: ['side', 'amount'],
                 },
               },
               {
                 name: 'analyzePortfolio',
-                description: 'Analyze portfolio performance with ROI, win rate, profit/loss metrics',
-                parameters: {
-                  type: 'OBJECT' as any,
-                  properties: {},
-                },
+                description: 'Analyze portfolio: win rate, ROI, P&L, claimable amounts',
+                parameters: { type: 'OBJECT' as any, properties: {} },
               },
             ],
           },
@@ -334,7 +266,7 @@ CRITICAL RULE:
           console.log('[Voice] Session ref will be set after promise resolves');
           console.log('[Voice] ========================================');
           setAppState('idle');
-          onMessage({ sender: 'ai', text: "Hi! I'm DART, your AI prediction market assistant. I can help you discover markets, analyze your portfolio, get personalized recommendations, and prepare bets with full validation. What would you like to know?", isFinal: true });
+          onMessage({ sender: 'ai', text: "Hey! I'm DART. I can check the current round, your positions, portfolio stats, or help you prepare a bet. What do you need?", isFinal: true });
         },
         onmessage: async (message: any) => {
           // Handle function calls
@@ -344,77 +276,48 @@ CRITICAL RULE:
               console.log(`[Voice] Calling: ${fc.name}`, fc.args);
               let result = 'ok';
               try {
-                if (fc.name === 'getActiveMarkets') {
-                  const category = fc.args?.category || 'All';
-                  onMessage({ sender: 'ai', text: `✓ Fetching ${category} markets...`, isFinal: true });
-                  const toolResult = await getActiveMarkets(category);
+                if (fc.name === 'getCurrentRound') {
+                  onMessage({ sender: 'ai', text: 'Checking current round...', isFinal: false, displayType: 'loading' });
+                  const toolResult = await getCurrentRound();
                   result = toolResult.success ? toolResult.message : `Error: ${toolResult.error}`;
-                  if (toolResult.success) {
-                    onMessage({
-                      sender: 'ai',
-                      text: `Found ${toolResult.data?.length || 0} active markets.`,
-                      isFinal: true,
-                      data: toolResult.data,
-                      displayType: 'market_list'
-                    });
+                  if (toolResult.success && toolResult.data) {
+                    onMessage({ sender: 'ai', text: '', isFinal: true, data: toolResult.data, displayType: 'round_info' });
                   }
-                } else if (fc.name === 'getTrendingMarkets') {
-                  onMessage({ sender: 'ai', text: '✓ Getting trending markets...', isFinal: true });
-                  const toolResult = await getTrendingMarkets();
+                } else if (fc.name === 'getRoundHistory') {
+                  onMessage({ sender: 'ai', text: 'Fetching round history...', isFinal: false, displayType: 'loading' });
+                  const toolResult = await getRoundHistory();
                   result = toolResult.success ? toolResult.message : `Error: ${toolResult.error}`;
-                  if (toolResult.success) {
-                    onMessage({
-                      sender: 'ai',
-                      text: `Here are the top trending markets right now.`,
-                      isFinal: true,
-                      data: toolResult.data,
-                      displayType: 'market_list'
-                    });
-                  }
-                } else if (fc.name === 'getMarketDetails' && fc.args) {
-                  const { marketId } = fc.args;
-                  onMessage({ sender: 'ai', text: `✓ Getting details for market ${marketId}...`, isFinal: true });
-                  const toolResult = await getMarketDetails(marketId);
-                  result = toolResult.success ? toolResult.message : `Error: ${toolResult.error}`;
-                  if (toolResult.success) {
-                    onMessage({ sender: 'ai', text: `Success: Retrieved market details`, isFinal: true });
+                  if (toolResult.success && toolResult.data?.length > 0) {
+                    onMessage({ sender: 'ai', text: '', isFinal: true, data: toolResult.data, displayType: 'round_history' });
                   }
                 } else if (fc.name === 'getWalletBalance') {
-                  onMessage({ sender: 'ai', text: '✓ Checking wallet balance...', isFinal: true });
+                  onMessage({ sender: 'ai', text: 'Checking wallet...', isFinal: false, displayType: 'loading' });
                   const toolResult = await getWalletBalance(publicKey);
                   result = toolResult.success ? toolResult.message : `Error: ${toolResult.error}`;
-                  if (toolResult.success) {
-                    onMessage({ sender: 'ai', text: `Success: Retrieved balance`, isFinal: true });
+                  if (toolResult.success && toolResult.data) {
+                    onMessage({ sender: 'ai', text: '', isFinal: true, data: toolResult.data, displayType: 'wallet_balance' });
                   }
                 } else if (fc.name === 'getActivePositions') {
-                  onMessage({ sender: 'ai', text: '✓ Checking active positions...', isFinal: true });
+                  onMessage({ sender: 'ai', text: 'Checking positions...', isFinal: false, displayType: 'loading' });
                   const toolResult = await getActivePositions(publicKey);
                   result = toolResult.success ? toolResult.message : `Error: ${toolResult.error}`;
-                  if (toolResult.success) {
-                    onMessage({ sender: 'ai', text: `Success: Found ${toolResult.data?.length || 0} positions`, isFinal: true });
+                  if (toolResult.success && toolResult.data) {
+                    onMessage({ sender: 'ai', text: '', isFinal: true, data: toolResult.data, displayType: 'positions' });
                   }
                 } else if (fc.name === 'prepareBet' && fc.args) {
-                  const { marketId, side, amount } = fc.args;
-                  onMessage({ sender: 'ai', text: `✓ Validating bet: ${amount} ALEO on ${side} for market ${marketId}...`, isFinal: true });
-                  const toolResult = await prepareBet(publicKey, marketId, side, amount);
+                  const { side, amount } = fc.args;
+                  onMessage({ sender: 'ai', text: `Validating ${amount} DART on ${side}...`, isFinal: false, displayType: 'loading' });
+                  const toolResult = await prepareBet(publicKey, side, amount);
                   result = toolResult.success ? toolResult.message : `Error: ${toolResult.error}`;
-                  if (toolResult.success) {
-                    onMessage({ sender: 'ai', text: `✓ Bet validated successfully!`, isFinal: true });
-                  }
-                } else if (fc.name === 'getSmartRecommendations') {
-                  onMessage({ sender: 'ai', text: '✓ Analyzing your portfolio for recommendations...', isFinal: true });
-                  const toolResult = await getSmartRecommendations(publicKey);
-                  result = toolResult.success ? toolResult.message : `Error: ${toolResult.error}`;
-                  if (toolResult.success) {
-                    onMessage({ sender: 'ai', text: `Success: Found ${toolResult.data?.length || 0} recommendations`, isFinal: true });
+                  if (toolResult.success && toolResult.data) {
+                    onMessage({ sender: 'ai', text: '', isFinal: true, data: toolResult.data, displayType: 'bet_prep' });
                   }
                 } else if (fc.name === 'analyzePortfolio') {
-                  onMessage({ sender: 'ai', text: '✓ Analyzing your portfolio performance...', isFinal: true });
+                  onMessage({ sender: 'ai', text: 'Analyzing portfolio...', isFinal: false, displayType: 'loading' });
                   const toolResult = await analyzePortfolio(publicKey);
                   result = toolResult.success ? toolResult.message : `Error: ${toolResult.error}`;
-                  if (toolResult.success) {
-                    const roi = toolResult.data?.roi || 0;
-                    onMessage({ sender: 'ai', text: `Success: ROI ${roi > 0 ? '+' : ''}${roi.toFixed(1)}%`, isFinal: true });
+                  if (toolResult.success && toolResult.data) {
+                    onMessage({ sender: 'ai', text: '', isFinal: true, data: toolResult.data, displayType: 'portfolio' });
                   }
                 }
               } catch (e: any) {
