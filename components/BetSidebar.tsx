@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { TrendingUp, TrendingDown, Loader, Wallet, Droplets, Check } from 'lucide-react';
+import { Loader, Wallet, Droplets, Check } from 'lucide-react';
 import { useWallet } from '@demox-labs/aleo-wallet-adapter-react';
 import { useBtcPrice } from '@/lib/hooks/useBtcPrice';
 import {
@@ -213,28 +213,28 @@ export default function BetSidebar({ round, onSuccess }: BetSidebarProps) {
           <div className="grid grid-cols-2 gap-2">
             <button
               onClick={() => setSide('YES')}
-              className={`relative py-3 rounded-xl font-bold text-sm transition-all hover:scale-[1.02] active:scale-95 ${isYes
-                ? 'bg-new-mint/20 text-new-mint border-2 border-new-mint/40 shadow-[0_0_15px_rgba(52,211,153,0.15)]'
-                : 'bg-white/[0.03] text-gray-500 border-2 border-transparent hover:bg-white/5 hover:text-gray-300 hover:shadow-[0_0_10px_rgba(255,255,255,0.05)]'
+              className={`relative py-3.5 rounded-xl font-bold text-sm transition-all hover:brightness-110 active:scale-95 ${isYes
+                ? 'text-new-mint brightness-125'
+                : 'text-new-mint/70'
                 }`}
+              style={{ backgroundColor: '#1a3a2a' }}
             >
               <div className="flex items-center justify-center gap-2">
-                <TrendingUp className="w-4 h-4" />
-                <span>Yes</span>
+                <span>Up</span>
                 <span className="font-mono">{odds.yes}%</span>
               </div>
             </button>
 
             <button
               onClick={() => setSide('NO')}
-              className={`relative py-3 rounded-xl font-bold text-sm transition-all hover:scale-[1.02] active:scale-95 ${!isYes
-                ? 'bg-off-red/20 text-off-red border-2 border-off-red/40 shadow-[0_0_15px_rgba(244,63,94,0.15)]'
-                : 'bg-white/[0.03] text-gray-500 border-2 border-transparent hover:bg-white/5 hover:text-gray-300 hover:shadow-[0_0_10px_rgba(255,255,255,0.05)]'
+              className={`relative py-3.5 rounded-xl font-bold text-sm transition-all hover:brightness-110 active:scale-95 ${!isYes
+                ? 'text-off-red brightness-125'
+                : 'text-off-red/70'
                 }`}
+              style={{ backgroundColor: '#3a1a1e' }}
             >
               <div className="flex items-center justify-center gap-2">
-                <TrendingDown className="w-4 h-4" />
-                <span>No</span>
+                <span>Down</span>
                 <span className="font-mono">{odds.no}%</span>
               </div>
             </button>
@@ -349,10 +349,12 @@ export default function BetSidebar({ round, onSuccess }: BetSidebarProps) {
               transition={{ duration: 0.3 }}
               onClick={handleBet}
               disabled={loading || !amount || parseFloat(amount) <= 0 || round.resolved}
-              className={`relative w-full py-3.5 rounded-xl font-black text-sm uppercase tracking-wider transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed ${isYes
-                ? 'bg-new-mint text-black border border-new-mint/30 shadow-[0_0_20px_rgba(52,211,153,0.3)] hover:shadow-[0_0_40px_rgba(52,211,153,0.6)]'
-                : 'bg-off-red text-white border border-off-red/30 shadow-[0_0_20px_rgba(244,63,94,0.3)] hover:shadow-[0_0_40px_rgba(244,63,94,0.6)]'
-                }`}
+              className="relative w-full py-3.5 rounded-xl font-black text-sm uppercase tracking-wider transition-all flex items-center justify-center gap-2 disabled:cursor-not-allowed"
+              style={{
+                backgroundColor: isYes ? '#34D399' : '#F43F5E',
+                color: isYes ? '#000' : '#fff',
+                opacity: (loading || !amount || parseFloat(amount) <= 0 || round.resolved) ? 0.5 : 1,
+              }}
             >
               {loading ? (
                 <>
@@ -360,7 +362,7 @@ export default function BetSidebar({ round, onSuccess }: BetSidebarProps) {
                   Processing...
                 </>
               ) : (
-                `Buy ${isYes ? 'Yes' : 'No'}`
+                `Buy ${isYes ? 'Up' : 'Down'}`
               )}
             </motion.button>
           ) : (

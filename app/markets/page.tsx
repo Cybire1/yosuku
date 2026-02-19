@@ -37,7 +37,7 @@ export default function MarketsPage() {
   const [mintTrigger, setMintTrigger] = useState(0);
   const [selectedDuration, setSelectedDuration] = useState<DurationLabel>('5 Minutes');
   const [notification, setNotification] = useState<{ type: 'win' | 'lose'; amount: number; roundId: number } | null>(null);
-  const [bottomTab, setBottomTab] = useState<BottomTab>('activity');
+  const [bottomTab, setBottomTab] = useState<BottomTab>('comments');
 
   // Auto-select duration tab to match active round
   useEffect(() => {

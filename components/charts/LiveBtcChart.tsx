@@ -211,15 +211,15 @@ export default function LiveBtcChart({ targetPrice, height = 370 }: LiveBtcChart
           {targetUsd && (
             <ReferenceLine
               y={targetUsd}
-              stroke="#60A5FA"
-              strokeDasharray="8 4"
-              strokeWidth={2}
+              stroke="rgba(96,165,250,0.45)"
+              strokeDasharray="6 4"
+              strokeWidth={1.5}
               label={{
                 value: `TARGET  $${targetUsd.toLocaleString(undefined, { maximumFractionDigits: 2 })}`,
                 position: 'insideTopRight',
-                fill: '#60A5FA',
-                fontSize: 11,
-                fontWeight: 800,
+                fill: 'rgba(96,165,250,0.55)',
+                fontSize: 10,
+                fontWeight: 700,
               }}
             />
           )}

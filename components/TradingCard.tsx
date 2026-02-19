@@ -87,18 +87,18 @@ export default function TradingCard({
           <div className="flex items-center justify-between mb-5">
             <div className="flex items-center gap-2">
               <span className="text-xs font-black uppercase tracking-widest text-gray-400">Round</span>
-              <span className="text-lg font-mono font-black text-white">#{round.id}</span>
+              <span className="text-lg font-mono font-black text-gray-300">#{round.id}</span>
             </div>
             <div className="flex items-center gap-2">
               <Clock className="w-3.5 h-3.5 text-gray-500" />
               {mins === 0 && secs === 0 ? (
                 <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" />
-                  <span className="text-sm font-bold text-yellow-400">Resolving on-chain...</span>
+                  <div className="w-2 h-2 rounded-full bg-amber-500/60 animate-pulse" />
+                  <span className="text-sm font-bold text-amber-500/70">Resolving on-chain...</span>
                 </div>
               ) : (
                 <>
-                  <span className="text-2xl font-mono font-black text-white">
+                  <span className="text-2xl font-mono font-black text-gray-300">
                     {String(mins).padStart(2, '0')}:{String(secs).padStart(2, '0')}
                   </span>
                   <span className="text-[10px] font-bold text-gray-500 uppercase">left</span>
@@ -125,7 +125,7 @@ export default function TradingCard({
               </div>
               <PriceTicker price={price} className={`text-xl font-mono font-black ${isAbove ? 'text-new-mint' : 'text-off-red'}`} />
               {price > 0 && (
-                <span className={`block text-xs font-mono font-bold mt-0.5 ${isAbove ? 'text-new-mint/70' : 'text-off-red/70'}`}>
+                <span className={`block text-xs font-mono font-bold mt-0.5 ${isAbove ? 'text-new-mint/40' : 'text-off-red/40'}`}>
                   {isAbove ? '+' : ''}{priceDelta.toFixed(2)} {isAbove ? 'Above' : 'Below'} Target
                 </span>
               )}
