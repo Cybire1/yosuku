@@ -1,151 +1,96 @@
-# DART - Decentralized Prediction Markets on Aleo
+# DART - BTC Prediction Markets on Aleo
 
-A privacy-first prediction markets platform built on Aleo blockchain with AI-powered voice assistance and cinematic UX.
+Privacy-first BTC price prediction platform built on Aleo. Bet on whether Bitcoin will go up or down using DART tokens, with zero-knowledge proofs keeping your positions private.
 
-## Core Features
+## What is DART?
 
-**Privacy-Preserving Prediction Markets**
-- Create and trade on custom prediction markets with zero-knowledge proofs
-- Private transaction history protected by Aleo's zkSNARKs
-- Dynamic odds calculation based on liquidity pools
-- Real-time market statistics and trending indicators
-- Category-based browsing (Politics, Sports, Crypto, Culture, Economics)
+DART runs timed prediction rounds where users bet YES or NO on BTC price targets. Winners split the pool proportionally (minus a 10% platform fee). All transactions are private via Aleo's zkSNARK technology.
 
-**Voice Agent (DART AI)**
-- Google Gemini 2.0 Live API integration
-- Real-time voice interaction with internet search grounding
-- Natural language market queries and analysis
-- Portfolio tracking and insights
+## Features
 
-**Modern UI/UX**
-- Kalshi-inspired professional interface
-- Glass morphism design with ambient gradients
-- Compact market cards with inline charts
-- Responsive sidebar widgets (Trending, Top Movers)
-- Horizontal category navigation
-
-**Aleo Blockchain Integration**
-- Zero-knowledge proofs for transaction privacy
-- Private betting and trading history
-- Wallet connection with @demox-labs/aleo-wallet-adapter
-- Secure smart contract interactions
+- **BTC Price Predictions** - Timed rounds (1m, 5m, 15m, 30m, 1h) with real-time BTC price feeds
+- **DART Token** - Platform token for placing bets, mintable on testnet via faucet
+- **Live Ticker Tape** - Scrolling crypto prices (BTC, ETH, SOL, SUI, ALEO, DOGE) + Fear/Greed index
+- **BTC News Feed** - Live Bitcoin news with sentiment indicators
+- **Voice Agent (DART AI)** - Google Gemini 2.0 powered voice assistant for market queries
+- **PnL Tracking** - Portfolio stats, round history, and performance charts
+- **Privacy by Default** - Zero-knowledge proofs for all bets and balances
 
 ## Quick Start
 
 ```bash
-# Install dependencies
 npm install
-
-# Set up environment variables
-cp .env.example .env.local
-# Add your NEXT_PUBLIC_GEMINI_API_KEY
-
-# Run development server
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) to see the app.
+Open [http://localhost:3000](http://localhost:3000)
 
 ## Tech Stack
 
-- **Frontend**: Next.js 14, TypeScript, Tailwind CSS
-- **Blockchain**: Aleo blockchain, Leo smart contracts
-- **Voice AI**: Google Gemini 2.0 Live API with WebRTC
-- **Charts**: Recharts for market visualizations
-- **Animations**: Framer Motion
-- **Wallet**: @demox-labs/aleo-wallet-adapter-react
+- **Framework**: Next.js 16, React 19, TypeScript
+- **Blockchain**: Aleo (testnet), Leo smart contracts
+- **Styling**: Tailwind CSS 4, Framer Motion
+- **Voice AI**: Google Gemini 2.0 Live API
+- **Wallet**: Leo Wallet via @demox-labs/aleo-wallet-adapter
+- **Charts**: Recharts
 
-## Project Structure
+## Smart Contracts
 
-```
-frontend/
-├── app/
-│   ├── markets/          # Main markets browsing page
-│   ├── market/[id]/      # Individual market details
-│   ├── portfolio/        # User portfolio dashboard
-│   └── claim/            # NFT claim pool interface
-├── components/
-│   ├── VoiceAgent.tsx    # DART AI voice interface
-│   ├── MarketCard.tsx    # Compact market display
-│   ├── FeaturedHero.tsx  # Hero market section
-│   └── charts/           # Chart components
-├── lib/
-│   ├── hooks/            # Custom React hooks
-│   └── searchUtils.ts    # Fuzzy search utilities
-└── constants/
-    └── contract.ts       # Aleo contract addresses
-```
-
-## Privacy Features
-
-**Zero-Knowledge Trading**
-- All bets and trades are private by default
-- Users can verify trades without revealing amounts
-- Private portfolio balances
-
-**Aleo's zkSNARK Technology**
-- Succinct proofs for all transactions
-- No on-chain transaction history exposure
-- Private yet verifiable market participation
-
-## Key Features
-
-**Market Search**
-- Fuzzy search with Cmd+K / Ctrl+K shortcut
-- Real-time filtering across all markets
-- Category-based filtering
-
-**Market Cards**
-- Live market status indicators
-- Inline mini price charts
-- One-click YES/NO betting
-- Volume and time remaining metadata
-
-**Voice Agent**
-- Floating orb trigger with living animations
-- Modal interface with glass morphism
-- Text and voice input support
-- Real-time internet search grounding
-
-**Sidebar Widgets**
-- Trending markets by volume
-- Top movers with percentage changes
-- Category filtering
+| Program | Purpose |
+|---------|---------|
+| `dart_token.aleo` | DART token (mint, transfer, balances) |
+| `btc_prediction.aleo` | Rounds, bets, resolution, payouts |
 
 ## Environment Variables
 
 ```env
-NEXT_PUBLIC_GEMINI_API_KEY=your_gemini_api_key_here
-NEXT_PUBLIC_ALEO_NETWORK=testnet3
+NEXT_PUBLIC_GEMINI_API_KEY=your_gemini_key
 ```
 
-## Development
+## Project Structure
 
-```bash
-# Run development server
-npm run dev
-
-# Build for production
-npm run build
-
-# Start production server
-npm start
-
-# Run linter
-npm run lint
 ```
+app/
+  markets/        # Main trading page (rounds, chart, betting)
+  portfolio/      # User positions and PnL
+  leaderboard/    # Top traders
+  admin/          # Round management
+  how-it-works/   # Platform guide
+  api/
+    ticker/       # Crypto price ticker data
+    crypto-news/  # BTC news aggregation
+    polymarket/   # External market data
+components/
+  TradingCard     # Round display with live chart
+  BetSidebar      # YES/NO betting panel
+  TickerTape      # Scrolling crypto prices
+  NewsFeed        # BTC news with sentiment
+  VoiceAgent      # DART AI voice interface
+  RoundHistory    # Past rounds and claims
+  PnLChart        # Performance visualization
+lib/
+  predictionContract.ts   # Contract constants and helpers
+  hooks/useRounds.ts      # Round fetching and state
+  hooks/useBtcPrice.ts    # Live BTC price feed
+  voice/                  # Voice agent tools
+```
+
+## How It Works
+
+1. A round opens with a BTC target price and duration
+2. Users bet YES (price >= target) or NO (price < target) using DART tokens
+3. When the timer expires, the round resolves against live BTC price
+4. Winners split the losing side's pool proportionally (10% fee)
 
 ## Deployment
 
-The app is deployed on Vercel with automatic deployments from the main branch.
+Deployed on Vercel with auto-deploys from main.
 
-Repository: https://github.com/shaibuafeez/dart.git
+**Repo**: https://github.com/shaibuafeez/dart.git
 
 ## Built For
 
-WaveHack - Build a Privacy-focused Application on Aleo
-
-DART demonstrates the power of Aleo's zero-knowledge technology for creating private, fair, and transparent prediction markets where users can trade without revealing their positions or transaction history.
+WaveHack - Privacy-focused Applications on Aleo
 
 ## License
 
