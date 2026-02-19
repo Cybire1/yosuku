@@ -6,7 +6,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Target, Menu, X, ArrowUpRight, Droplets, Loader, Check } from 'lucide-react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
-import { PRED_TOKEN_PROGRAM, PRED_MULTIPLIER } from '@/lib/predictionContract';
+import { PRED_TOKEN_PROGRAM, PRED_MULTIPLIER, fetchReputation, type ReputationData } from '@/lib/predictionContract';
+import ReputationBadge from './ReputationBadge';
 
 const NAV_LINKS = [
   { name: 'markets', href: '/markets' },
@@ -22,10 +23,19 @@ export default function Header() {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [reputation, setReputation] = useState<ReputationData | null>(null);
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (publicKey) {
+      fetchReputation(publicKey).then(setReputation).catch(() => {});
+    } else {
+      setReputation(null);
+    }
+  }, [publicKey]);
 
   const handleMint = async () => {
     if (!publicKey || !requestTransaction || mintState === 'loading') return;
@@ -127,6 +137,11 @@ export default function Header() {
           <div className="flex items-center gap-2 pl-1.5 pr-2">
             {mounted && (
               <>
+                {publicKey && reputation && reputation.bets > 0 && (
+                  <div className="hidden sm:block">
+                    <ReputationBadge tier={reputation.tier} compact />
+                  </div>
+                )}
                 {publicKey && (
                   <button
                     onClick={handleMint}

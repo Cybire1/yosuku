@@ -67,11 +67,9 @@ export default function QuickBet({ round, side, onClose, onSuccess }: QuickBetPr
     setError('');
 
     try {
-      // Step 1: Transfer DART tokens to the prediction program (public transfer)
-      // Step 2: Place the bet
-      const betFunction = side === 'YES' ? 'bet_yes' : 'bet_no';
+      const sideVal = side === 'YES' ? 'true' : 'false';
 
-      // Step 1: Transfer DART tokens to the prediction program
+      // Step 1: Transfer DART tokens to the prediction program (public transfer)
       await requestTransaction({
         address: publicKey,
         chainId: 'testnetbeta',
@@ -84,14 +82,14 @@ export default function QuickBet({ round, side, onClose, onSuccess }: QuickBetPr
         feePrivate: false,
       });
 
-      // Step 2: Place the bet
+      // Step 2: Place bet (v3 unified — returns private BetReceipt)
       await requestTransaction({
         address: publicKey,
         chainId: 'testnetbeta',
         transitions: [{
           program: BTC_PREDICTION_PROGRAM,
-          functionName: betFunction,
-          inputs: [`${round.id}u64`, `${microAmount}u64`],
+          functionName: 'bet',
+          inputs: [`${round.id}u64`, `${microAmount}u64`, sideVal],
         }],
         fee: 2_000_000,
         feePrivate: false,

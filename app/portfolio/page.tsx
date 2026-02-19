@@ -20,10 +20,15 @@ import PnLChart from '@/components/PnLChart';
 import {
   BTC_PREDICTION_PROGRAM,
   formatPred,
+  calcPayoutWithBonus,
+  fetchReputation,
   type RoundState,
   type UserPosition,
+  type ReputationData,
 } from '@/lib/predictionContract';
 import { fetchRound, loadPositions } from '@/lib/roundHelpers';
+import ReputationCard from '@/components/ReputationCard';
+import ReputationBadge from '@/components/ReputationBadge';
 
 export default function PortfolioPage() {
   const router = useRouter();
@@ -33,6 +38,7 @@ export default function PortfolioPage() {
   const [loading, setLoading] = useState(true);
   const [claimingId, setClaimingId] = useState<number | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [reputation, setReputation] = useState<ReputationData | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -60,8 +66,19 @@ export default function PortfolioPage() {
       if (r) found.push(r);
     }
     setRounds(found.sort((a, b) => b.id - a.id));
+
+    // Fetch reputation data
+    if (publicKey) {
+      try {
+        const rep = await fetchReputation(publicKey);
+        setReputation(rep);
+      } catch {
+        // Reputation not available yet (first time user)
+      }
+    }
+
     setLoading(false);
-  }, []);
+  }, [publicKey]);
 
   useEffect(() => {
     scan();
@@ -78,12 +95,14 @@ export default function PortfolioPage() {
     const totalPool = round.yesPool + round.noPool;
     const winPool = round.outcome ? round.yesPool : round.noPool;
     if (winPool === 0) return;
-    const gross = Math.floor(deposit * totalPool / winPool);
-    const fee = Math.floor(gross / 10);
-    const netPayout = gross - fee;
+
+    // Calculate payout with tier bonus
+    const bonusPct = reputation?.bonusPct ?? 0;
+    const netPayout = calcPayoutWithBonus(deposit, winPool, totalPool, bonusPct);
 
     setClaimingId(roundId);
     try {
+      // v3: claim takes BetReceipt record (auto-selected by wallet) + expected_payout
       await requestTransaction({
         address: publicKey,
         chainId: 'testnetbeta',
@@ -91,7 +110,10 @@ export default function PortfolioPage() {
           {
             program: BTC_PREDICTION_PROGRAM,
             functionName: 'claim',
-            inputs: [`${roundId}u64`, `${netPayout}u64`],
+            inputs: [
+              { id: 'auto', program_id: BTC_PREDICTION_PROGRAM, record_name: 'BetReceipt' },
+              `${netPayout}u64`,
+            ],
           },
         ],
         fee: 2_000_000,
@@ -290,10 +312,13 @@ export default function PortfolioPage() {
                 />
               </div>
 
-              {/* Prediction Stats + P&L Chart side by side on desktop */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <PredictionStats rounds={rounds} positions={positions} />
-                <PnLChart rounds={rounds} positions={positions} />
+              {/* Reputation + Charts */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {reputation && <ReputationCard data={reputation} />}
+                <div className={`${reputation ? 'md:col-span-2' : 'md:col-span-3'} grid grid-cols-1 md:grid-cols-2 gap-4`}>
+                  <PredictionStats rounds={rounds} positions={positions} />
+                  <PnLChart rounds={rounds} positions={positions} />
+                </div>
               </div>
 
               {/* Active Positions */}

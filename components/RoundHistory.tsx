@@ -2,18 +2,20 @@
 
 import { motion } from 'framer-motion';
 import { Check, X, Trophy, Clock } from 'lucide-react';
-import { formatPred, type RoundState, type UserPosition } from '@/lib/predictionContract';
+import { formatPred, calcPayoutWithBonus, type RoundState, type UserPosition, type ReputationData } from '@/lib/predictionContract';
 import { useWallet } from '@demox-labs/aleo-wallet-adapter-react';
 import { BTC_PREDICTION_PROGRAM } from '@/lib/predictionContract';
+import ReputationBadge from './ReputationBadge';
 import { useState } from 'react';
 
 interface RoundHistoryProps {
   rounds: RoundState[];
   positions: UserPosition[];
+  reputation?: ReputationData;
   onClaim?: (roundId: number) => void;
 }
 
-export default function RoundHistory({ rounds, positions, onClaim }: RoundHistoryProps) {
+export default function RoundHistory({ rounds, positions, reputation, onClaim }: RoundHistoryProps) {
   const { publicKey, requestTransaction } = useWallet();
   const [claimingId, setClaimingId] = useState<number | null>(null);
 
@@ -30,19 +32,26 @@ export default function RoundHistory({ rounds, positions, onClaim }: RoundHistor
     const totalPool = round.yesPool + round.noPool;
     const winPool = round.outcome ? round.yesPool : round.noPool;
     if (winPool === 0) return;
-    const gross = Math.floor(deposit * totalPool / winPool);
-    const fee = Math.floor(gross / 10);
-    const netPayout = gross - fee;
+
+    // Calculate payout with tier bonus
+    const bonusPct = reputation?.bonusPct ?? 0;
+    const netPayout = calcPayoutWithBonus(deposit, winPool, totalPool, bonusPct);
 
     setClaimingId(roundId);
     try {
+      // v3: claim takes a BetReceipt record (wallet provides it automatically)
+      // + expected_payout as public input
       const transaction = {
         address: publicKey,
         chainId: 'testnetbeta',
         transitions: [{
           program: BTC_PREDICTION_PROGRAM,
           functionName: 'claim',
-          inputs: [`${roundId}u64`, `${netPayout}u64`],
+          inputs: [
+            // BetReceipt record — wallet auto-selects matching record
+            { id: 'auto', program_id: BTC_PREDICTION_PROGRAM, record_name: 'BetReceipt' },
+            `${netPayout}u64`,
+          ],
         }],
         fee: 1_000_000,
         feePrivate: false,

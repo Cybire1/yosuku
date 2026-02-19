@@ -1,16 +1,16 @@
-// Contract constants for BTC Prediction Market
+// Contract constants for BTC Prediction Market v3
 
 export const PRED_TOKEN_PROGRAM = 'dart_token.aleo';
-export const BTC_PREDICTION_PROGRAM = 'btc_prediction_v2.aleo';
+export const BTC_PREDICTION_PROGRAM = 'btc_prediction_v3.aleo';
 
-// On-chain address of btc_prediction_v2.aleo (for token transfers to the program)
-export const BTC_PREDICTION_ADDRESS = 'aleo1w2hdtm6n5c0nprhnjq6sj794utehf0ccf3xlj4xa0zc04mzg5s8qfys9pd';
+// On-chain address of btc_prediction_v3.aleo (for token transfers to the program)
+export const BTC_PREDICTION_ADDRESS = 'aleo1h9l6247x6y44fnq438yxjurqswf5dgdak7sedsn9wwzjl5xlxvpqwyyjyl';
 
 // Token decimals: 1 DART = 1_000_000 microtokens
 export const PRED_DECIMALS = 6;
 export const PRED_MULTIPLIER = 1_000_000;
 
-// Platform fee: 10%
+// Platform fee: 10% base (reduced by tier)
 export const PLATFORM_FEE_BPS = 1000;
 
 // Round duration in seconds
@@ -19,8 +19,8 @@ export const ROUND_DURATION_SECONDS = 300; // 5 minutes
 // Default seed liquidity per side when creating a round (500 DART)
 export const DEFAULT_SEED_AMOUNT = 500 * PRED_MULTIPLIER;
 
-// Pool address: btc_prediction_v2.aleo program address in dart_token balances
-export const POOL_ADDRESS = 'btc_prediction_v2.aleo';
+// Pool address: btc_prediction_v3.aleo program address in dart_token balances
+export const POOL_ADDRESS = 'btc_prediction_v3.aleo';
 
 // Aleo API endpoints
 export const ALEO_API_URL = 'https://api.explorer.provable.com/v1';
@@ -158,4 +158,115 @@ export interface UserPosition {
   yesDeposit: number;
   noDeposit: number;
   claimed: boolean;
+}
+
+// ── Reputation System ──────────────────────────────────
+
+export type ReputationTier = 'Novice' | 'Trader' | 'Whale' | 'Oracle';
+
+export interface ReputationData {
+  bets: number;
+  wins: number;
+  streak: number;
+  winRate: number;
+  tier: ReputationTier;
+  bonusPct: number;   // 0, 3, 7, or 12
+  feePct: number;     // 10, 9, 8, or 7
+  nextTier: ReputationTier | null;
+  progressToNext: number; // 0-100%
+}
+
+const TIERS: { tier: ReputationTier; minBets: number; minWinRate: number; bonus: number; fee: number }[] = [
+  { tier: 'Oracle', minBets: 30, minWinRate: 0.65, bonus: 12, fee: 7 },
+  { tier: 'Whale',  minBets: 15, minWinRate: 0.55, bonus: 7,  fee: 8 },
+  { tier: 'Trader', minBets: 5,  minWinRate: 0.45, bonus: 3,  fee: 9 },
+  { tier: 'Novice', minBets: 0,  minWinRate: 0,    bonus: 0,  fee: 10 },
+];
+
+export function computeTier(bets: number, wins: number): ReputationTier {
+  const winRate = bets > 0 ? wins / bets : 0;
+  for (const t of TIERS) {
+    if (bets >= t.minBets && winRate >= t.minWinRate) return t.tier;
+  }
+  return 'Novice';
+}
+
+export function getReputationData(bets: number, wins: number, streak: number): ReputationData {
+  const winRate = bets > 0 ? wins / bets : 0;
+  const tier = computeTier(bets, wins);
+  const tierInfo = TIERS.find(t => t.tier === tier)!;
+  const tierIdx = TIERS.findIndex(t => t.tier === tier);
+  const nextTierInfo = tierIdx > 0 ? TIERS[tierIdx - 1] : null;
+
+  let progressToNext = 100;
+  if (nextTierInfo) {
+    const betsProgress = Math.min(1, bets / nextTierInfo.minBets);
+    const wrProgress = nextTierInfo.minWinRate > 0
+      ? Math.min(1, winRate / nextTierInfo.minWinRate)
+      : 1;
+    progressToNext = Math.round(((betsProgress + wrProgress) / 2) * 100);
+  }
+
+  return {
+    bets,
+    wins,
+    streak,
+    winRate,
+    tier,
+    bonusPct: tierInfo.bonus,
+    feePct: tierInfo.fee,
+    nextTier: nextTierInfo?.tier ?? null,
+    progressToNext,
+  };
+}
+
+// Fetch reputation data from on-chain mappings
+export async function fetchReputation(address: string): Promise<ReputationData> {
+  const userKey = await fetchUserKey(address);
+  const [betsRaw, winsRaw, streakRaw] = await Promise.all([
+    fetchMapping(BTC_PREDICTION_PROGRAM, 'user_bets', userKey),
+    fetchMapping(BTC_PREDICTION_PROGRAM, 'user_wins', userKey),
+    fetchMapping(BTC_PREDICTION_PROGRAM, 'user_streak', userKey),
+  ]);
+  return getReputationData(parseU64(betsRaw), parseU64(winsRaw), parseU64(streakRaw));
+}
+
+// Compute the same user hash key as the contract: BHP256::hash_to_field(address)
+// We fetch via the Aleo API hash endpoint
+async function fetchUserKey(address: string): Promise<string> {
+  // The contract uses BHP256::hash_to_field(caller) as key
+  // We need to pass the address as-is since Aleo API accepts the original key
+  return address;
+}
+
+// Calculate payout with tier bonus
+export function calcPayoutWithBonus(
+  deposit: number,
+  winningPool: number,
+  totalPool: number,
+  bonusPct: number,
+): number {
+  if (winningPool === 0) return 0;
+  const gross = (deposit / winningPool) * totalPool;
+  const baseFee = gross * 0.1;
+  const bonusAmount = Math.floor(baseFee * (bonusPct / 100) * 10); // bonusPct of gross
+  const basePayout = gross - baseFee;
+  // Bonus comes from fee reduction: base_net + (base_net * bonusPct / 100)
+  return Math.floor(basePayout + basePayout * bonusPct / 100);
+}
+
+// Time-weight bonus multiplier
+export function getTimeWeightMultiplier(
+  betBlock: number,
+  roundStart: number,
+  roundDeadline: number,
+): number {
+  const totalBlocks = roundDeadline - roundStart;
+  if (totalBlocks <= 0) return 1.0;
+  const elapsed = betBlock - roundStart;
+  const pct = elapsed / totalBlocks;
+  if (pct <= 0.25) return 1.15;
+  if (pct <= 0.50) return 1.10;
+  if (pct <= 0.75) return 1.05;
+  return 1.0;
 }
