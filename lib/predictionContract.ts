@@ -1,10 +1,10 @@
 // Contract constants for BTC Prediction Market
 
 export const PRED_TOKEN_PROGRAM = 'dart_token.aleo';
-export const BTC_PREDICTION_PROGRAM = 'btc_prediction.aleo';
+export const BTC_PREDICTION_PROGRAM = 'btc_prediction_v2.aleo';
 
-// On-chain address of btc_prediction.aleo (for token transfers to the program)
-export const BTC_PREDICTION_ADDRESS = 'aleo1chujzh54d8qd9393t6dnqqsvzlwfnhlhf790qz4glksals4cms9s29tuv6';
+// On-chain address of btc_prediction_v2.aleo (for token transfers to the program)
+export const BTC_PREDICTION_ADDRESS = 'aleo1w2hdtm6n5c0nprhnjq6sj794utehf0ccf3xlj4xa0zc04mzg5s8qfys9pd';
 
 // Token decimals: 1 DART = 1_000_000 microtokens
 export const PRED_DECIMALS = 6;
@@ -19,9 +19,8 @@ export const ROUND_DURATION_SECONDS = 300; // 5 minutes
 // Default seed liquidity per side when creating a round (500 DART)
 export const DEFAULT_SEED_AMOUNT = 500 * PRED_MULTIPLIER;
 
-// Pool address: btc_prediction.aleo program address in dart_token balances
-// Update this after deploying the contract
-export const POOL_ADDRESS = 'btc_prediction.aleo';
+// Pool address: btc_prediction_v2.aleo program address in dart_token balances
+export const POOL_ADDRESS = 'btc_prediction_v2.aleo';
 
 // Aleo API endpoints
 export const ALEO_API_URL = 'https://api.explorer.provable.com/v1';
@@ -67,6 +66,14 @@ export function parseU64(val: string | null): number {
   if (!val) return 0;
   const cleaned = val.replace('u64', '').trim();
   return parseInt(cleaned, 10) || 0;
+}
+
+// Fetch on-chain DART balance for an address and sync to localStorage
+export async function fetchOnChainBalance(address: string): Promise<number> {
+  const val = await fetchMapping(PRED_TOKEN_PROGRAM, 'balances', address);
+  const balance = parseU64(val);
+  localStorage.setItem('dart_balance', String(balance));
+  return balance;
 }
 
 // Helper: calculate estimated payout

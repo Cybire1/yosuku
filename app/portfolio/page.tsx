@@ -91,7 +91,7 @@ export default function PortfolioPage() {
           {
             program: BTC_PREDICTION_PROGRAM,
             functionName: 'claim',
-            inputs: [`${roundId}u64`],
+            inputs: [`${roundId}u64`, `${netPayout}u64`],
           },
         ],
         fee: 2_000_000,

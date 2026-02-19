@@ -14,6 +14,7 @@ import {
   calcOdds,
   estimateProb,
   getConfidenceLabel,
+  fetchOnChainBalance,
   type RoundState,
 } from '@/lib/predictionContract';
 import { savePosition } from '@/lib/roundHelpers';
@@ -111,13 +112,16 @@ export default function BetSidebar({ round, onSuccess }: BetSidebarProps) {
     return () => clearInterval(interval);
   }, [round.endTime]);
 
-  // Read balance
+  // Read balance — sync from chain on mount, then poll localStorage for fast updates
   useEffect(() => {
+    if (publicKey) {
+      fetchOnChainBalance(publicKey).then(setBalance).catch(() => {});
+    }
     const read = () => setBalance(parseInt(localStorage.getItem(BALANCE_KEY) || '0', 10));
     read();
     const interval = setInterval(read, 2000);
     return () => clearInterval(interval);
-  }, []);
+  }, [publicKey]);
 
   // Estimated payout — odds-based (Polymarket-style)
   const estPayout = (() => {

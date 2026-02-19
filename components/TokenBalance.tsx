@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Coins } from 'lucide-react';
 import { useWallet } from '@demox-labs/aleo-wallet-adapter-react';
-import { formatPred } from '@/lib/predictionContract';
+import { formatPred, fetchOnChainBalance } from '@/lib/predictionContract';
 import AnimatedNumber from './AnimatedNumber';
 
 const BALANCE_KEY = 'dart_balance';
@@ -22,15 +22,29 @@ export default function TokenBalance({ refreshTrigger }: TokenBalanceProps) {
       return;
     }
 
-    const read = () => {
-      const val = parseInt(localStorage.getItem(BALANCE_KEY) || '0', 10);
-      setBalance(val);
+    // Fetch on-chain balance immediately, then every 15s
+    const syncChain = async () => {
+      try {
+        const onChain = await fetchOnChainBalance(publicKey);
+        setBalance(onChain);
+      } catch {
+        // Fallback to localStorage
+        setBalance(parseInt(localStorage.getItem(BALANCE_KEY) || '0', 10));
+      }
     };
 
-    read();
-    // Poll localStorage every 2s for updates
-    const interval = setInterval(read, 2000);
-    return () => clearInterval(interval);
+    syncChain();
+    const chainInterval = setInterval(syncChain, 15_000);
+
+    // Also poll localStorage for fast local updates (mint/bet)
+    const localInterval = setInterval(() => {
+      setBalance(parseInt(localStorage.getItem(BALANCE_KEY) || '0', 10));
+    }, 2000);
+
+    return () => {
+      clearInterval(chainInterval);
+      clearInterval(localInterval);
+    };
   }, [publicKey, refreshTrigger]);
 
   if (!publicKey) return null;
