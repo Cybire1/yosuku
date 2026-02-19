@@ -16,7 +16,7 @@ interface RoundHistoryProps {
 }
 
 export default function RoundHistory({ rounds, positions, reputation, onClaim }: RoundHistoryProps) {
-  const { publicKey, requestTransaction } = useWallet();
+  const { publicKey, requestTransaction, requestRecords } = useWallet();
   const [claimingId, setClaimingId] = useState<number | null>(null);
 
   const getPosition = (roundId: number) => positions.find(p => p.roundId === roundId);
@@ -39,25 +39,42 @@ export default function RoundHistory({ rounds, positions, reputation, onClaim }:
 
     setClaimingId(roundId);
     try {
-      // v3: claim takes a BetReceipt record (wallet provides it automatically)
-      // + expected_payout as public input
-      const transaction = {
+      // Fetch user's BetReceipt records from wallet
+      const records = await requestRecords?.(BTC_PREDICTION_PROGRAM);
+      const receiptList = Array.isArray(records) ? records : [];
+      // Find receipt matching this round
+      const receipt = receiptList.find((r: Record<string, unknown>) => {
+        const data = (r as Record<string, unknown>).data as Record<string, string> | undefined;
+        const plaintext = (r as Record<string, unknown>).plaintext as string | undefined;
+        if (data?.round_id) {
+          return data.round_id === `${roundId}u64` || data.round_id === `${roundId}u64.private`;
+        }
+        if (plaintext) {
+          return plaintext.includes(`round_id: ${roundId}u64`);
+        }
+        return false;
+      });
+
+      if (!receipt) {
+        console.error('BetReceipt not found for round', roundId);
+        return;
+      }
+
+      // Pass the record plaintext as input
+      const recordInput = (receipt as Record<string, unknown>).plaintext as string
+        || JSON.stringify(receipt);
+
+      await requestTransaction({
         address: publicKey,
         chainId: 'testnetbeta',
         transitions: [{
           program: BTC_PREDICTION_PROGRAM,
           functionName: 'claim',
-          inputs: [
-            // BetReceipt record — wallet auto-selects matching record
-            { id: 'auto', program_id: BTC_PREDICTION_PROGRAM, record_name: 'BetReceipt' },
-            `${netPayout}u64`,
-          ],
+          inputs: [recordInput, `${netPayout}u64`],
         }],
         fee: 1_000_000,
         feePrivate: false,
-      };
-
-      await requestTransaction(transaction);
+      });
 
       // Credit payout to local balance
       const curBalance = parseInt(localStorage.getItem('dart_balance') || '0', 10);

@@ -32,7 +32,7 @@ import ReputationBadge from '@/components/ReputationBadge';
 
 export default function PortfolioPage() {
   const router = useRouter();
-  const { publicKey, requestTransaction } = useWallet();
+  const { publicKey, requestTransaction, requestRecords } = useWallet();
   const [rounds, setRounds] = useState<RoundState[]>([]);
   const [positions, setPositions] = useState<UserPosition[]>([]);
   const [loading, setLoading] = useState(true);
@@ -66,6 +66,11 @@ export default function PortfolioPage() {
       if (r) found.push(r);
     }
     setRounds(found.sort((a, b) => b.id - a.id));
+
+    // Filter positions to only those with matching on-chain rounds
+    const validIds = new Set(found.map(r => r.id));
+    const validPositions = allPositions.filter(p => validIds.has(p.roundId));
+    setPositions(validPositions);
 
     // Fetch reputation data
     if (publicKey) {
@@ -102,7 +107,30 @@ export default function PortfolioPage() {
 
     setClaimingId(roundId);
     try {
-      // v3: claim takes BetReceipt record (auto-selected by wallet) + expected_payout
+      // Fetch user's BetReceipt records from wallet
+      const records = await requestRecords?.(BTC_PREDICTION_PROGRAM);
+      const receiptList = Array.isArray(records) ? records : [];
+      const receipt = receiptList.find((r: Record<string, unknown>) => {
+        const data = (r as Record<string, unknown>).data as Record<string, string> | undefined;
+        const plaintext = (r as Record<string, unknown>).plaintext as string | undefined;
+        if (data?.round_id) {
+          return data.round_id === `${roundId}u64` || data.round_id === `${roundId}u64.private`;
+        }
+        if (plaintext) {
+          return plaintext.includes(`round_id: ${roundId}u64`);
+        }
+        return false;
+      });
+
+      if (!receipt) {
+        console.error('BetReceipt not found for round', roundId);
+        setClaimingId(null);
+        return;
+      }
+
+      const recordInput = (receipt as Record<string, unknown>).plaintext as string
+        || JSON.stringify(receipt);
+
       await requestTransaction({
         address: publicKey,
         chainId: 'testnetbeta',
@@ -110,10 +138,7 @@ export default function PortfolioPage() {
           {
             program: BTC_PREDICTION_PROGRAM,
             functionName: 'claim',
-            inputs: [
-              { id: 'auto', program_id: BTC_PREDICTION_PROGRAM, record_name: 'BetReceipt' },
-              `${netPayout}u64`,
-            ],
+            inputs: [recordInput, `${netPayout}u64`],
           },
         ],
         fee: 2_000_000,

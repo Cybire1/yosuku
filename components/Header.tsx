@@ -10,6 +10,7 @@ import { PRED_TOKEN_PROGRAM, PRED_MULTIPLIER, fetchReputation, type ReputationDa
 import ReputationBadge from './ReputationBadge';
 
 const NAV_LINKS = [
+  { name: 'home', href: '/' },
   { name: 'markets', href: '/markets' },
   { name: 'portfolio', href: '/portfolio' },
   { name: 'how it works', href: '/how-it-works' },
@@ -90,7 +91,7 @@ export default function Header() {
           {/* Desktop Nav */}
           <nav className="hidden md:flex items-center">
             {NAV_LINKS.map((link, index) => {
-              const isActive = pathname === link.href || (link.href !== '/' && pathname?.startsWith(link.href));
+              const isActive = link.href === '/' ? pathname === '/' : (pathname === link.href || pathname?.startsWith(link.href));
 
               return (
                 <a

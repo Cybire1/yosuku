@@ -71,9 +71,12 @@ export function parseU64(val: string | null): number {
 // Fetch on-chain DART balance for an address and sync to localStorage
 export async function fetchOnChainBalance(address: string): Promise<number> {
   const val = await fetchMapping(PRED_TOKEN_PROGRAM, 'balances', address);
-  const balance = parseU64(val);
-  localStorage.setItem('dart_balance', String(balance));
-  return balance;
+  const onChain = parseU64(val);
+  const local = parseInt(localStorage.getItem('dart_balance') || '0', 10);
+  // Keep the higher value — local may include optimistic pending tx updates
+  const best = Math.max(onChain, local);
+  localStorage.setItem('dart_balance', String(best));
+  return best;
 }
 
 // Helper: calculate estimated payout

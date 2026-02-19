@@ -160,28 +160,22 @@ export default function BetSidebar({ round, onSuccess }: BetSidebarProps) {
     try {
       const sideVal = side === 'YES' ? 'true' : 'false';
 
-      // Step 1: Transfer DART tokens to the prediction program (public transfer)
+      // Combined: transfer tokens + place bet in one transaction
       await requestTransaction({
         address: publicKey,
         chainId: 'testnetbeta',
-        transitions: [{
-          program: PRED_TOKEN_PROGRAM,
-          functionName: 'transfer_public',
-          inputs: [BTC_PREDICTION_ADDRESS, `${microAmount}u64`],
-        }],
-        fee: 2_000_000,
-        feePrivate: false,
-      });
-
-      // Step 2: Place bet (v3 unified bet with side param, returns private BetReceipt)
-      await requestTransaction({
-        address: publicKey,
-        chainId: 'testnetbeta',
-        transitions: [{
-          program: BTC_PREDICTION_PROGRAM,
-          functionName: 'bet',
-          inputs: [`${round.id}u64`, `${microAmount}u64`, sideVal],
-        }],
+        transitions: [
+          {
+            program: PRED_TOKEN_PROGRAM,
+            functionName: 'transfer_public',
+            inputs: [BTC_PREDICTION_ADDRESS, `${microAmount}u64`],
+          },
+          {
+            program: BTC_PREDICTION_PROGRAM,
+            functionName: 'bet',
+            inputs: [`${round.id}u64`, `${microAmount}u64`, sideVal],
+          },
+        ],
         fee: 2_000_000,
         feePrivate: false,
       });

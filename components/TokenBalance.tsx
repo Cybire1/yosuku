@@ -22,13 +22,16 @@ export default function TokenBalance({ refreshTrigger }: TokenBalanceProps) {
       return;
     }
 
-    // Fetch on-chain balance immediately, then every 15s
+    // Fetch on-chain balance — only update if higher than local (avoids stomping pending txs)
     const syncChain = async () => {
       try {
         const onChain = await fetchOnChainBalance(publicKey);
-        setBalance(onChain);
+        const local = parseInt(localStorage.getItem(BALANCE_KEY) || '0', 10);
+        // Use whichever is higher — local may have optimistic pending tx updates
+        const best = Math.max(onChain, local);
+        localStorage.setItem(BALANCE_KEY, String(best));
+        setBalance(best);
       } catch {
-        // Fallback to localStorage
         setBalance(parseInt(localStorage.getItem(BALANCE_KEY) || '0', 10));
       }
     };
@@ -36,7 +39,7 @@ export default function TokenBalance({ refreshTrigger }: TokenBalanceProps) {
     syncChain();
     const chainInterval = setInterval(syncChain, 15_000);
 
-    // Also poll localStorage for fast local updates (mint/bet)
+    // Poll localStorage for fast local updates (mint/bet)
     const localInterval = setInterval(() => {
       setBalance(parseInt(localStorage.getItem(BALANCE_KEY) || '0', 10));
     }, 2000);
