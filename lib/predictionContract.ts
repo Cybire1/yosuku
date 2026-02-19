@@ -3,6 +3,9 @@
 export const PRED_TOKEN_PROGRAM = 'dart_token.aleo';
 export const BTC_PREDICTION_PROGRAM = 'btc_prediction.aleo';
 
+// On-chain address of btc_prediction.aleo (for token transfers to the program)
+export const BTC_PREDICTION_ADDRESS = 'aleo1chujzh54d8qd9393t6dnqqsvzlwfnhlhf790qz4glksals4cms9s29tuv6';
+
 // Token decimals: 1 DART = 1_000_000 microtokens
 export const PRED_DECIMALS = 6;
 export const PRED_MULTIPLIER = 1_000_000;

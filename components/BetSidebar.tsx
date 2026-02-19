@@ -7,6 +7,7 @@ import { useWallet } from '@demox-labs/aleo-wallet-adapter-react';
 import { useBtcPrice } from '@/lib/hooks/useBtcPrice';
 import {
   BTC_PREDICTION_PROGRAM,
+  BTC_PREDICTION_ADDRESS,
   PRED_TOKEN_PROGRAM,
   PRED_MULTIPLIER,
   formatPred,
@@ -154,21 +155,32 @@ export default function BetSidebar({ round, onSuccess }: BetSidebarProps) {
 
     try {
       const betFunction = side === 'YES' ? 'bet_yes' : 'bet_no';
-      const transaction = {
+
+      // Step 1: Transfer DART tokens to the prediction program
+      await requestTransaction({
         address: publicKey,
         chainId: 'testnetbeta',
-        transitions: [
-          {
-            program: BTC_PREDICTION_PROGRAM,
-            functionName: betFunction,
-            inputs: [`${round.id}u64`, `${microAmount}u64`],
-          },
-        ],
+        transitions: [{
+          program: PRED_TOKEN_PROGRAM,
+          functionName: 'transfer_public',
+          inputs: [BTC_PREDICTION_ADDRESS, `${microAmount}u64`],
+        }],
         fee: 2_000_000,
         feePrivate: false,
-      };
+      });
 
-      await requestTransaction(transaction);
+      // Step 2: Place the bet
+      await requestTransaction({
+        address: publicKey,
+        chainId: 'testnetbeta',
+        transitions: [{
+          program: BTC_PREDICTION_PROGRAM,
+          functionName: betFunction,
+          inputs: [`${round.id}u64`, `${microAmount}u64`],
+        }],
+        fee: 2_000_000,
+        feePrivate: false,
+      });
 
       const newBalance = Math.max(0, balance - microAmount);
       localStorage.setItem(BALANCE_KEY, String(newBalance));

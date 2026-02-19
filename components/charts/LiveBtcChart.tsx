@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip, ReferenceLine } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip, ReferenceLine, CartesianGrid } from 'recharts';
 import { useBtcPrice } from '@/lib/hooks/useBtcPrice';
 
 interface PricePoint {
@@ -123,7 +123,8 @@ export default function LiveBtcChart({ targetPrice, height }: LiveBtcChartProps)
     }
 
     const range = hi - lo;
-    const pad = Math.max(range * 0.12, 10);
+    // Tight padding — just enough to not clip the line
+    const pad = Math.max(range * 0.2, 3);
 
     return {
       minY: lo - pad,
@@ -170,20 +171,26 @@ export default function LiveBtcChart({ targetPrice, height }: LiveBtcChartProps)
         <AreaChart data={data} margin={{ top: 30, right: 12, left: 0, bottom: 0 }}>
           <defs>
             <linearGradient id="btc-gradient-up" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#34D399" stopOpacity={0.2} />
+              <stop offset="0%" stopColor="#34D399" stopOpacity={0.12} />
               <stop offset="100%" stopColor="#34D399" stopOpacity={0} />
             </linearGradient>
             <linearGradient id="btc-gradient-down" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#F43F5E" stopOpacity={0.2} />
+              <stop offset="0%" stopColor="#F43F5E" stopOpacity={0.12} />
               <stop offset="100%" stopColor="#F43F5E" stopOpacity={0} />
             </linearGradient>
           </defs>
+
+          <CartesianGrid
+            horizontal={true}
+            vertical={false}
+            stroke="rgba(255,255,255,0.06)"
+          />
 
           <XAxis
             dataKey="time"
             axisLine={false}
             tickLine={false}
-            tick={{ fontSize: 9, fill: '#444' }}
+            tick={{ fontSize: 9, fill: '#555' }}
             interval="preserveStartEnd"
             minTickGap={80}
           />
@@ -191,35 +198,36 @@ export default function LiveBtcChart({ targetPrice, height }: LiveBtcChartProps)
             domain={[minY, maxY]}
             axisLine={false}
             tickLine={false}
-            tick={{ fontSize: 9, fill: '#444' }}
-            tickFormatter={(v: number) => `$${v.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
-            width={52}
+            tick={{ fontSize: 10, fill: '#666', fontFamily: 'monospace' }}
+            tickFormatter={(v: number) => `$${v.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`}
+            tickCount={5}
+            width={62}
           />
 
-          <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#333', strokeWidth: 1 }} />
+          <Tooltip content={<CustomTooltip />} cursor={{ stroke: 'rgba(255,255,255,0.1)', strokeWidth: 1 }} />
 
-          {/* Target price line — always visible */}
+          {/* Target price line */}
           {targetUsd && (
             <ReferenceLine
               y={targetUsd}
-              stroke="rgba(96,165,250,0.45)"
+              stroke="rgba(255,255,255,0.25)"
               strokeDasharray="6 4"
               strokeWidth={1.5}
               label={{
-                value: `TARGET  $${targetUsd.toLocaleString(undefined, { maximumFractionDigits: 2 })}`,
-                position: 'insideTopRight',
-                fill: 'rgba(96,165,250,0.55)',
-                fontSize: 10,
-                fontWeight: 700,
+                value: 'Target',
+                position: 'right',
+                fill: 'rgba(255,255,255,0.5)',
+                fontSize: 11,
+                fontWeight: 600,
               }}
             />
           )}
 
           <Area
-            type="basis"
+            type="monotone"
             dataKey="price"
             stroke={strokeColor}
-            strokeWidth={2.5}
+            strokeWidth={2}
             fill={`url(#btc-gradient-${isUp ? 'up' : 'down'})`}
             animationDuration={800}
             animationEasing="ease-in-out"

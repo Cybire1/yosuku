@@ -36,16 +36,15 @@ export default function RoundHistory({ rounds, positions, onClaim }: RoundHistor
 
     setClaimingId(roundId);
     try {
-      // Deployed contract claim takes only round_id
       const transaction = {
         address: publicKey,
         chainId: 'testnetbeta',
         transitions: [{
           program: BTC_PREDICTION_PROGRAM,
           functionName: 'claim',
-          inputs: [`${roundId}u64`],
+          inputs: [`${roundId}u64`, `${netPayout}u64`],
         }],
-        fee: 1000000,
+        fee: 1_000_000,
         feePrivate: false,
       };
 
@@ -88,7 +87,7 @@ export default function RoundHistory({ rounds, positions, onClaim }: RoundHistor
           ? Math.max(position.yesDeposit, position.noDeposit)
           : 0;
         const isWinner = round.resolved && userSide === (round.outcome ? 'YES' : 'NO');
-        const canClaim = isWinner && position && !position.claimed;
+        const canClaim = isWinner && position && !position.claimed && (round.yesPool + round.noPool) > 0;
 
         // Calculate payout
         const totalPool = round.yesPool + round.noPool;

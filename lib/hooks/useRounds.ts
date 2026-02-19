@@ -13,39 +13,28 @@ async function roundExists(id: number): Promise<boolean> {
   return !!v && v !== 'null';
 }
 
-/** Find the highest round ID starting from a hint. Checks 3 ahead, then returns highest found. */
-async function findHighestFrom(hint: number): Promise<number> {
-  // Check hint itself first
-  if (hint > 0 && !(await roundExists(hint))) {
-    // Hint is stale — go backwards to find a valid one
-    for (let i = hint - 1; i >= Math.max(0, hint - 5); i--) {
-      if (await roundExists(i)) { hint = i; break; }
-    }
+/** Binary search for the highest round ID, starting from a hint for speed */
+async function findHighestRound(hint: number): Promise<number> {
+  // Exponential probe forward from hint to find upper bound
+  let lo = Math.max(0, hint);
+  let hi = lo + 1;
+
+  // Verify hint exists; if not, start from 0
+  if (lo > 0 && !(await roundExists(lo))) lo = 0;
+
+  while (await roundExists(hi)) {
+    lo = hi;
+    hi = Math.min(hi * 2, hi + 200); // don't jump too far
+    if (hi > 10000) break;
   }
 
-  // Scan forward from hint (batch check 3 at once)
-  const checks = await Promise.all([
-    roundExists(hint + 1),
-    roundExists(hint + 2),
-    roundExists(hint + 3),
-  ]);
-
-  let highest = hint;
-  for (let i = 0; i < checks.length; i++) {
-    if (checks[i]) highest = hint + 1 + i;
-    else break;
-  }
-  return highest;
-}
-
-/** Binary search for the latest round — only used on very first visit */
-async function binarySearchHighest(): Promise<number> {
-  let lo = 0, hi = 500;
+  // Binary search between lo and hi
   while (lo < hi) {
     const mid = Math.floor((lo + hi + 1) / 2);
     if (await roundExists(mid)) lo = mid; else hi = mid - 1;
   }
-  return lo;
+
+  return (await roundExists(lo)) ? lo : 0;
 }
 
 export function useRounds() {
@@ -69,13 +58,8 @@ export function useRounds() {
   const initialLoad = useCallback(async () => {
     const lastKnown = parseInt(localStorage.getItem(LAST_ROUND_KEY) || '0', 10);
 
-    // Step 1: Find highest round ID (fast if we have a cached hint)
-    let highestId: number;
-    if (lastKnown > 0) {
-      highestId = await findHighestFrom(lastKnown);
-    } else {
-      highestId = await binarySearchHighest();
-    }
+    // Step 1: Find highest round ID (exponential probe + binary search)
+    const highestId = await findHighestRound(lastKnown);
 
     if (highestId > 0) {
       localStorage.setItem(LAST_ROUND_KEY, String(highestId));
@@ -149,21 +133,18 @@ export function useRounds() {
           setPastRounds(prev => [updated, ...prev].slice(0, 20));
           setPositions(loadPositions());
 
-          // Scan forward for next active round (parallel check)
-          const nexts = await Promise.all([
-            fetchRound(current.id + 1),
-            fetchRound(current.id + 2),
-          ]);
-
-          for (const next of nexts) {
-            if (next && !next.resolved) {
-              localStorage.setItem(LAST_ROUND_KEY, String(next.id));
-              setActiveRound(next);
+          // Find the latest round (resolver may have jumped ahead)
+          const newHighest = await findHighestRound(current.id);
+          if (newHighest > current.id) {
+            localStorage.setItem(LAST_ROUND_KEY, String(newHighest));
+            const latest = await fetchRound(newHighest);
+            if (latest && !latest.resolved) {
+              setActiveRound(latest);
               return;
             }
           }
 
-          localStorage.setItem(LAST_ROUND_KEY, String(current.id));
+          localStorage.setItem(LAST_ROUND_KEY, String(newHighest || current.id));
           setActiveRound(null);
           return;
         }
@@ -171,17 +152,14 @@ export function useRounds() {
         // Normal pool update — keep endTime stable
         setActiveRound(prev => prev ? { ...updated, endTime: prev.endTime } : updated);
       } else {
-        // No active round — check for new ones (parallel)
+        // No active round — search for latest
         const lastKnown = parseInt(localStorage.getItem(LAST_ROUND_KEY) || '0', 10);
-        const nexts = await Promise.all([
-          fetchRound(lastKnown + 1),
-          fetchRound(lastKnown + 2),
-        ]);
-
-        for (const next of nexts) {
-          if (next && !next.resolved) {
-            localStorage.setItem(LAST_ROUND_KEY, String(next.id));
-            setActiveRound(next);
+        const newHighest = await findHighestRound(lastKnown);
+        if (newHighest > lastKnown) {
+          localStorage.setItem(LAST_ROUND_KEY, String(newHighest));
+          const latest = await fetchRound(newHighest);
+          if (latest && !latest.resolved) {
+            setActiveRound(latest);
             return;
           }
         }
