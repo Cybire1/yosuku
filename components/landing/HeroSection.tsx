@@ -1,333 +1,296 @@
 'use client';
 
-import { useRef, useEffect, useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
-import { ArrowUpRight } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import gsap from 'gsap';
-import { ScrollTrigger } from 'gsap/ScrollTrigger';
+import { useRouter } from 'next/navigation';
+import { ArrowRight, Clock, Activity } from 'lucide-react';
 import MagneticButton from './MagneticButton';
-import TickerMarquee from './TickerMarquee';
-import { useBtcPrice } from '@/lib/hooks/useBtcPrice';
 
-if (typeof window !== 'undefined') {
-  gsap.registerPlugin(ScrollTrigger);
+// High-performance Particle System for the Canvas Background inside the Portal
+class Particle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  radius: number;
+
+  constructor(width: number, height: number) {
+    this.x = Math.random() * width;
+    this.y = Math.random() * height;
+    this.vx = (Math.random() - 0.5) * 0.4;
+    this.vy = (Math.random() - 0.5) * 0.4;
+    this.radius = Math.random() * 1.5 + 0.5;
+  }
+
+  update(width: number, height: number) {
+    this.x += this.vx;
+    this.y += this.vy;
+
+    if (this.x < 0 || this.x > width) this.vx *= -1;
+    if (this.y < 0 || this.y > height) this.vy *= -1;
+  }
+
+  draw(ctx: CanvasRenderingContext2D) {
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+    ctx.fill();
+  }
 }
 
-/* ─── Live BTC Price Badge ─── */
-function BtcBadge() {
-  const { price, change24h } = useBtcPrice();
-  const [flash, setFlash] = useState<'up' | 'down' | null>(null);
-  const prevPrice = useRef(price);
+function ParticleNetwork() {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
-    if (price === 0 || prevPrice.current === 0) {
-      prevPrice.current = price;
-      return;
-    }
-    if (price > prevPrice.current) setFlash('up');
-    else if (price < prevPrice.current) setFlash('down');
-    prevPrice.current = price;
-    const t = setTimeout(() => setFlash(null), 600);
-    return () => clearTimeout(t);
-  }, [price]);
-
-  if (price === 0) return null;
-
-  return (
-    <div
-      className={`
-        btc-badge inline-flex items-center gap-2 px-4 py-2 rounded-full
-        border backdrop-blur-md font-mono text-sm transition-colors duration-300
-        ${flash === 'up' ? 'border-[#34D399] bg-[#34D399]/10' : ''}
-        ${flash === 'down' ? 'border-[#F43F5E] bg-[#F43F5E]/10' : ''}
-        ${flash === null ? 'border-zinc-700 bg-zinc-900/60' : ''}
-      `}
-    >
-      <span className="text-zinc-400 text-xs font-medium">BTC</span>
-      <span className="text-white font-semibold">
-        ${price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-      </span>
-      <span className={`text-xs ${change24h >= 0 ? 'text-[#34D399]' : 'text-[#F43F5E]'}`}>
-        {change24h >= 0 ? '▲' : '▼'}{Math.abs(change24h).toFixed(1)}%
-      </span>
-    </div>
-  );
-}
-
-/* ─── Canvas Dot Grid Background ─── */
-function DotGrid({ containerRef }: { containerRef: React.RefObject<HTMLDivElement | null> }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const mouse = useRef({ x: 0, y: 0 });
-  const animRef = useRef<number>(0);
-
-  const draw = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const dpr = window.devicePixelRatio || 1;
-    const w = canvas.width / dpr;
-    const h = canvas.height / dpr;
+    let particles: Particle[] = [];
+    let animationFrameId: number;
+    let width = canvas.clientWidth;  // Use clientWidth instead of window.innerWidth for bounded container
+    let height = canvas.clientHeight;
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const init = () => {
+      width = canvas.clientWidth;
+      height = canvas.clientHeight;
+      canvas.width = width;
+      canvas.height = height;
 
-    const spacing = 40;
-    const cols = Math.ceil(w / spacing) + 1;
-    const rows = Math.ceil(h / spacing) + 1;
-    const time = Date.now() * 0.001;
-
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        const x = c * spacing;
-        const y = r * spacing;
-
-        // Distance from mouse for subtle interaction
-        const dx = (x - mouse.current.x) / w;
-        const dy = (y - mouse.current.y) / h;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-
-        // Breathing pulse + mouse proximity
-        const pulse = 0.3 + 0.15 * Math.sin(time * 1.5 + c * 0.2 + r * 0.3);
-        const proximity = Math.max(0, 1 - dist * 3) * 0.3;
-        const alpha = Math.min(pulse + proximity, 0.6);
-        const radius = (1 + proximity * 2) * dpr;
-
-        ctx.beginPath();
-        ctx.arc(x * dpr, y * dpr, radius, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
-        ctx.fill();
+      // Responsive particle count based on container area
+      const particleCount = Math.min(Math.floor((width * height) / 15000), 80);
+      particles = [];
+      for (let i = 0; i < particleCount; i++) {
+        particles.push(new Particle(width, height));
       }
-    }
-
-    animRef.current = requestAnimationFrame(draw);
-  }, []);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    const container = containerRef.current;
-    if (!canvas || !container) return;
-
-    const resize = () => {
-      const dpr = window.devicePixelRatio || 1;
-      canvas.width = container.clientWidth * dpr;
-      canvas.height = container.clientHeight * dpr;
-      canvas.style.width = container.clientWidth + 'px';
-      canvas.style.height = container.clientHeight + 'px';
     };
 
-    const handleMouse = (e: MouseEvent) => {
-      const rect = container.getBoundingClientRect();
-      mouse.current.x = e.clientX - rect.left;
-      mouse.current.y = e.clientY - rect.top;
+    const animate = () => {
+      ctx.clearRect(0, 0, width, height);
+
+      // Draw faint connections
+      for (let i = 0; i < particles.length; i++) {
+        for (let j = i + 1; j < particles.length; j++) {
+          const dx = particles[i].x - particles[j].x;
+          const dy = particles[i].y - particles[j].y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+
+          if (dist < 150) {
+            ctx.beginPath();
+            ctx.moveTo(particles[i].x, particles[i].y);
+            ctx.lineTo(particles[j].x, particles[j].y);
+            ctx.strokeStyle = `rgba(255, 255, 255, ${0.05 * (1 - dist / 150)})`;
+            ctx.lineWidth = 0.5;
+            ctx.stroke();
+          }
+        }
+      }
+
+      // Update and draw particles
+      particles.forEach((p) => {
+        p.update(width, height);
+        p.draw(ctx);
+      });
+
+      animationFrameId = requestAnimationFrame(animate);
     };
 
-    resize();
-    window.addEventListener('resize', resize);
-    window.addEventListener('mousemove', handleMouse);
-    animRef.current = requestAnimationFrame(draw);
+    init();
+    animate();
 
+    const handleResize = () => {
+      init();
+    };
+
+    window.addEventListener('resize', handleResize);
     return () => {
-      window.removeEventListener('resize', resize);
-      window.removeEventListener('mousemove', handleMouse);
-      cancelAnimationFrame(animRef.current);
+      window.removeEventListener('resize', handleResize);
+      cancelAnimationFrame(animationFrameId);
     };
-  }, [containerRef, draw]);
+  }, []);
 
   return (
     <canvas
       ref={canvasRef}
-      className="absolute inset-0 pointer-events-none hidden md:block"
-      style={{ opacity: 0.4 }}
+      className="absolute inset-0 w-full h-full pointer-events-none z-0 mix-blend-screen opacity-70"
     />
   );
 }
 
-/* ─── Main Hero Section ─── */
 export default function HeroSection() {
   const router = useRouter();
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [isHovered, setIsHovered] = useState(false);
+  const [time, setTime] = useState<Date | null>(null);
 
   useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    const ctx = gsap.context(() => {
-      const tl = gsap.timeline({
-        scrollTrigger: {
-          trigger: container,
-          start: 'top top',
-          end: '+=300%',
-          pin: true,
-          scrub: 1,
-          anticipatePin: 1,
-        },
-      });
-
-      // Phase 1 (0-20%): "PREDICT" slides from left
-      tl.fromTo(
-        '.hero-line-1',
-        { xPercent: -110, opacity: 0 },
-        { xPercent: 0, opacity: 1, duration: 1, ease: 'power3.out' }
-      );
-
-      // Phase 2 (20-40%): Green accent block + "THE FUTURE" from right
-      tl.fromTo(
-        '.hero-accent-block',
-        { scaleX: 0, opacity: 0 },
-        { scaleX: 1, opacity: 1, duration: 0.6, ease: 'power3.out' },
-        '+=0.2'
-      );
-      tl.fromTo(
-        '.hero-line-2',
-        { xPercent: 110, opacity: 0 },
-        { xPercent: 0, opacity: 1, duration: 1, ease: 'power3.out' },
-        '<+=0.1'
-      );
-
-      // Phase 3 (40-60%): "ON ALEO" from left + BTC badge fades in
-      tl.fromTo(
-        '.hero-line-3',
-        { xPercent: -110, opacity: 0 },
-        { xPercent: 0, opacity: 1, duration: 1, ease: 'power3.out' },
-        '+=0.2'
-      );
-      tl.fromTo(
-        '.btc-badge',
-        { opacity: 0, y: -20 },
-        { opacity: 1, y: 0, duration: 0.6, ease: 'power2.out' },
-        '<+=0.3'
-      );
-
-      // Phase 4 (60-80%): Subtext + CTA buttons
-      tl.fromTo(
-        '.hero-subtext',
-        { opacity: 0, y: 40 },
-        { opacity: 1, y: 0, duration: 0.8, ease: 'power2.out' },
-        '+=0.3'
-      );
-      tl.fromTo(
-        '.hero-cta',
-        { opacity: 0, y: 30 },
-        { opacity: 1, y: 0, duration: 0.6, ease: 'power2.out' },
-        '<+=0.2'
-      );
-
-      // Phase 5 (80-100%): Ticker slides in from bottom
-      tl.fromTo(
-        '.hero-ticker',
-        { yPercent: 100, opacity: 0 },
-        { yPercent: 0, opacity: 1, duration: 0.8, ease: 'power2.out' },
-        '+=0.2'
-      );
-    }, container);
-
-    return () => ctx.revert();
+    setTime(new Date());
+    const interval = setInterval(() => setTime(new Date()), 1000);
+    return () => clearInterval(interval);
   }, []);
 
+  const formatTime = (date: Date) => {
+    return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+  };
+  const formatDate = (date: Date) => {
+    return date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  };
+
+  const bentoClasses = "relative overflow-hidden bg-zinc-950/50 border border-white/10 rounded-[2rem] backdrop-blur-md flex flex-col";
+  const whiteBentoClasses = "relative overflow-hidden bg-white border border-black/5 rounded-[2rem] shadow-xl flex flex-col";
+
   return (
-    <div
-      ref={containerRef}
-      className="relative w-full h-screen bg-zinc-900 flex flex-col justify-between overflow-hidden text-white"
-    >
-      {/* Canvas dot grid background */}
-      <DotGrid containerRef={containerRef} />
+    <section className="relative w-full min-h-screen bg-[#030303] text-white p-4 sm:p-6 lg:p-8 flex items-center justify-center pt-24 sm:pt-28">
 
-      {/* Live BTC Badge — top right */}
-      <div className="absolute top-6 right-6 md:top-8 md:right-10 z-20">
-        <BtcBadge />
-      </div>
+      {/* Full Bento Grid */}
+      <div className="w-full max-w-[1800px] h-[85vh] min-h-[700px] grid grid-cols-1 lg:grid-cols-4 lg:grid-rows-3 gap-4 lg:gap-6 z-10 relative">
 
-      {/* ── Main Typography ── */}
-      <div className="flex-1 flex flex-col justify-center px-6 sm:px-12 md:px-[50px] relative z-10">
-
-        {/* Line 1: PREDICT */}
-        <div className="overflow-hidden">
-          <div className="hero-line-1 opacity-0">
-            <h1 className="font-extrabold uppercase text-[16vw] md:text-[13vw] leading-none tracking-tight">
-              PREDICT
+        {/* Left Column - Top (Briefing) - WHITE THEME */}
+        <motion.div
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.8, delay: 0.1 }}
+          className={`${whiteBentoClasses} lg:col-span-1 lg:row-span-2 p-6 sm:p-8 justify-between`}
+        >
+          <div>
+            <div className="inline-flex items-center gap-2 px-3 py-1 mb-6 rounded-full border border-black/5 bg-zinc-100">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
+              <span className="text-[10px] font-semibold tracking-widest uppercase text-zinc-500">Aleo Native</span>
+            </div>
+            <h1 className="text-3xl xl:text-4xl font-light tracking-tight text-zinc-900 mb-6 leading-[1.1]">
+              The world's first <br /><span className="font-medium italic text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-emerald-300">private 5-minute</span> prediction markets
             </h1>
+            <p className="text-zinc-600 text-sm xl:text-base font-light leading-relaxed">
+              Trade crypto, sports, and culture with instant 300-second resolutions.
+              Lightning fast execution. Zero-knowledge privacy. Built on Aleo.
+            </p>
           </div>
-        </div>
 
-        {/* Line 2: Green block + THE FUTURE */}
-        <div className="overflow-hidden flex items-center">
-          <div
-            className="hero-accent-block origin-left h-[8vw] md:h-[7vw] lg:h-[6vw] w-[9vw] rounded-md md:rounded-xl bg-[#34D399] flex-shrink-0 mr-[2vw] opacity-0"
-          />
-          <div className="hero-line-2 opacity-0">
-            <h1 className="font-extrabold uppercase text-[16vw] md:text-[13vw] leading-none tracking-tight">
-              THE FUTURE
-            </h1>
+          {/* Decorative Technical Hatching */}
+          <div className="absolute top-0 right-0 w-32 h-32 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'repeating-linear-gradient(45deg, #000000 0, #000000 1px, transparent 1px, transparent 8px)' }}></div>
+        </motion.div>
+
+        {/* Left Column - Bottom (CTAs) */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8, delay: 0.2 }}
+          className={`${bentoClasses} lg:col-span-1 lg:row-span-1 p-6 justify-end bg-gradient-to-br from-zinc-950/80 to-zinc-900/80`}
+        >
+          <div className="flex flex-col gap-4 w-full">
+            <MagneticButton>
+              <button
+                onClick={() => router.push('/markets')}
+                className="relative w-full overflow-hidden flex items-center justify-between px-6 py-4 rounded-2xl bg-emerald-400 hover:bg-emerald-300 text-zinc-950 font-bold transition-all shadow-[0_0_20px_rgba(52,211,153,0.3)] hover:shadow-[0_0_30px_rgba(52,211,153,0.5)] group"
+              >
+                <span className="tracking-wide">Start Predicting</span>
+                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+              </button>
+            </MagneticButton>
+
+            <MagneticButton>
+              <button className="w-full flex items-center justify-between px-6 py-4 rounded-2xl border border-white/10 text-white hover:bg-white/5 transition-colors group">
+                <span className="font-medium">Read Documentation</span>
+                <ArrowRight className="w-5 h-5 text-zinc-500 group-hover:translate-x-1 group-hover:text-white transition-all" />
+              </button>
+            </MagneticButton>
           </div>
-        </div>
+        </motion.div>
 
-        {/* Line 3: ON ALEO */}
-        <div className="overflow-hidden">
-          <div className="hero-line-3 opacity-0">
-            <h1 className="font-extrabold uppercase text-[16vw] md:text-[13vw] leading-none tracking-tight text-[#60A5FA]">
-              ON ALEO
-            </h1>
+        {/* Center - The Portal */}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 1, delay: 0.3 }}
+          className={`${bentoClasses} lg:col-span-2 lg:row-span-3 overflow-hidden relative group`}
+        >
+          {/* Subtle Portal Radial Glow */}
+          <div className="absolute inset-0 bg-gradient-to-b from-emerald-500/5 to-transparent z-10 pointer-events-none" />
+
+          {/* The Network Particles inside the portal */}
+          <div className="absolute inset-0 z-0">
+            <ParticleNetwork />
           </div>
-        </div>
-      </div>
 
-      {/* ── Footer: Subtext + CTA ── */}
-      <div className="border-t border-zinc-700 flex flex-col md:flex-row justify-between items-start md:items-center py-5 px-6 sm:px-12 md:px-[50px] gap-6 md:gap-0 relative z-10">
+          {/* Centerpiece Portal Image Overlay */}
+          <div className="absolute inset-x-0 bottom-0 top-[15%] flex flex-col items-center justify-center pointer-events-none blur-[0.5px]">
+            <img
+              src="/bento-portal.png"
+              className="w-[110%] h-[110%] object-cover mix-blend-lighten opacity-[0.85] rounded-full drop-shadow-[0_0_80px_rgba(52,211,153,0.2)] lg:-translate-y-8"
+              alt="Web3 Portal"
+            />
+          </div>
 
-        {/* Subtext */}
-        <div className="hero-subtext opacity-0 flex flex-col md:flex-row gap-4 md:gap-20">
-          <p className="text-sm md:text-base font-light tracking-tight text-zinc-300">
-            Zero-knowledge privacy.
+          <div className="absolute bottom-6 left-6 z-20">
+            <p className="text-xs font-mono text-zinc-500 tracking-wider">SYSTEM / CORE_PORTAL</p>
+          </div>
+        </motion.div>
+
+        {/* Right Column - Top (Telemetry Clock) - WHITE THEME */}
+        <motion.div
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.8, delay: 0.4 }}
+          className={`${whiteBentoClasses} lg:col-span-1 lg:row-span-1 p-6 sm:p-8 flex-col justify-center`}
+        >
+          <Clock className="w-5 h-5 text-zinc-400 mb-4" />
+          <p className="text-3xl xl:text-4xl font-light tracking-tight text-zinc-900 mb-2">
+            {time ? formatTime(time) : '00:00 AM'}
           </p>
-          <p className="text-sm md:text-base font-light tracking-tight text-zinc-300">
-            Trustless resolution.
+          <p className="text-zinc-500 text-sm font-medium">
+            {time ? formatDate(time) : 'Loading...'}
           </p>
-        </div>
+        </motion.div>
 
-        {/* CTA Buttons */}
-        <div className="hero-cta opacity-0 flex items-center gap-3">
-          <MagneticButton>
-            <motion.button
-              onMouseEnter={() => setIsHovered(true)}
-              onMouseLeave={() => setIsHovered(false)}
-              onClick={() => router.push('/markets')}
-              className="relative overflow-hidden px-6 py-2 border border-zinc-500 rounded-full font-light text-sm tracking-widest uppercase cursor-pointer transition-colors duration-300"
-              animate={{
-                backgroundColor: isHovered ? '#ffffff' : 'transparent',
-                color: isHovered ? '#000000' : '#ffffff',
-                borderColor: isHovered ? '#ffffff' : '#71717a',
-              }}
-            >
-              <span className="relative z-10 font-medium">Launch App</span>
-            </motion.button>
-          </MagneticButton>
+        {/* Right Column - Middle (Network Status) */}
+        <motion.div
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.8, delay: 0.5 }}
+          className={`${bentoClasses} lg:col-span-1 lg:row-span-1 p-6 sm:p-8 flex-col justify-center`}
+        >
+          <Activity className="w-5 h-5 text-emerald-400 mb-4" />
+          <p className="text-xl tracking-tight text-white mb-2">Network Status</p>
+          <div className="flex items-center gap-2">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+            </span>
+            <p className="text-emerald-400 text-sm font-medium">100% Operational</p>
+          </div>
 
-          <MagneticButton>
+          {/* Minimalist Data lines */}
+          <div className="absolute bottom-6 right-6 flex items-end gap-1 opacity-[0.15]">
+            <div className="w-1.5 h-3 bg-emerald-400 rounded-t-sm" />
+            <div className="w-1.5 h-6 bg-emerald-400 rounded-t-sm" />
+            <div className="w-1.5 h-4 bg-emerald-400 rounded-t-sm" />
+            <div className="w-1.5 h-8 bg-emerald-400 rounded-t-sm" />
+          </div>
+        </motion.div>
+
+        {/* Right Column - Bottom (Scroll Indicator) */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8, delay: 0.6 }}
+          className={`${bentoClasses} lg:col-span-1 lg:row-span-1 p-6 sm:p-8 flex-row items-end justify-between hover:bg-zinc-900/80 transition-colors group cursor-pointer`}
+          onClick={() => window.scrollTo({ top: window.innerHeight, behavior: 'smooth' })}
+        >
+          <div className="flex flex-col">
+            <p className="text-sm font-semibold text-white tracking-widest uppercase">Scroll</p>
+            <p className="text-xs text-zinc-400 tracking-wider">to explore page</p>
+          </div>
+
+          {/* Animated Arrow / Line (Highly Visible) */}
+          <div className="relative w-12 h-12 flex items-center justify-center overflow-hidden border-2 border-white/20 rounded-full bg-white/5 group-hover:bg-white/10 transition-colors">
             <motion.div
-              onMouseEnter={() => setIsHovered(true)}
-              onMouseLeave={() => setIsHovered(false)}
-              onClick={() => router.push('/markets')}
-              className="relative w-10 h-10 flex justify-center items-center rounded-full border border-zinc-500 cursor-pointer overflow-hidden transition-colors duration-300"
-              animate={{
-                backgroundColor: isHovered ? '#ffffff' : 'transparent',
-                borderColor: isHovered ? '#ffffff' : '#71717a',
-              }}
-            >
-              <ArrowUpRight
-                className={`relative z-10 w-5 h-5 transition-colors duration-300 ${isHovered ? 'text-black' : 'text-white'}`}
-              />
-            </motion.div>
-          </MagneticButton>
-        </div>
-      </div>
+              animate={{ y: [-30, 30] }}
+              transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
+              className="w-1 h-8 bg-emerald-400 rounded-full absolute shadow-[0_0_10px_rgba(52,211,153,0.8)]"
+            />
+          </div>
+        </motion.div>
 
-      {/* ── Ticker Marquee ── */}
-      <div className="hero-ticker opacity-0 relative z-10">
-        <TickerMarquee />
       </div>
-    </div>
+    </section>
   );
 }

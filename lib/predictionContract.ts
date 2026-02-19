@@ -72,11 +72,42 @@ export function parseU64(val: string | null): number {
 export async function fetchOnChainBalance(address: string): Promise<number> {
   const val = await fetchMapping(PRED_TOKEN_PROGRAM, 'balances', address);
   const onChain = parseU64(val);
-  const local = parseInt(localStorage.getItem('dart_balance') || '0', 10);
-  // Keep the higher value — local may include optimistic pending tx updates
-  const best = Math.max(onChain, local);
-  localStorage.setItem('dart_balance', String(best));
-  return best;
+
+  // Check if there's a pending optimistic update (expires after 60s)
+  const pendingRaw = localStorage.getItem('dart_balance_pending');
+  if (pendingRaw) {
+    try {
+      const pending = JSON.parse(pendingRaw);
+      const age = Date.now() - (pending.timestamp || 0);
+      if (age < 60_000 && pending.expectedBalance != null) {
+        // If on-chain has caught up to or exceeded the optimistic value, clear pending
+        if (onChain >= pending.expectedBalance) {
+          localStorage.removeItem('dart_balance_pending');
+          localStorage.setItem('dart_balance', String(onChain));
+          return onChain;
+        }
+        // Still waiting for tx confirmation — show optimistic value
+        return pending.expectedBalance;
+      }
+      // Expired — on-chain is source of truth
+      localStorage.removeItem('dart_balance_pending');
+    } catch {
+      localStorage.removeItem('dart_balance_pending');
+    }
+  }
+
+  // No pending update — on-chain is source of truth
+  localStorage.setItem('dart_balance', String(onChain));
+  return onChain;
+}
+
+// Set an optimistic balance after a transaction (bet or claim)
+export function setOptimisticBalance(expectedBalance: number) {
+  localStorage.setItem('dart_balance', String(expectedBalance));
+  localStorage.setItem('dart_balance_pending', JSON.stringify({
+    expectedBalance,
+    timestamp: Date.now(),
+  }));
 }
 
 // Helper: calculate estimated payout
@@ -225,21 +256,24 @@ export function getReputationData(bets: number, wins: number, streak: number): R
 
 // Fetch reputation data from on-chain mappings
 export async function fetchReputation(address: string): Promise<ReputationData> {
-  const userKey = await fetchUserKey(address);
-  const [betsRaw, winsRaw, streakRaw] = await Promise.all([
-    fetchMapping(BTC_PREDICTION_PROGRAM, 'user_bets', userKey),
-    fetchMapping(BTC_PREDICTION_PROGRAM, 'user_wins', userKey),
-    fetchMapping(BTC_PREDICTION_PROGRAM, 'user_streak', userKey),
-  ]);
-  return getReputationData(parseU64(betsRaw), parseU64(winsRaw), parseU64(streakRaw));
+  try {
+    const userKey = await fetchUserKey(address);
+    const [betsRaw, winsRaw, streakRaw] = await Promise.all([
+      fetchMapping(BTC_PREDICTION_PROGRAM, 'user_bets', userKey),
+      fetchMapping(BTC_PREDICTION_PROGRAM, 'user_wins', userKey),
+      fetchMapping(BTC_PREDICTION_PROGRAM, 'user_streak', userKey),
+    ]);
+    return getReputationData(parseU64(betsRaw), parseU64(winsRaw), parseU64(streakRaw));
+  } catch (err) {
+    console.warn('Failed to fetch reputation (WASM hash may have failed):', err);
+    return getReputationData(0, 0, 0);
+  }
 }
 
 // Compute the same user hash key as the contract: BHP256::hash_to_field(address)
-// We fetch via the Aleo API hash endpoint
 async function fetchUserKey(address: string): Promise<string> {
-  // The contract uses BHP256::hash_to_field(caller) as key
-  // We need to pass the address as-is since Aleo API accepts the original key
-  return address;
+  const { bhp256HashToField } = await import('@/lib/aleoHash');
+  return bhp256HashToField(address);
 }
 
 // Calculate payout with tier bonus

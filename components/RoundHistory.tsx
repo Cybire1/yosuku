@@ -2,7 +2,7 @@
 
 import { motion } from 'framer-motion';
 import { Check, X, Trophy, Clock } from 'lucide-react';
-import { formatPred, calcPayoutWithBonus, type RoundState, type UserPosition, type ReputationData } from '@/lib/predictionContract';
+import { formatPred, calcPayoutWithBonus, setOptimisticBalance, fetchOnChainBalance, type RoundState, type UserPosition, type ReputationData } from '@/lib/predictionContract';
 import { useWallet } from '@demox-labs/aleo-wallet-adapter-react';
 import { BTC_PREDICTION_PROGRAM } from '@/lib/predictionContract';
 import ReputationBadge from './ReputationBadge';
@@ -76,9 +76,14 @@ export default function RoundHistory({ rounds, positions, reputation, onClaim }:
         feePrivate: false,
       });
 
-      // Credit payout to local balance
+      // Optimistic balance update — will reconcile when on-chain confirms
       const curBalance = parseInt(localStorage.getItem('dart_balance') || '0', 10);
-      localStorage.setItem('dart_balance', String(curBalance + netPayout));
+      setOptimisticBalance(curBalance + netPayout);
+
+      // Kick off on-chain refresh after delay
+      setTimeout(() => {
+        if (publicKey) fetchOnChainBalance(publicKey);
+      }, 10_000);
 
       onClaim?.(roundId);
     } catch (err) {

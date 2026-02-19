@@ -15,6 +15,10 @@
     "@demox-labs/aleo-wallet-adapter-reactui": "^0.0.36",
     "@google/genai": "^1.38.0",
     "@gsap/react": "^2.1.2",
+    "@provablehq/wasm": "^0.9.16",
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "^9.5.0",
+    "@react-three/postprocessing": "^3.0.4",
     "@studio-freight/lenis": "^1.0.42",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
@@ -26,13 +30,15 @@
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "recharts": "^3.7.0",
-    "tailwind-merge": "^3.4.0"
+    "tailwind-merge": "^3.4.0",
+    "three": "^0.183.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/three": "^0.183.1",
     "eslint": "^9",
     "eslint-config-next": "16.1.5",
     "tailwindcss": "^4",

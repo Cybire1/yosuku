@@ -15,6 +15,7 @@ import {
   estimateProb,
   getConfidenceLabel,
   fetchOnChainBalance,
+  setOptimisticBalance,
   type RoundState,
 } from '@/lib/predictionContract';
 import { savePosition } from '@/lib/roundHelpers';
@@ -181,7 +182,7 @@ export default function BetSidebar({ round, onSuccess }: BetSidebarProps) {
       });
 
       const newBalance = Math.max(0, balance - microAmount);
-      localStorage.setItem(BALANCE_KEY, String(newBalance));
+      setOptimisticBalance(newBalance);
       setBalance(newBalance);
 
       savePosition(round.id, side, microAmount);

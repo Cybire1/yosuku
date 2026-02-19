@@ -1,34 +1,48 @@
 'use client';
 
 import { useState } from 'react';
-import { motion } from 'framer-motion';
 import { Trophy, Loader } from 'lucide-react';
 import { useWallet } from '@demox-labs/aleo-wallet-adapter-react';
+import {
+  BTC_PREDICTION_PROGRAM,
+  formatPred,
+  calcPayoutWithBonus,
+  setOptimisticBalance,
+  fetchOnChainBalance,
+  type RoundState,
+  type ReputationData,
+} from '@/lib/predictionContract';
 
 interface ClaimWinningsProps {
-  marketId: string;
-  marketQuestion: string;
-  winningSide: 'YES' | 'NO';
+  round: RoundState;
+  userDeposit: number;       // micro DART
   userSide: 'YES' | 'NO';
-  shares: number;
+  reputation?: ReputationData;
   onClaimed?: () => void;
 }
 
 export default function ClaimWinnings({
-  marketId,
-  marketQuestion,
-  winningSide,
+  round,
+  userDeposit,
   userSide,
-  shares,
-  onClaimed
+  reputation,
+  onClaimed,
 }: ClaimWinningsProps) {
-  const { publicKey, requestTransaction } = useWallet();
+  const { publicKey, requestTransaction, requestRecords } = useWallet();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [claimed, setClaimed] = useState(false);
 
-  const isWinner = userSide === winningSide;
-  const estimatedPayout = isWinner ? shares * 2 : 0; // Simplified: 2x payout for winners
+  const winningSide = round.outcome ? 'YES' : 'NO';
+  const isWinner = round.resolved && userSide === winningSide;
+
+  // Calculate payout with tier bonus
+  const totalPool = round.yesPool + round.noPool;
+  const winPool = round.outcome ? round.yesPool : round.noPool;
+  const bonusPct = reputation?.bonusPct ?? 0;
+  const estimatedPayout = isWinner && winPool > 0
+    ? calcPayoutWithBonus(userDeposit, winPool, totalPool, bonusPct)
+    : 0;
 
   const handleClaim = async () => {
     if (!publicKey || !requestTransaction) {
@@ -37,7 +51,7 @@ export default function ClaimWinnings({
     }
 
     if (!isWinner) {
-      setError('You did not win this market');
+      setError('You did not win this round');
       return;
     }
 
@@ -45,36 +59,66 @@ export default function ClaimWinnings({
     setError('');
 
     try {
-      // Call claim_winnings transition
-      const inputs = [
-        `${marketId}u64`, // market_id: u64
-      ];
+      // Fetch user's BetReceipt records from wallet
+      const records = await requestRecords?.(BTC_PREDICTION_PROGRAM);
+      const receiptList = Array.isArray(records) ? records : [];
 
-      const transaction = {
+      // Find the receipt matching this round
+      const receipt = receiptList.find((r: Record<string, unknown>) => {
+        const data = (r as Record<string, unknown>).data as Record<string, string> | undefined;
+        const plaintext = (r as Record<string, unknown>).plaintext as string | undefined;
+        if (data?.round_id) {
+          return data.round_id === `${round.id}u64` || data.round_id === `${round.id}u64.private`;
+        }
+        if (plaintext) {
+          return plaintext.includes(`round_id: ${round.id}u64`);
+        }
+        return false;
+      });
+
+      if (!receipt) {
+        setError('BetReceipt not found in wallet. It may have already been consumed.');
+        setLoading(false);
+        return;
+      }
+
+      const recordInput = (receipt as Record<string, unknown>).plaintext as string
+        || JSON.stringify(receipt);
+
+      await requestTransaction({
         address: publicKey,
         chainId: 'testnetbeta',
         transitions: [{
-          program: 'predictionmarket_v2.aleo',
-          functionName: 'claim_winnings',
-          inputs,
+          program: BTC_PREDICTION_PROGRAM,
+          functionName: 'claim',
+          inputs: [recordInput, `${estimatedPayout}u64`],
         }],
-        fee: 1000000, // 1 ALEO
+        fee: 2_000_000,
         feePrivate: false,
-      };
+      });
 
-      const txResult = await requestTransaction(transaction);
-      console.log('Claim transaction:', txResult);
+      // Optimistic balance update
+      const curBalance = parseInt(localStorage.getItem('dart_balance') || '0', 10);
+      setOptimisticBalance(curBalance + estimatedPayout);
 
-      setClaimed(true);
-
-      if (onClaimed) {
-        onClaimed();
+      // Mark as claimed
+      const claimedRounds: number[] = JSON.parse(localStorage.getItem('pred_claimed') || '[]');
+      if (!claimedRounds.includes(round.id)) {
+        claimedRounds.push(round.id);
+        localStorage.setItem('pred_claimed', JSON.stringify(claimedRounds));
       }
 
-      alert(`Successfully claimed ${estimatedPayout.toFixed(2)} ALEO!`);
-    } catch (err: any) {
+      setClaimed(true);
+      onClaimed?.();
+
+      // Refresh on-chain balance after delay
+      setTimeout(() => {
+        if (publicKey) fetchOnChainBalance(publicKey);
+      }, 10_000);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to claim winnings';
       console.error('Claim error:', err);
-      setError(err.message || 'Failed to claim winnings');
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -102,7 +146,7 @@ export default function ClaimWinnings({
           <div className="text-center">
             <Trophy className="w-6 h-6 mx-auto text-off-green mb-2" />
             <p className="text-off-green font-bold text-sm uppercase tracking-widest">Claimed!</p>
-            <p className="text-gray-400 text-xs mt-1">+{estimatedPayout.toFixed(2)} ALEO</p>
+            <p className="text-gray-400 text-xs mt-1">+{formatPred(estimatedPayout)} DART</p>
           </div>
         </div>
       </div>
@@ -121,11 +165,11 @@ export default function ClaimWinnings({
               <Trophy className="w-5 h-5 text-off-green" />
               <span className="text-off-green font-black text-sm uppercase tracking-widest">Winner!</span>
             </div>
-            <p className="text-xs text-gray-400 line-clamp-1">{marketQuestion}</p>
+            <p className="text-xs text-gray-400">Round #{round.id}</p>
           </div>
           <div className="text-right">
-            <p className="text-2xl font-black text-white">+{estimatedPayout.toFixed(2)}</p>
-            <p className="text-[10px] text-gray-500 uppercase tracking-widest">ALEO</p>
+            <p className="text-2xl font-black text-white font-mono">+{formatPred(estimatedPayout)}</p>
+            <p className="text-[10px] text-gray-500 uppercase tracking-widest">DART</p>
           </div>
         </div>
 

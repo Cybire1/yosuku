@@ -22,15 +22,11 @@ export default function TokenBalance({ refreshTrigger }: TokenBalanceProps) {
       return;
     }
 
-    // Fetch on-chain balance — only update if higher than local (avoids stomping pending txs)
+    // Fetch on-chain balance — reconciles with optimistic pending updates
     const syncChain = async () => {
       try {
-        const onChain = await fetchOnChainBalance(publicKey);
-        const local = parseInt(localStorage.getItem(BALANCE_KEY) || '0', 10);
-        // Use whichever is higher — local may have optimistic pending tx updates
-        const best = Math.max(onChain, local);
-        localStorage.setItem(BALANCE_KEY, String(best));
-        setBalance(best);
+        const resolved = await fetchOnChainBalance(publicKey);
+        setBalance(resolved);
       } catch {
         setBalance(parseInt(localStorage.getItem(BALANCE_KEY) || '0', 10));
       }

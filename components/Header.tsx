@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Target, Menu, X, ArrowUpRight, Droplets, Loader, Check } from 'lucide-react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
-import { PRED_TOKEN_PROGRAM, PRED_MULTIPLIER, fetchReputation, type ReputationData } from '@/lib/predictionContract';
+import { PRED_TOKEN_PROGRAM, PRED_MULTIPLIER, fetchReputation, setOptimisticBalance, type ReputationData } from '@/lib/predictionContract';
 import ReputationBadge from './ReputationBadge';
 
 const NAV_LINKS = [
@@ -55,7 +55,7 @@ export default function Header() {
         feePrivate: false,
       });
       const cur = parseInt(localStorage.getItem('dart_balance') || '0', 10);
-      localStorage.setItem('dart_balance', String(cur + microAmount));
+      setOptimisticBalance(cur + microAmount);
       setMintState('done');
       setTimeout(() => setMintState('idle'), 2000);
     } catch {

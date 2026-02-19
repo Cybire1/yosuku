@@ -1,7 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Enable WASM support for @provablehq/wasm (Aleo BHP256 hashing)
+  turbopack: {},
+  serverExternalPackages: ['@provablehq/wasm'],
 };
 
 export default nextConfig;

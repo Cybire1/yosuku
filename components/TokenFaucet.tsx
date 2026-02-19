@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Droplets, Loader, Check } from 'lucide-react';
 import { useWallet } from '@demox-labs/aleo-wallet-adapter-react';
-import { PRED_TOKEN_PROGRAM, PRED_MULTIPLIER } from '@/lib/predictionContract';
+import { PRED_TOKEN_PROGRAM, PRED_MULTIPLIER, setOptimisticBalance } from '@/lib/predictionContract';
 
 const BALANCE_KEY = 'dart_balance';
 
@@ -44,9 +44,9 @@ export default function TokenFaucet({ onMinted }: TokenFaucetProps) {
 
       await requestTransaction(transaction);
 
-      // Update local balance tracker after successful tx
+      // Optimistic balance update — will reconcile when on-chain confirms
       const current = parseInt(localStorage.getItem(BALANCE_KEY) || '0', 10);
-      localStorage.setItem(BALANCE_KEY, String(current + microAmount));
+      setOptimisticBalance(current + microAmount);
 
       setSuccess(true);
       onMinted?.();

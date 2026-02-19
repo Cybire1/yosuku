@@ -22,6 +22,8 @@ import {
   formatPred,
   calcPayoutWithBonus,
   fetchReputation,
+  setOptimisticBalance,
+  fetchOnChainBalance,
   type RoundState,
   type UserPosition,
   type ReputationData,
@@ -144,9 +146,14 @@ export default function PortfolioPage() {
         fee: 2_000_000,
         feePrivate: false,
       });
-      // Credit payout to localStorage balance
+      // Optimistic balance update — will reconcile when on-chain confirms
       const curBalance = parseInt(localStorage.getItem('dart_balance') || '0', 10);
-      localStorage.setItem('dart_balance', String(curBalance + netPayout));
+      setOptimisticBalance(curBalance + netPayout);
+
+      // Also kick off an on-chain refresh after a short delay
+      setTimeout(() => {
+        if (publicKey) fetchOnChainBalance(publicKey);
+      }, 10_000);
 
       const claimed: number[] = JSON.parse(localStorage.getItem('pred_claimed') || '[]');
       if (!claimed.includes(roundId)) {
