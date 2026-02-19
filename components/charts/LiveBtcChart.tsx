@@ -71,7 +71,7 @@ const LiveDot = ({ cx, cy, index, total, color }: any) => {
   );
 };
 
-export default function LiveBtcChart({ targetPrice, height = 370 }: LiveBtcChartProps) {
+export default function LiveBtcChart({ targetPrice, height }: LiveBtcChartProps) {
   const { price } = useBtcPrice();
   const [data, setData] = useState<PricePoint[]>(() => loadCachedData());
   const priceRef = useRef(0);
@@ -134,7 +134,7 @@ export default function LiveBtcChart({ targetPrice, height = 370 }: LiveBtcChart
 
   if (data.length < 2) {
     return (
-      <div style={{ height }} className="flex items-center justify-center">
+      <div style={height ? { height } : undefined} className="h-full flex items-center justify-center">
         <div className="text-center">
           <div className="w-6 h-6 border-2 border-new-mint/30 border-t-new-mint rounded-full animate-spin mx-auto mb-2" />
           <p className="text-[10px] text-gray-500 uppercase tracking-widest">Loading chart...</p>
@@ -149,20 +149,11 @@ export default function LiveBtcChart({ targetPrice, height = 370 }: LiveBtcChart
   const strokeColor = isUp ? '#34D399' : '#F43F5E';
 
   return (
-    <div className="relative" style={{ height }}>
+    <div className="relative h-full" style={height ? { height } : undefined}>
       {/* Status badges — top overlay */}
       <div className="absolute top-3 left-3 right-3 z-10 flex items-center justify-between pointer-events-none">
-        {/* Above/Below target indicator */}
-        {targetUsd && (
-          <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold backdrop-blur-sm ${
-            isAboveTarget
-              ? 'bg-new-mint/15 text-new-mint border border-new-mint/20'
-              : 'bg-off-red/15 text-off-red border border-off-red/20'
-          }`}>
-            <span className={`w-1.5 h-1.5 rounded-full ${isAboveTarget ? 'bg-new-mint' : 'bg-off-red'} animate-pulse`} />
-            {isAboveTarget ? 'Above Target — YES winning' : 'Below Target — NO winning'}
-          </div>
-        )}
+        {/* spacer */}
+        <div />
 
         {/* Price delta */}
         <div className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold backdrop-blur-sm ${
@@ -202,7 +193,7 @@ export default function LiveBtcChart({ targetPrice, height = 370 }: LiveBtcChart
             tickLine={false}
             tick={{ fontSize: 9, fill: '#444' }}
             tickFormatter={(v: number) => `$${v.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
-            width={62}
+            width={52}
           />
 
           <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#333', strokeWidth: 1 }} />

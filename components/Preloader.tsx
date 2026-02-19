@@ -6,12 +6,12 @@ import { motion, AnimatePresence, useMotionValue, useTransform, animate } from '
 const WORDS = ['PREDICT', 'PRIVATE', 'PROFIT'];
 
 export default function Preloader() {
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
-  // Check sessionStorage after hydration to avoid mismatch
+  // Only show preloader on first visit (not on navigation)
   useEffect(() => {
-    if (sessionStorage.getItem('preloaderShown')) {
-      setLoading(false);
+    if (!sessionStorage.getItem('preloaderShown')) {
+      setLoading(true);
     }
   }, []);
   const [wordIndex, setWordIndex] = useState(0);

@@ -98,7 +98,7 @@ export default function TradingCard({
                 </div>
               ) : (
                 <>
-                  <span className="text-2xl font-mono font-black text-gray-300">
+                  <span className="text-xl sm:text-2xl font-mono font-black text-gray-300">
                     {String(mins).padStart(2, '0')}:{String(secs).padStart(2, '0')}
                   </span>
                   <span className="text-[10px] font-bold text-gray-500 uppercase">left</span>
@@ -113,7 +113,7 @@ export default function TradingCard({
               <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500 block mb-1">
                 Price to Beat
               </span>
-              <span className="text-xl font-mono font-bold text-gray-400">
+              <span className="text-base sm:text-xl font-mono font-bold text-gray-400">
                 ${targetUsd.toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </span>
             </div>
@@ -123,7 +123,7 @@ export default function TradingCard({
                 <div className={`w-1.5 h-1.5 rounded-full ${connected ? 'bg-new-mint animate-pulse' : 'bg-red-500'}`} />
                 <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Live BTC</span>
               </div>
-              <PriceTicker price={price} className={`text-xl font-mono font-black ${isAbove ? 'text-new-mint' : 'text-off-red'}`} />
+              <PriceTicker price={price} className={`text-base sm:text-xl font-mono font-black ${isAbove ? 'text-new-mint' : 'text-off-red'}`} />
               {price > 0 && (
                 <span className={`block text-xs font-mono font-bold mt-0.5 ${isAbove ? 'text-new-mint/40' : 'text-off-red/40'}`}>
                   {isAbove ? '+' : ''}{priceDelta.toFixed(2)} {isAbove ? 'Above' : 'Below'} Target
@@ -134,7 +134,9 @@ export default function TradingCard({
 
           {/* Live BTC Chart */}
           <div className="mb-5 bg-white/[0.02] border border-white/5 rounded-2xl overflow-hidden">
-            <LiveBtcChart targetPrice={round.targetPrice} height={280} />
+            <div className="h-[220px] sm:h-[350px]">
+              <LiveBtcChart targetPrice={round.targetPrice} />
+            </div>
           </div>
 
           {/* Probability bar */}

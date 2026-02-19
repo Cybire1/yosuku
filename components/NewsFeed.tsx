@@ -50,7 +50,7 @@ export default function NewsFeed() {
   }, []);
 
   return (
-    <div className="mt-8 bg-neutral-900/50 border border-white/[0.06] rounded-2xl overflow-hidden backdrop-blur-sm">
+    <div className="mt-5 sm:mt-8 bg-neutral-900/50 border border-white/[0.06] rounded-2xl overflow-hidden backdrop-blur-sm">
       {/* Header */}
       <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-white/[0.06]">
         <Newspaper className="w-4 h-4 text-gray-400" />

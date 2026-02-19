@@ -177,19 +177,19 @@ export default function MarketsPage() {
               hidden: { opacity: 0, y: 30 },
               visible: { opacity: 1, y: 0, transition: { type: 'spring', damping: 25, stiffness: 200 } }
             }}
-            className="flex items-center justify-between mb-6"
+            className="flex items-center justify-between gap-3 mb-6"
           >
-            <div className="flex items-center gap-2 flex-wrap">
-              <div className="flex items-center gap-1.5 mr-2">
-                <BitcoinIcon className="w-5 h-5" />
-                <span className="text-sm font-black uppercase tracking-tight text-white hidden sm:inline">BTC</span>
+            <div className="flex items-center gap-1.5 sm:gap-3 overflow-x-auto scrollbar-hide">
+              <div className="flex items-center gap-2 mr-1 sm:mr-3 flex-shrink-0">
+                <BitcoinIcon className="w-5 h-5 sm:w-7 sm:h-7" />
+                <span className="text-base font-black uppercase tracking-tight text-white hidden sm:inline">BTC</span>
               </div>
-              <Timer className="w-3 h-3 text-gray-500" />
+              <Timer className="w-3.5 h-3.5 text-gray-500 flex-shrink-0 hidden sm:block" />
               {DURATION_OPTIONS.map((opt) => (
                 <button
                   key={opt.label}
                   onClick={() => setSelectedDuration(opt.label)}
-                  className={`px-3 sm:px-4 py-1.5 rounded-lg text-[11px] font-bold tracking-wide transition-all ${selectedDuration === opt.label
+                  className={`px-2.5 sm:px-5 py-1.5 sm:py-2 rounded-lg text-[11px] sm:text-xs font-bold tracking-wide transition-all flex-shrink-0 ${selectedDuration === opt.label
                     ? 'bg-new-mint/15 text-new-mint border border-new-mint/30'
                     : 'bg-white/[0.03] text-gray-500 border border-white/5 hover:text-white hover:bg-white/5'
                     }`}
@@ -200,7 +200,7 @@ export default function MarketsPage() {
             </div>
 
             {publicKey && (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-shrink-0">
                 <TokenBalance refreshTrigger={mintTrigger} />
               </div>
             )}
@@ -263,11 +263,6 @@ export default function MarketsPage() {
                   <BetSidebar round={activeRound} onSuccess={handleBetSuccess} />
                 </div>
               )}
-
-              {/* BTC News Feed — mobile */}
-              <div className="lg:hidden">
-                <NewsFeed />
-              </div>
 
               {/* Bottom tab bar */}
               <div className="mt-8 flex items-center gap-1 border-b border-white/5 mb-4">
@@ -374,6 +369,11 @@ export default function MarketsPage() {
                     </div>
                   </div>
                 )}
+              </div>
+
+              {/* BTC News Feed — mobile */}
+              <div className="lg:hidden">
+                <NewsFeed />
               </div>
             </div>
 

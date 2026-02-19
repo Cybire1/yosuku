@@ -138,7 +138,7 @@ export default function Header() {
                     ) : mintState === 'done' ? (
                       <Check className="w-3.5 h-3.5 text-new-mint" />
                     ) : (
-                      <Droplets className="w-3.5 h-3.5" />
+                      <Droplets className="w-3.5 h-3.5 text-amber-400/70" />
                     )}
                     {mintState === 'done' ? 'Minted' : 'Mint'}
                   </button>
@@ -147,7 +147,7 @@ export default function Header() {
                   <WalletMultiButton className="!bg-white/5 !backdrop-blur-md !text-white !border !border-white/10 !rounded-full !font-bold !h-10 !px-6 !text-xs hover:!bg-white hover:!text-black hover:!border-white hover:shadow-[0_0_20px_rgba(255,255,255,0.3)] transition-all duration-300 lowercase tracking-wide" />
                 </div>
                 <div className="sm:hidden transform scale-90">
-                  <WalletMultiButton style={{ padding: '0 12px', height: '32px', fontSize: '10px' }} />
+                  <WalletMultiButton className="!bg-white/5 !text-white !border !border-white/10 !rounded-full !font-bold lowercase tracking-wide" style={{ padding: '0 12px', height: '32px', fontSize: '10px' }} />
                 </div>
               </>
             )}
@@ -213,7 +213,7 @@ export default function Header() {
                     <span className="text-sm font-mono text-new-mint/40 group-hover:text-new-mint transition-colors w-8">
                       0{index + 1}
                     </span>
-                    <span className="text-5xl font-black text-white/50 group-hover:text-white transition-all duration-300 tracking-tighter group-hover:tracking-normal group-hover:translate-x-4">
+                    <span className="text-3xl sm:text-5xl font-black text-white/50 group-hover:text-white transition-all duration-300 tracking-tighter group-hover:tracking-normal group-hover:translate-x-4">
                       {link.name}
                     </span>
                     <ArrowUpRight className="w-8 h-8 text-new-mint opacity-0 group-hover:opacity-100 -translate-x-4 group-hover:translate-x-0 transition-all duration-300" />

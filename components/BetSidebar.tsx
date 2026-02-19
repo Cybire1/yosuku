@@ -61,9 +61,9 @@ function MintButton() {
       ) : state === 'done' ? (
         <Check className="w-3.5 h-3.5 text-new-mint" />
       ) : (
-        <Droplets className="w-3.5 h-3.5" />
+        <Droplets className="w-3.5 h-3.5 text-amber-400/70" />
       )}
-      {state === 'done' ? 'Minted 1,000 DART!' : 'Mint 1,000 DART (Testnet)'}
+      {state === 'done' ? 'Minted 1,000 DART!' : 'Mint 1,000 DART'}
     </button>
   );
 }
@@ -257,7 +257,7 @@ export default function BetSidebar({ round, onSuccess }: BetSidebarProps) {
               value={amount}
               onChange={(e) => { setAmount(e.target.value); setError(''); }}
               placeholder="0"
-              className="w-full bg-black/40 border border-white/10 rounded-xl pl-16 pr-4 py-3.5 text-2xl font-mono font-bold text-white placeholder-gray-700 focus:border-white/20 focus:outline-none transition-all text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              className="w-full bg-black/40 border border-white/10 rounded-xl pl-16 pr-4 py-3 text-lg sm:text-2xl font-mono font-bold text-white placeholder-gray-700 focus:border-white/20 focus:outline-none transition-all text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
               step="1"
               min="0"
             />
@@ -267,19 +267,19 @@ export default function BetSidebar({ round, onSuccess }: BetSidebarProps) {
           </div>
 
           {/* Quick-add buttons */}
-          <div className="flex gap-1.5">
+          <div className="flex flex-wrap gap-1.5">
             {QUICK_AMOUNTS.map((qa) => (
               <button
                 key={qa}
                 onClick={() => handleQuickAdd(qa)}
-                className="flex-1 py-1.5 rounded-lg text-xs font-bold bg-white/[0.04] text-gray-400 border border-white/5 hover:bg-white/[0.08] hover:text-white transition-all"
+                className="flex-1 min-w-[3.5rem] py-1.5 rounded-lg text-[11px] font-bold bg-white/[0.04] text-gray-400 border border-white/5 hover:bg-white/[0.08] hover:text-white transition-all"
               >
                 +{qa}
               </button>
             ))}
             <button
               onClick={() => setAmount(formatPred(balance).replace(/,/g, ''))}
-              className="px-3 py-1.5 rounded-lg text-xs font-bold bg-white/[0.04] text-gray-400 border border-white/5 hover:bg-white/[0.08] hover:text-white transition-all"
+              className="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-white/[0.04] text-gray-400 border border-white/5 hover:bg-white/[0.08] hover:text-white transition-all"
             >
               Max
             </button>

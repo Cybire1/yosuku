@@ -11,7 +11,7 @@ import {
   Trophy,
   Check,
   X,
-  Zap,
+  PieChart,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import Header from '@/components/Header';
@@ -185,7 +185,7 @@ export default function PortfolioPage() {
           >
             <div className="flex items-center gap-3 mb-2">
               <div className="w-8 h-8 bg-new-mint/10 rounded-lg flex items-center justify-center">
-                <Zap className="w-4 h-4 text-new-mint" />
+                <PieChart className="w-4 h-4 text-new-mint" />
               </div>
               <h1 className="text-2xl font-black uppercase tracking-tight text-white">
                 Portfolio
