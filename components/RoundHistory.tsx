@@ -1,9 +1,9 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Check, X, Trophy, Clock } from 'lucide-react';
+import { Check, X, Trophy, Clock, Lock, Unlock } from 'lucide-react';
 import { formatPred, calcPayoutWithBonus, setOptimisticBalance, fetchOnChainBalance, type RoundState, type UserPosition, type ReputationData } from '@/lib/predictionContract';
-import { useWallet } from '@demox-labs/aleo-wallet-adapter-react';
+import { useWallet } from '@provablehq/aleo-wallet-adaptor-react';
 import { BTC_PREDICTION_PROGRAM } from '@/lib/predictionContract';
 import ReputationBadge from './ReputationBadge';
 import { useState } from 'react';
@@ -16,13 +16,13 @@ interface RoundHistoryProps {
 }
 
 export default function RoundHistory({ rounds, positions, reputation, onClaim }: RoundHistoryProps) {
-  const { publicKey, requestTransaction, requestRecords } = useWallet();
+  const { address, executeTransaction } = useWallet();
   const [claimingId, setClaimingId] = useState<number | null>(null);
 
   const getPosition = (roundId: number) => positions.find(p => p.roundId === roundId);
 
   const handleClaim = async (roundId: number) => {
-    if (!publicKey || !requestTransaction) return;
+    if (!address || !executeTransaction) return;
 
     const round = rounds.find(r => r.id === roundId);
     const pos = getPosition(roundId);
@@ -39,50 +39,24 @@ export default function RoundHistory({ rounds, positions, reputation, onClaim }:
 
     setClaimingId(roundId);
     try {
-      // Fetch user's BetReceipt records from wallet
-      const records = await requestRecords?.(BTC_PREDICTION_PROGRAM);
-      const receiptList = Array.isArray(records) ? records : [];
-      // Find receipt matching this round
-      const receipt = receiptList.find((r: Record<string, unknown>) => {
-        const data = (r as Record<string, unknown>).data as Record<string, string> | undefined;
-        const plaintext = (r as Record<string, unknown>).plaintext as string | undefined;
-        if (data?.round_id) {
-          return data.round_id === `${roundId}u64` || data.round_id === `${roundId}u64.private`;
-        }
-        if (plaintext) {
-          return plaintext.includes(`round_id: ${roundId}u64`);
-        }
-        return false;
+      // v7: claim takes BetSlot record + payout
+      // Since we can't easily get the record here, use recordIndices
+      await executeTransaction({
+        program: BTC_PREDICTION_PROGRAM,
+        function: 'claim',
+        inputs: [`${netPayout}u128`],
+        fee: 2_000_000,
+        privateFee: false,
+        recordIndices: [0],
       });
 
-      if (!receipt) {
-        console.error('BetReceipt not found for round', roundId);
-        return;
-      }
-
-      // Pass the record plaintext as input
-      const recordInput = (receipt as Record<string, unknown>).plaintext as string
-        || JSON.stringify(receipt);
-
-      await requestTransaction({
-        address: publicKey,
-        chainId: 'testnetbeta',
-        transitions: [{
-          program: BTC_PREDICTION_PROGRAM,
-          functionName: 'claim',
-          inputs: [recordInput, `${netPayout}u64`],
-        }],
-        fee: 1_000_000,
-        feePrivate: false,
-      });
-
-      // Optimistic balance update — will reconcile when on-chain confirms
-      const curBalance = parseInt(localStorage.getItem('dart_balance') || '0', 10);
+      // Optimistic balance update
+      const curBalance = parseInt(localStorage.getItem('usdcx_balance') || '0', 10);
       setOptimisticBalance(curBalance + netPayout);
 
       // Kick off on-chain refresh after delay
       setTimeout(() => {
-        if (publicKey) fetchOnChainBalance(publicKey);
+        if (address) fetchOnChainBalance(address);
       }, 10_000);
 
       onClaim?.(roundId);
@@ -120,12 +94,15 @@ export default function RoundHistory({ rounds, positions, reputation, onClaim }:
         const isWinner = round.resolved && userSide === (round.outcome ? 'YES' : 'NO');
         const canClaim = isWinner && position && !position.claimed && (round.yesPool + round.noPool) > 0;
 
-        // Calculate payout
+        // Calculate payout — only possible after resolution when pools revealed
         const totalPool = round.yesPool + round.noPool;
         const winPool = round.outcome ? round.yesPool : round.noPool;
         const payout = isWinner && winPool > 0
           ? (userDeposit / winPool) * totalPool * 0.9
           : 0;
+
+        // Dark pool state
+        const isDarkPool = !round.resolved && round.totalPool > 0 && round.yesPool === 0 && round.noPool === 0;
 
         return (
           <motion.div
@@ -163,19 +140,32 @@ export default function RoundHistory({ rounds, positions, reputation, onClaim }:
                   </div>
                   <div className="flex items-center gap-2 mt-0.5">
                     {round.resolved ? (
-                      <span className={`text-[10px] font-bold uppercase tracking-wider ${
-                        round.outcome ? 'text-new-mint' : 'text-off-red'
-                      }`}>
-                        {round.outcome ? 'YES Won' : 'NO Won'}
-                      </span>
+                      <>
+                        <Unlock className="w-2.5 h-2.5 text-gray-500" />
+                        <span className={`text-[10px] font-bold uppercase tracking-wider ${
+                          round.outcome ? 'text-new-mint' : 'text-off-red'
+                        }`}>
+                          {round.outcome ? 'YES Won' : 'NO Won'}
+                        </span>
+                        <span className="text-[10px] text-gray-600">
+                          Pool: {formatPred(totalPool)} ({formatPred(round.yesPool)}Y / {formatPred(round.noPool)}N)
+                        </span>
+                      </>
+                    ) : isDarkPool ? (
+                      <>
+                        <Lock className="w-2.5 h-2.5 text-sky-400" />
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-sky-400">
+                          Dark Pool
+                        </span>
+                        <span className="text-[10px] text-gray-600">
+                          Total: {formatPred(round.totalPool)}
+                        </span>
+                      </>
                     ) : (
                       <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">
                         Pending
                       </span>
                     )}
-                    <span className="text-[10px] text-gray-600">
-                      Pool: {formatPred(totalPool)}
-                    </span>
                   </div>
                 </div>
               </div>
@@ -185,7 +175,7 @@ export default function RoundHistory({ rounds, positions, reputation, onClaim }:
                 {isWinner ? (
                   <div>
                     <span className="text-sm font-bold text-new-mint">+{formatPred(payout)}</span>
-                    <span className="block text-[10px] text-gray-500">DART</span>
+                    <span className="block text-[10px] text-gray-500">USDCx</span>
                     {canClaim && (
                       <button
                         onClick={() => handleClaim(round.id)}
@@ -205,7 +195,7 @@ export default function RoundHistory({ rounds, positions, reputation, onClaim }:
                 ) : round.resolved ? (
                   <div>
                     <span className="text-sm font-bold text-off-red">-{formatPred(userDeposit)}</span>
-                    <span className="block text-[10px] text-gray-500">DART</span>
+                    <span className="block text-[10px] text-gray-500">USDCx</span>
                   </div>
                 ) : (
                   <div>

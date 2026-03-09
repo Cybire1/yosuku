@@ -180,7 +180,7 @@ YOUR IDENTITY:
 
 HOW IT WORKS:
 - Each round sets a BTC target price and a deadline (in blocks, ~3.5s each)
-- Users bet YES (BTC above target) or NO (BTC below target) using DART tokens
+- Users bet YES (BTC above target) or NO (BTC below target) using Aleo credits (the native token)
 - When the round ends, the winning side splits the total pool (minus 10% fee)
 - Rounds last about 5 minutes and auto-cycle
 
@@ -191,7 +191,7 @@ PRONUNCIATION:
 YOUR TOOLS:
 - getCurrentRound() — get the active round (target price, time left, pool sizes)
 - getRoundHistory() — see recent resolved rounds and outcomes
-- getWalletBalance() — ALEO credits + DART token balance
+- getWalletBalance() — ALEO credits balance
 - getActivePositions() — user's bets across rounds
 - prepareBet(side, amount) — validate a bet on the current round (does NOT execute)
 - analyzePortfolio() — win rate, ROI, P&L breakdown
@@ -223,7 +223,7 @@ SECURITY:
               },
               {
                 name: 'getWalletBalance',
-                description: 'Get ALEO credits and DART token balance from blockchain',
+                description: 'Get Aleo credits balance from blockchain',
                 parameters: { type: 'OBJECT' as any, properties: {} },
               },
               {
@@ -244,7 +244,7 @@ SECURITY:
                     },
                     amount: {
                       type: 'NUMBER' as any,
-                      description: 'Amount in DART tokens to bet',
+                      description: 'Amount in credits to bet',
                     },
                   },
                   required: ['side', 'amount'],
@@ -306,7 +306,7 @@ SECURITY:
                   }
                 } else if (fc.name === 'prepareBet' && fc.args) {
                   const { side, amount } = fc.args;
-                  onMessage({ sender: 'ai', text: `Validating ${amount} DART on ${side}...`, isFinal: false, displayType: 'loading' });
+                  onMessage({ sender: 'ai', text: `Validating ${amount} credits on ${side}...`, isFinal: false, displayType: 'loading' });
                   const toolResult = await prepareBet(publicKey, side, amount);
                   result = toolResult.success ? toolResult.message : `Error: ${toolResult.error}`;
                   if (toolResult.success && toolResult.data) {

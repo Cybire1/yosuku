@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useWallet } from '@demox-labs/aleo-wallet-adapter-react';
+import { useWallet } from '@provablehq/aleo-wallet-adaptor-react';
 import { MessageCircle, Send, Trash2 } from 'lucide-react';
 
 interface Comment {
@@ -34,7 +34,7 @@ function timeAgo(ts: number) {
 }
 
 export default function Comments({ roundId }: CommentsProps) {
-  const { publicKey } = useWallet();
+  const { address } = useWallet();
   const [comments, setComments] = useState<Comment[]>([]);
   const [text, setText] = useState('');
 
@@ -54,11 +54,11 @@ export default function Comments({ roundId }: CommentsProps) {
   };
 
   const handlePost = () => {
-    if (!text.trim() || !publicKey) return;
+    if (!text.trim() || !address) return;
 
     const comment: Comment = {
       id: crypto.randomUUID(),
-      address: publicKey,
+      address: address,
       text: text.trim(),
       timestamp: Date.now(),
       roundId,
@@ -97,12 +97,12 @@ export default function Comments({ roundId }: CommentsProps) {
 
       {/* Post input */}
       <div className="px-5 py-3 border-b border-white/5">
-        {publicKey ? (
+        {address ? (
           <div className="flex gap-2">
             {/* Avatar */}
             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-new-mint/20 to-new-blue/20 border border-white/10 flex items-center justify-center flex-shrink-0 mt-0.5">
               <span className="text-[10px] font-mono font-bold text-gray-400">
-                {publicKey.slice(5, 7).toUpperCase()}
+                {address.slice(5, 7).toUpperCase()}
               </span>
             </div>
 
@@ -162,7 +162,7 @@ export default function Comments({ roundId }: CommentsProps) {
                   </div>
 
                   {/* Delete own comments */}
-                  {publicKey === c.address && (
+                  {address === c.address && (
                     <button
                       onClick={() => handleDelete(c.id)}
                       className="opacity-0 group-hover:opacity-100 p-1 text-gray-600 hover:text-off-red transition-all"

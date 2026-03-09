@@ -1,11 +1,11 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useWallet } from '@demox-labs/aleo-wallet-adapter-react';
+import { useWallet } from '@provablehq/aleo-wallet-adaptor-react';
 import { useVoiceSession, type VoiceMessage } from '@/lib/hooks/useVoiceSession';
 
 export default function SimpleVoiceButton() {
-  const { publicKey } = useWallet();
+  const { address } = useWallet();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<VoiceMessage[]>([]);
   const [textInput, setTextInput] = useState('');
@@ -27,7 +27,7 @@ export default function SimpleVoiceButton() {
     isOpen,
     mounted,
     messagesCount: messages.length,
-    hasPublicKey: !!publicKey
+    hasPublicKey: !!address
   });
 
   useEffect(() => {
@@ -41,13 +41,13 @@ export default function SimpleVoiceButton() {
 
   console.log('[SimpleVoiceButton] Calling useVoiceSession with:', {
     hasApiKey: !!process.env.NEXT_PUBLIC_GEMINI_API_KEY,
-    hasPublicKey: !!publicKey,
+    hasPublicKey: !!address,
     handleMessageFn: !!handleMessage
   });
 
   const { appState, startSession, toggleListening, sendTextMessage, isConnected } = useVoiceSession({
     apiKey: process.env.NEXT_PUBLIC_GEMINI_API_KEY || '',
-    publicKey: publicKey ?? undefined,
+    publicKey: address ?? undefined,
     onMessage: handleMessage,
   });
 

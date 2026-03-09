@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, TrendingUp, Activity, Loader } from 'lucide-react';
-import { useWallet } from '@demox-labs/aleo-wallet-adapter-react';
+import { useWallet } from '@provablehq/aleo-wallet-adaptor-react';
 import { useBtcPrice } from '@/lib/hooks/useBtcPrice';
 import {
   BTC_PREDICTION_PROGRAM,
@@ -25,7 +25,7 @@ interface QuickBetProps {
 const QUICK_AMOUNTS = [50, 100, 250, 500];
 
 export default function QuickBet({ round, side, onClose, onSuccess }: QuickBetProps) {
-  const { publicKey, requestTransaction } = useWallet();
+  const { address, executeTransaction } = useWallet();
   const { price } = useBtcPrice();
   const [amount, setAmount] = useState('100');
   const [loading, setLoading] = useState(false);
@@ -44,16 +44,16 @@ export default function QuickBet({ round, side, onClose, onSuccess }: QuickBetPr
     return { yes: 50, no: 50 };
   }, [price, round.targetPrice, round.endTime]);
 
-  // Estimate payout if this bet wins
+  // Estimate payout — dark pool, so use probability-based estimate
   const estPayout = (() => {
     if (!microAmount) return 0;
-    const totalPool = round.yesPool + round.noPool + microAmount;
-    const winPool = (side === 'YES' ? round.yesPool : round.noPool) + microAmount;
-    return (microAmount / winPool) * totalPool * 0.9;
+    const sideOdds = side === 'YES' ? odds.yes : odds.no;
+    if (sideOdds <= 0 || sideOdds >= 100) return microAmount * 0.9;
+    return (microAmount / (sideOdds / 100)) * 0.9;
   })();
 
   const handleBet = async () => {
-    if (!publicKey || !requestTransaction) {
+    if (!address || !executeTransaction) {
       setError('Connect your wallet first');
       return;
     }
@@ -69,24 +69,22 @@ export default function QuickBet({ round, side, onClose, onSuccess }: QuickBetPr
     try {
       const sideVal = side === 'YES' ? 'true' : 'false';
 
-      // Combined: transfer tokens + place bet in one transaction
-      await requestTransaction({
-        address: publicKey,
-        chainId: 'testnetbeta',
-        transitions: [
-          {
-            program: PRED_TOKEN_PROGRAM,
-            functionName: 'transfer_public',
-            inputs: [BTC_PREDICTION_ADDRESS, `${microAmount}u64`],
-          },
-          {
-            program: BTC_PREDICTION_PROGRAM,
-            functionName: 'bet',
-            inputs: [`${round.id}u64`, `${microAmount}u64`, sideVal],
-          },
-        ],
-        fee: 2_000_000,
-        feePrivate: false,
+      // Step 1: Transfer USDCx to the prediction program
+      await executeTransaction({
+        program: PRED_TOKEN_PROGRAM,
+        function: 'transfer_public',
+        inputs: [BTC_PREDICTION_ADDRESS, `${microAmount}u128`],
+        fee: 500_000,
+        privateFee: false,
+      });
+
+      // Step 2: Place the bet
+      await executeTransaction({
+        program: BTC_PREDICTION_PROGRAM,
+        function: 'bet',
+        inputs: [`${round.id}u64`, `${microAmount}u128`, sideVal],
+        fee: 500_000,
+        privateFee: false,
       });
 
       // Save position to localStorage
@@ -107,7 +105,7 @@ export default function QuickBet({ round, side, onClose, onSuccess }: QuickBetPr
       if (message.includes('NOT_GRANTED') || message.includes('Permission')) {
         setError('Transaction rejected by wallet');
       } else if (message.includes('Insufficient')) {
-        setError('Insufficient DART balance. Mint more tokens.');
+        setError('Insufficient USDCx.');
       } else {
         setError(message);
       }
@@ -195,7 +193,7 @@ export default function QuickBet({ round, side, onClose, onSuccess }: QuickBetPr
             {/* Amount input */}
             <div className="mb-6">
               <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">
-                Amount (DART)
+                Amount (USDCx)
               </label>
               <div className="relative">
                 <input
@@ -208,7 +206,7 @@ export default function QuickBet({ round, side, onClose, onSuccess }: QuickBetPr
                   min="0"
                 />
                 <div className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-500">
-                  DART
+                  USDCx
                 </div>
               </div>
             </div>
@@ -217,7 +215,7 @@ export default function QuickBet({ round, side, onClose, onSuccess }: QuickBetPr
             {estPayout > 0 && (
               <div className="flex justify-between items-center text-xs px-2 mb-4">
                 <span className="text-gray-500">Est. Payout (if {side} wins)</span>
-                <span className="font-mono font-bold text-new-mint">{formatPred(estPayout)} DART</span>
+                <span className="font-mono font-bold text-new-mint">{formatPred(estPayout)} USDCx</span>
               </div>
             )}
 

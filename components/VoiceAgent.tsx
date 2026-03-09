@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Mic, MicOff, X, Send, Loader2, Sparkles, Zap, BarChart3, Target, Clock, TrendingUp, TrendingDown, Wallet, Trophy, Check } from 'lucide-react';
 import { usePathname } from 'next/navigation';
-import { useWallet } from '@demox-labs/aleo-wallet-adapter-react';
+import { useWallet } from '@provablehq/aleo-wallet-adaptor-react';
 import { useVoiceSession, type VoiceMessage } from '@/lib/hooks/useVoiceSession';
 import { formatPred } from '@/lib/predictionContract';
 
@@ -13,11 +13,12 @@ import { formatPred } from '@/lib/predictionContract';
 function RoundInfoCard({ data }: { data: any }) {
   if (!data) return null;
   const targetUsd = (data.targetPrice / 100).toFixed(2);
-  const totalPool = data.yesPool + data.noPool;
+  const totalPool = data.totalPool || (data.yesPool + data.noPool);
   const secsLeft = Math.max(0, Math.floor((data.endTime - Date.now()) / 1000));
   const mins = Math.floor(secsLeft / 60);
   const secs = secsLeft % 60;
-  const yesPct = totalPool > 0 ? Math.round((data.yesPool / totalPool) * 100) : 50;
+  const isDarkPool = data.yesPool === 0 && data.noPool === 0 && totalPool > 0;
+  const yesPct = isDarkPool ? 50 : (totalPool > 0 ? Math.round((data.yesPool / totalPool) * 100) : 50);
 
   return (
     <div className="w-full rounded-xl bg-white/[0.04] border border-white/10 overflow-hidden">
@@ -49,7 +50,7 @@ function RoundInfoCard({ data }: { data: any }) {
           </div>
           <div className="text-right">
             <span className="text-[9px] font-bold uppercase tracking-wider text-gray-500 block">Pool</span>
-            <span className="text-sm font-mono font-bold text-new-mint">{formatPred(totalPool)} DART</span>
+            <span className="text-sm font-mono font-bold text-new-mint">{formatPred(totalPool)} Credits</span>
           </div>
         </div>
         {/* Pool bar */}
@@ -92,7 +93,7 @@ function RoundHistoryCard({ data }: { data: any[] }) {
               <span className={`text-[10px] font-bold ${r.outcome ? 'text-new-mint' : 'text-off-red'}`}>
                 {r.outcome ? 'YES' : 'NO'}
               </span>
-              <span className="text-[10px] font-mono text-gray-500">{formatPred(r.yesPool + r.noPool)}</span>
+              <span className="text-[10px] font-mono text-gray-500">{formatPred(r.totalPool || (r.yesPool + r.noPool))}</span>
             </div>
           </div>
         ))}
@@ -115,13 +116,13 @@ function WalletBalanceCard({ data }: { data: any }) {
           <span className="text-sm font-mono font-bold text-white">{data.aleoBalance?.toFixed(2)}</span>
         </div>
         <div className="flex items-center justify-between">
-          <span className="text-xs text-gray-500">DART Tokens</span>
+          <span className="text-xs text-gray-500">Credits</span>
           <span className="text-sm font-mono font-bold text-new-mint">{data.dartBalance?.toFixed(0)}</span>
         </div>
         {data.totalStaked > 0 && (
           <div className="flex items-center justify-between pt-1 border-t border-white/5">
             <span className="text-xs text-gray-500">Staked</span>
-            <span className="text-xs font-mono text-yellow-400">{formatPred(data.totalStaked)} DART</span>
+            <span className="text-xs font-mono text-yellow-400">{formatPred(data.totalStaked)} Credits</span>
           </div>
         )}
         {data.activeCount > 0 && (
@@ -157,7 +158,7 @@ function PositionsCard({ data }: { data: any[] }) {
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-xs font-mono font-bold text-white">{formatPred(deposit)}</span>
-                <span className="text-[10px] text-gray-500">DART</span>
+                <span className="text-[10px] text-gray-500">Credits</span>
                 {pos.claimed && <Check className="w-3 h-3 text-new-mint" />}
               </div>
             </div>
@@ -187,11 +188,11 @@ function BetPrepCard({ data }: { data: any }) {
         </div>
         <div className="flex items-center justify-between">
           <span className="text-xs text-gray-500">Amount</span>
-          <span className="text-xs font-mono font-bold text-white">{data.amount} DART</span>
+          <span className="text-xs font-mono font-bold text-white">{data.amount} Credits</span>
         </div>
         <div className="flex items-center justify-between pt-1 border-t border-white/5">
           <span className="text-xs text-gray-500">Est. Payout</span>
-          <span className="text-xs font-mono font-bold text-new-mint">{data.estPayout} DART</span>
+          <span className="text-xs font-mono font-bold text-new-mint">{data.estPayout} Credits</span>
         </div>
         <p className="text-[10px] text-gray-500 pt-1">Use the betting panel to confirm.</p>
       </div>
@@ -232,13 +233,13 @@ function PortfolioCard({ data }: { data: any }) {
           <div className="flex items-center gap-1.5">
             {isProfit ? <TrendingUp className="w-3 h-3 text-new-mint" /> : <TrendingDown className="w-3 h-3 text-off-red" />}
             <span className={`text-sm font-mono font-bold ${isProfit ? 'text-new-mint' : 'text-off-red'}`}>
-              {isProfit ? '+' : ''}{formatPred(data.totalPnL || 0)} DART
+              {isProfit ? '+' : ''}{formatPred(data.totalPnL || 0)} Credits
             </span>
           </div>
         </div>
         <div className="flex items-center justify-between">
           <span className="text-xs text-gray-500">Invested</span>
-          <span className="text-xs font-mono text-gray-300">{formatPred(data.totalInvested || 0)} DART</span>
+          <span className="text-xs font-mono text-gray-300">{formatPred(data.totalInvested || 0)} Credits</span>
         </div>
         {data.wins > 0 && (
           <div className="flex items-center justify-between">
@@ -255,7 +256,7 @@ function PortfolioCard({ data }: { data: any }) {
             <span className="text-xs text-gray-500">Claimable</span>
             <div className="flex items-center gap-1">
               <Trophy className="w-3 h-3 text-yellow-400" />
-              <span className="text-xs font-mono font-bold text-yellow-400">{formatPred(data.claimable)} DART</span>
+              <span className="text-xs font-mono font-bold text-yellow-400">{formatPred(data.claimable)} Credits</span>
             </div>
           </div>
         )}
@@ -327,7 +328,7 @@ function MessageBubble({ msg }: { msg: VoiceMessage }) {
 // ── Main Component ───────────────────────────────────
 
 export default function VoiceAgent() {
-  const { publicKey } = useWallet();
+  const { address } = useWallet();
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<VoiceMessage[]>([]);
@@ -354,7 +355,7 @@ export default function VoiceAgent() {
 
   const { appState, startSession, toggleListening, sendTextMessage, isConnected } = useVoiceSession({
     apiKey: process.env.NEXT_PUBLIC_GEMINI_API_KEY || '',
-    publicKey: publicKey ?? undefined,
+    publicKey: address ?? undefined,
     onMessage: handleMessage,
   });
 

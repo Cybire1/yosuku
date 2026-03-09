@@ -14,14 +14,14 @@ import PredictionStats from '@/components/PredictionStats';
 import PnLChart from '@/components/PnLChart';
 import { useRounds } from '@/lib/hooks/useRounds';
 import { useBtcPrice } from '@/lib/hooks/useBtcPrice';
-import { useWallet } from '@demox-labs/aleo-wallet-adapter-react';
+import { useWallet } from '@provablehq/aleo-wallet-adaptor-react';
 import { fetchRound, loadPositions, markClaimed } from '@/lib/roundHelpers';
 import {
   DURATION_OPTIONS,
   formatPred,
   type DurationLabel,
 } from '@/lib/predictionContract';
-import { Activity, Timer, Trophy, XCircle, BarChart3, MessageCircle, BookOpen, History } from 'lucide-react';
+import { Activity, Timer, Trophy, XCircle, BarChart3, MessageCircle, BookOpen, History, Shield } from 'lucide-react';
 import BitcoinIcon from '@/components/icons/BitcoinIcon';
 import NewsFeed from '@/components/NewsFeed';
 import TickerTape from '@/components/TickerTape';
@@ -30,7 +30,7 @@ import DoodleStrip from '@/components/DoodleStrip';
 type BottomTab = 'activity' | 'comments' | 'stats' | 'rules';
 
 export default function MarketsPage() {
-  const { publicKey } = useWallet();
+  const { address } = useWallet();
   const { change24h } = useBtcPrice();
   const { activeRound, pastRounds, positions, loading, reloadPositions, setActiveRound, setPastRounds } = useRounds();
 
@@ -143,8 +143,8 @@ export default function MarketsPage() {
                 <span className="text-xs text-gray-400 ml-2">
                   Round #{notification.roundId} —{' '}
                   {notification.type === 'win'
-                    ? `+${formatPred(notification.amount)} DART`
-                    : `-${formatPred(notification.amount)} DART`
+                    ? `+${formatPred(notification.amount)} USDCx`
+                    : `-${formatPred(notification.amount)} USDCx`
                   }
                 </span>
               </div>
@@ -199,7 +199,7 @@ export default function MarketsPage() {
               ))}
             </div>
 
-            {publicKey && (
+            {address && (
               <div className="flex items-center gap-2 flex-shrink-0">
                 <TokenBalance refreshTrigger={mintTrigger} />
               </div>
@@ -212,7 +212,7 @@ export default function MarketsPage() {
           </div>
 
           {/* Faucet */}
-          {publicKey && (
+          {address && (
             <motion.div
               variants={{
                 hidden: { opacity: 0, y: 30 },
@@ -270,7 +270,7 @@ export default function MarketsPage() {
                   <button
                     key={key}
                     onClick={() => setBottomTab(key)}
-                    className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold transition-all border-b-2 ${bottomTab === key
+                    className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-4 py-2.5 text-[11px] sm:text-xs font-bold transition-all border-b-2 ${bottomTab === key
                       ? 'text-white border-new-mint'
                       : 'text-gray-500 border-transparent hover:text-gray-300'
                       }`}
@@ -297,7 +297,7 @@ export default function MarketsPage() {
 
                 {bottomTab === 'stats' && (
                   <div className="space-y-4">
-                    {publicKey && positions.length > 0 ? (
+                    {address && positions.length > 0 ? (
                       <>
                         <PredictionStats rounds={pastRounds} positions={positions} />
                         <PnLChart rounds={pastRounds} positions={positions} />
@@ -306,7 +306,7 @@ export default function MarketsPage() {
                       <div className="text-center py-12">
                         <BarChart3 className="w-8 h-8 text-gray-600 mx-auto mb-3" />
                         <p className="text-gray-500 text-sm">
-                          {publicKey ? 'Place some bets to see your stats' : 'Connect wallet to see stats'}
+                          {address ? 'Place some bets to see your stats' : 'Connect wallet to see stats'}
                         </p>
                       </div>
                     )}
@@ -323,7 +323,7 @@ export default function MarketsPage() {
                         <div className="flex justify-between items-center">
                           <span className="text-xs text-gray-500">Pool</span>
                           <span className="text-xs font-mono font-bold text-new-mint">
-                            {formatPred(activeRound.yesPool + activeRound.noPool)} DART
+                            {formatPred(activeRound.totalPool)} USDCx
                           </span>
                         </div>
                         <div className="flex justify-between items-center">
@@ -350,7 +350,8 @@ export default function MarketsPage() {
                       </p>
                       <p>
                         Winners split the pool proportionally (minus <span className="text-white font-bold">10% fee</span>).
-                        Stake with <span className="text-white font-bold">DART</span> tokens.
+                        Stake with <span className="text-white font-bold">USDCx stablecoin</span>.
+                        Your bets are encrypted as private Aleo records.
                       </p>
                       <div className="border-t border-white/5 pt-3 space-y-2 text-xs text-gray-500">
                         <div className="flex justify-between">
@@ -359,11 +360,25 @@ export default function MarketsPage() {
                         </div>
                         <div className="flex justify-between">
                           <span>Token</span>
-                          <span className="text-white font-bold">DART</span>
+                          <span className="text-white font-bold">USDCx</span>
                         </div>
                         <div className="flex justify-between">
                           <span>Network</span>
                           <span className="text-white font-bold">Aleo Testnet</span>
+                        </div>
+                        <div className="border-t border-white/5 pt-2 mt-2 space-y-2">
+                          <div className="flex justify-between items-center">
+                            <span>Bet Privacy</span>
+                            <span className="flex items-center gap-1 text-sky-400 font-bold"><Shield className="w-3 h-3" /> Encrypted</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span>Identity</span>
+                            <span className="text-sky-400 font-bold">BHP256 Hashed</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span>Claims</span>
+                            <span className="text-sky-400 font-bold">ZK-Verified</span>
+                          </div>
                         </div>
                       </div>
                     </div>

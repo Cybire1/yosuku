@@ -9,7 +9,7 @@ const LAST_ROUND_KEY = 'dart_last_round_id';
 
 /** Check if a round exists on-chain (single lightweight call) */
 async function roundExists(id: number): Promise<boolean> {
-  const v = await fetchMapping(BTC_PREDICTION_PROGRAM, 'round_target_price', `${id}u64`);
+  const v = await fetchMapping(BTC_PREDICTION_PROGRAM, 'rt', `${id}u64`);
   return !!v && v !== 'null';
 }
 

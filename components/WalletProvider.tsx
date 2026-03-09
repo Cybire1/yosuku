@@ -1,31 +1,30 @@
 'use client';
 
-import { WalletProvider as AleoWalletProvider } from '@demox-labs/aleo-wallet-adapter-react';
-import { WalletModalProvider } from '@demox-labs/aleo-wallet-adapter-reactui';
-import { LeoWalletAdapter } from '@demox-labs/aleo-wallet-adapter-leo';
-import { ShieldWalletAdapter } from '@/lib/ShieldWalletAdapter';
-import { useMemo } from 'react';
+import { ReactNode, useMemo } from 'react';
+import { AleoWalletProvider } from '@provablehq/aleo-wallet-adaptor-react';
+import { WalletModalProvider } from '@provablehq/aleo-wallet-adaptor-react-ui';
+import { ShieldWalletAdapter } from '@provablehq/aleo-wallet-adaptor-shield';
+import { Network } from '@provablehq/aleo-types';
+import { WalletDecryptPermission } from '@provablehq/aleo-wallet-standard';
 
-// Import wallet adapter CSS
-import '@demox-labs/aleo-wallet-adapter-reactui/styles.css';
+// Import wallet modal styles
+import '@provablehq/aleo-wallet-adaptor-react-ui/dist/styles.css';
 
 export default function WalletProvider({
   children,
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
-  const wallets = useMemo(
-    () => [
-      new LeoWalletAdapter({
-        appName: 'Dart',
-      }),
-      new ShieldWalletAdapter(),
-    ],
-    []
-  );
+  const wallets = useMemo(() => [new ShieldWalletAdapter()], []);
 
   return (
-    <AleoWalletProvider wallets={wallets} autoConnect>
+    <AleoWalletProvider
+      wallets={wallets}
+      network={Network.TESTNET}
+      decryptPermission={WalletDecryptPermission.AutoDecrypt}
+      programs={['btc_pred_v7.aleo', 'test_usdcx_stablecoin.aleo']}
+      autoConnect
+    >
       <WalletModalProvider>{children}</WalletModalProvider>
     </AleoWalletProvider>
   );

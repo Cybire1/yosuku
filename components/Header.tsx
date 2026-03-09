@@ -1,12 +1,13 @@
 'use client';
 
-import { useWallet } from '@demox-labs/aleo-wallet-adapter-react';
-import { WalletMultiButton } from '@demox-labs/aleo-wallet-adapter-reactui';
+import { useWallet } from '@provablehq/aleo-wallet-adaptor-react';
+import { WalletMultiButton } from '@provablehq/aleo-wallet-adaptor-react-ui';
+import { Network } from '@provablehq/aleo-types';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Target, Menu, X, ArrowUpRight, Droplets, Loader, Check } from 'lucide-react';
+import { Target, Menu, X, ArrowUpRight, Shield } from 'lucide-react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
-import { PRED_TOKEN_PROGRAM, PRED_MULTIPLIER, fetchReputation, setOptimisticBalance, type ReputationData } from '@/lib/predictionContract';
+import { fetchReputation, type ReputationData } from '@/lib/predictionContract';
 import ReputationBadge from './ReputationBadge';
 
 const NAV_LINKS = [
@@ -17,10 +18,9 @@ const NAV_LINKS = [
 ];
 
 export default function Header() {
-  const { publicKey, requestTransaction } = useWallet();
+  const { address } = useWallet();
   const router = useRouter();
   const pathname = usePathname();
-  const [mintState, setMintState] = useState<'idle' | 'loading' | 'done'>('idle');
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -31,37 +31,12 @@ export default function Header() {
   }, []);
 
   useEffect(() => {
-    if (publicKey) {
-      fetchReputation(publicKey).then(setReputation).catch(() => {});
+    if (address) {
+      fetchReputation(address).then(setReputation).catch(() => {});
     } else {
       setReputation(null);
     }
-  }, [publicKey]);
-
-  const handleMint = async () => {
-    if (!publicKey || !requestTransaction || mintState === 'loading') return;
-    setMintState('loading');
-    try {
-      const microAmount = 1000 * PRED_MULTIPLIER;
-      await requestTransaction({
-        address: publicKey,
-        chainId: 'testnetbeta',
-        transitions: [{
-          program: PRED_TOKEN_PROGRAM,
-          functionName: 'mint_public',
-          inputs: [`${microAmount}u64`],
-        }],
-        fee: 2_000_000,
-        feePrivate: false,
-      });
-      const cur = parseInt(localStorage.getItem('dart_balance') || '0', 10);
-      setOptimisticBalance(cur + microAmount);
-      setMintState('done');
-      setTimeout(() => setMintState('idle'), 2000);
-    } catch {
-      setMintState('idle');
-    }
-  };
+  }, [address]);
 
   return (
     <>
@@ -138,26 +113,16 @@ export default function Header() {
           <div className="flex items-center gap-2 pl-1.5 pr-2">
             {mounted && (
               <>
-                {publicKey && reputation && reputation.bets > 0 && (
+                {address && reputation && reputation.bets > 0 && (
                   <div className="hidden sm:block">
                     <ReputationBadge tier={reputation.tier} compact />
                   </div>
                 )}
-                {publicKey && (
-                  <button
-                    onClick={handleMint}
-                    disabled={mintState === 'loading'}
-                    className="hidden sm:flex items-center gap-1.5 h-10 px-4 rounded-full text-xs font-bold text-gray-400 hover:text-new-mint bg-white/[0.03] hover:bg-new-mint/10 border border-white/5 hover:border-new-mint/20 transition-all disabled:opacity-50"
-                  >
-                    {mintState === 'loading' ? (
-                      <Loader className="w-3.5 h-3.5 animate-spin" />
-                    ) : mintState === 'done' ? (
-                      <Check className="w-3.5 h-3.5 text-new-mint" />
-                    ) : (
-                      <Droplets className="w-3.5 h-3.5 text-amber-400/70" />
-                    )}
-                    {mintState === 'done' ? 'Minted' : 'Mint'}
-                  </button>
+                {address && (
+                  <div className="hidden sm:inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] bg-sky-400/10 border border-sky-400/20 text-sky-400/80 font-semibold">
+                    <Shield className="w-3 h-3" />
+                    Private
+                  </div>
                 )}
                 <div className="transform transition-transform hover:scale-105 active:scale-95 hidden sm:block">
                   <WalletMultiButton className="!bg-white/5 !backdrop-blur-md !text-white !border !border-white/10 !rounded-full !font-bold !h-10 !px-6 !text-xs hover:!bg-white hover:!text-black hover:!border-white hover:shadow-[0_0_20px_rgba(255,255,255,0.3)] transition-all duration-300 lowercase tracking-wide" />

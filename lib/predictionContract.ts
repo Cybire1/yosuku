@@ -1,12 +1,12 @@
-// Contract constants for BTC Prediction Market v3
+// Contract constants for BTC Prediction Market v7 (dark pool + private bets)
 
-export const PRED_TOKEN_PROGRAM = 'dart_token.aleo';
-export const BTC_PREDICTION_PROGRAM = 'btc_prediction_v3.aleo';
+export const PRED_TOKEN_PROGRAM = 'test_usdcx_stablecoin.aleo';
+export const BTC_PREDICTION_PROGRAM = 'btc_pred_v7.aleo';
 
-// On-chain address of btc_prediction_v3.aleo (for token transfers to the program)
-export const BTC_PREDICTION_ADDRESS = 'aleo1h9l6247x6y44fnq438yxjurqswf5dgdak7sedsn9wwzjl5xlxvpqwyyjyl';
+// On-chain address of btc_pred_v7.aleo (for token transfers to the program)
+export const BTC_PREDICTION_ADDRESS = 'aleo1vudfydg2xwgeg2xgqcs0p3d2c3h74ly2jzqtq2cuf7g8fc7k6s9s2q7ysx';
 
-// Token decimals: 1 DART = 1_000_000 microtokens
+// Token decimals: 1 USDCx = 1_000_000 micro-USDCx (6 decimals)
 export const PRED_DECIMALS = 6;
 export const PRED_MULTIPLIER = 1_000_000;
 
@@ -16,17 +16,20 @@ export const PLATFORM_FEE_BPS = 1000;
 // Round duration in seconds
 export const ROUND_DURATION_SECONDS = 300; // 5 minutes
 
-// Default seed liquidity per side when creating a round (500 DART)
+// Default seed liquidity per side when creating a round (500 USDCx)
 export const DEFAULT_SEED_AMOUNT = 500 * PRED_MULTIPLIER;
 
-// Pool address: btc_prediction_v3.aleo program address in dart_token balances
-export const POOL_ADDRESS = 'btc_prediction_v3.aleo';
+// Pool address: btc_pred_v7.aleo program address in USDCx balances
+export const POOL_ADDRESS = BTC_PREDICTION_ADDRESS;
+
+// Backend URL for dark pool bet reporting
+export const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
 
 // Aleo API endpoints
 export const ALEO_API_URL = 'https://api.explorer.provable.com/v1';
 export const ALEO_NETWORK = 'testnet';
 
-// Helper: format DART amount for display
+// Helper: format credits amount for display
 export function formatPred(microAmount: number): string {
   return (microAmount / PRED_MULTIPLIER).toLocaleString(undefined, {
     minimumFractionDigits: 0,
@@ -34,7 +37,7 @@ export function formatPred(microAmount: number): string {
   });
 }
 
-// Helper: parse display DART to micro amount
+// Helper: parse display credits to micro amount
 export function parsePredToMicro(displayAmount: string): number {
   const num = parseFloat(displayAmount);
   if (isNaN(num) || num <= 0) return 0;
@@ -68,43 +71,59 @@ export function parseU64(val: string | null): number {
   return parseInt(cleaned, 10) || 0;
 }
 
-// Fetch on-chain DART balance for an address and sync to localStorage
+// Helper: parse u128 value from Aleo mapping response (USDCx amounts)
+export function parseU128(val: string | null): number {
+  if (!val) return 0;
+  const cleaned = val.replace('u128', '').trim();
+  return parseInt(cleaned, 10) || 0;
+}
+
+// Fetch on-chain USDCx balance for an address and sync to localStorage
 export async function fetchOnChainBalance(address: string): Promise<number> {
   const val = await fetchMapping(PRED_TOKEN_PROGRAM, 'balances', address);
-  const onChain = parseU64(val);
+  const onChain = parseU128(val);
+  const local = parseInt(localStorage.getItem('usdcx_balance') || '0', 10);
 
-  // Check if there's a pending optimistic update (expires after 60s)
-  const pendingRaw = localStorage.getItem('dart_balance_pending');
+  // If on-chain returned a real positive value, trust it
+  if (onChain > 0) {
+    // Clear any pending optimistic update — chain has confirmed something
+    localStorage.removeItem('usdcx_balance_pending');
+    // Use whichever is higher: on-chain or local (local may include unconfirmed mints)
+    const best = Math.max(onChain, local);
+    localStorage.setItem('usdcx_balance', String(best));
+    return best;
+  }
+
+  // On-chain returned 0 or null — check if there's a pending optimistic update
+  const pendingRaw = localStorage.getItem('usdcx_balance_pending');
   if (pendingRaw) {
     try {
       const pending = JSON.parse(pendingRaw);
       const age = Date.now() - (pending.timestamp || 0);
-      if (age < 60_000 && pending.expectedBalance != null) {
-        // If on-chain has caught up to or exceeded the optimistic value, clear pending
-        if (onChain >= pending.expectedBalance) {
-          localStorage.removeItem('dart_balance_pending');
-          localStorage.setItem('dart_balance', String(onChain));
-          return onChain;
-        }
-        // Still waiting for tx confirmation — show optimistic value
+      // Keep optimistic value for up to 5 minutes (Aleo testnet can be slow)
+      if (age < 300_000 && pending.expectedBalance > 0) {
         return pending.expectedBalance;
       }
-      // Expired — on-chain is source of truth
-      localStorage.removeItem('dart_balance_pending');
+      localStorage.removeItem('usdcx_balance_pending');
     } catch {
-      localStorage.removeItem('dart_balance_pending');
+      localStorage.removeItem('usdcx_balance_pending');
     }
   }
 
-  // No pending update — on-chain is source of truth
-  localStorage.setItem('dart_balance', String(onChain));
-  return onChain;
+  // No pending update but we have a local balance — keep it.
+  // Only an explicit spend (bet) or a positive on-chain value should reduce it.
+  // This prevents the API returning null from wiping out the user's balance.
+  if (local > 0) {
+    return local;
+  }
+
+  return 0;
 }
 
 // Set an optimistic balance after a transaction (bet or claim)
 export function setOptimisticBalance(expectedBalance: number) {
-  localStorage.setItem('dart_balance', String(expectedBalance));
-  localStorage.setItem('dart_balance_pending', JSON.stringify({
+  localStorage.setItem('usdcx_balance', String(expectedBalance));
+  localStorage.setItem('usdcx_balance_pending', JSON.stringify({
     expectedBalance,
     timestamp: Date.now(),
   }));
@@ -180,8 +199,9 @@ export interface RoundState {
   deadline: number;       // block height
   durationMs: number;     // round duration in ms
   endTime: number;        // timestamp when round ends
-  yesPool: number;        // micro DART
-  noPool: number;         // micro DART
+  yesPool: number;        // microcredits (0 during betting, revealed at resolution)
+  noPool: number;         // microcredits (0 during betting, revealed at resolution)
+  totalPool: number;      // dark pool: combined total (always visible)
   resolved: boolean;
   outcome: boolean | null; // null if not resolved, true = YES won
 }
@@ -254,18 +274,17 @@ export function getReputationData(bets: number, wins: number, streak: number): R
   };
 }
 
-// Fetch reputation data from on-chain mappings
-export async function fetchReputation(address: string): Promise<ReputationData> {
+// Fetch reputation data — v6 has no on-chain reputation mappings,
+// so we compute from local positions instead
+export async function fetchReputation(_address: string): Promise<ReputationData> {
   try {
-    const userKey = await fetchUserKey(address);
-    const [betsRaw, winsRaw, streakRaw] = await Promise.all([
-      fetchMapping(BTC_PREDICTION_PROGRAM, 'user_bets', userKey),
-      fetchMapping(BTC_PREDICTION_PROGRAM, 'user_wins', userKey),
-      fetchMapping(BTC_PREDICTION_PROGRAM, 'user_streak', userKey),
-    ]);
-    return getReputationData(parseU64(betsRaw), parseU64(winsRaw), parseU64(streakRaw));
-  } catch (err) {
-    console.warn('Failed to fetch reputation (WASM hash may have failed):', err);
+    const positions: { roundId: number; side: string; amount: number }[] =
+      JSON.parse(localStorage.getItem('pred_positions') || '[]');
+    const claimed: number[] = JSON.parse(localStorage.getItem('pred_claimed') || '[]');
+    const bets = positions.length;
+    const wins = claimed.length;
+    return getReputationData(bets, wins, 0);
+  } catch {
     return getReputationData(0, 0, 0);
   }
 }

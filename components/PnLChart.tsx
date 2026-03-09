@@ -81,7 +81,7 @@ export default function PnLChart({ rounds, positions }: PnLChartProps) {
               fontSize: '11px',
             }}
             labelFormatter={(v) => `Round #${v}`}
-            formatter={(value) => [`${formatPred(Number(value ?? 0))} DART`, 'P&L']}
+            formatter={(value) => [`${formatPred(Number(value ?? 0))} USDCx`, 'P&L']}
           />
           <Area
             type="monotone"

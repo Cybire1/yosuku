@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
-import { ArrowRight, Clock, Activity } from 'lucide-react';
+import { ArrowRight, Clock, Shield, CheckCircle } from 'lucide-react';
 import MagneticButton from './MagneticButton';
 
 // High-performance Particle System for the Canvas Background inside the Portal
@@ -142,7 +142,7 @@ export default function HeroSection() {
     <section className="relative w-full min-h-screen bg-[#030303] text-white p-4 sm:p-6 lg:p-8 flex items-center justify-center pt-24 sm:pt-28">
 
       {/* Full Bento Grid */}
-      <div className="w-full max-w-[1800px] h-[85vh] min-h-[700px] grid grid-cols-1 lg:grid-cols-4 lg:grid-rows-3 gap-4 lg:gap-6 z-10 relative">
+      <div className="w-full max-w-[1800px] lg:h-[85vh] lg:min-h-[700px] grid grid-cols-1 lg:grid-cols-4 lg:grid-rows-3 gap-3 sm:gap-4 lg:gap-6 z-10 relative">
 
         {/* Left Column - Top (Briefing) - WHITE THEME */}
         <motion.div
@@ -154,14 +154,14 @@ export default function HeroSection() {
           <div>
             <div className="inline-flex items-center gap-2 px-3 py-1 mb-6 rounded-full border border-black/5 bg-zinc-100">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
-              <span className="text-[10px] font-semibold tracking-widest uppercase text-zinc-500">Aleo Native</span>
+              <span className="text-[10px] font-semibold tracking-widest uppercase text-zinc-500">Private by Default</span>
             </div>
-            <h1 className="text-3xl xl:text-4xl font-light tracking-tight text-zinc-900 mb-6 leading-[1.1]">
+            <h1 className="text-2xl sm:text-3xl xl:text-4xl font-light tracking-tight text-zinc-900 mb-4 sm:mb-6 leading-[1.1]">
               The world's first <br /><span className="font-medium italic text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-emerald-300">private 5-minute</span> prediction markets
             </h1>
             <p className="text-zinc-600 text-sm xl:text-base font-light leading-relaxed">
-              Trade crypto, sports, and culture with instant 300-second resolutions.
-              Lightning fast execution. Zero-knowledge privacy. Built on Aleo.
+              Your bets are encrypted. Your identity is hidden. Only you know your positions.
+              Built on Aleo with zero-knowledge proofs.
             </p>
           </div>
 
@@ -201,7 +201,7 @@ export default function HeroSection() {
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 1, delay: 0.3 }}
-          className={`${bentoClasses} lg:col-span-2 lg:row-span-3 overflow-hidden relative group`}
+          className={`${bentoClasses} lg:col-span-2 lg:row-span-3 overflow-hidden relative group min-h-[280px] sm:min-h-[350px]`}
         >
           {/* Subtle Portal Radial Glow */}
           <div className="absolute inset-0 bg-gradient-to-b from-emerald-500/5 to-transparent z-10 pointer-events-none" />
@@ -215,7 +215,7 @@ export default function HeroSection() {
           <div className="absolute inset-x-0 bottom-0 top-[15%] flex flex-col items-center justify-center pointer-events-none blur-[0.5px]">
             <img
               src="/bento-portal.png"
-              className="w-[110%] h-[110%] object-cover mix-blend-lighten opacity-[0.85] rounded-full drop-shadow-[0_0_80px_rgba(52,211,153,0.2)] lg:-translate-y-8"
+              className="w-full h-full object-cover mix-blend-lighten opacity-[0.85] rounded-full drop-shadow-[0_0_80px_rgba(52,211,153,0.2)] lg:-translate-y-8 lg:w-[110%] lg:h-[110%]"
               alt="Web3 Portal"
             />
           </div>
@@ -233,7 +233,7 @@ export default function HeroSection() {
           className={`${whiteBentoClasses} lg:col-span-1 lg:row-span-1 p-6 sm:p-8 flex-col justify-center`}
         >
           <Clock className="w-5 h-5 text-zinc-400 mb-4" />
-          <p className="text-3xl xl:text-4xl font-light tracking-tight text-zinc-900 mb-2">
+          <p className="text-2xl sm:text-3xl xl:text-4xl font-light tracking-tight text-zinc-900 mb-2">
             {time ? formatTime(time) : '00:00 AM'}
           </p>
           <p className="text-zinc-500 text-sm font-medium">
@@ -241,29 +241,28 @@ export default function HeroSection() {
           </p>
         </motion.div>
 
-        {/* Right Column - Middle (Network Status) */}
+        {/* Right Column - Middle (Zero-Knowledge Privacy) */}
         <motion.div
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.8, delay: 0.5 }}
           className={`${bentoClasses} lg:col-span-1 lg:row-span-1 p-6 sm:p-8 flex-col justify-center`}
         >
-          <Activity className="w-5 h-5 text-emerald-400 mb-4" />
-          <p className="text-xl tracking-tight text-white mb-2">Network Status</p>
-          <div className="flex items-center gap-2">
-            <span className="relative flex h-2.5 w-2.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-            </span>
-            <p className="text-emerald-400 text-sm font-medium">100% Operational</p>
-          </div>
-
-          {/* Minimalist Data lines */}
-          <div className="absolute bottom-6 right-6 flex items-end gap-1 opacity-[0.15]">
-            <div className="w-1.5 h-3 bg-emerald-400 rounded-t-sm" />
-            <div className="w-1.5 h-6 bg-emerald-400 rounded-t-sm" />
-            <div className="w-1.5 h-4 bg-emerald-400 rounded-t-sm" />
-            <div className="w-1.5 h-8 bg-emerald-400 rounded-t-sm" />
+          <Shield className="w-5 h-5 text-sky-400 mb-4" />
+          <p className="text-xl tracking-tight text-white mb-3">Zero-Knowledge Privacy</p>
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <CheckCircle className="w-3.5 h-3.5 text-sky-400" />
+              <span className="text-sm text-zinc-400">Encrypted Bets</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <CheckCircle className="w-3.5 h-3.5 text-sky-400" />
+              <span className="text-sm text-zinc-400">Hidden Addresses</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <CheckCircle className="w-3.5 h-3.5 text-sky-400" />
+              <span className="text-sm text-zinc-400">Private Records</span>
+            </div>
           </div>
         </motion.div>
 
@@ -281,7 +280,7 @@ export default function HeroSection() {
           </div>
 
           {/* Animated Arrow / Line (Highly Visible) */}
-          <div className="relative w-12 h-12 flex items-center justify-center overflow-hidden border-2 border-white/20 rounded-full bg-white/5 group-hover:bg-white/10 transition-colors">
+          <div className="relative w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center overflow-hidden border-2 border-white/20 rounded-full bg-white/5 group-hover:bg-white/10 transition-colors">
             <motion.div
               animate={{ y: [-30, 30] }}
               transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}

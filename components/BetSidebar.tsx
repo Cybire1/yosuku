@@ -1,17 +1,17 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Loader, Wallet, Droplets, Check } from 'lucide-react';
-import { useWallet } from '@demox-labs/aleo-wallet-adapter-react';
+import { Loader, Wallet, Droplets, Shield, EyeOff, Lock, KeyRound } from 'lucide-react';
+import { useWallet } from '@provablehq/aleo-wallet-adaptor-react';
 import { useBtcPrice } from '@/lib/hooks/useBtcPrice';
 import {
   BTC_PREDICTION_PROGRAM,
   BTC_PREDICTION_ADDRESS,
   PRED_TOKEN_PROGRAM,
   PRED_MULTIPLIER,
+  BACKEND_URL,
   formatPred,
-  calcOdds,
   estimateProb,
   getConfidenceLabel,
   fetchOnChainBalance,
@@ -20,56 +20,26 @@ import {
 } from '@/lib/predictionContract';
 import { savePosition } from '@/lib/roundHelpers';
 import AnimatedNumber from './AnimatedNumber';
+import InitSlotPrompt from './InitSlotPrompt';
 
-const BALANCE_KEY = 'dart_balance';
+const BALANCE_KEY = 'usdcx_balance';
 const QUICK_AMOUNTS = [50, 100, 250, 500];
 
-function MintButton() {
-  const { publicKey, requestTransaction } = useWallet();
-  const [state, setState] = useState<'idle' | 'loading' | 'done'>('idle');
-
-  const handleMint = async () => {
-    if (!publicKey || !requestTransaction || state === 'loading') return;
-    setState('loading');
-    try {
-      const microAmount = 1000 * PRED_MULTIPLIER;
-      await requestTransaction({
-        address: publicKey,
-        chainId: 'testnetbeta',
-        transitions: [{
-          program: PRED_TOKEN_PROGRAM,
-          functionName: 'mint_public',
-          inputs: [`${microAmount}u64`],
-        }],
-        fee: 2_000_000,
-        feePrivate: false,
-      });
-      const cur = parseInt(localStorage.getItem(BALANCE_KEY) || '0', 10);
-      localStorage.setItem(BALANCE_KEY, String(cur + microAmount));
-      setState('done');
-      setTimeout(() => setState('idle'), 2000);
-    } catch {
-      setState('idle');
-    }
-  };
-
+function GetUSDCxButton() {
   return (
-    <button
-      onClick={handleMint}
-      disabled={state === 'loading'}
-      className="w-full py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 bg-white/[0.04] border border-white/10 text-gray-400 hover:text-new-mint hover:bg-new-mint/10 hover:border-new-mint/20 transition-all disabled:opacity-50"
+    <a
+      href="https://usdcx.aleo.dev/"
+      target="_blank"
+      rel="noopener noreferrer"
+      className="w-full py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 bg-white/[0.04] border border-white/10 text-gray-400 hover:text-new-mint hover:bg-new-mint/10 hover:border-new-mint/20 transition-all"
     >
-      {state === 'loading' ? (
-        <Loader className="w-3.5 h-3.5 animate-spin" />
-      ) : state === 'done' ? (
-        <Check className="w-3.5 h-3.5 text-new-mint" />
-      ) : (
-        <Droplets className="w-3.5 h-3.5 text-amber-400/70" />
-      )}
-      {state === 'done' ? 'Minted 1,000 DART!' : 'Mint 1,000 DART'}
-    </button>
+      <Droplets className="w-3.5 h-3.5 text-amber-400/70" />
+      Bridge USDCx
+    </a>
   );
 }
+
+type SlotState = 'loading' | 'none' | 'empty' | 'active';
 
 interface BetSidebarProps {
   round: RoundState;
@@ -77,7 +47,7 @@ interface BetSidebarProps {
 }
 
 export default function BetSidebar({ round, onSuccess }: BetSidebarProps) {
-  const { publicKey, requestTransaction } = useWallet();
+  const { address, executeTransaction, requestRecords } = useWallet();
   const { price } = useBtcPrice();
   const [side, setSide] = useState<'YES' | 'NO'>('YES');
   const [amount, setAmount] = useState('');
@@ -87,20 +57,81 @@ export default function BetSidebar({ round, onSuccess }: BetSidebarProps) {
   const [minsLeft, setMinsLeft] = useState(0);
   const [flashType, setFlashType] = useState<'none' | 'YES' | 'NO'>('none');
 
+  // Slot management
+  const [slotState, setSlotState] = useState<SlotState>('loading');
+  const [slotRecord, setSlotRecord] = useState<string | null>(null);
+  const [activeRoundId, setActiveRoundId] = useState<number | null>(null);
+
   const targetUsd = round.targetPrice / 100;
   const microAmount = Math.floor(parseFloat(amount || '0') * PRED_MULTIPLIER);
-  const totalPool = round.yesPool + round.noPool;
+  const totalPool = round.totalPool;
 
   // Dynamic odds from live BTC price + time remaining (Polymarket-style)
+  // During dark pool phase, no pool-based odds available — purely probability model
   const odds = (() => {
     if (price > 0 && minsLeft > 0) {
       const prob = estimateProb(price, targetUsd, minsLeft);
       const yesPct = Math.round(prob * 100);
       return { yes: Math.max(1, Math.min(99, yesPct)), no: Math.max(1, Math.min(99, 100 - yesPct)) };
     }
-    // Fallback to pool-based if no price data
-    return calcOdds(round.yesPool, round.noPool);
+    return { yes: 50, no: 50 };
   })();
+
+  // Fetch slot records
+  const fetchSlot = useCallback(async () => {
+    if (!address || !requestRecords) {
+      setSlotState('none');
+      return;
+    }
+
+    try {
+      const records = await requestRecords(BTC_PREDICTION_PROGRAM);
+      const slots = (records || []).filter(
+        (r: any) => r.data?.active !== undefined || r.plaintext?.includes('BetSlot')
+      );
+
+      if (slots.length === 0) {
+        // Check localStorage for slot initialization flag
+        const hasSlot = localStorage.getItem('v7_has_slot');
+        if (hasSlot === 'true') {
+          // User initialized but records not decrypted yet — assume empty slot
+          setSlotState('empty');
+          setSlotRecord(null);
+        } else {
+          setSlotState('none');
+        }
+        return;
+      }
+
+      // Find the latest slot
+      const slot = slots[slots.length - 1] as any;
+      const plaintext = slot.plaintext || JSON.stringify(slot.data);
+
+      // Check if active
+      const activeMatch = plaintext.match(/active:\s*(true|false)/);
+      const isActive = activeMatch?.[1] === 'true';
+
+      if (isActive) {
+        const ridMatch = plaintext.match(/rid:\s*(\d+)u64/);
+        setActiveRoundId(ridMatch ? parseInt(ridMatch[1], 10) : null);
+        setSlotState('active');
+      } else {
+        setSlotState('empty');
+      }
+
+      setSlotRecord(plaintext);
+    } catch {
+      // requestRecords may fail on localhost — fall back to localStorage
+      const hasSlot = localStorage.getItem('v7_has_slot');
+      setSlotState(hasSlot === 'true' ? 'empty' : 'none');
+    }
+  }, [address, requestRecords]);
+
+  useEffect(() => {
+    if (address) {
+      fetchSlot();
+    }
+  }, [address, fetchSlot]);
 
   // Track minutes remaining for probability
   useEffect(() => {
@@ -113,18 +144,18 @@ export default function BetSidebar({ round, onSuccess }: BetSidebarProps) {
     return () => clearInterval(interval);
   }, [round.endTime]);
 
-  // Read balance — sync from chain on mount, then poll localStorage for fast updates
+  // Read balance
   useEffect(() => {
-    if (publicKey) {
-      fetchOnChainBalance(publicKey).then(setBalance).catch(() => {});
+    if (address) {
+      fetchOnChainBalance(address).then(setBalance).catch(() => {});
     }
     const read = () => setBalance(parseInt(localStorage.getItem(BALANCE_KEY) || '0', 10));
     read();
     const interval = setInterval(read, 2000);
     return () => clearInterval(interval);
-  }, [publicKey]);
+  }, [address]);
 
-  // Estimated payout — odds-based (Polymarket-style)
+  // Estimated payout — odds-based
   const estPayout = (() => {
     if (!microAmount) return 0;
     const sideOdds = side === 'YES' ? odds.yes : odds.no;
@@ -137,8 +168,13 @@ export default function BetSidebar({ round, onSuccess }: BetSidebarProps) {
     setAmount((current + val).toString());
   };
 
+  const handleSlotInitialized = () => {
+    localStorage.setItem('v7_has_slot', 'true');
+    setSlotState('empty');
+  };
+
   const handleBet = async () => {
-    if (!publicKey || !requestTransaction) {
+    if (!address || !executeTransaction) {
       setError('Connect wallet first');
       return;
     }
@@ -147,45 +183,74 @@ export default function BetSidebar({ round, onSuccess }: BetSidebarProps) {
       return;
     }
     if (microAmount > balance) {
-      setError('Insufficient DART. Mint more tokens.');
+      setError('Insufficient USDCx.');
       return;
     }
 
     setLoading(true);
     setError('');
 
-    // Trigger intense visual feedback punch
+    // Trigger intense visual feedback
     setFlashType(side);
     setTimeout(() => setFlashType('none'), 400);
 
     try {
       const sideVal = side === 'YES' ? 'true' : 'false';
 
-      // Combined: transfer tokens + place bet in one transaction
-      await requestTransaction({
-        address: publicKey,
-        chainId: 'testnetbeta',
-        transitions: [
-          {
-            program: PRED_TOKEN_PROGRAM,
-            functionName: 'transfer_public',
-            inputs: [BTC_PREDICTION_ADDRESS, `${microAmount}u64`],
-          },
-          {
-            program: BTC_PREDICTION_PROGRAM,
-            functionName: 'bet',
-            inputs: [`${round.id}u64`, `${microAmount}u64`, sideVal],
-          },
-        ],
-        fee: 2_000_000,
-        feePrivate: false,
+      // Step 1: Transfer USDCx to the prediction program
+      await executeTransaction({
+        program: PRED_TOKEN_PROGRAM,
+        function: 'transfer_public',
+        inputs: [BTC_PREDICTION_ADDRESS, `${microAmount}u128`],
+        fee: 500_000,
+        privateFee: false,
       });
+
+      // Step 2: Place the bet — side is PRIVATE (not public)
+      // The contract's `bet` function takes: (slot: BetSlot, rid: u64, amt: u128, side: bool)
+      // slot is consumed as a record input
+      // Always pass 4 inputs: BetSlot record + rid + amt + side
+      const betInputs = [
+        slotRecord || '{}',
+        `${round.id}u64`,
+        `${microAmount}u128`,
+        sideVal,
+      ];
+
+      const betResult = await executeTransaction({
+        program: BTC_PREDICTION_PROGRAM,
+        function: 'bet',
+        inputs: betInputs,
+        fee: 500_000,
+        privateFee: false,
+        ...(slotRecord ? {} : { recordIndices: [0] }),
+      });
+
+      // Step 3: Report bet side to backend (dark pool tally)
+      try {
+        await fetch(`${BACKEND_URL}/api/bet`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ roundId: round.id, side, amount: microAmount }),
+        });
+      } catch {
+        // Non-critical — bet is already on-chain
+      }
+
+      // Save bet txId
+      if (betResult?.transactionId) {
+        const betTxs = JSON.parse(localStorage.getItem('pred_bet_txids') || '{}');
+        betTxs[round.id] = betResult.transactionId;
+        localStorage.setItem('pred_bet_txids', JSON.stringify(betTxs));
+      }
 
       const newBalance = Math.max(0, balance - microAmount);
       setOptimisticBalance(newBalance);
       setBalance(newBalance);
 
       savePosition(round.id, side, microAmount);
+      setSlotState('active');
+      setActiveRoundId(round.id);
 
       setAmount('');
       onSuccess?.();
@@ -194,7 +259,7 @@ export default function BetSidebar({ round, onSuccess }: BetSidebarProps) {
       if (message.includes('NOT_GRANTED') || message.includes('Permission')) {
         setError('Transaction rejected');
       } else if (message.includes('Insufficient')) {
-        setError('Insufficient DART. Mint more tokens.');
+        setError('Insufficient USDCx.');
       } else {
         setError(message);
       }
@@ -204,6 +269,36 @@ export default function BetSidebar({ round, onSuccess }: BetSidebarProps) {
   };
 
   const isYes = side === 'YES';
+
+  // Show init prompt if no slot
+  if (address && slotState === 'none') {
+    return <InitSlotPrompt onInitialized={handleSlotInitialized} />;
+  }
+
+  // Show active bet info if slot is occupied
+  if (address && slotState === 'active' && activeRoundId !== null) {
+    return (
+      <div className="bg-neutral-900/60 backdrop-blur-xl border border-white/10 rounded-2xl p-5">
+        <div className="text-center space-y-3">
+          <div className="w-12 h-12 rounded-xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center mx-auto">
+            <Lock className="w-6 h-6 text-sky-400" />
+          </div>
+          <div>
+            <p className="text-sm font-bold text-white">Active Bet on Round #{activeRoundId}</p>
+            <p className="text-xs text-gray-400 mt-1">
+              Your slot is locked. Claim winnings or forfeit to bet again.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 bg-white/[0.03] border border-white/5 rounded-xl px-3 py-2">
+            <Shield className="w-3 h-3 text-sky-400" />
+            <span className="text-[10px] text-gray-400">
+              Your bet side is encrypted — only you can see it
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -252,6 +347,22 @@ export default function BetSidebar({ round, onSuccess }: BetSidebarProps) {
           </div>
         </div>
 
+        {/* Dark pool indicator */}
+        <div className="px-4 pt-3">
+          <div className="flex items-center gap-2 bg-white/[0.03] border border-white/5 rounded-xl px-3 py-2">
+            <div className="relative">
+              <Shield className="w-3 h-3 text-sky-400" />
+              <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-sky-400 rounded-full animate-pulse" />
+            </div>
+            <span className="text-[10px] text-sky-400/80 font-medium">Private Bet</span>
+            <span className="text-[10px] text-gray-600">·</span>
+            <Lock className="w-2.5 h-2.5 text-gray-500" />
+            <span className="text-[10px] text-gray-500">Dark Pool Active</span>
+            <span className="text-[10px] text-gray-600">·</span>
+            <span className="text-[10px] text-gray-500 font-mono">{formatPred(totalPool)} USDCx</span>
+          </div>
+        </div>
+
         {/* Amount section */}
         <div className="p-4 space-y-3">
           <div className="flex items-baseline justify-between">
@@ -273,7 +384,7 @@ export default function BetSidebar({ round, onSuccess }: BetSidebarProps) {
               min="0"
             />
             <div className="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-500 uppercase">
-              DART
+              USDCx
             </div>
           </div>
 
@@ -301,10 +412,18 @@ export default function BetSidebar({ round, onSuccess }: BetSidebarProps) {
               <span className="text-gray-500">Est. payout</span>
               <div className="flex items-center gap-1 font-mono font-bold text-new-mint">
                 <AnimatedNumber value={formatPred(estPayout)} />
-                <span>DART</span>
+                <span>USDCx</span>
               </div>
             </div>
           )}
+
+          {/* Privacy explainer */}
+          <div className="flex items-start gap-2 bg-white/[0.02] border border-white/5 rounded-lg px-3 py-2">
+            <EyeOff className="w-3 h-3 text-gray-600 mt-0.5 flex-shrink-0" />
+            <span className="text-[10px] text-gray-600 leading-relaxed">
+              Your bet side is encrypted — nobody can see if you chose Up or Down. Pool breakdown hidden until resolution.
+            </span>
+          </div>
 
           {/* Error */}
           {error && (
@@ -314,7 +433,6 @@ export default function BetSidebar({ round, onSuccess }: BetSidebarProps) {
           {/* Confidence meter */}
           {price > 0 && minsLeft > 0 && (
             (() => {
-              const targetUsd = round.targetPrice / 100;
               const prob = estimateProb(price, targetUsd, minsLeft);
               const { label, color } = getConfidenceLabel(prob);
               const pct = Math.round(prob * 100);
@@ -349,7 +467,7 @@ export default function BetSidebar({ round, onSuccess }: BetSidebarProps) {
           )}
 
           {/* CTA button */}
-          {publicKey ? (
+          {address ? (
             <motion.button
               whileHover={{ scale: 1.01 }}
               whileTap={{ scale: 0.95 }}
@@ -359,7 +477,7 @@ export default function BetSidebar({ round, onSuccess }: BetSidebarProps) {
               } : {}}
               transition={{ duration: 0.3 }}
               onClick={handleBet}
-              disabled={loading || !amount || parseFloat(amount) <= 0 || round.resolved}
+              disabled={loading || !amount || parseFloat(amount) <= 0 || round.resolved || slotState === 'loading'}
               className="relative w-full py-3.5 rounded-xl font-black text-sm uppercase tracking-wider transition-all flex items-center justify-center gap-2 disabled:cursor-not-allowed"
               style={{
                 backgroundColor: isYes ? '#34D399' : '#F43F5E',
@@ -370,10 +488,13 @@ export default function BetSidebar({ round, onSuccess }: BetSidebarProps) {
               {loading ? (
                 <>
                   <Loader className="w-4 h-4 animate-spin" />
-                  Processing...
+                  Generating ZK Proof...
                 </>
               ) : (
-                `Buy ${isYes ? 'Up' : 'Down'}`
+                <>
+                  <Shield className="w-3.5 h-3.5" />
+                  {`Buy ${isYes ? 'Up' : 'Down'}`}
+                </>
               )}
             </motion.button>
           ) : (
@@ -383,9 +504,9 @@ export default function BetSidebar({ round, onSuccess }: BetSidebarProps) {
             </div>
           )}
 
-          {/* Mint DART shortcut */}
-          {publicKey && (
-            <MintButton />
+          {/* Get USDCx shortcut */}
+          {address && (
+            <GetUSDCxButton />
           )}
         </div>
       </div>

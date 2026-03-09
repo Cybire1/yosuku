@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Trophy, TrendingUp, Target, ArrowLeft, Medal, Award, Crown } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useWallet } from '@demox-labs/aleo-wallet-adapter-react';
+import { useWallet } from '@provablehq/aleo-wallet-adaptor-react';
 import Header from '@/components/Header';
 import {
   getLeaderboard,
@@ -18,7 +18,7 @@ import {
 
 export default function LeaderboardPage() {
   const router = useRouter();
-  const { publicKey } = useWallet();
+  const { address } = useWallet();
   const [category, setCategory] = useState<LeaderboardCategory>('volume');
   const [timePeriod, setTimePeriod] = useState<TimePeriod>('all');
   const [leaderboard, setLeaderboard] = useState<TraderStats[]>([]);
@@ -26,14 +26,14 @@ export default function LeaderboardPage() {
 
   useEffect(() => {
     updateLeaderboard();
-  }, [category, timePeriod, publicKey]);
+  }, [category, timePeriod, address]);
 
   const updateLeaderboard = () => {
     const data = getLeaderboard(category, timePeriod, 100);
     setLeaderboard(data);
 
-    if (publicKey) {
-      const rank = getUserRank(publicKey, category, timePeriod);
+    if (address) {
+      const rank = getUserRank(address, category, timePeriod);
       setUserRank(rank);
     } else {
       setUserRank(null);
@@ -92,8 +92,8 @@ export default function LeaderboardPage() {
           {/* Header */}
           <div className="mb-12">
             <div className="flex items-center gap-4 mb-4">
-              <Trophy className="w-12 h-12 text-new-mint" />
-              <h1 className="text-6xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-br from-white to-gray-500">
+              <Trophy className="w-8 h-8 sm:w-12 sm:h-12 text-new-mint" />
+              <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-br from-white to-gray-500">
                 Leaderboard
               </h1>
             </div>
@@ -146,7 +146,7 @@ export default function LeaderboardPage() {
           </div>
 
           {/* User's Rank Card */}
-          {publicKey && userRank && userRank.stats && (
+          {address && userRank && userRank.stats && (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -155,30 +155,30 @@ export default function LeaderboardPage() {
               <div className="absolute inset-0 bg-neutral-900/40 backdrop-blur-2xl border border-new-mint/30 rounded-2xl" />
               <div className="absolute inset-0 bg-noise opacity-20 mix-blend-overlay rounded-2xl pointer-events-none" />
               <div className="relative p-6">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                   <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-full bg-new-mint/20 flex items-center justify-center text-new-mint font-black text-xl">
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-new-mint/20 flex items-center justify-center text-new-mint font-black text-lg sm:text-xl">
                       #{userRank.rank}
                     </div>
                     <div>
-                      <div className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-1">Your Rank</div>
-                      <div className="text-xl font-bold text-white">{formatAddress(publicKey)}</div>
+                      <div className="text-[10px] sm:text-xs font-bold uppercase tracking-widest text-gray-500 mb-1">Your Rank</div>
+                      <div className="text-base sm:text-xl font-bold text-white">{formatAddress(address)}</div>
                     </div>
                   </div>
-                  <div className="grid grid-cols-3 gap-6 text-center">
+                  <div className="grid grid-cols-3 gap-4 sm:gap-6 text-center w-full sm:w-auto">
                     <div>
-                      <div className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-1">Volume</div>
-                      <div className="text-xl font-black text-white">{formatVolume(userRank.stats.totalVolume)}</div>
+                      <div className="text-[10px] sm:text-xs font-bold uppercase tracking-widest text-gray-500 mb-1">Volume</div>
+                      <div className="text-base sm:text-xl font-black text-white">{formatVolume(userRank.stats.totalVolume)}</div>
                     </div>
                     <div>
-                      <div className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-1">Profit</div>
-                      <div className={`text-xl font-black ${userRank.stats.totalProfit >= 0 ? 'text-off-green' : 'text-off-red'}`}>
+                      <div className="text-[10px] sm:text-xs font-bold uppercase tracking-widest text-gray-500 mb-1">Profit</div>
+                      <div className={`text-base sm:text-xl font-black ${userRank.stats.totalProfit >= 0 ? 'text-off-green' : 'text-off-red'}`}>
                         {userRank.stats.totalProfit >= 0 ? '+' : ''}{userRank.stats.totalProfit.toFixed(2)}
                       </div>
                     </div>
                     <div>
-                      <div className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-1">Accuracy</div>
-                      <div className="text-xl font-black text-white">{userRank.stats.accuracy.toFixed(1)}%</div>
+                      <div className="text-[10px] sm:text-xs font-bold uppercase tracking-widest text-gray-500 mb-1">Accuracy</div>
+                      <div className="text-base sm:text-xl font-black text-white">{userRank.stats.accuracy.toFixed(1)}%</div>
                     </div>
                   </div>
                 </div>
@@ -197,8 +197,8 @@ export default function LeaderboardPage() {
             <div className="absolute inset-0 bg-noise opacity-20 mix-blend-overlay rounded-2xl pointer-events-none" />
 
             <div className="relative overflow-hidden rounded-2xl">
-              {/* Table Header */}
-              <div className="grid grid-cols-12 gap-4 px-8 py-4 border-b border-white/10 text-xs font-bold uppercase tracking-widest text-gray-500">
+              {/* Desktop Table Header */}
+              <div className="hidden md:grid grid-cols-12 gap-4 px-6 lg:px-8 py-4 border-b border-white/10 text-xs font-bold uppercase tracking-widest text-gray-500">
                 <div className="col-span-1">Rank</div>
                 <div className="col-span-3">Trader</div>
                 <div className="col-span-2 text-right">Volume</div>
@@ -210,10 +210,10 @@ export default function LeaderboardPage() {
               {/* Table Body */}
               <div className="max-h-[600px] overflow-y-auto">
                 {leaderboard.length === 0 ? (
-                  <div className="p-20 text-center">
-                    <Target className="w-16 h-16 mx-auto text-gray-600 mb-4" />
-                    <h3 className="text-xl font-bold text-gray-400 mb-2">No Data Yet</h3>
-                    <p className="text-gray-500">Start trading to appear on the leaderboard!</p>
+                  <div className="p-12 sm:p-20 text-center">
+                    <Target className="w-12 h-12 sm:w-16 sm:h-16 mx-auto text-gray-600 mb-4" />
+                    <h3 className="text-lg sm:text-xl font-bold text-gray-400 mb-2">No Data Yet</h3>
+                    <p className="text-gray-500 text-sm">Start trading to appear on the leaderboard!</p>
                   </div>
                 ) : (
                   leaderboard.map((trader, index) => (
@@ -222,49 +222,72 @@ export default function LeaderboardPage() {
                       initial={{ opacity: 0, x: -20 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: index * 0.02 }}
-                      className={`grid grid-cols-12 gap-4 px-8 py-5 border-b border-white/5 hover:bg-white/5 transition-all ${publicKey && trader.address === publicKey ? 'bg-new-mint/5' : ''
-                        }`}
+                      className={`border-b border-white/5 hover:bg-white/5 transition-all ${address && trader.address === address ? 'bg-new-mint/5' : ''}`}
                     >
-                      {/* Rank */}
-                      <div className="col-span-1 flex items-center gap-2">
-                        {getRankIcon(trader.rank || 0)}
-                        <span className={`text-lg font-black ${getRankColor(trader.rank || 0)}`}>
-                          #{trader.rank}
-                        </span>
-                      </div>
-
-                      {/* Trader Address */}
-                      <div className="col-span-3 flex items-center">
-                        <span className="font-mono text-white font-bold">
-                          {formatAddress(trader.address)}
-                        </span>
-                      </div>
-
-                      {/* Volume */}
-                      <div className="col-span-2 text-right flex items-center justify-end">
-                        <span className="text-white font-bold">{formatVolume(trader.totalVolume)} ALEO</span>
-                      </div>
-
-                      {/* Profit */}
-                      <div className="col-span-2 text-right flex items-center justify-end">
-                        <span className={`font-black ${trader.totalProfit >= 0 ? 'text-off-green' : 'text-off-red'}`}>
-                          {trader.totalProfit >= 0 ? '+' : ''}{trader.totalProfit.toFixed(2)}
-                        </span>
-                      </div>
-
-                      {/* Trades */}
-                      <div className="col-span-2 text-right flex items-center justify-end">
-                        <div>
-                          <div className="text-white font-bold">{trader.totalTrades}</div>
-                          <div className="text-xs text-gray-500">
-                            {trader.winningTrades}W / {trader.losingTrades}L
+                      {/* Desktop row */}
+                      <div className="hidden md:grid grid-cols-12 gap-4 px-6 lg:px-8 py-5">
+                        <div className="col-span-1 flex items-center gap-2">
+                          {getRankIcon(trader.rank || 0)}
+                          <span className={`text-lg font-black ${getRankColor(trader.rank || 0)}`}>
+                            #{trader.rank}
+                          </span>
+                        </div>
+                        <div className="col-span-3 flex items-center">
+                          <span className="font-mono text-white font-bold">
+                            {formatAddress(trader.address)}
+                          </span>
+                        </div>
+                        <div className="col-span-2 text-right flex items-center justify-end">
+                          <span className="text-white font-bold">{formatVolume(trader.totalVolume)} ALEO</span>
+                        </div>
+                        <div className="col-span-2 text-right flex items-center justify-end">
+                          <span className={`font-black ${trader.totalProfit >= 0 ? 'text-off-green' : 'text-off-red'}`}>
+                            {trader.totalProfit >= 0 ? '+' : ''}{trader.totalProfit.toFixed(2)}
+                          </span>
+                        </div>
+                        <div className="col-span-2 text-right flex items-center justify-end">
+                          <div>
+                            <div className="text-white font-bold">{trader.totalTrades}</div>
+                            <div className="text-xs text-gray-500">
+                              {trader.winningTrades}W / {trader.losingTrades}L
+                            </div>
                           </div>
+                        </div>
+                        <div className="col-span-2 text-right flex items-center justify-end">
+                          <span className="text-white font-bold">{trader.accuracy.toFixed(1)}%</span>
                         </div>
                       </div>
 
-                      {/* Accuracy */}
-                      <div className="col-span-2 text-right flex items-center justify-end">
-                        <span className="text-white font-bold">{trader.accuracy.toFixed(1)}%</span>
+                      {/* Mobile card */}
+                      <div className="md:hidden px-4 py-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-2">
+                            {getRankIcon(trader.rank || 0)}
+                            <span className={`text-base font-black ${getRankColor(trader.rank || 0)}`}>
+                              #{trader.rank}
+                            </span>
+                            <span className="font-mono text-sm text-white font-bold">
+                              {formatAddress(trader.address)}
+                            </span>
+                          </div>
+                          <span className="text-white font-bold text-sm">{trader.accuracy.toFixed(1)}%</span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-3 text-xs">
+                          <div>
+                            <span className="text-gray-500 block">Volume</span>
+                            <span className="text-white font-bold">{formatVolume(trader.totalVolume)}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-500 block">Profit</span>
+                            <span className={`font-bold ${trader.totalProfit >= 0 ? 'text-off-green' : 'text-off-red'}`}>
+                              {trader.totalProfit >= 0 ? '+' : ''}{trader.totalProfit.toFixed(2)}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-gray-500 block">Trades</span>
+                            <span className="text-white font-bold">{trader.totalTrades} <span className="text-gray-500">({trader.winningTrades}W/{trader.losingTrades}L)</span></span>
+                          </div>
+                        </div>
                       </div>
                     </motion.div>
                   ))

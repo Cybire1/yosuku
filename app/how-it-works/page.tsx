@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { ArrowLeft, Target, Zap, TrendingUp, Clock, Coins, Trophy, HelpCircle, ArrowRight } from 'lucide-react';
+import { ArrowLeft, Target, Zap, TrendingUp, Clock, Coins, Trophy, HelpCircle, ArrowRight, Shield, EyeOff, Lock } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import Header from '@/components/Header';
 
@@ -11,8 +11,8 @@ export default function HowItWorksPage() {
   const steps = [
     {
       number: 1,
-      title: 'Connect & Mint',
-      description: 'Connect your Leo Wallet and mint free DART tokens from the faucet. No purchase needed — it\'s a demo token for testnet.',
+      title: 'Connect & Fund',
+      description: 'Connect your Leo Wallet and bridge USDCx from the Aleo bridge. USDCx is a stablecoin pegged to USDC.',
       icon: Coins,
       numClass: 'bg-new-mint/10 text-new-mint',
       iconClass: 'text-new-mint',
@@ -28,7 +28,7 @@ export default function HowItWorksPage() {
     {
       number: 3,
       title: 'Bet YES or NO',
-      description: 'Bet YES if you think BTC will be at or above the target price. Bet NO if you think it\'ll be below. Choose your amount in DART.',
+      description: 'Bet YES if you think BTC will be at or above the target price. Bet NO if you think it\'ll be below. Choose your amount in USDCx.',
       icon: Zap,
       numClass: 'bg-new-mint/10 text-new-mint',
       iconClass: 'text-new-mint',
@@ -61,15 +61,20 @@ export default function HowItWorksPage() {
     },
     {
       title: 'On-Chain Settlement',
-      description: 'Everything runs on Aleo smart contracts. Bets, pools, and payouts are all verifiable on-chain. No middleman.',
+      description: 'Everything runs on Aleo smart contracts. Bets, pools, and payouts are all verifiable on-chain with zero-knowledge proofs. No middleman, full privacy.',
       icon: Zap,
+    },
+    {
+      title: 'Dark Pool + Private Bets',
+      description: 'Your bet side (Up/Down) is encrypted — nobody can see which side you chose. During betting, only the combined pool total is visible. Per-side breakdown is revealed only at resolution.',
+      icon: Shield,
     },
   ];
 
   const faqs = [
     {
-      question: 'What are DART tokens?',
-      answer: 'DART is a free demo token on Aleo testnet. Anyone can mint from the faucet. It\'s used to place bets in prediction rounds — no real money involved.',
+      question: 'What currency does DART use?',
+      answer: 'DART uses USDCx (test_usdcx_stablecoin.aleo) — a USDC-pegged stablecoin on Aleo. Bridge USDC from Ethereum Sepolia to get USDCx at usdcx.aleo.dev.',
     },
     {
       question: 'How is the winner decided?',
@@ -77,7 +82,7 @@ export default function HowItWorksPage() {
     },
     {
       question: 'How much do I win?',
-      answer: 'Your payout = (your bet / winning pool) × total pool × 90%. The 10% fee goes to the platform. For example, if you bet 100 DART on YES, the YES pool is 500, and total pool is 1000 — you\'d get (100/500) × 1000 × 0.9 = 180 DART.',
+      answer: 'Your payout = (your bet / winning pool) × total pool × 90%. The 10% fee goes to the platform. For example, if you bet 100 USDCx on YES, the YES pool is 500, and total pool is 1000 — you\'d get (100/500) × 1000 × 0.9 = 180 USDCx.',
     },
     {
       question: 'What wallet do I need?',
@@ -85,7 +90,11 @@ export default function HowItWorksPage() {
     },
     {
       question: 'Is this real money?',
-      answer: 'No. DART tokens are free testnet tokens with no real value. This is a demo running on Aleo testnet for educational and testing purposes.',
+      answer: 'On testnet, USDCx is bridged from Sepolia test USDC. This is a demo running on Aleo testnet for educational and testing purposes.',
+    },
+    {
+      question: 'How does DART protect my privacy?',
+      answer: 'DART uses three layers of Aleo privacy: (1) Private bet side — your Up/Down choice is encrypted in a BetSlot record that only your wallet can decrypt, (2) Dark pool — during betting, only the combined pool total is visible; the YES/NO split is hidden until resolution, (3) ZK-verified claims — when you claim, a zero-knowledge proof verifies your eligibility without revealing your position to the network.',
     },
     {
       question: 'Can I create my own rounds?',
@@ -119,11 +128,11 @@ export default function HowItWorksPage() {
             animate={{ opacity: 1, y: 0 }}
             className="mb-16"
           >
-            <h1 className="text-5xl md:text-6xl font-black tracking-tight text-white mb-4">
+            <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black tracking-tight text-white mb-4">
               How It Works
             </h1>
             <p className="text-lg text-gray-400 max-w-2xl leading-relaxed">
-              Predict BTC price movements. Bet with DART tokens. Win from the pool.
+              Predict BTC price movements. Bet with USDCx stablecoin. Win from the pool.
             </p>
           </motion.div>
 
@@ -161,32 +170,32 @@ export default function HowItWorksPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
-            className="mb-20 bg-neutral-900/50 border border-new-mint/10 rounded-2xl p-8"
+            className="mb-20 bg-neutral-900/50 border border-new-mint/10 rounded-2xl p-4 sm:p-6 md:p-8"
           >
             <h2 className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-6">Payout Example</h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+            <div className="grid grid-cols-3 gap-3 sm:gap-6 mb-6">
               <div className="text-center">
-                <div className="text-3xl font-black font-mono text-new-mint">500</div>
-                <div className="text-xs text-gray-500 mt-1">YES Pool (DART)</div>
+                <div className="text-xl sm:text-2xl md:text-3xl font-black font-mono text-new-mint">500</div>
+                <div className="text-xs text-gray-500 mt-1">YES Pool (USDCx)</div>
               </div>
               <div className="text-center">
-                <div className="text-3xl font-black font-mono text-off-red">500</div>
-                <div className="text-xs text-gray-500 mt-1">NO Pool (DART)</div>
+                <div className="text-xl sm:text-2xl md:text-3xl font-black font-mono text-off-red">500</div>
+                <div className="text-xs text-gray-500 mt-1">NO Pool (USDCx)</div>
               </div>
               <div className="text-center">
-                <div className="text-3xl font-black font-mono text-white">1,000</div>
-                <div className="text-xs text-gray-500 mt-1">Total Pool (DART)</div>
+                <div className="text-xl sm:text-2xl md:text-3xl font-black font-mono text-white">1,000</div>
+                <div className="text-xs text-gray-500 mt-1">Total Pool (USDCx)</div>
               </div>
             </div>
             <div className="border-t border-white/5 pt-6">
               <div className="flex items-center gap-3 flex-wrap">
                 <span className="text-sm text-gray-400">You bet</span>
-                <span className="px-3 py-1 bg-new-mint/10 text-new-mint font-mono font-bold text-sm rounded-lg">100 DART on YES</span>
+                <span className="px-3 py-1 bg-new-mint/10 text-new-mint font-mono font-bold text-sm rounded-lg">100 USDCx on YES</span>
                 <ArrowRight className="w-4 h-4 text-gray-600" />
                 <span className="text-sm text-gray-400">YES wins</span>
                 <ArrowRight className="w-4 h-4 text-gray-600" />
                 <span className="text-sm text-gray-400">You get</span>
-                <span className="px-3 py-1 bg-new-mint/10 text-new-mint font-mono font-bold text-sm rounded-lg">180 DART</span>
+                <span className="px-3 py-1 bg-new-mint/10 text-new-mint font-mono font-bold text-sm rounded-lg">180 USDCx</span>
                 <span className="text-xs text-gray-600">(100/500 × 1000 × 90%)</span>
               </div>
             </div>
@@ -214,6 +223,64 @@ export default function HowItWorksPage() {
                 </motion.div>
               ))}
             </div>
+          </div>
+
+          {/* Privacy Architecture */}
+          <div className="mb-20">
+            <h2 className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-8 flex items-center gap-2">
+              <Shield className="w-4 h-4 text-sky-400" />
+              Privacy Architecture
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.5 }}
+                className="bg-neutral-900/50 border border-sky-400/10 hover:border-sky-400/20 rounded-2xl p-6 transition-all"
+              >
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-8 h-8 rounded-lg bg-sky-400/10 flex items-center justify-center">
+                    <EyeOff className="w-4 h-4 text-sky-400" />
+                  </div>
+                  <h3 className="text-base font-bold text-white">Private Bet Side</h3>
+                </div>
+                <p className="text-sm text-gray-400 leading-relaxed">
+                  Your bet side (Up/Down) is stored in an encrypted <span className="text-sky-400 font-medium">BetSlot</span> record — it never leaves your wallet. The contract only sees your bet amount on-chain, not which side you chose. This is true privacy that can only exist on Aleo.
+                </p>
+              </motion.div>
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.55 }}
+                className="bg-neutral-900/50 border border-sky-400/10 hover:border-sky-400/20 rounded-2xl p-6 transition-all"
+              >
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-8 h-8 rounded-lg bg-sky-400/10 flex items-center justify-center">
+                    <Lock className="w-4 h-4 text-sky-400" />
+                  </div>
+                  <h3 className="text-base font-bold text-white">Dark Pool</h3>
+                </div>
+                <p className="text-sm text-gray-400 leading-relaxed">
+                  During betting, only the <span className="text-sky-400 font-medium">combined pool total</span> is visible on-chain. The YES/NO breakdown is hidden until the round resolves — preventing front-running and ensuring fair odds for everyone.
+                </p>
+              </motion.div>
+            </div>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.6 }}
+              className="bg-neutral-900/50 border border-sky-400/10 hover:border-sky-400/20 rounded-2xl p-6 transition-all"
+            >
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-8 h-8 rounded-lg bg-sky-400/10 flex items-center justify-center">
+                  <Shield className="w-4 h-4 text-sky-400" />
+                </div>
+                <h3 className="text-base font-bold text-white">ZK-Verified Claims</h3>
+              </div>
+              <p className="text-sm text-gray-400 leading-relaxed">
+                When you claim winnings, your encrypted <span className="text-sky-400 font-medium">BetSlot</span> record is consumed and verified with a zero-knowledge proof. The contract confirms you're on the winning side and calculates your payout — all without revealing your position to the network. Your slot is then recycled for the next round.
+              </p>
+            </motion.div>
           </div>
 
           {/* FAQ */}
@@ -247,7 +314,7 @@ export default function HowItWorksPage() {
           >
             <h2 className="text-2xl font-black mb-3">Ready to Predict?</h2>
             <p className="text-gray-400 text-sm mb-6 max-w-md mx-auto">
-              Mint free DART tokens, pick a side, and see if you can beat the market.
+              Bridge USDCx, pick a side, and see if you can beat the market.
             </p>
             <button
               onClick={() => router.push('/markets')}

@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Shield, CheckCircle, XCircle, Clock, TrendingUp, Users, ArrowLeft } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useWallet } from '@demox-labs/aleo-wallet-adapter-react';
+import { useWallet } from '@provablehq/aleo-wallet-adaptor-react';
 import Header from '@/components/Header';
 import type { Market } from '@/components/MarketCard';
 
@@ -15,14 +15,14 @@ const ADMIN_ADDRESSES = [
 
 export default function AdminPage() {
   const router = useRouter();
-  const { publicKey, requestTransaction } = useWallet();
+  const { address, executeTransaction } = useWallet();
   const [markets, setMarkets] = useState<Market[]>([]);
   const [loading, setLoading] = useState(false);
   const [resolving, setResolving] = useState<string | null>(null);
   const [error, setError] = useState('');
 
   // Check if connected user is admin
-  const isAdmin = publicKey && ADMIN_ADDRESSES.includes(publicKey);
+  const isAdmin = address && ADMIN_ADDRESSES.includes(address);
 
   useEffect(() => {
     loadMarkets();
@@ -41,7 +41,7 @@ export default function AdminPage() {
   };
 
   const handleResolve = async (market: Market, outcome: 'YES' | 'NO') => {
-    if (!publicKey || !requestTransaction) {
+    if (!address || !executeTransaction) {
       setError('Please connect your wallet first');
       return;
     }
@@ -62,19 +62,13 @@ export default function AdminPage() {
         outcome === 'YES' ? 'true' : 'false', // winning_side: bool
       ];
 
-      const transaction = {
-        address: publicKey,
-        chainId: 'testnetbeta',
-        transitions: [{
-          program: 'predictionmarket_v2.aleo',
-          functionName: 'resolve_market',
-          inputs,
-        }],
-        fee: 1000000, // 1 ALEO
-        feePrivate: false,
-      };
-
-      const txResult = await requestTransaction(transaction);
+      const txResult = await executeTransaction({
+        program: 'predictionmarket_v2.aleo',
+        function: 'resolve_market',
+        inputs,
+        fee: 1_000_000,
+        privateFee: false,
+      });
       console.log('Resolution transaction:', txResult);
 
       // Update market status locally
@@ -97,7 +91,7 @@ export default function AdminPage() {
     }
   };
 
-  if (!publicKey) {
+  if (!address) {
     return (
       <div className="min-h-screen text-white selection:bg-off-blue/30 overflow-x-hidden">
         <div className="fixed inset-0 bg-noise opacity-[0.03] pointer-events-none z-50"></div>

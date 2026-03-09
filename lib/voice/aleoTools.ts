@@ -1,4 +1,4 @@
-// Voice tools for BTC Prediction round-based system
+// Voice tools for BTC Prediction round-based system (v7 — dark pool + private bets)
 import { fetchRound, loadPositions, getBlockHeight } from '@/lib/roundHelpers';
 import {
   BTC_PREDICTION_PROGRAM,
@@ -33,15 +33,15 @@ async function fetchAleoBalance(address: string): Promise<number> {
   }
 }
 
-async function fetchDartBalance(address: string): Promise<number> {
+async function fetchUsdcxBalance(address: string): Promise<number> {
   try {
     const res = await fetch(
-      `https://api.explorer.provable.com/v1/testnet/program/dart_token.aleo/mapping/balances/${address}`
+      `https://api.explorer.provable.com/v1/testnet/program/test_usdcx_stablecoin.aleo/mapping/balances/${address}`
     );
     if (!res.ok) return 0;
     const data = await res.json();
     if (data && typeof data === 'string') {
-      return parseInt(data.replace('u64', '')) / PRED_MULTIPLIER;
+      return parseInt(data.replace('u128', '')) / PRED_MULTIPLIER;
     }
     return 0;
   } catch {
@@ -61,7 +61,7 @@ async function findLatestRoundId(): Promise<number> {
   // Check forward
   for (let offset = 3; offset >= 0; offset--) {
     const id = lastKnown + offset;
-    const exists = await fetchMapping(BTC_PREDICTION_PROGRAM, 'round_target_price', `${id}u64`);
+    const exists = await fetchMapping(BTC_PREDICTION_PROGRAM, 'rt', `${id}u64`);
     if (exists && exists !== 'null') return id;
   }
 
@@ -84,16 +84,15 @@ export async function getCurrentRound(): Promise<VoiceToolResult> {
     }
 
     const targetUsd = (round.targetPrice / 100).toFixed(2);
-    const totalPool = round.yesPool + round.noPool;
-    const yesPoolDart = formatPred(round.yesPool);
-    const noPoolDart = formatPred(round.noPool);
-    const totalDart = formatPred(totalPool);
+    const totalDart = formatPred(round.totalPool);
 
     if (round.resolved) {
       const outcome = round.outcome ? 'YES (above target)' : 'NO (below target)';
+      const yesPoolDart = formatPred(round.yesPool);
+      const noPoolDart = formatPred(round.noPool);
       return {
         success: true,
-        message: `Round #${round.id} is resolved. Target was $${targetUsd}. Outcome: ${outcome}. Total pool: ${totalDart} DART (YES: ${yesPoolDart}, NO: ${noPoolDart}). Next round should start soon.`,
+        message: `Round #${round.id} is resolved. Target was $${targetUsd}. Outcome: ${outcome}. Total pool: ${totalDart} USDCx (YES: ${yesPoolDart}, NO: ${noPoolDart}). Next round should start soon.`,
         data: round,
       };
     }
@@ -105,7 +104,7 @@ export async function getCurrentRound(): Promise<VoiceToolResult> {
 
     return {
       success: true,
-      message: `Round #${round.id} is active. BTC target: $${targetUsd}. ${timeStr}. Pool: ${totalDart} DART (YES: ${yesPoolDart}, NO: ${noPoolDart}).`,
+      message: `Round #${round.id} is active. BTC target: $${targetUsd}. ${timeStr}. Dark pool total: ${totalDart} USDCx (per-side breakdown hidden until resolution).`,
       data: round,
     };
   } catch (error: any) {
@@ -136,7 +135,7 @@ export async function getRoundHistory(): Promise<VoiceToolResult> {
       .map(r => {
         const outcome = r.outcome ? 'YES' : 'NO';
         const targetUsd = (r.targetPrice / 100).toFixed(2);
-        return `#${r.id}: Target $${targetUsd} → ${outcome} won | Pool: ${formatPred(r.yesPool + r.noPool)} DART`;
+        return `#${r.id}: Target $${targetUsd} → ${outcome} won | Pool: ${formatPred(r.totalPool)} USDCx`;
       })
       .join('\n');
 
@@ -150,7 +149,7 @@ export async function getRoundHistory(): Promise<VoiceToolResult> {
   }
 }
 
-/** Get wallet balance (ALEO credits + DART tokens) */
+/** Get wallet balance (ALEO credits + USDCx tokens) */
 export async function getWalletBalance(publicKey: string | undefined): Promise<VoiceToolResult> {
   try {
     if (!publicKey) {
@@ -161,9 +160,9 @@ export async function getWalletBalance(publicKey: string | undefined): Promise<V
       };
     }
 
-    const [aleoBalance, dartBalance] = await Promise.all([
+    const [aleoBalance, usdcxBalance] = await Promise.all([
       fetchAleoBalance(publicKey),
-      fetchDartBalance(publicKey),
+      fetchUsdcxBalance(publicKey),
     ]);
 
     const positions = loadPositions();
@@ -174,10 +173,10 @@ export async function getWalletBalance(publicKey: string | undefined): Promise<V
     );
 
     let message = `Your wallet:\n`;
-    message += `ALEO Credits: ${aleoBalance.toFixed(2)} ALEO\n`;
-    message += `DART Balance: ${(dartBalance).toFixed(0)} DART\n`;
+    message += `ALEO USDCx: ${aleoBalance.toFixed(2)} ALEO\n`;
+    message += `USDCx Balance: ${(usdcxBalance).toFixed(0)} USDCx\n`;
     if (totalStaked > 0) {
-      message += `Staked in rounds: ${formatPred(totalStaked)} DART\n`;
+      message += `Staked in rounds: ${formatPred(totalStaked)} USDCx\n`;
     }
     if (activeCount > 0) {
       message += `Active positions: ${activeCount}`;
@@ -186,7 +185,7 @@ export async function getWalletBalance(publicKey: string | undefined): Promise<V
     return {
       success: true,
       message,
-      data: { aleoBalance, dartBalance, activeCount, totalStaked },
+      data: { aleoBalance, usdcxBalance, activeCount, totalStaked },
     };
   } catch (error: any) {
     return { success: false, message: 'Failed to fetch wallet balance.', error: error.message };
@@ -222,7 +221,7 @@ export async function getActivePositions(publicKey: string | undefined): Promise
       const side = pos.yesDeposit > 0 ? 'YES' : 'NO';
       const deposit = Math.max(pos.yesDeposit, pos.noDeposit);
 
-      if (!round) return `Round #${pos.roundId}: ${formatPred(deposit)} DART on ${side} (data unavailable)`;
+      if (!round) return `Round #${pos.roundId}: ${formatPred(deposit)} USDCx on ${side} (data unavailable)`;
 
       const targetUsd = (round.targetPrice / 100).toFixed(2);
 
@@ -233,19 +232,19 @@ export async function getActivePositions(publicKey: string | undefined): Promise
           const totalPool = round.yesPool + round.noPool;
           const winPool = round.outcome ? round.yesPool : round.noPool;
           const payout = winPool > 0 ? (deposit / winPool) * totalPool * 0.9 : 0;
-          return `Round #${pos.roundId} ($${targetUsd}): ${formatPred(deposit)} DART on ${side} → WON ${formatPred(payout)} DART${pos.claimed ? ' (claimed)' : ' (claimable!)'}`;
+          return `Round #${pos.roundId} ($${targetUsd}): ${formatPred(deposit)} USDCx on ${side} → WON ${formatPred(payout)} USDCx${pos.claimed ? ' (claimed)' : ' (claimable!)'}`;
         }
-        return `Round #${pos.roundId} ($${targetUsd}): ${formatPred(deposit)} DART on ${side} → LOST`;
+        return `Round #${pos.roundId} ($${targetUsd}): ${formatPred(deposit)} USDCx on ${side} → LOST`;
       }
 
-      return `Round #${pos.roundId} ($${targetUsd}): ${formatPred(deposit)} DART on ${side} (active)`;
+      return `Round #${pos.roundId} ($${targetUsd}): ${formatPred(deposit)} USDCx on ${side} (active — dark pool)`;
     });
 
     const totalStaked = positions.reduce((s, p) => s + Math.max(p.yesDeposit, p.noDeposit), 0);
 
     return {
       success: true,
-      message: `Your ${positions.length} positions:\n${lines.join('\n')}\n\nTotal staked: ${formatPred(totalStaked)} DART`,
+      message: `Your ${positions.length} positions:\n${lines.join('\n')}\n\nTotal staked: ${formatPred(totalStaked)} USDCx`,
       data: positions,
     };
   } catch (error: any) {
@@ -264,7 +263,7 @@ export async function prepareBet(
       return { success: false, message: 'Please connect your wallet first.', error: 'No wallet connected' };
     }
     if (amount <= 0) {
-      return { success: false, message: 'Bet amount must be greater than 0 DART.', error: 'Invalid amount' };
+      return { success: false, message: 'Bet amount must be greater than 0 USDCx.', error: 'Invalid amount' };
     }
 
     const highestId = await findLatestRoundId();
@@ -281,32 +280,24 @@ export async function prepareBet(
 
     const microAmount = amount * PRED_MULTIPLIER;
     const targetUsd = (round.targetPrice / 100).toFixed(2);
-    const totalPool = round.yesPool + round.noPool + microAmount;
-    const sidePool = (side === 'YES' ? round.yesPool : round.noPool) + microAmount;
-    const opposingPool = side === 'YES' ? round.noPool : round.yesPool;
 
-    let estPayout: number;
-    if (opposingPool === 0) {
-      estPayout = microAmount; // Full refund if no opposition
-    } else {
-      estPayout = (microAmount / sidePool) * totalPool * 0.9;
-    }
-
+    // In dark pool mode, we can't give exact payout estimates since per-side pools are hidden
     const message = `Ready to place bet on Round #${round.id}:
 
 BTC Target: $${targetUsd}
 Side: ${side} (BTC will be ${side === 'YES' ? 'above' : 'below'} target)
-Amount: ${amount} DART
+Amount: ${amount} USDCx
 Time left: ${Math.floor(secsLeft / 60)}m ${secsLeft % 60}s
-Est. payout if you win: ${formatPred(estPayout)} DART
-Profit if you win: ${formatPred(estPayout - microAmount)} DART
+Dark Pool Total: ${formatPred(round.totalPool)} USDCx
+
+Note: Your bet side is PRIVATE — encrypted in your BetSlot record. Per-side pool breakdown is hidden until resolution.
 
 Use the betting panel on the Markets page to complete this bet.`;
 
     return {
       success: true,
       message,
-      data: { roundId: round.id, side, amount, estPayout: formatPred(estPayout) },
+      data: { roundId: round.id, side, amount },
     };
   } catch (error: any) {
     return { success: false, message: 'Failed to prepare bet.', error: error.message };
@@ -376,9 +367,9 @@ Total Positions: ${positions.length}
 Active: ${active} | Resolved: ${resolvedCount} (${wins} wins, ${losses} losses)
 Win Rate: ${winRate}%
 
-Total Invested: ${formatPred(totalInvested)} DART
-P&L: ${totalPnL >= 0 ? '+' : ''}${formatPred(totalPnL)} DART
-ROI: ${roi}%${claimable > 0 ? `\nClaimable: ${formatPred(claimable)} DART` : ''}`;
+Total Invested: ${formatPred(totalInvested)} USDCx
+P&L: ${totalPnL >= 0 ? '+' : ''}${formatPred(totalPnL)} USDCx
+ROI: ${roi}%${claimable > 0 ? `\nClaimable: ${formatPred(claimable)} USDCx` : ''}`;
 
     return {
       success: true,

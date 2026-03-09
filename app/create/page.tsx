@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useWallet } from '@demox-labs/aleo-wallet-adapter-react';
+import { useWallet } from '@provablehq/aleo-wallet-adaptor-react';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Plus, Calendar, Hash, Copy } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -9,7 +9,7 @@ import Header from '@/components/Header';
 
 export default function CreateMarketPage() {
   const router = useRouter();
-  const { publicKey, requestTransaction } = useWallet();
+  const { address, executeTransaction } = useWallet();
 
   const [question, setQuestion] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -53,7 +53,7 @@ export default function CreateMarketPage() {
   const handleCreateMarket = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!publicKey || !requestTransaction) {
+    if (!address || !executeTransaction) {
       setError('Please connect your wallet first');
       return;
     }
@@ -78,24 +78,17 @@ export default function CreateMarketPage() {
 
       console.log('Creating market:', { marketId, question, questionHash });
 
-      // Construct proper AleoTransaction object
-      const transaction = {
-        address: publicKey,
-        chainId: 'testnetbeta',
-        transitions: [{
-          program: 'predictionmarket_v2.aleo',
-          functionName: 'create_market_public',
-          inputs: [
-            `${marketId}u64`,      // market_id: u64
-            questionHash,          // question_hash: field
-          ],
-        }],
-        fee: 2000000, // 2 ALEO fee for market creation
-        feePrivate: false,
-      };
-
       // Call create_market_public on the blockchain
-      const txResult = await requestTransaction(transaction);
+      const txResult = await executeTransaction({
+        program: 'predictionmarket_v2.aleo',
+        function: 'create_market_public',
+        inputs: [
+          `${marketId}u64`,
+          questionHash,
+        ],
+        fee: 2_000_000,
+        privateFee: false,
+      });
 
       console.log('Market creation result:', txResult);
 
@@ -111,7 +104,7 @@ export default function CreateMarketPage() {
         total_no_shares: 0,
         total_volume: 0,
         resolved: false,
-        creator: publicKey,
+        creator: address,
       });
       localStorage.setItem('aleomarkets', JSON.stringify(markets));
 
@@ -180,7 +173,7 @@ export default function CreateMarketPage() {
                   <span className="text-[10px] font-bold uppercase tracking-widest">Cloned from Polymarket</span>
                 </motion.div>
               )}
-              <h1 className="text-6xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-br from-white to-gray-500">
+              <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-br from-white to-gray-500">
                 Create Market
               </h1>
             </div>
@@ -202,7 +195,7 @@ export default function CreateMarketPage() {
             <div className="absolute inset-0 bg-neutral-900/40 backdrop-blur-2xl border border-white/10 rounded-3xl" />
             <div className="absolute inset-0 bg-noise opacity-20 mix-blend-overlay rounded-3xl pointer-events-none" />
 
-            <form onSubmit={handleCreateMarket} className="relative p-10 space-y-10">
+            <form onSubmit={handleCreateMarket} className="relative p-4 sm:p-6 md:p-10 space-y-6 sm:space-y-8 md:space-y-10">
 
               {/* Question Input */}
               <div className="space-y-4">
@@ -214,7 +207,7 @@ export default function CreateMarketPage() {
                     value={question}
                     onChange={(e) => setQuestion(e.target.value)}
                     placeholder="e.g. Will Bitcoin hit $100k?"
-                    className="w-full h-32 bg-black/40 border border-white/10 rounded-xl px-6 py-6 text-2xl font-bold text-white placeholder-gray-700 resize-none focus:border-off-blue/50 focus:bg-black/60 focus:outline-none focus:ring-4 focus:ring-off-blue/5 transition-all"
+                    className="w-full h-28 sm:h-32 bg-black/40 border border-white/10 rounded-xl px-4 sm:px-6 py-4 sm:py-6 text-lg sm:text-xl md:text-2xl font-bold text-white placeholder-gray-700 resize-none focus:border-off-blue/50 focus:bg-black/60 focus:outline-none focus:ring-4 focus:ring-off-blue/5 transition-all"
                     maxLength={200}
                   />
                   <div className="absolute bottom-4 right-4 text-[10px] font-bold text-gray-600">
@@ -235,7 +228,7 @@ export default function CreateMarketPage() {
                     value={endDate}
                     onChange={(e) => setEndDate(e.target.value)}
                     min={new Date().toISOString().split('T')[0]}
-                    className="w-full bg-black/40 border border-white/10 rounded-xl pl-16 pr-6 py-6 text-xl font-mono text-white placeholder-gray-700 focus:border-off-blue/50 focus:bg-black/60 focus:outline-none focus:ring-4 focus:ring-off-blue/5 transition-all text-white/90"
+                    className="w-full bg-black/40 border border-white/10 rounded-xl pl-12 sm:pl-16 pr-4 sm:pr-6 py-4 sm:py-6 text-base sm:text-xl font-mono text-white placeholder-gray-700 focus:border-off-blue/50 focus:bg-black/60 focus:outline-none focus:ring-4 focus:ring-off-blue/5 transition-all text-white/90"
                   />
                 </div>
               </div>
@@ -266,18 +259,18 @@ export default function CreateMarketPage() {
               )}
 
               {/* Actions */}
-              <div className="grid grid-cols-2 gap-4 pt-4">
+              <div className="grid grid-cols-2 gap-3 sm:gap-4 pt-4">
                 <button
                   type="button"
                   onClick={() => router.push('/')}
-                  className="px-8 py-5 rounded-xl border border-white/10 text-white font-bold uppercase tracking-widest text-xs hover:bg-white/5 transition-all"
+                  className="px-4 sm:px-8 py-3.5 sm:py-5 rounded-xl border border-white/10 text-white font-bold uppercase tracking-widest text-xs hover:bg-white/5 transition-all"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={loading || !publicKey || !question || !endDate}
-                  className="px-8 py-5 rounded-xl bg-white text-black font-black uppercase tracking-widest text-xs hover:bg-off-blue hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_30px_rgba(255,255,255,0.1)] hover:shadow-[0_0_50px_rgba(96,165,250,0.3)] flex items-center justify-center gap-2"
+                  disabled={loading || !address || !question || !endDate}
+                  className="px-4 sm:px-8 py-3.5 sm:py-5 rounded-xl bg-white text-black font-black uppercase tracking-widest text-xs hover:bg-off-blue hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_30px_rgba(255,255,255,0.1)] hover:shadow-[0_0_50px_rgba(96,165,250,0.3)] flex items-center justify-center gap-2"
                 >
                   {loading ? 'Creating...' : (
                     <>
@@ -288,7 +281,7 @@ export default function CreateMarketPage() {
                 </button>
               </div>
 
-              {!publicKey && (
+              {!address && (
                 <div className="text-center">
                   <span className="text-off-orange text-xs font-bold uppercase tracking-widest animate-pulse">
                     Please connect wallet to continue

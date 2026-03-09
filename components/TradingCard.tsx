@@ -31,7 +31,7 @@ export default function TradingCard({
   const [secs, setSecs] = useState(0);
   const [progress, setProgress] = useState(100);
 
-  const totalPool = round.yesPool + round.noPool;
+  const totalPool = round.totalPool;
   const targetUsd = round.targetPrice / 100;
   const priceDelta = price > 0 ? price - targetUsd : 0;
   const isAbove = price >= targetUsd;
@@ -56,15 +56,29 @@ export default function TradingCard({
   const positionPayout = (() => {
     if (!userSide) return 0;
     const deposit = userSide === 'YES' ? userYesDeposit : userNoDeposit;
-    // Include user's own deposit in pool if on-chain hasn't updated yet
-    const yesWithLocal = Math.max(round.yesPool, userYesDeposit);
-    const noWithLocal = Math.max(round.noPool, userNoDeposit);
-    const opposingPool = userSide === 'YES' ? noWithLocal : yesWithLocal;
-    // No opposition → full refund, no fee taken from your own money
-    if (opposingPool === 0) return deposit;
-    const effectiveTotal = yesWithLocal + noWithLocal;
-    const winPool = userSide === 'YES' ? yesWithLocal : noWithLocal;
-    return (deposit / winPool) * effectiveTotal * 0.9;
+
+    // After resolution: use actual revealed pool data
+    if (round.yesPool > 0 || round.noPool > 0) {
+      const winPool = userSide === 'YES' ? round.yesPool : round.noPool;
+      const totalPool = round.yesPool + round.noPool;
+      if (winPool === 0) return 0;
+      return (deposit / winPool) * totalPool * 0.9;
+    }
+
+    // During dark pool: use probability-based estimate
+    // Pool breakdown is hidden, so estimate payout from probability
+    const minsLeft = Math.max(0, (round.endTime - Date.now()) / 60000);
+    if (price > 0 && minsLeft > 0) {
+      const prob = estimateProb(price, targetUsd, minsLeft);
+      const sideProb = userSide === 'YES' ? prob : 1 - prob;
+      if (sideProb > 0) {
+        // Est. payout = bet / probability * 0.9 (10% fee)
+        return (deposit / sideProb) * 0.9;
+      }
+    }
+
+    // Fallback: assume 50/50
+    return deposit * 2 * 0.9;
   })();
 
   return (
@@ -176,7 +190,7 @@ export default function TradingCard({
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Pool</span>
               <AnimatedNumber value={formatPred(totalPool)} className="text-sm font-mono font-bold text-new-mint" />
-              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">DART</span>
+              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">USDCx</span>
             </div>
             <div className="flex-1 h-2 bg-white/5 rounded-full overflow-hidden">
               <div
@@ -203,13 +217,13 @@ export default function TradingCard({
                 <div>
                   <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500 block mb-1">Your Position</span>
                   <span className={`text-sm font-bold ${userSide === 'YES' ? 'text-new-mint' : 'text-off-red'}`}>
-                    {formatPred(userDeposit)} DART on {userSide}
+                    {formatPred(userDeposit)} USDCx on {userSide}
                   </span>
                 </div>
                 <div className="text-right">
                   <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500 block mb-1">Est. Payout</span>
                   <span className="text-sm font-mono font-bold text-white">
-                    {formatPred(positionPayout)} DART
+                    {formatPred(positionPayout)} USDCx
                   </span>
                 </div>
               </div>

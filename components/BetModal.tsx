@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, TrendingUp, AlertCircle } from 'lucide-react';
-import { useWallet } from '@demox-labs/aleo-wallet-adapter-react';
+import { useWallet } from '@provablehq/aleo-wallet-adaptor-react';
 import IncognitoToggle from './IncognitoToggle';
 import type { Market } from './MarketCard';
 import { savePosition } from '@/lib/positionStorage';
@@ -15,7 +15,7 @@ interface BetModalProps {
 }
 
 export default function BetModal({ market, side, onClose }: BetModalProps) {
-  const { publicKey, requestTransaction } = useWallet();
+  const { address, executeTransaction } = useWallet();
   const [amount, setAmount] = useState('');
   const [mode, setMode] = useState<'public' | 'private'>('public');
   const [loading, setLoading] = useState(false);
@@ -39,7 +39,7 @@ export default function BetModal({ market, side, onClose }: BetModalProps) {
     : (market.total_no_shares / (market.total_yes_shares + market.total_no_shares || 1)) * 100;
 
   const handlePlaceBet = async () => {
-    if (!publicKey || !requestTransaction) {
+    if (!address || !executeTransaction) {
       setError('Please connect your wallet first');
       return;
     }
@@ -65,20 +65,13 @@ export default function BetModal({ market, side, onClose }: BetModalProps) {
         `${amountInMicrocredits}u64`,         // amount: u64
       ];
 
-      // Construct proper AleoTransaction object
-      const transaction = {
-        address: publicKey,
-        chainId: 'testnetbeta',
-        transitions: [{
-          program: 'predictionmarket_v2.aleo',
-          functionName: transition,
-          inputs,
-        }],
-        fee: 1000000, // 1 million microcredits = 1 ALEO
-        feePrivate: false,
-      };
-
-      const txResult = await requestTransaction(transaction);
+      const txResult = await executeTransaction({
+        program: 'predictionmarket_v2.aleo',
+        function: transition,
+        inputs,
+        fee: 1_000_000,
+        privateFee: false,
+      });
 
       console.log('Transaction result:', txResult);
 
@@ -97,7 +90,7 @@ export default function BetModal({ market, side, onClose }: BetModalProps) {
         entryPrice: currentPrice,
         timestamp: Date.now(),
         txHash: typeof txResult === 'string' ? txResult : undefined,
-        userAddress: publicKey,
+        userAddress: address,
       });
 
       // Success!

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useWallet } from '@demox-labs/aleo-wallet-adapter-react';
+import { useWallet } from '@provablehq/aleo-wallet-adaptor-react';
 import { motion } from 'framer-motion';
 import {
   TrendingUp,
@@ -12,6 +12,9 @@ import {
   Check,
   X,
   PieChart,
+  Shield,
+  EyeOff,
+  Lock,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import Header from '@/components/Header';
@@ -34,7 +37,7 @@ import ReputationBadge from '@/components/ReputationBadge';
 
 export default function PortfolioPage() {
   const router = useRouter();
-  const { publicKey, requestTransaction, requestRecords } = useWallet();
+  const { address, executeTransaction } = useWallet();
   const [rounds, setRounds] = useState<RoundState[]>([]);
   const [positions, setPositions] = useState<UserPosition[]>([]);
   const [loading, setLoading] = useState(true);
@@ -75,9 +78,9 @@ export default function PortfolioPage() {
     setPositions(validPositions);
 
     // Fetch reputation data
-    if (publicKey) {
+    if (address) {
       try {
-        const rep = await fetchReputation(publicKey);
+        const rep = await fetchReputation(address);
         setReputation(rep);
       } catch {
         // Reputation not available yet (first time user)
@@ -85,14 +88,14 @@ export default function PortfolioPage() {
     }
 
     setLoading(false);
-  }, [publicKey]);
+  }, [address]);
 
   useEffect(() => {
     scan();
   }, [scan]);
 
   const handleClaim = async (roundId: number) => {
-    if (!publicKey || !requestTransaction) return;
+    if (!address || !executeTransaction) return;
 
     const round = rounds.find((r) => r.id === roundId);
     const pos = positions.find((p) => p.roundId === roundId);
@@ -109,50 +112,24 @@ export default function PortfolioPage() {
 
     setClaimingId(roundId);
     try {
-      // Fetch user's BetReceipt records from wallet
-      const records = await requestRecords?.(BTC_PREDICTION_PROGRAM);
-      const receiptList = Array.isArray(records) ? records : [];
-      const receipt = receiptList.find((r: Record<string, unknown>) => {
-        const data = (r as Record<string, unknown>).data as Record<string, string> | undefined;
-        const plaintext = (r as Record<string, unknown>).plaintext as string | undefined;
-        if (data?.round_id) {
-          return data.round_id === `${roundId}u64` || data.round_id === `${roundId}u64.private`;
-        }
-        if (plaintext) {
-          return plaintext.includes(`round_id: ${roundId}u64`);
-        }
-        return false;
-      });
-
-      if (!receipt) {
-        console.error('BetReceipt not found for round', roundId);
-        setClaimingId(null);
-        return;
-      }
-
-      const recordInput = (receipt as Record<string, unknown>).plaintext as string
-        || JSON.stringify(receipt);
-
-      await requestTransaction({
-        address: publicKey,
-        chainId: 'testnetbeta',
-        transitions: [
-          {
-            program: BTC_PREDICTION_PROGRAM,
-            functionName: 'claim',
-            inputs: [recordInput, `${netPayout}u64`],
-          },
-        ],
+      // v7 record-based claim: BetSlot record + payout
+      // Shield wallet handles record selection via recordIndices
+      await executeTransaction({
+        program: BTC_PREDICTION_PROGRAM,
+        function: 'claim',
+        inputs: [`${netPayout}u128`],
         fee: 2_000_000,
-        feePrivate: false,
+        privateFee: false,
+        recordIndices: [0],
       });
+
       // Optimistic balance update — will reconcile when on-chain confirms
-      const curBalance = parseInt(localStorage.getItem('dart_balance') || '0', 10);
+      const curBalance = parseInt(localStorage.getItem('usdcx_balance') || '0', 10);
       setOptimisticBalance(curBalance + netPayout);
 
       // Also kick off an on-chain refresh after a short delay
       setTimeout(() => {
-        if (publicKey) fetchOnChainBalance(publicKey);
+        if (address) fetchOnChainBalance(address);
       }, 10_000);
 
       const claimed: number[] = JSON.parse(localStorage.getItem('pred_claimed') || '[]');
@@ -218,7 +195,7 @@ export default function PortfolioPage() {
 
       <main className="pt-28 pb-12 relative">
         <motion.div
-          className="max-w-[1100px] mx-auto px-6"
+          className="max-w-[1100px] mx-auto px-4 sm:px-6"
           initial="hidden"
           animate="visible"
           variants={{
@@ -246,7 +223,7 @@ export default function PortfolioPage() {
               </h1>
             </div>
             <p className="text-sm text-gray-500">
-              Your BTC prediction performance and positions.
+              Your encrypted positions and private prediction history.
             </p>
           </motion.div>
 
@@ -257,20 +234,20 @@ export default function PortfolioPage() {
                 Loading...
               </p>
             </div>
-          ) : !publicKey ? (
+          ) : !address ? (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="relative overflow-hidden bg-neutral-900/40 backdrop-blur-2xl border border-white/10 rounded-[32px] p-20 text-center shadow-2xl"
+              className="relative overflow-hidden bg-neutral-900/40 backdrop-blur-2xl border border-white/10 rounded-[24px] sm:rounded-[32px] p-10 sm:p-16 md:p-20 text-center shadow-2xl"
             >
               {/* Premium Glow */}
               <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3/4 h-32 bg-new-mint/20 blur-[100px] rounded-full pointer-events-none" />
 
-              <div className="relative z-10 w-24 h-24 mx-auto mb-6 bg-gradient-to-b from-neutral-800 to-black rounded-full border border-white/10 flex items-center justify-center shadow-inner">
+              <div className="relative z-10 w-20 h-20 sm:w-24 sm:h-24 mx-auto mb-6 bg-gradient-to-b from-neutral-800 to-black rounded-full border border-white/10 flex items-center justify-center shadow-inner">
                 <div className="absolute inset-0 bg-new-mint/20 blur-xl rounded-full animate-pulse" />
-                <Wallet className="w-10 h-10 text-white/70 relative z-10" />
+                <Wallet className="w-8 h-8 sm:w-10 sm:h-10 text-white/70 relative z-10" />
               </div>
-              <h2 className="relative z-10 text-3xl font-black text-white tracking-tight mb-3">Connect Your Wallet</h2>
+              <h2 className="relative z-10 text-2xl sm:text-3xl font-black text-white tracking-tight mb-3">Connect Your Wallet</h2>
               <p className="relative z-10 text-gray-400 max-w-sm mx-auto">
                 Connect your Aleo wallet to track your positions, view your P&L, and claim your winnings.
               </p>
@@ -286,16 +263,16 @@ export default function PortfolioPage() {
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="relative overflow-hidden bg-neutral-900/40 backdrop-blur-2xl border border-white/10 rounded-[32px] p-20 text-center shadow-2xl"
+              className="relative overflow-hidden bg-neutral-900/40 backdrop-blur-2xl border border-white/10 rounded-[24px] sm:rounded-[32px] p-10 sm:p-16 md:p-20 text-center shadow-2xl"
             >
               {/* Premium Glow */}
               <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3/4 h-32 bg-new-blue/20 blur-[100px] rounded-full pointer-events-none" />
 
-              <div className="relative z-10 w-24 h-24 mx-auto mb-6 bg-gradient-to-b from-neutral-800 to-black rounded-full border border-white/10 flex items-center justify-center shadow-inner group">
+              <div className="relative z-10 w-20 h-20 sm:w-24 sm:h-24 mx-auto mb-6 bg-gradient-to-b from-neutral-800 to-black rounded-full border border-white/10 flex items-center justify-center shadow-inner group">
                 <div className="absolute inset-0 bg-new-blue/20 blur-xl rounded-full group-hover:bg-new-blue/30 transition-all duration-500" />
-                <Clock className="w-10 h-10 text-white/70 relative z-10 group-hover:scale-110 transition-transform duration-500" />
+                <Clock className="w-8 h-8 sm:w-10 sm:h-10 text-white/70 relative z-10 group-hover:scale-110 transition-transform duration-500" />
               </div>
-              <h2 className="relative z-10 text-3xl font-black text-white tracking-tight mb-3">No Active Positions</h2>
+              <h2 className="relative z-10 text-2xl sm:text-3xl font-black text-white tracking-tight mb-3">No Active Positions</h2>
               <p className="relative z-10 text-gray-400 max-w-sm mx-auto mb-8">
                 You haven't placed any predictions yet. Head over to the markets to make your first trade.
               </p>
@@ -315,24 +292,24 @@ export default function PortfolioPage() {
               className="space-y-6"
             >
               {/* Stats overview cards */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                 <StatCard
                   label="Invested"
                   value={`${formatPred(totalInvested)}`}
-                  sub="DART"
+                  sub="USDCx"
                   color="text-white"
                 />
                 <StatCard
                   label="P&L"
                   value={`${totalPnL >= 0 ? '+' : ''}${formatPred(totalPnL)}`}
-                  sub="DART"
+                  sub="USDCx"
                   color={totalPnL >= 0 ? 'text-new-mint' : 'text-off-red'}
                   icon={totalPnL >= 0 ? TrendingUp : TrendingDown}
                 />
                 <StatCard
                   label="Claimable"
                   value={formatPred(claimableAmount)}
-                  sub="DART"
+                  sub="USDCx"
                   color="text-new-mint"
                   icon={Trophy}
                 />
@@ -341,6 +318,13 @@ export default function PortfolioPage() {
                   value={String(roundsWithPosition.length)}
                   sub="resolved"
                   color="text-new-blue"
+                />
+                <StatCard
+                  label="Privacy"
+                  value="Active"
+                  sub="ZK Records"
+                  color="text-sky-400"
+                  icon={Shield}
                 />
               </div>
 
@@ -351,6 +335,14 @@ export default function PortfolioPage() {
                   <PredictionStats rounds={rounds} positions={positions} />
                   <PnLChart rounds={rounds} positions={positions} />
                 </div>
+              </div>
+
+              {/* Privacy notice */}
+              <div className="flex items-center gap-2 bg-sky-400/5 border border-sky-400/10 rounded-xl px-4 py-2.5">
+                <EyeOff className="w-3.5 h-3.5 text-sky-400/60 flex-shrink-0" />
+                <span className="text-[11px] text-sky-400/60">
+                  All positions stored as private Aleo records. Only your wallet can decrypt them.
+                </span>
               </div>
 
               {/* Active Positions */}
@@ -389,18 +381,23 @@ export default function PortfolioPage() {
                                   ${(round.targetPrice / 100).toFixed(2)}
                                 </span>
                               </div>
-                              <span
-                                className={`text-[10px] font-bold uppercase tracking-wider ${side === 'YES' ? 'text-new-mint' : 'text-off-red'
-                                  }`}
-                              >
-                                {side} &middot; {formatPred(deposit)} DART
-                              </span>
+                              <div className="flex items-center gap-1.5">
+                                <span
+                                  className={`text-[10px] font-bold uppercase tracking-wider ${side === 'YES' ? 'text-new-mint' : 'text-off-red'
+                                    }`}
+                                >
+                                  {side} &middot; {formatPred(deposit)} USDCx
+                                </span>
+                                <span className="inline-flex items-center gap-0.5 text-[9px] text-sky-400/60 bg-sky-400/5 px-1.5 py-0.5 rounded">
+                                  <Lock className="w-2.5 h-2.5" /> Private
+                                </span>
+                              </div>
                             </div>
                           </div>
                           <div className="text-right">
                             <span className="text-xs text-gray-500 block">Est. payout</span>
                             <span className="text-sm font-mono font-bold text-white">
-                              {formatPred(estPayout)} DART
+                              {formatPred(estPayout)} USDCx
                             </span>
                           </div>
                         </div>
@@ -462,9 +459,14 @@ export default function PortfolioPage() {
                                   {round.outcome ? 'YES' : 'NO'} Won
                                 </span>
                               </div>
-                              <span className="text-[10px] text-gray-500">
-                                Your bet: {userSide} &middot; {formatPred(deposit)} DART
-                              </span>
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-[10px] text-gray-500">
+                                  Your bet: {userSide} &middot; {formatPred(deposit)} USDCx
+                                </span>
+                                <span className="inline-flex items-center gap-0.5 text-[9px] text-sky-400/60 bg-sky-400/5 px-1.5 py-0.5 rounded">
+                                  <Lock className="w-2.5 h-2.5" /> Private
+                                </span>
+                              </div>
                             </div>
                           </div>
 
@@ -475,7 +477,7 @@ export default function PortfolioPage() {
                                   <span className="text-sm font-bold text-new-mint">
                                     +{formatPred(payout)}
                                   </span>
-                                  <span className="block text-[10px] text-gray-500">DART</span>
+                                  <span className="block text-[10px] text-gray-500">USDCx</span>
                                 </div>
                                 {canClaim && (
                                   <button
@@ -500,7 +502,7 @@ export default function PortfolioPage() {
                                 <span className="text-sm font-bold text-off-red">
                                   -{formatPred(deposit)}
                                 </span>
-                                <span className="block text-[10px] text-gray-500">DART</span>
+                                <span className="block text-[10px] text-gray-500">USDCx</span>
                               </div>
                             )}
                           </div>

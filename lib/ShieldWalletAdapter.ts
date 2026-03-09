@@ -122,12 +122,48 @@ export class ShieldWalletAdapter extends BaseMessageSignerWalletAdapter {
       if (!wallet) throw new WalletNotReadyError();
 
       try {
-        const result = await wallet.connect(decryptPermission, network, programs);
-        // Shield may return address in result or store it in _publicKey
-        const address = result?.address || wallet._publicKey;
-        if (!address) throw new WalletConnectionError('No public key returned');
-        this._publicKey = address;
+        console.log('[Shield] Connecting...', { decryptPermission, network, hasPrograms: !!programs });
+        console.log('[Shield] wallet object keys:', Object.keys(wallet));
+        console.log('[Shield] wallet._publicKey:', wallet._publicKey);
+        console.log('[Shield] wallet._network:', wallet._network);
+
+        // If wallet already has a public key, skip the connect call
+        if (wallet._publicKey) {
+          console.log('[Shield] Already has publicKey, using it directly');
+          this._publicKey = wallet._publicKey;
+        } else {
+          console.log('[Shield] wallet._network:', wallet._network);
+          // Try multiple network strings — Shield may expect a specific format
+          const networkOptions = [
+            wallet._network,  // whatever Shield is currently on
+            'testnet',
+            'testnetbeta',
+            'Testnet',
+            'TestnetBeta',
+          ].filter(Boolean) as string[];
+
+          let connected = false;
+          for (const net of networkOptions) {
+            try {
+              console.log('[Shield] Trying connect with network:', net);
+              const result = await wallet.connect('NO_DECRYPT', net);
+              const address = result?.address || wallet._publicKey;
+              if (address) {
+                this._publicKey = address;
+                connected = true;
+                console.log('[Shield] Connected on network:', net, 'address:', address);
+                break;
+              }
+            } catch (e) {
+              console.warn('[Shield] Failed with network:', net, (e as Error)?.message);
+            }
+          }
+          if (!connected) {
+            throw new WalletConnectionError('Shield wallet could not connect on any network. Open Shield extension and switch to Testnet manually, then retry.');
+          }
+        }
       } catch (error: unknown) {
+        console.error('[Shield] Connect failed:', error);
         throw new WalletConnectionError((error as Error)?.message);
       }
 

@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { ArrowLeft, TrendingUp, Clock, Users, DollarSign, Info, Calendar } from 'lucide-react';
-import { useWallet } from '@demox-labs/aleo-wallet-adapter-react';
+import { useWallet } from '@provablehq/aleo-wallet-adaptor-react';
 import Header from '@/components/Header';
 import BetModal from '@/components/BetModal';
 import MarketAnalytics from '@/components/MarketAnalytics';
@@ -13,7 +13,7 @@ import type { Market } from '@/components/MarketCard';
 export default function MarketDetailPage() {
   const router = useRouter();
   const params = useParams();
-  const { publicKey } = useWallet();
+  const { address } = useWallet();
   const [market, setMarket] = useState<(Market & { yes_odds?: number; no_odds?: number; creator?: string }) | null>(null);
   const [loading, setLoading] = useState(true);
   const [showBetModal, setShowBetModal] = useState(false);
@@ -79,7 +79,7 @@ export default function MarketDetailPage() {
   };
 
   const handleBet = (side: 'YES' | 'NO') => {
-    if (!publicKey) {
+    if (!address) {
       alert('Please connect your wallet first');
       return;
     }
@@ -162,7 +162,7 @@ export default function MarketDetailPage() {
             animate={{ opacity: 1, y: 0 }}
             className="mb-12"
           >
-            <h1 className="text-5xl md:text-6xl font-black tracking-tight leading-tight mb-6">
+            <h1 className="text-2xl sm:text-3xl md:text-5xl lg:text-6xl font-black tracking-tight leading-tight mb-4 sm:mb-6">
               {market.question}
             </h1>
 
@@ -191,8 +191,8 @@ export default function MarketDetailPage() {
               <div className="absolute inset-0 bg-neutral-900/40 backdrop-blur-2xl border border-white/10 rounded-3xl" />
               <div className="absolute inset-0 bg-noise opacity-20 mix-blend-overlay rounded-3xl pointer-events-none" />
 
-              <div className="relative p-8">
-                <h2 className="text-2xl font-black uppercase tracking-tight mb-8">Place Your Bet</h2>
+              <div className="relative p-4 sm:p-6 md:p-8">
+                <h2 className="text-lg sm:text-xl md:text-2xl font-black uppercase tracking-tight mb-4 sm:mb-6 md:mb-8">Place Your Bet</h2>
 
                 {/* YES/NO Buttons */}
                 <div className="grid grid-cols-2 gap-4 mb-8">
@@ -200,11 +200,11 @@ export default function MarketDetailPage() {
                   <button
                     onClick={() => handleBet('YES')}
                     disabled={market.resolved}
-                    className="group relative overflow-hidden rounded-2xl p-8 bg-off-green/5 border-2 border-off-green/20 hover:border-off-green/50 hover:bg-off-green/10 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="group relative overflow-hidden rounded-2xl p-4 sm:p-6 md:p-8 bg-off-green/5 border-2 border-off-green/20 hover:border-off-green/50 hover:bg-off-green/10 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <div className="relative z-10">
                       <div className="text-sm font-bold uppercase tracking-widest text-off-green mb-2">Yes</div>
-                      <div className="text-4xl font-black text-white mb-2">{market.yes_odds?.toFixed(0)}%</div>
+                      <div className="text-2xl sm:text-3xl md:text-4xl font-black text-white mb-2">{market.yes_odds?.toFixed(0)}%</div>
                       <div className="text-xs text-gray-400">{market.total_yes_shares.toFixed(0)} shares</div>
                     </div>
                     <div className="absolute inset-0 bg-off-green/0 group-hover:bg-off-green/5 transition-all" />
@@ -214,11 +214,11 @@ export default function MarketDetailPage() {
                   <button
                     onClick={() => handleBet('NO')}
                     disabled={market.resolved}
-                    className="group relative overflow-hidden rounded-2xl p-8 bg-off-red/5 border-2 border-off-red/20 hover:border-off-red/50 hover:bg-off-red/10 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="group relative overflow-hidden rounded-2xl p-4 sm:p-6 md:p-8 bg-off-red/5 border-2 border-off-red/20 hover:border-off-red/50 hover:bg-off-red/10 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <div className="relative z-10">
                       <div className="text-sm font-bold uppercase tracking-widest text-off-red mb-2">No</div>
-                      <div className="text-4xl font-black text-white mb-2">{market.no_odds?.toFixed(0)}%</div>
+                      <div className="text-2xl sm:text-3xl md:text-4xl font-black text-white mb-2">{market.no_odds?.toFixed(0)}%</div>
                       <div className="text-xs text-gray-400">{market.total_no_shares.toFixed(0)} shares</div>
                     </div>
                     <div className="absolute inset-0 bg-off-red/0 group-hover:bg-off-red/5 transition-all" />
@@ -226,7 +226,7 @@ export default function MarketDetailPage() {
                 </div>
 
                 {/* Visual Probability Bar */}
-                <div className="relative h-16 bg-neutral-950 rounded-xl overflow-hidden border border-white/10">
+                <div className="relative h-10 sm:h-12 md:h-16 bg-neutral-950 rounded-xl overflow-hidden border border-white/10">
                   <div
                     className="absolute inset-y-0 left-0 bg-gradient-to-r from-off-green/30 to-off-green/10 border-r-2 border-off-green/50"
                     style={{ width: `${market.yes_odds}%` }}
@@ -237,9 +237,9 @@ export default function MarketDetailPage() {
                   />
 
                   {/* Labels */}
-                  <div className="absolute inset-0 flex items-center justify-between px-6">
-                    <span className="text-off-green font-bold text-lg z-10">YES {market.yes_odds?.toFixed(0)}%</span>
-                    <span className="text-off-red font-bold text-lg z-10">NO {market.no_odds?.toFixed(0)}%</span>
+                  <div className="absolute inset-0 flex items-center justify-between px-3 sm:px-6">
+                    <span className="text-off-green font-bold text-xs sm:text-sm md:text-lg z-10">YES {market.yes_odds?.toFixed(0)}%</span>
+                    <span className="text-off-red font-bold text-xs sm:text-sm md:text-lg z-10">NO {market.no_odds?.toFixed(0)}%</span>
                   </div>
                 </div>
               </div>
@@ -312,8 +312,8 @@ export default function MarketDetailPage() {
           >
             <div className="absolute inset-0 bg-neutral-900/40 backdrop-blur-2xl border border-white/10 rounded-2xl" />
             <div className="absolute inset-0 bg-noise opacity-20 mix-blend-overlay rounded-2xl pointer-events-none" />
-            <div className="relative p-8">
-              <h3 className="text-xl font-black uppercase tracking-tight mb-4 flex items-center gap-3">
+            <div className="relative p-4 sm:p-6 md:p-8">
+              <h3 className="text-lg sm:text-xl font-black uppercase tracking-tight mb-4 flex items-center gap-3">
                 <Info className="w-5 h-5 text-off-blue" />
                 Resolution Criteria
               </h3>
