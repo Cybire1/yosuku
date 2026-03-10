@@ -12,6 +12,7 @@ import {
   type RoundState,
   type ReputationData,
 } from '@/lib/predictionContract';
+import { resolveSlotRecord } from '@/lib/recordResolver';
 
 interface ClaimWinningsProps {
   round: RoundState;
@@ -28,7 +29,7 @@ export default function ClaimWinnings({
   reputation,
   onClaimed,
 }: ClaimWinningsProps) {
-  const { address, executeTransaction, requestRecords } = useWallet();
+  const { address, executeTransaction, requestRecords, decrypt } = useWallet();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [claimed, setClaimed] = useState(false);
@@ -44,6 +45,14 @@ export default function ClaimWinnings({
     ? calcPayoutWithBonus(userDeposit, winPool, totalPool, bonusPct)
     : 0;
 
+  /** Find the active BetSlot record via requestRecords or tx-based decrypt */
+  const findSlotRecord = async (): Promise<string | null> => {
+    return resolveSlotRecord(
+      { requestRecords, decrypt },
+      round.id,
+    );
+  };
+
   const handleClaim = async () => {
     if (!address || !executeTransaction) {
       setError('Please connect your wallet');
@@ -54,32 +63,16 @@ export default function ClaimWinnings({
     setError('');
 
     try {
-      // v7: claim takes the BetSlot record + payout
-      // Try to get the slot record via requestRecords
-      let slotPlaintext: string | null = null;
+      const slotPlaintext = await findSlotRecord();
 
-      if (requestRecords) {
-        try {
-          const records = await requestRecords(BTC_PREDICTION_PROGRAM);
-          const activeSlots = (records || []).filter((r: any) => {
-            const pt = r.plaintext || JSON.stringify(r.data);
-            return pt.includes('active: true') || pt.includes('active:true');
-          });
-          if (activeSlots.length > 0) {
-            const s = activeSlots[0] as any;
-            slotPlaintext = s.plaintext || JSON.stringify(s.data);
-          }
-        } catch {
-          // requestRecords may fail on localhost
-        }
+      if (!slotPlaintext) {
+        setError('Could not find your BetSlot record. Make sure you have an active bet.');
+        setLoading(false);
+        return;
       }
 
-      // Always pass 2 inputs: BetSlot record + payout
-      // Shield validates input count before checking recordIndices
-      const inputs = [
-        slotPlaintext || '{}',
-        `${estimatedPayout}u128`,
-      ];
+      const inputs = [slotPlaintext, `${estimatedPayout}u128`];
+      console.log('[Claim] Submitting with inputs:', inputs.length, inputs.map(i => i.slice(0, 80)));
 
       await executeTransaction({
         program: BTC_PREDICTION_PROGRAM,
@@ -87,7 +80,7 @@ export default function ClaimWinnings({
         inputs,
         fee: 2_000_000,
         privateFee: false,
-        ...(slotPlaintext ? {} : { recordIndices: [0] }),
+        recordIndices: [0],
       });
 
       // Optimistic balance update
@@ -127,35 +120,21 @@ export default function ClaimWinnings({
     setError('');
 
     try {
-      // v7: forfeit takes BetSlot record, returns empty slot
-      let slotPlaintext: string | null = null;
+      const slotPlaintext = await findSlotRecord();
 
-      if (requestRecords) {
-        try {
-          const records = await requestRecords(BTC_PREDICTION_PROGRAM);
-          const activeSlots = (records || []).filter((r: any) => {
-            const pt = r.plaintext || JSON.stringify(r.data);
-            return pt.includes('active: true') || pt.includes('active:true');
-          });
-          if (activeSlots.length > 0) {
-            const s = activeSlots[0] as any;
-            slotPlaintext = s.plaintext || JSON.stringify(s.data);
-          }
-        } catch {
-          // requestRecords may fail
-        }
+      if (!slotPlaintext) {
+        setError('Could not find your BetSlot record.');
+        setLoading(false);
+        return;
       }
-
-      // Always pass 1 input: BetSlot record
-      const inputs = [slotPlaintext || '{}'];
 
       await executeTransaction({
         program: BTC_PREDICTION_PROGRAM,
         function: 'forfeit',
-        inputs,
+        inputs: [slotPlaintext],
         fee: 500_000,
         privateFee: false,
-        ...(slotPlaintext ? {} : { recordIndices: [0] }),
+        recordIndices: [0],
       });
 
       // Mark as claimed (forfeited)

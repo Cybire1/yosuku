@@ -19,6 +19,7 @@ import {
   type RoundState,
 } from '@/lib/predictionContract';
 import { savePosition } from '@/lib/roundHelpers';
+import { resolveSlotRecord } from '@/lib/recordResolver';
 import AnimatedNumber from './AnimatedNumber';
 import InitSlotPrompt from './InitSlotPrompt';
 
@@ -47,7 +48,7 @@ interface BetSidebarProps {
 }
 
 export default function BetSidebar({ round, onSuccess }: BetSidebarProps) {
-  const { address, executeTransaction, requestRecords } = useWallet();
+  const { address, executeTransaction, requestRecords, decrypt } = useWallet();
   const { price } = useBtcPrice();
   const [side, setSide] = useState<'YES' | 'NO'>('YES');
   const [amount, setAmount] = useState('');
@@ -77,55 +78,73 @@ export default function BetSidebar({ round, onSuccess }: BetSidebarProps) {
     return { yes: 50, no: 50 };
   })();
 
-  // Fetch slot records
+  // Fetch slot records — tries requestRecords, then tx-based decrypt fallback
   const fetchSlot = useCallback(async () => {
-    if (!address || !requestRecords) {
+    if (!address) {
       setSlotState('none');
       return;
     }
 
-    try {
-      const records = await requestRecords(BTC_PREDICTION_PROGRAM);
-      const slots = (records || []).filter(
-        (r: any) => r.data?.active !== undefined || r.plaintext?.includes('BetSlot')
-      );
+    // Strategy 1: try requestRecords directly
+    if (requestRecords) {
+      try {
+        const records = await requestRecords(BTC_PREDICTION_PROGRAM);
+        const slots = (records || []).filter(
+          (r: any) => r.data?.active !== undefined || r.plaintext?.includes('BetSlot') ||
+            (typeof r === 'string' && r.includes('active'))
+        );
 
-      if (slots.length === 0) {
-        // Check localStorage for slot initialization flag
-        const hasSlot = localStorage.getItem('v7_has_slot');
-        if (hasSlot === 'true') {
-          // User initialized but records not decrypted yet — assume empty slot
-          setSlotState('empty');
-          setSlotRecord(null);
-        } else {
-          setSlotState('none');
+        if (slots.length > 0) {
+          const slot = slots[slots.length - 1] as any;
+          const plaintext = typeof slot === 'string' ? slot : (slot.plaintext || JSON.stringify(slot.data));
+
+          const activeMatch = plaintext.match(/active:\s*(true|false)/);
+          const isActive = activeMatch?.[1] === 'true';
+
+          if (isActive) {
+            const ridMatch = plaintext.match(/rid:\s*(\d+)u64/);
+            setActiveRoundId(ridMatch ? parseInt(ridMatch[1], 10) : null);
+            setSlotState('active');
+          } else {
+            setSlotState('empty');
+          }
+
+          setSlotRecord(plaintext);
+          return;
         }
+      } catch {
+        console.warn('[BetSidebar] requestRecords failed, trying fallback...');
+      }
+    }
+
+    // Strategy 2: try resolving via stored bet tx ID
+    try {
+      const record = await resolveSlotRecord({ requestRecords, decrypt });
+      if (record) {
+        const isActive = /active:\s*true/.test(record);
+        if (isActive) {
+          const ridMatch = record.match(/rid:\s*(\d+)u64/);
+          setActiveRoundId(ridMatch ? parseInt(ridMatch[1], 10) : null);
+          setSlotState('active');
+        } else {
+          setSlotState('empty');
+        }
+        setSlotRecord(record);
         return;
       }
-
-      // Find the latest slot
-      const slot = slots[slots.length - 1] as any;
-      const plaintext = slot.plaintext || JSON.stringify(slot.data);
-
-      // Check if active
-      const activeMatch = plaintext.match(/active:\s*(true|false)/);
-      const isActive = activeMatch?.[1] === 'true';
-
-      if (isActive) {
-        const ridMatch = plaintext.match(/rid:\s*(\d+)u64/);
-        setActiveRoundId(ridMatch ? parseInt(ridMatch[1], 10) : null);
-        setSlotState('active');
-      } else {
-        setSlotState('empty');
-      }
-
-      setSlotRecord(plaintext);
     } catch {
-      // requestRecords may fail on localhost — fall back to localStorage
-      const hasSlot = localStorage.getItem('v7_has_slot');
-      setSlotState(hasSlot === 'true' ? 'empty' : 'none');
+      // ignore
     }
-  }, [address, requestRecords]);
+
+    // Strategy 3: localStorage fallback
+    const hasSlot = localStorage.getItem('v7_has_slot');
+    if (hasSlot === 'true') {
+      setSlotState('empty');
+      setSlotRecord(null);
+    } else {
+      setSlotState('none');
+    }
+  }, [address, requestRecords, decrypt]);
 
   useEffect(() => {
     if (address) {
