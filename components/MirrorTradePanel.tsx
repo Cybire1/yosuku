@@ -163,31 +163,8 @@ export default function MirrorTradePanel({
 
   const yesPct = Math.round(market.publicYesPrice * 100);
   const noPct = Math.round(market.publicNoPrice * 100);
-  const roomLabel = roomId ? roomId.replace(/-/g, ' ') : 'open feed';
-
   return (
     <section className={`${className} rounded-3xl border border-white/7 bg-neutral-950/70 p-5 sm:p-6`}>
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <span className="rounded-full border border-white/8 bg-white/[0.03] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.24em] text-gray-300">
-          Ticket
-        </span>
-        <span className="rounded-full border border-white/8 bg-white/[0.03] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.24em] text-gray-300">
-          {roomLabel}
-        </span>
-        <span className={`rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.24em] ${
-          market.onChainCreated
-            ? 'border-off-blue/20 bg-off-blue/10 text-off-blue'
-            : 'border-white/8 bg-white/[0.03] text-gray-400'
-        }`}>
-          {market.onChainCreated ? 'Live' : 'Queued'}
-        </span>
-        {market.onChainResolved && (
-          <span className="rounded-full border border-white/8 bg-white/[0.03] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.24em] text-gray-400">
-            Resolved
-          </span>
-        )}
-      </div>
-
       <h3 className={`${compact ? 'text-xl' : 'text-2xl'} font-black leading-tight text-white`}>{market.question}</h3>
       {!compact && (
         <p className="mt-2 text-sm leading-relaxed text-gray-400">
@@ -260,8 +237,8 @@ export default function MirrorTradePanel({
             onClick={() => setSide('YES')}
             className={`rounded-2xl border px-4 py-3 text-left transition-all ${
               side === 'YES'
-                ? 'border-new-mint/30 bg-new-mint/10 text-white'
-                : 'border-white/8 bg-white/[0.03] text-gray-400 hover:text-white'
+                ? 'border-[#86efac]/35 bg-[#bbf7d8] text-[#07281d]'
+                : 'border-[#86efac]/20 bg-[#86efac]/10 text-[#b7f7d0] hover:bg-[#86efac]/16'
             }`}
           >
             <p className="text-[10px] font-bold uppercase tracking-[0.24em]">{market.outcomeLabels[0]}</p>
@@ -271,8 +248,8 @@ export default function MirrorTradePanel({
             onClick={() => setSide('NO')}
             className={`rounded-2xl border px-4 py-3 text-left transition-all ${
               side === 'NO'
-                ? 'border-off-red/30 bg-off-red/10 text-white'
-                : 'border-white/8 bg-white/[0.03] text-gray-400 hover:text-white'
+                ? 'border-[#fda4af]/35 bg-[#fecdd3] text-[#4a101c]'
+                : 'border-[#fda4af]/20 bg-[#fda4af]/10 text-[#fecdd3] hover:bg-[#fda4af]/16'
             }`}
           >
             <p className="text-[10px] font-bold uppercase tracking-[0.24em]">{market.outcomeLabels[1]}</p>

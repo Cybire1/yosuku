@@ -15,30 +15,43 @@ import NewsFeed from '@/components/NewsFeed';
 import { useBtcPrice } from '@/lib/hooks/useBtcPrice';
 import { fetchMirrorCatalog, type MirrorMarketData } from '@/lib/mirrorMarkets';
 import type { MirrorSide } from '@/lib/mirrorMarkets';
-import {
-  PRIVATE_ROOMS,
-  loadUnlockedRooms,
-  unlockRoom,
-  type PrivateRoomId,
-} from '@/lib/privateRooms';
-import { getResolverBackendUrl } from '@/lib/backendUrl';
 
-function getRoomMarketVisibility(
-  market: MirrorMarketData,
-  roomId: PrivateRoomId,
-  unlockedRooms: PrivateRoomId[],
-) {
-  const text = `${market.question} ${market.description || ''} ${market.category}`.toLowerCase();
-  const volume = market.volume24hr || market.volume;
-  const isMajor = /(btc|bitcoin|eth|ethereum|rates|etf)/.test(text);
-  const isAlt = /(sol|solana|doge|xrp|sui|memecoin|altcoin)/.test(text);
-  const roomUnlocked = roomId === 'public' || unlockedRooms.includes(roomId);
+type CategoryBucket = 'all' | 'crypto' | 'sports' | 'politics' | 'tech' | 'economics' | 'science' | 'other';
 
-  if (!roomUnlocked) return false;
-  if (roomId === 'public') return !(/politics|government|election|trump|war|iran/.test(text) && volume < 100_000);
-  if (roomId === 'macro-desk') return isMajor;
-  if (roomId === 'altcoin-war-room') return isAlt;
-  return !isMajor && !isAlt || volume >= 50_000;
+const CATEGORY_BUCKETS: Array<{ id: CategoryBucket; label: string }> = [
+  { id: 'all', label: 'All markets' },
+  { id: 'crypto', label: 'Crypto' },
+  { id: 'sports', label: 'Sports' },
+  { id: 'politics', label: 'Politics' },
+  { id: 'tech', label: 'Tech' },
+  { id: 'economics', label: 'Economics' },
+  { id: 'science', label: 'Science' },
+  { id: 'other', label: 'Other' },
+];
+
+function getCategoryBucket(market: MirrorMarketData): CategoryBucket {
+  const text = `${market.category} ${market.question} ${market.description || ''}`.toLowerCase();
+
+  if (/(bitcoin|btc|eth|ethereum|sol|solana|doge|xrp|sui|token|crypto|stablecoin|altcoin|memecoin)/.test(text)) {
+    return 'crypto';
+  }
+  if (/(fifa|nba|nfl|mlb|nhl|sports|cup|tournament|qualify|match|team|league|championship)/.test(text)) {
+    return 'sports';
+  }
+  if (/(election|trump|senate|president|government|policy|war|iran|ukraine|politic|congress|vote)/.test(text)) {
+    return 'politics';
+  }
+  if (/(openai|ai|hardware|tech|apple|google|meta|nvidia|startup|consumer product)/.test(text)) {
+    return 'tech';
+  }
+  if (/(economy|fed|rates|inflation|recession|gdp|tariff|etf|macro|oil|yield|employment|finance)/.test(text)) {
+    return 'economics';
+  }
+  if (/(science|space|nasa|drug|trial|research|physics|biology|medical)/.test(text)) {
+    return 'science';
+  }
+
+  return 'other';
 }
 
 export default function MarketsPage() {
@@ -48,23 +61,16 @@ export default function MarketsPage() {
   const [mintTrigger, setMintTrigger] = useState(0);
   const [mirrorMarkets, setMirrorMarkets] = useState<MirrorMarketData[]>([]);
   const [mirrorLoading, setMirrorLoading] = useState(true);
-  const [mirrorLastSyncAt, setMirrorLastSyncAt] = useState<string | null>(null);
-  const [mirrorCreateOnChain, setMirrorCreateOnChain] = useState(false);
   const [selectedMirrorMarketId, setSelectedMirrorMarketId] = useState<string | null>(null);
   const [selectedTradeSide, setSelectedTradeSide] = useState<MirrorSide | null>(null);
-  const [activeRoomId, setActiveRoomId] = useState<PrivateRoomId>('public');
-  const [unlockedRooms, setUnlockedRooms] = useState<PrivateRoomId[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'live' | 'queued'>('all');
   const [sortBy, setSortBy] = useState<'volume' | 'ending' | 'signal'>('volume');
-  const [categoryFilter, setCategoryFilter] = useState('all');
-  const [unlockCode, setUnlockCode] = useState('');
-  const [unlockError, setUnlockError] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState<CategoryBucket>('all');
   const tradePanelRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    setUnlockedRooms(loadUnlockedRooms());
 
     async function loadMirrorCatalog() {
       try {
@@ -72,11 +78,6 @@ export default function MarketsPage() {
         if (cancelled) return;
 
         setMirrorMarkets(markets);
-
-        const res = await fetch(`${getResolverBackendUrl()}/api/mirrors`);
-        const data = res.ok ? await res.json() : null;
-        setMirrorLastSyncAt(data?.status?.lastSyncAt || null);
-        setMirrorCreateOnChain(Boolean(data?.status?.createOnChain));
 
         setSelectedMirrorMarketId((current) => {
           if (current && markets.some((market) => market.marketId === current)) {
@@ -110,27 +111,30 @@ export default function MarketsPage() {
     };
   }, []);
 
-  const roomVisibleMarkets = useMemo(
-    () => mirrorMarkets.filter((market) => getRoomMarketVisibility(market, activeRoomId, unlockedRooms)),
-    [mirrorMarkets, activeRoomId, unlockedRooms]
-  );
-
-  const categoryOptions = useMemo(() => {
-    const unique = new Set<string>();
-    roomVisibleMarkets.forEach((market) => unique.add(market.category));
-    return ['all', ...Array.from(unique).slice(0, 10)];
-  }, [roomVisibleMarkets]);
-
-  useEffect(() => {
-    if (categoryFilter !== 'all' && !categoryOptions.includes(categoryFilter)) {
-      setCategoryFilter('all');
-    }
-  }, [categoryFilter, categoryOptions]);
+  const categoryCounts = useMemo(() => {
+    return mirrorMarkets.reduce<Record<CategoryBucket, number>>(
+      (counts, market) => {
+        counts.all += 1;
+        counts[getCategoryBucket(market)] += 1;
+        return counts;
+      },
+      {
+        all: 0,
+        crypto: 0,
+        sports: 0,
+        politics: 0,
+        tech: 0,
+        economics: 0,
+        science: 0,
+        other: 0,
+      }
+    );
+  }, [mirrorMarkets]);
 
   const visibleMirrorMarkets = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
 
-    const filtered = roomVisibleMarkets.filter((market) => {
+    const filtered = mirrorMarkets.filter((market) => {
       const matchesQuery =
         !normalizedQuery ||
         `${market.question} ${market.description || ''} ${market.category}`.toLowerCase().includes(normalizedQuery);
@@ -143,7 +147,7 @@ export default function MarketsPage() {
             : !market.onChainCreated;
 
       const matchesCategory =
-        categoryFilter === 'all' || market.category.toLowerCase() === categoryFilter.toLowerCase();
+        categoryFilter === 'all' || getCategoryBucket(market) === categoryFilter;
 
       return matchesQuery && matchesStatus && matchesCategory;
     });
@@ -163,7 +167,7 @@ export default function MarketsPage() {
 
       return (b.volume24hr || b.volume) - (a.volume24hr || a.volume);
     });
-  }, [roomVisibleMarkets, searchQuery, statusFilter, sortBy, categoryFilter]);
+  }, [mirrorMarkets, searchQuery, statusFilter, sortBy, categoryFilter]);
 
   useEffect(() => {
     setSelectedMirrorMarketId((current) => {
@@ -178,8 +182,6 @@ export default function MarketsPage() {
 
   const selectedMirrorMarket =
     visibleMirrorMarkets.find((market) => market.marketId === selectedMirrorMarketId) || null;
-  const selectedRoom = PRIVATE_ROOMS.find((room) => room.id === activeRoomId) || PRIVATE_ROOMS[0];
-  const selectedRoomLocked = selectedRoom.privacy === 'invite-only' && !unlockedRooms.includes(selectedRoom.id);
   const btcPriceLabel = btcPrice > 0 ? `$${btcPrice.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : 'Loading';
   const btcChangeLabel = `${change24h >= 0 ? '+' : ''}${change24h.toFixed(2)}%`;
 
@@ -218,26 +220,8 @@ export default function MarketsPage() {
             }}
             className="mb-5 rounded-[1.9rem] border border-white/7 bg-neutral-950/75 p-4 sm:p-5"
           >
-            <div className="mb-4 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div>
-                <div className="mb-2 flex flex-wrap items-center gap-2">
-                  <span className="rounded-full border border-new-mint/20 bg-new-mint/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.24em] text-new-mint">
-                    Markets
-                  </span>
-                  <span className="rounded-full border border-white/8 bg-white/[0.03] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.24em] text-gray-300">
-                    {visibleMirrorMarkets.length} visible
-                  </span>
-                  {mirrorCreateOnChain && (
-                    <span className="rounded-full border border-white/8 bg-white/[0.03] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.24em] text-gray-300">
-                      Auto-sync live
-                    </span>
-                  )}
-                  {mirrorLastSyncAt && (
-                    <span className="rounded-full border border-white/8 bg-white/[0.03] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.24em] text-gray-300">
-                      Synced {new Date(mirrorLastSyncAt).toLocaleTimeString()}
-                    </span>
-                  )}
-                </div>
                 <h1 className="text-2xl font-black tracking-tight text-white sm:text-3xl">Markets</h1>
               </div>
 
@@ -248,23 +232,28 @@ export default function MarketsPage() {
                     <TokenBalance refreshTrigger={mintTrigger} />
                   </div>
                 )}
-
-                <Link
-                  href="/markets/btc"
-                  className="group flex items-center justify-between gap-3 rounded-[1.35rem] border border-white/8 bg-white/[0.03] px-4 py-3 transition-colors hover:border-white/16"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-full border border-new-mint/20 bg-new-mint/10">
-                      <Sparkles className="h-4 w-4 text-new-mint" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-bold text-white">Classic BTC Arena</p>
-                      <p className="text-xs text-gray-500">5-minute route</p>
-                    </div>
-                  </div>
-                  <ArrowUpRight className="h-4 w-4 text-gray-400 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-white" />
-                </Link>
               </div>
+            </div>
+
+            <div className="mb-4 flex flex-wrap items-center gap-2">
+              {CATEGORY_BUCKETS.map((category) => (
+                <button
+                  key={category.id}
+                  onClick={() => setCategoryFilter(category.id)}
+                  className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-[10px] font-bold uppercase tracking-[0.22em] transition-colors ${
+                    categoryFilter === category.id
+                      ? 'border-white bg-white text-black'
+                      : 'border-white/8 bg-white/[0.03] text-gray-400 hover:text-white'
+                  }`}
+                >
+                  <span>{category.label}</span>
+                  <span className={`rounded-full px-2 py-0.5 text-[9px] tracking-[0.18em] ${
+                    categoryFilter === category.id ? 'bg-black/10 text-black/70' : 'bg-black/25 text-gray-500'
+                  }`}>
+                    {categoryCounts[category.id]}
+                  </span>
+                </button>
+              ))}
             </div>
 
             <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto_auto]">
@@ -292,70 +281,22 @@ export default function MarketsPage() {
                 ))}
               </div>
 
-              <select
-                value={sortBy}
-                onChange={(event) => setSortBy(event.target.value as typeof sortBy)}
-                className="rounded-[1.35rem] border border-white/8 bg-black/35 px-4 py-3 text-sm text-white outline-none"
+              <Link
+                href="/markets/btc"
+                className="group hidden items-center justify-between gap-3 rounded-[1.35rem] border border-white/8 bg-white/[0.03] px-4 py-3 transition-colors hover:border-white/16 lg:flex"
               >
-                <option value="volume">Sort: Volume</option>
-                <option value="ending">Sort: Ending soon</option>
-                <option value="signal">Sort: Signal</option>
-              </select>
+                <div className="flex items-center gap-3">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full border border-new-mint/20 bg-new-mint/10">
+                    <Sparkles className="h-4 w-4 text-new-mint" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-white">BTC Arena</p>
+                    <p className="text-xs text-gray-500">5-minute route</p>
+                  </div>
+                </div>
+                <ArrowUpRight className="h-4 w-4 text-gray-400 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-white" />
+              </Link>
             </div>
-
-            <div className="mt-4 flex flex-wrap items-center gap-2">
-              {PRIVATE_ROOMS.map((room) => {
-                const unlocked = room.privacy === 'public' || unlockedRooms.includes(room.id);
-                return (
-                  <button
-                    key={room.id}
-                    onClick={() => {
-                      setActiveRoomId(room.id);
-                      setUnlockError('');
-                    }}
-                    className={`rounded-full border px-4 py-2 text-sm font-semibold transition-colors ${
-                      activeRoomId === room.id
-                        ? 'border-white bg-white text-black'
-                        : 'border-white/8 bg-white/[0.03] text-gray-300 hover:text-white'
-                    }`}
-                  >
-                    {room.name}
-                    <span className={`ml-2 text-[10px] uppercase tracking-[0.2em] ${unlocked ? 'text-new-mint' : 'text-gray-500'}`}>
-                      {unlocked ? 'open' : 'private'}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-
-            {selectedRoomLocked && (
-              <div className="mt-3 flex flex-col gap-3 rounded-[1.35rem] border border-white/8 bg-black/35 p-4 lg:flex-row lg:items-center">
-                <p className="min-w-0 flex-1 text-sm text-gray-400">{selectedRoom.description}</p>
-                <input
-                  value={unlockCode}
-                  onChange={(event) => setUnlockCode(event.target.value)}
-                  placeholder={`Unlock ${selectedRoom.name}`}
-                  className="rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3 text-sm text-white outline-none placeholder:text-gray-600 lg:min-w-[260px]"
-                />
-                <button
-                  onClick={() => {
-                    const ok = unlockRoom(selectedRoom.id, unlockCode);
-                    if (ok) {
-                      setUnlockedRooms(loadUnlockedRooms());
-                      setUnlockCode('');
-                      setUnlockError('');
-                    } else {
-                      setUnlockError('Invalid invite code');
-                    }
-                  }}
-                  className="rounded-2xl border border-new-mint/20 bg-new-mint/10 px-4 py-3 text-sm font-bold uppercase tracking-[0.2em] text-new-mint transition-colors hover:bg-new-mint/15"
-                >
-                  Unlock
-                </button>
-              </div>
-            )}
-
-            {unlockError && <p className="mt-3 text-sm text-off-red">{unlockError}</p>}
           </motion.section>
 
           <motion.section
@@ -445,21 +386,33 @@ export default function MarketsPage() {
             className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_390px]"
           >
             <div className="rounded-[1.9rem] border border-white/7 bg-neutral-950/75 p-5 sm:p-6">
-              <div className="mb-4 flex flex-wrap items-center gap-2">
-                <h2 className="mr-3 text-2xl font-black text-white">All markets</h2>
-                {categoryOptions.map((category) => (
-                  <button
-                    key={category}
-                    onClick={() => setCategoryFilter(category)}
-                    className={`rounded-full px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.22em] transition-colors ${
-                      categoryFilter === category
-                        ? 'bg-white text-black'
-                        : 'border border-white/8 bg-white/[0.03] text-gray-400 hover:text-white'
-                    }`}
-                  >
-                    {category}
-                  </button>
-                ))}
+              <div className="mb-4 flex flex-col gap-4">
+                <div>
+                  <h2 className="text-2xl font-black text-white">All markets</h2>
+                  <p className="mt-1 text-sm text-gray-500">
+                    {visibleMirrorMarkets.length} shown in {CATEGORY_BUCKETS.find((bucket) => bucket.id === categoryFilter)?.label.toLowerCase()}
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  {([
+                    ['volume', 'Highest volume'],
+                    ['ending', 'Ending soon'],
+                    ['signal', 'Strongest signal'],
+                  ] as const).map(([value, label]) => (
+                    <button
+                      key={value}
+                      onClick={() => setSortBy(value)}
+                      className={`rounded-full border px-3 py-2 text-[10px] font-bold uppercase tracking-[0.22em] transition-colors ${
+                        sortBy === value
+                          ? 'border-new-mint/20 bg-new-mint/10 text-new-mint'
+                          : 'border-white/8 bg-white/[0.03] text-gray-400 hover:text-white'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {mirrorLoading && visibleMirrorMarkets.length === 0 ? (
@@ -471,7 +424,7 @@ export default function MarketsPage() {
                   No markets match the current filters.
                 </div>
               ) : (
-                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                <div className="grid items-start gap-5 md:grid-cols-2 2xl:grid-cols-3">
                   {visibleMirrorMarkets.map((market) => (
                     <MirrorMarketCard
                       key={market.marketId}
@@ -480,8 +433,8 @@ export default function MarketsPage() {
                       activeSide={selectedMirrorMarketId === market.marketId ? selectedTradeSide : null}
                       onSelect={(candidate) => setSelectedMirrorMarketId(candidate.marketId)}
                       onChooseSide={handleChooseSide}
-                      roomLocked={selectedRoomLocked}
-                      roomId={activeRoomId}
+                      roomLocked={false}
+                      roomId="public"
                       onTradeSuccess={() => {
                         setMintTrigger((prev) => prev + 1);
                       }}
@@ -496,8 +449,8 @@ export default function MarketsPage() {
                 className="xl:sticky xl:top-28 xl:self-start"
                 compact
                 market={selectedMirrorMarket}
-                roomId={activeRoomId}
-                roomLocked={selectedRoomLocked}
+                roomId="public"
+                roomLocked={false}
                 preferredSide={selectedTradeSide}
                 onSuccess={() => {
                   setMintTrigger((prev) => prev + 1);

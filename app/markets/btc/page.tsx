@@ -163,6 +163,8 @@ export default function BtcMarketsPage() {
       <DoodleStrip />
 
       <main className="relative pb-12 pt-28">
+        <div className="pointer-events-none absolute inset-0 -z-10 bg-[#050505]" />
+        <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.045),transparent_42%),radial-gradient(circle_at_bottom,rgba(255,255,255,0.02),transparent_38%)]" />
         <motion.div
           className="mx-auto max-w-[1400px] px-4 sm:px-6"
           initial="hidden"
@@ -172,52 +174,6 @@ export default function BtcMarketsPage() {
             visible: { opacity: 1, transition: { staggerChildren: 0.08 } },
           }}
         >
-          <motion.section
-            variants={{
-              hidden: { opacity: 0, y: 20 },
-              visible: { opacity: 1, y: 0, transition: { type: 'spring', damping: 24, stiffness: 220 } },
-            }}
-            className="mb-6 rounded-[2rem] border border-white/7 bg-neutral-950/75 p-5 sm:p-6"
-          >
-            <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-              <div className="max-w-3xl">
-                <Link
-                  href="/markets"
-                  className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/8 bg-white/[0.03] px-4 py-2 text-[10px] font-bold uppercase tracking-[0.24em] text-gray-300 transition-colors hover:text-white"
-                >
-                  <ArrowLeft className="h-3.5 w-3.5" />
-                  Back to all markets
-                </Link>
-
-                <div className="mb-3 flex flex-wrap items-center gap-2">
-                  <span className="rounded-full border border-new-mint/20 bg-new-mint/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.24em] text-new-mint">
-                    Classic BTC Arena
-                  </span>
-                  <span className="rounded-full border border-white/8 bg-white/[0.03] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.24em] text-gray-300">
-                    Original 5-minute flow
-                  </span>
-                </div>
-
-                <h1 className="text-3xl font-black tracking-tight text-white sm:text-4xl">
-                  BTC fast markets.
-                </h1>
-                <p className="mt-3 max-w-2xl text-sm leading-relaxed text-gray-400 sm:text-base">
-                  This route keeps your existing BTC prediction surface intact, including the fast round tabs,
-                  live chart, comments, history, and sidebar trade ticket.
-                </p>
-              </div>
-
-              {address && (
-                <div className="rounded-2xl border border-white/7 bg-black/30 px-4 py-3">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-gray-500">Wallet balance</p>
-                  <div className="mt-2">
-                    <TokenBalance refreshTrigger={mintTrigger} />
-                  </div>
-                </div>
-              )}
-            </div>
-          </motion.section>
-
           <motion.div
             variants={{
               hidden: { opacity: 0, y: 20 },
@@ -226,6 +182,13 @@ export default function BtcMarketsPage() {
             className="mb-6 flex items-center justify-between gap-3"
           >
             <div className="scrollbar-hide flex items-center gap-1.5 overflow-x-auto sm:gap-3">
+              <Link
+                href="/markets"
+                className="mr-2 inline-flex flex-shrink-0 items-center gap-2 rounded-full border border-white/8 bg-white/[0.03] px-4 py-2 text-[10px] font-bold uppercase tracking-[0.24em] text-gray-300 transition-colors hover:text-white"
+              >
+                <ArrowLeft className="h-3.5 w-3.5" />
+                Back
+              </Link>
               <div className="mr-1 flex flex-shrink-0 items-center gap-2 sm:mr-3">
                 <BitcoinIcon className="h-5 w-5 sm:h-7 sm:w-7" />
                 <span className="hidden text-base font-black uppercase tracking-tight text-white sm:inline">BTC</span>
@@ -247,7 +210,7 @@ export default function BtcMarketsPage() {
             </div>
 
             {address && (
-              <div className="flex flex-shrink-0 items-center gap-2 lg:hidden">
+              <div className="flex flex-shrink-0 items-center gap-2">
                 <TokenBalance refreshTrigger={mintTrigger} />
               </div>
             )}
