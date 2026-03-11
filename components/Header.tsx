@@ -13,7 +13,7 @@ import ReputationBadge from './ReputationBadge';
 const NAV_LINKS = [
   { name: 'home', href: '/' },
   { name: 'markets', href: '/markets' },
-  { name: 'portfolio', href: '/portfolio' },
+  // { name: 'portfolio', href: '/portfolio' },  // TODO: re-enable after testing
   { name: 'how it works', href: '/how-it-works' },
 ];
 

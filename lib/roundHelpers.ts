@@ -14,18 +14,31 @@ const AVG_BLOCK_TIME_MS = 3500;
 
 // Cache for round metadata from backend
 const metaCache = new Map<number, { durationSecs: number; startBlock: number }>();
+let backendReachable = true;
+let backendCheckTime = 0;
 
 async function fetchRoundMeta(roundId: number): Promise<{ durationSecs: number; startBlock: number } | null> {
   const cached = metaCache.get(roundId);
   if (cached) return cached;
+  // Skip if backend is localhost (env not configured)
+  if (BACKEND_URL.includes('localhost')) return null;
+  // Skip if backend was unreachable or returned errors recently (retry every 60s)
+  if (!backendReachable && Date.now() - backendCheckTime < 60_000) return null;
   try {
-    const res = await fetch(`${BACKEND_URL}/api/round-meta/${roundId}`);
-    if (!res.ok) return null;
+    const res = await fetch(`${BACKEND_URL}/api/round-meta/${roundId}`, { signal: AbortSignal.timeout(3000) });
+    if (!res.ok) {
+      backendReachable = false;
+      backendCheckTime = Date.now();
+      return null;
+    }
+    backendReachable = true;
     const data = await res.json();
     const meta = { durationSecs: data.durationSecs, startBlock: data.startBlock };
     metaCache.set(roundId, meta);
     return meta;
   } catch {
+    backendReachable = false;
+    backendCheckTime = Date.now();
     return null;
   }
 }
