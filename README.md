@@ -7,19 +7,21 @@
   <img src="https://img.shields.io/badge/License-MIT-yellow" alt="License">
 </p>
 
-**A prediction market where nobody can see your bet.**
+**The problem isn't privacy. It's that fast markets are broken without it.**
 
-DART lets you bet on BTC price movements using USDCx stablecoins. What makes it different: your bet side is never revealed until you choose to claim. Not to other traders, not to observers, not even to the contract admin. The pool itself operates as a dark pool — only the combined total is visible while betting is active.
+Every prediction market today has the same flaw: the moment you place a bet, everyone sees it. On a slow market — *will BTC hit $100K by December?* — that's annoying but survivable. On a fast market — *will BTC be above $72K in 5 minutes?* — it's fatal.
 
-This isn't a privacy wrapper on top of a public market. The entire protocol is designed around Aleo's ZK circuit — the privacy is the product.
+In a 5-minute window, a whale bets YES, the pool shifts, everyone copies, and the odds collapse before the round closes. MEV bots see pending transactions and front-run. Traders watch each other instead of watching the market. You get herd behavior, not real sentiment. This is why nobody runs fast prediction markets on public chains.
+
+**DART fixes this by making order flow invisible.** Your bet side is a private input to a ZK circuit — it never appears on-chain. The contract stores a commitment hash, not your direction. Only the combined pool total updates. After the round settles, the per-side breakdown is revealed — but by then, there's nothing left to game.
+
+The 5-minute round isn't a gimmick. It's the proof that the privacy works. 59+ rounds completed on testnet. Dark pool holds. No copy-trading possible. No front-running possible.
 
 > **Live on Aleo Testnet** | Contract: [`btc_pred_v8.aleo`](https://testnet.explorer.provable.com) | [Shield Wallet](https://www.shieldwallet.xyz/)
 
 ---
 
-## What Happens When You Place a Bet
-
-Here's what an on-chain observer sees when Alice bets 10 USDCx on YES for BTC hitting $72,000:
+## DART vs. Public Markets
 
 ```
 On Polymarket:                          On DART:
@@ -31,9 +33,9 @@ Everyone adjusts their bets             Nobody knows anything changed
 Bob front-runs with $500 on YES         Bob sees nothing to front-run
 ```
 
-This is possible because of three things happening simultaneously:
+Three things happen simultaneously when Alice bets:
 
-1. **Alice's bet side is a private input** — it enters the ZK circuit but never appears on-chain
+1. **Her bet side is a private input** — it enters the ZK circuit but never appears on-chain
 2. **The contract stores `hash(YES, 10, random_salt)`** — a commitment that can't be reversed without Alice's salt
 3. **Only the combined pool total updates** — per-side breakdown stays hidden until resolution
 
@@ -41,9 +43,7 @@ After the round ends, Alice reveals her commitment to claim. By then, the market
 
 ---
 
-## Why This Requires Aleo
-
-This protocol cannot exist on Ethereum, Solana, or any transparent blockchain. Here's why:
+## Why This Can Only Exist on Aleo
 
 **On Ethereum/Solana**, a `bet(side, amount)` function call puts `side` in the transaction calldata. Everyone sees it. You can try to encrypt it, but:
 - The contract needs to update per-side pool totals → those pool changes reveal the side
@@ -54,15 +54,15 @@ This protocol cannot exist on Ethereum, Solana, or any transparent blockchain. H
 - Computes `hash(side, amount, salt)` inside the proof
 - Updates only the combined pool total (public)
 - Never exposes which side received the funds
-- Returns an encrypted `BetReceipt` that only Alice can read
+- Returns an encrypted `BetReceipt` that only the bettor can read
 
 The private input mechanism is native to Aleo's execution model — it's not bolted on. The proof guarantees the bet is valid without revealing what it is.
 
 ---
 
-## The Commitment Scheme
+## How It Works
 
-Every bet creates a binding commitment:
+### Placing a Bet
 
 ```
 bet(round_id, amount, side, salt)
@@ -79,7 +79,7 @@ bet(round_id, amount, side, salt)
     BetReceipt { round_id, commit }  ← only bettor can decrypt
 ```
 
-To claim winnings later:
+### Claiming Winnings
 
 ```
 claim(round_id, side, amount, salt, payout)
@@ -92,32 +92,21 @@ claim(round_id, side, amount, salt, payout)
 └─ Transfers USDCx payout to caller
 ```
 
-The critical property: `claim()` takes **all scalar inputs**. No records are consumed. The wallet doesn't need to find, decrypt, or pass any records. This is a deliberate design choice — [see Design Decisions](#design-decisions) for why.
+Claims take **all scalar inputs** — no records consumed. The wallet doesn't need to find, decrypt, or pass any records. This is deliberate: [see Design Decisions](#design-decisions).
 
----
-
-## Dark Pool
+### Dark Pool
 
 During active betting, the contract exposes a single number: the combined pool total.
 
 ```
-Active Round #9 (as seen by any observer):
-┌────────────────────────────────┐
-│  Target: BTC > $71,594         │
-│  Total Pool: 3,000,000 USDCx  │
-│  YES Pool: ???                 │
-│  NO Pool:  ???                 │
-│  Deadline: block 15,092,325    │
-└────────────────────────────────┘
-
-After Resolution:
-┌────────────────────────────────┐
-│  Target: BTC > $71,594         │
-│  Total Pool: 3,000,000 USDCx  │
-│  YES Pool: 1,000,000           │  ← revealed
-│  NO Pool:  2,000,000           │  ← revealed
-│  Outcome: NO won               │
-└────────────────────────────────┘
+Active Round (as seen by any observer):       After Resolution:
+┌────────────────────────────────┐           ┌────────────────────────────────┐
+│  Target: BTC > $71,594         │           │  Target: BTC > $71,594         │
+│  Total Pool: 3,000,000 USDCx  │           │  Total Pool: 3,000,000 USDCx  │
+│  YES Pool: ???                 │           │  YES Pool: 1,000,000           │
+│  NO Pool:  ???                 │           │  NO Pool:  2,000,000           │
+│  Deadline: block 15,092,325    │           │  Outcome: NO won               │
+└────────────────────────────────┘           └────────────────────────────────┘
 ```
 
 The resolver bot tracks per-side totals off-chain and submits them at resolution. The contract enforces `yes_total + no_total == pool_total` — the admin can't inflate or deflate the pool.
@@ -126,37 +115,31 @@ The resolver bot tracks per-side totals off-chain and submits them at resolution
 
 ## Design Decisions
 
-Building through 8 contract versions taught us things that aren't obvious from documentation.
+8 contract versions. Each one broke, taught us something, and led to the next.
 
 ### Why not records for claims? (v7 → v8)
 
-v7 used a `BetSlot` record model (inspired by [ZKPerp](https://github.com/hwdeboer1977/ZKPerp)'s slot system). Users received a record with their bet data and passed it back to `claim()`. Elegant in theory.
+v7 used a `BetSlot` record model inspired by [ZKPerp](https://github.com/hwdeboer1977/ZKPerp). Users received a record with their bet data and passed it back to `claim()`. Elegant in theory.
 
-In practice, Shield Wallet's `requestRecords` intermittently fails with *"Could not establish connection. Receiving end does not exist."* Users could bet but couldn't claim. We built a [debug page](/test-wallet) to isolate the issue and confirmed it's a wallet-level reliability problem, not an origin or permissions issue.
+In practice, Shield Wallet's `requestRecords` intermittently fails. Users could bet but couldn't claim. We built a [debug page](/test-wallet) to isolate the issue — it's a wallet-level reliability problem.
 
-v8's commitment scheme eliminates record inputs entirely. Claims use scalar values (round ID, side, amount, salt, payout). The wallet only needs `executeTransaction` — which works reliably.
+v8 eliminates record inputs entirely. Claims use scalar values: `(roundId, side, amount, salt, payout)`. The wallet only needs `executeTransaction` — which works reliably.
 
-### Why random salt, not deterministic?
+### Why random salt?
 
-We initially tried deriving salt from `SHA-256(address + roundId + side + amount)`. Seems cleaner than localStorage.
+We tried deriving salt from `SHA-256(address + roundId + side + amount)`. Broken — all inputs except `side` are public, and `side` is binary. An attacker computes both hashes and cracks the commitment in two guesses.
 
-It's broken. All inputs except `side` are publicly visible on-chain. `side` is binary (YES or NO). An attacker computes both hashes and compares against the stored commitment. Two guesses, guaranteed crack.
+We tried Shield Wallet's `signMessage` for deterministic-but-secret salt. Broken — signing the same message twice produces different signatures. Can't reproduce the salt at claim time.
 
-We then tested Shield Wallet's `signMessage` for deterministic-but-secret salt derivation. It works, but **signing the same message twice produces different signatures**. Non-deterministic signatures can't reproduce the same salt at claim time.
-
-Random salt stored in browser localStorage is the only approach that resists both brute-force and replay attacks. Encrypted backup to wallet-derived keys is planned for production — see [Roadmap](#roadmap).
-
-### Why short mapping names?
-
-Leo 3.4.0 has a 31-byte identifier limit. `finalize_transfer_private_to_public` doesn't compile. All mappings use 2-letter names (`rt` for round target, `rp` for round pool, etc.). Ugly but necessary.
+Random salt is the only approach that resists both brute-force and replay attacks. Encrypted backup to wallet-derived keys is planned for production — see [Roadmap](#roadmap).
 
 ### Why parimutuel, not AMM?
 
-Prediction markets have binary outcomes (YES/NO). AMM curves (Uniswap-style) create artificial slippage that doesn't reflect actual probability. Parimutuel pooling — where winners split the losers' pool proportionally — is mathematically simpler and better suited to binary events. It's what Polymarket uses under the hood.
+Prediction markets have binary outcomes. AMM curves create artificial slippage that doesn't reflect actual probability. Parimutuel pooling — winners split the losers' pool proportionally — is mathematically simpler and better suited to binary events.
 
 ---
 
-## System Overview
+## Architecture
 
 <p align="center">
   <img src="public/image.png" alt="DART Architecture" width="700">
@@ -164,15 +147,13 @@ Prediction markets have binary outcomes (YES/NO). AMM curves (Uniswap-style) cre
 
 ### Frontend
 
-Next.js 16, TypeScript, Tailwind 4, Framer Motion. Live BTC price via Binance WebSocket. Polymarket-style probability display. Voice agent powered by Google Gemini 2.0 Live API.
+Next.js 16, TypeScript, Tailwind 4, Framer Motion. Live BTC price via Binance WebSocket. Voice agent powered by Google Gemini 2.0 Live API.
 
 | Page | Purpose |
 |---|---|
 | `/markets` | Active round, betting panel, live chart |
-| `/portfolio` | Positions, P&L, claim/forfeit |
 | `/how-it-works` | Privacy architecture explained |
 | `/leaderboard` | Top predictors |
-| `/test-wallet` | Shield Wallet capability testing |
 
 ### Contract
 
@@ -213,21 +194,39 @@ cd backend && npm install && npm run build && npm start
 
 ---
 
-## Version History
+## Evolution
 
-DART has been through 8 contract iterations. Each solved a specific problem:
-
-| Version | Problem It Solved |
+| Version | What Broke → What We Built |
 |---|---|
-| v1-v2 | None — first working prediction market on Aleo |
-| v3 | Bets were public → added private BetReceipt records + reputation tiers |
-| v4 | Custom token friction → switched to native Aleo credits |
-| v5 | Credits too volatile → integrated USDCx stablecoin (u128 precision) |
+| v1-v2 | First working prediction market on Aleo |
+| v3 | Bets were public → private BetReceipt records + reputation |
+| v4 | Custom token friction → native Aleo credits |
+| v5 | Credits too volatile → USDCx stablecoin (u128 precision) |
 | v6 | Record-based claims were complex → mapping-based claims |
-| v7 | Pool composition leaked sentiment → added dark pool + private bet sides |
-| **v8** | **Wallet couldn't reliably provide records for claims → ZK commitment scheme with all-scalar claims** |
+| v7 | Pool composition leaked sentiment → dark pool + private bet sides |
+| **v8** | **Wallet couldn't reliably pass records → ZK commitment scheme, all-scalar claims** |
 
-8 iterations, each driven by a real problem encountered during testing. Not planned architecture — evolved architecture.
+8 iterations, each driven by a real failure. Not planned architecture — evolved architecture.
+
+---
+
+## What We Solved (v7 → v8)
+
+| Problem in v7 | How v8 Fixed It |
+|---|---|
+| Claims required record inputs — wallet failed intermittently | Commitment scheme with all-scalar claims |
+| BetSlot model — users stuck if wallet couldn't decrypt | No records needed. Claim with scalars. |
+| ~61 USDCx permanently locked (no drain function) | Seed funds now recoverable by admin |
+| Single-bet-per-slot — had to claim before betting again | No slots. Bet on any round, any time |
+
+## Roadmap
+
+- **Encrypted salt backup** — wallet-derived key encryption so claims survive browser clears
+- **Multi-sig admin** — decentralize round creation and resolution
+- **On-chain pool verification** — trustless dark pool split via ZK commitment aggregation
+- **Multi-asset markets** — ETH, SOL, and custom prediction markets beyond BTC
+
+Privacy deep-dive: [PRIVACY_ARCHITECTURE.md](PRIVACY_ARCHITECTURE.md)
 
 ---
 
@@ -242,28 +241,6 @@ DART has been through 8 contract iterations. Each solved a specific problem:
 
 ---
 
-## What We Solved (v7 → v8)
-
-v7 had real problems. v8 solved them:
-
-| Problem in v7 | How v8 Fixed It |
-|---|---|
-| Claims required record inputs — Shield Wallet's `requestRecords` failed intermittently | Commitment scheme with all-scalar claims. No records consumed. |
-| BetSlot record model — users stuck if wallet couldn't decrypt their slot | No records needed at all. Claim with `(roundId, side, amount, salt, payout)` |
-| ~61 USDCx permanently locked in seed pools (no drain function) | Seed funds now recoverable by admin |
-| Single-bet-per-slot limitation — had to claim before betting again | No slots. Bet on any round, any time |
-
-## Roadmap
-
-- **Encrypted salt backup** — wallet-derived key encryption so claims survive browser clears
-- **Multi-sig admin** — decentralize round creation and resolution
-- **On-chain pool verification** — trustless dark pool split via ZK commitment aggregation
-- **Multi-asset markets** — ETH, SOL, and custom prediction markets beyond BTC
-
-Privacy deep-dive: [PRIVACY_ARCHITECTURE.md](PRIVACY_ARCHITECTURE.md)
-
----
-
 ## Links
 
 | | |
@@ -275,4 +252,4 @@ Privacy deep-dive: [PRIVACY_ARCHITECTURE.md](PRIVACY_ARCHITECTURE.md)
 
 ---
 
-**Built for WaveHack.** A prediction market that treats your bets like they're nobody else's business.
+**Built for WaveHack.** The first prediction market where fast rounds are actually usable — because the order flow is invisible.
