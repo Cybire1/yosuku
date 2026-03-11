@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Loader, Wallet, Droplets, Shield, EyeOff, Lock, KeyRound } from 'lucide-react';
 import { useWallet } from '@provablehq/aleo-wallet-adaptor-react';
@@ -18,13 +18,25 @@ import {
   setOptimisticBalance,
   type RoundState,
 } from '@/lib/predictionContract';
-import { savePosition } from '@/lib/roundHelpers';
-import { resolveSlotRecord } from '@/lib/recordResolver';
+import { savePosition, saveBetCommitment } from '@/lib/roundHelpers';
 import AnimatedNumber from './AnimatedNumber';
-import InitSlotPrompt from './InitSlotPrompt';
 
 const BALANCE_KEY = 'usdcx_balance';
 const QUICK_AMOUNTS = [50, 100, 250, 500];
+
+/** Generate a random field element (253-bit) as salt for ZK commitment.
+ *  Must be random (not deterministic) to preserve hiding property —
+ *  a deterministic salt from public inputs would let attackers brute-force
+ *  the binary YES/NO side by trying both possibilities. */
+function generateSalt(): string {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  // Aleo field is < 2^253, zero out the top 3 bits to stay within range
+  bytes[0] &= 0x1f;
+  const hex = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+  const bigint = BigInt('0x' + hex);
+  return bigint.toString() + 'field';
+}
 
 function GetUSDCxButton() {
   return (
@@ -40,15 +52,13 @@ function GetUSDCxButton() {
   );
 }
 
-type SlotState = 'loading' | 'none' | 'empty' | 'active';
-
 interface BetSidebarProps {
   round: RoundState;
   onSuccess?: () => void;
 }
 
 export default function BetSidebar({ round, onSuccess }: BetSidebarProps) {
-  const { address, executeTransaction, requestRecords, decrypt } = useWallet();
+  const { address, executeTransaction } = useWallet();
   const { price } = useBtcPrice();
   const [side, setSide] = useState<'YES' | 'NO'>('YES');
   const [amount, setAmount] = useState('');
@@ -58,10 +68,13 @@ export default function BetSidebar({ round, onSuccess }: BetSidebarProps) {
   const [minsLeft, setMinsLeft] = useState(0);
   const [flashType, setFlashType] = useState<'none' | 'YES' | 'NO'>('none');
 
-  // Slot management
-  const [slotState, setSlotState] = useState<SlotState>('loading');
-  const [slotRecord, setSlotRecord] = useState<string | null>(null);
-  const [activeRoundId, setActiveRoundId] = useState<number | null>(null);
+  // Check if user already bet on this round
+  const [hasBet, setHasBet] = useState(false);
+  useEffect(() => {
+    if (!address) return;
+    const positions: { roundId: number }[] = JSON.parse(localStorage.getItem('v8_positions') || '[]');
+    setHasBet(positions.some(p => p.roundId === round.id));
+  }, [address, round.id]);
 
   const targetUsd = round.targetPrice / 100;
   const microAmount = Math.floor(parseFloat(amount || '0') * PRED_MULTIPLIER);
@@ -77,80 +90,6 @@ export default function BetSidebar({ round, onSuccess }: BetSidebarProps) {
     }
     return { yes: 50, no: 50 };
   })();
-
-  // Fetch slot records — tries requestRecords, then tx-based decrypt fallback
-  const fetchSlot = useCallback(async () => {
-    if (!address) {
-      setSlotState('none');
-      return;
-    }
-
-    // Strategy 1: try requestRecords directly
-    if (requestRecords) {
-      try {
-        const records = await requestRecords(BTC_PREDICTION_PROGRAM);
-        const slots = (records || []).filter(
-          (r: any) => r.data?.active !== undefined || r.plaintext?.includes('BetSlot') ||
-            (typeof r === 'string' && r.includes('active'))
-        );
-
-        if (slots.length > 0) {
-          const slot = slots[slots.length - 1] as any;
-          const plaintext = typeof slot === 'string' ? slot : (slot.plaintext || JSON.stringify(slot.data));
-
-          const activeMatch = plaintext.match(/active:\s*(true|false)/);
-          const isActive = activeMatch?.[1] === 'true';
-
-          if (isActive) {
-            const ridMatch = plaintext.match(/rid:\s*(\d+)u64/);
-            setActiveRoundId(ridMatch ? parseInt(ridMatch[1], 10) : null);
-            setSlotState('active');
-          } else {
-            setSlotState('empty');
-          }
-
-          setSlotRecord(plaintext);
-          return;
-        }
-      } catch {
-        console.warn('[BetSidebar] requestRecords failed, trying fallback...');
-      }
-    }
-
-    // Strategy 2: try resolving via stored bet tx ID
-    try {
-      const record = await resolveSlotRecord({ requestRecords, decrypt });
-      if (record) {
-        const isActive = /active:\s*true/.test(record);
-        if (isActive) {
-          const ridMatch = record.match(/rid:\s*(\d+)u64/);
-          setActiveRoundId(ridMatch ? parseInt(ridMatch[1], 10) : null);
-          setSlotState('active');
-        } else {
-          setSlotState('empty');
-        }
-        setSlotRecord(record);
-        return;
-      }
-    } catch {
-      // ignore
-    }
-
-    // Strategy 3: localStorage fallback
-    const hasSlot = localStorage.getItem('v7_has_slot');
-    if (hasSlot === 'true') {
-      setSlotState('empty');
-      setSlotRecord(null);
-    } else {
-      setSlotState('none');
-    }
-  }, [address, requestRecords, decrypt]);
-
-  useEffect(() => {
-    if (address) {
-      fetchSlot();
-    }
-  }, [address, fetchSlot]);
 
   // Track minutes remaining for probability
   useEffect(() => {
@@ -187,11 +126,6 @@ export default function BetSidebar({ round, onSuccess }: BetSidebarProps) {
     setAmount((current + val).toString());
   };
 
-  const handleSlotInitialized = () => {
-    localStorage.setItem('v7_has_slot', 'true');
-    setSlotState('empty');
-  };
-
   const handleBet = async () => {
     if (!address || !executeTransaction) {
       setError('Connect wallet first');
@@ -215,6 +149,7 @@ export default function BetSidebar({ round, onSuccess }: BetSidebarProps) {
 
     try {
       const sideVal = side === 'YES' ? 'true' : 'false';
+      const salt = generateSalt();
 
       // Step 1: Transfer USDCx to the prediction program
       await executeTransaction({
@@ -225,27 +160,28 @@ export default function BetSidebar({ round, onSuccess }: BetSidebarProps) {
         privateFee: false,
       });
 
-      // Step 2: Place the bet — side is PRIVATE (not public)
-      // The contract's `bet` function takes: (slot: BetSlot, rid: u64, amt: u128, side: bool)
-      // slot is consumed as a record input
-      // Always pass 4 inputs: BetSlot record + rid + amt + side
+      // Step 2: Place the bet — v8 commitment scheme
+      // bet(rid: u64, amt: u128, side: bool, salt: field) -> (BetReceipt, Future)
+      // side, amt, salt are PRIVATE inputs — hidden by ZK proof
       const betInputs = [
-        slotRecord || '{}',
         `${round.id}u64`,
         `${microAmount}u128`,
         sideVal,
+        salt,
       ];
 
-      const betResult = await executeTransaction({
+      await executeTransaction({
         program: BTC_PREDICTION_PROGRAM,
         function: 'bet',
         inputs: betInputs,
-        fee: 500_000,
+        fee: 2_000_000,
         privateFee: false,
-        ...(slotRecord ? {} : { recordIndices: [0] }),
       });
 
-      // Step 3: Report bet side to backend (dark pool tally)
+      // Step 3: Save commitment locally (salt needed for claim/forfeit)
+      saveBetCommitment(address, round.id, side, microAmount, salt);
+
+      // Step 4: Report bet side to backend (dark pool tally)
       try {
         await fetch(`${BACKEND_URL}/api/bet`, {
           method: 'POST',
@@ -256,20 +192,12 @@ export default function BetSidebar({ round, onSuccess }: BetSidebarProps) {
         // Non-critical — bet is already on-chain
       }
 
-      // Save bet txId
-      if (betResult?.transactionId) {
-        const betTxs = JSON.parse(localStorage.getItem('pred_bet_txids') || '{}');
-        betTxs[round.id] = betResult.transactionId;
-        localStorage.setItem('pred_bet_txids', JSON.stringify(betTxs));
-      }
-
       const newBalance = Math.max(0, balance - microAmount);
       setOptimisticBalance(newBalance);
       setBalance(newBalance);
 
       savePosition(round.id, side, microAmount);
-      setSlotState('active');
-      setActiveRoundId(round.id);
+      setHasBet(true);
 
       setAmount('');
       onSuccess?.();
@@ -289,29 +217,24 @@ export default function BetSidebar({ round, onSuccess }: BetSidebarProps) {
 
   const isYes = side === 'YES';
 
-  // Show init prompt if no slot
-  if (address && slotState === 'none') {
-    return <InitSlotPrompt onInitialized={handleSlotInitialized} />;
-  }
-
-  // Show active bet info if slot is occupied
-  if (address && slotState === 'active' && activeRoundId !== null) {
+  // Show active bet info if already bet on this round
+  if (address && hasBet) {
     return (
       <div className="bg-neutral-900/60 backdrop-blur-xl border border-white/10 rounded-2xl p-5">
         <div className="text-center space-y-3">
           <div className="w-12 h-12 rounded-xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center mx-auto">
-            <Lock className="w-6 h-6 text-sky-400" />
+            <KeyRound className="w-6 h-6 text-sky-400" />
           </div>
           <div>
-            <p className="text-sm font-bold text-white">Active Bet on Round #{activeRoundId}</p>
+            <p className="text-sm font-bold text-white">Bet Placed on Round #{round.id}</p>
             <p className="text-xs text-gray-400 mt-1">
-              Your slot is locked. Claim winnings or forfeit to bet again.
+              Your commitment is stored on-chain. Claim or forfeit after resolution.
             </p>
           </div>
           <div className="flex items-center gap-2 bg-white/[0.03] border border-white/5 rounded-xl px-3 py-2">
             <Shield className="w-3 h-3 text-sky-400" />
             <span className="text-[10px] text-gray-400">
-              Your bet side is encrypted — only you can see it
+              Your bet side is hidden by a ZK commitment — nobody can see it
             </span>
           </div>
         </div>
@@ -373,7 +296,7 @@ export default function BetSidebar({ round, onSuccess }: BetSidebarProps) {
               <Shield className="w-3 h-3 text-sky-400" />
               <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-sky-400 rounded-full animate-pulse" />
             </div>
-            <span className="text-[10px] text-sky-400/80 font-medium">Private Bet</span>
+            <span className="text-[10px] text-sky-400/80 font-medium">ZK Commitment</span>
             <span className="text-[10px] text-gray-600">·</span>
             <Lock className="w-2.5 h-2.5 text-gray-500" />
             <span className="text-[10px] text-gray-500">Dark Pool Active</span>
@@ -440,7 +363,7 @@ export default function BetSidebar({ round, onSuccess }: BetSidebarProps) {
           <div className="flex items-start gap-2 bg-white/[0.02] border border-white/5 rounded-lg px-3 py-2">
             <EyeOff className="w-3 h-3 text-gray-600 mt-0.5 flex-shrink-0" />
             <span className="text-[10px] text-gray-600 leading-relaxed">
-              Your bet side is encrypted — nobody can see if you chose Up or Down. Pool breakdown hidden until resolution.
+              Your bet side is hidden by a ZK commitment. Nobody can see your position. Pool breakdown hidden until resolution.
             </span>
           </div>
 
@@ -496,7 +419,7 @@ export default function BetSidebar({ round, onSuccess }: BetSidebarProps) {
               } : {}}
               transition={{ duration: 0.3 }}
               onClick={handleBet}
-              disabled={loading || !amount || parseFloat(amount) <= 0 || round.resolved || slotState === 'loading'}
+              disabled={loading || !amount || parseFloat(amount) <= 0 || round.resolved}
               className="relative w-full py-3.5 rounded-xl font-black text-sm uppercase tracking-wider transition-all flex items-center justify-center gap-2 disabled:cursor-not-allowed"
               style={{
                 backgroundColor: isYes ? '#34D399' : '#F43F5E',

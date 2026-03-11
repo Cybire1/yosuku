@@ -1,10 +1,10 @@
-// Contract constants for BTC Prediction Market v7 (dark pool + private bets)
+// Contract constants for BTC Prediction Market v8 (commitment scheme + dark pool)
 
 export const PRED_TOKEN_PROGRAM = 'test_usdcx_stablecoin.aleo';
-export const BTC_PREDICTION_PROGRAM = 'btc_pred_v7.aleo';
+export const BTC_PREDICTION_PROGRAM = 'btc_pred_v8.aleo';
 
-// On-chain address of btc_pred_v7.aleo (for token transfers to the program)
-export const BTC_PREDICTION_ADDRESS = 'aleo1vudfydg2xwgeg2xgqcs0p3d2c3h74ly2jzqtq2cuf7g8fc7k6s9s2q7ysx';
+// On-chain address of btc_pred_v8.aleo (for token transfers to the program)
+export const BTC_PREDICTION_ADDRESS = 'aleo1v5wrxmqe2urj30wqxyhnfymghw03kcdgu2pdcv7hhlw3z2vcs5rqwl2f7e';
 
 // Token decimals: 1 USDCx = 1_000_000 micro-USDCx (6 decimals)
 export const PRED_DECIMALS = 6;
@@ -19,7 +19,7 @@ export const ROUND_DURATION_SECONDS = 300; // 5 minutes
 // Default seed liquidity per side when creating a round (500 USDCx)
 export const DEFAULT_SEED_AMOUNT = 500 * PRED_MULTIPLIER;
 
-// Pool address: btc_pred_v7.aleo program address in USDCx balances
+// Pool address: btc_pred_v8.aleo program address in USDCx balances
 export const POOL_ADDRESS = BTC_PREDICTION_ADDRESS;
 
 // Backend URL for dark pool bet reporting
@@ -279,8 +279,8 @@ export function getReputationData(bets: number, wins: number, streak: number): R
 export async function fetchReputation(_address: string): Promise<ReputationData> {
   try {
     const positions: { roundId: number; side: string; amount: number }[] =
-      JSON.parse(localStorage.getItem('pred_positions') || '[]');
-    const claimed: number[] = JSON.parse(localStorage.getItem('pred_claimed') || '[]');
+      JSON.parse(localStorage.getItem('v8_positions') || '[]');
+    const claimed: number[] = JSON.parse(localStorage.getItem('v8_claimed') || '[]');
     const bets = positions.length;
     const wins = claimed.length;
     return getReputationData(bets, wins, 0);

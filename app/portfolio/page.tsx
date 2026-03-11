@@ -112,15 +112,26 @@ export default function PortfolioPage() {
 
     setClaimingId(roundId);
     try {
-      // v7 record-based claim: BetSlot record + payout
-      // Shield wallet handles record selection via recordIndices
+      // v8 commitment-based claim: reveal preimage (side, amt, salt) + payout
+      const { getBetCommitment } = await import('@/lib/roundHelpers');
+      const commitment = getBetCommitment(address, roundId);
+      if (!commitment) {
+        setClaimingId(null);
+        return;
+      }
+      const sideVal = commitment.side === 'YES' ? 'true' : 'false';
       await executeTransaction({
         program: BTC_PREDICTION_PROGRAM,
         function: 'claim',
-        inputs: [`${netPayout}u128`],
+        inputs: [
+          `${roundId}u64`,
+          sideVal,
+          `${commitment.amount}u128`,
+          commitment.salt,
+          `${netPayout}u128`,
+        ],
         fee: 2_000_000,
         privateFee: false,
-        recordIndices: [0],
       });
 
       // Optimistic balance update — will reconcile when on-chain confirms
@@ -132,10 +143,10 @@ export default function PortfolioPage() {
         if (address) fetchOnChainBalance(address);
       }, 10_000);
 
-      const claimed: number[] = JSON.parse(localStorage.getItem('pred_claimed') || '[]');
+      const claimed: number[] = JSON.parse(localStorage.getItem('v8_claimed') || '[]');
       if (!claimed.includes(roundId)) {
         claimed.push(roundId);
-        localStorage.setItem('pred_claimed', JSON.stringify(claimed));
+        localStorage.setItem('v8_claimed', JSON.stringify(claimed));
       }
       setPositions((prev) =>
         prev.map((p) => (p.roundId === roundId ? { ...p, claimed: true } : p))

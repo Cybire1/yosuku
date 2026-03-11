@@ -290,7 +290,7 @@ Amount: ${amount} USDCx
 Time left: ${Math.floor(secsLeft / 60)}m ${secsLeft % 60}s
 Dark Pool Total: ${formatPred(round.totalPool)} USDCx
 
-Note: Your bet side is PRIVATE — encrypted in your BetSlot record. Per-side pool breakdown is hidden until resolution.
+Note: Your bet side is PRIVATE — hidden by a ZK commitment. Per-side pool breakdown is hidden until resolution.
 
 Use the betting panel on the Markets page to complete this bet.`;
 

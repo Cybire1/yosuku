@@ -39,15 +39,26 @@ export default function RoundHistory({ rounds, positions, reputation, onClaim }:
 
     setClaimingId(roundId);
     try {
-      // v7: claim takes BetSlot record + payout
-      // Since we can't easily get the record here, use recordIndices
+      // v8 commitment-based claim: reveal preimage (side, amt, salt) + payout
+      const { getBetCommitment } = await import('@/lib/roundHelpers');
+      const commitment = getBetCommitment(address, roundId);
+      if (!commitment) {
+        setClaimingId(null);
+        return;
+      }
+      const sideVal = commitment.side === 'YES' ? 'true' : 'false';
       await executeTransaction({
         program: BTC_PREDICTION_PROGRAM,
         function: 'claim',
-        inputs: [`${netPayout}u128`],
+        inputs: [
+          `${roundId}u64`,
+          sideVal,
+          `${commitment.amount}u128`,
+          commitment.salt,
+          `${netPayout}u128`,
+        ],
         fee: 2_000_000,
         privateFee: false,
-        recordIndices: [0],
       });
 
       // Optimistic balance update

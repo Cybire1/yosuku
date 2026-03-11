@@ -13,7 +13,8 @@ async function roundExists(id: number): Promise<boolean> {
   return !!v && v !== 'null';
 }
 
-/** Binary search for the highest round ID, starting from a hint for speed */
+/** Binary search for the highest round ID, starting from a hint for speed.
+ *  Tolerates gaps (e.g. round 3 missing but round 4 exists). */
 async function findHighestRound(hint: number): Promise<number> {
   // Exponential probe forward from hint to find upper bound
   let lo = Math.max(0, hint);
@@ -32,6 +33,17 @@ async function findHighestRound(hint: number): Promise<number> {
   while (lo < hi) {
     const mid = Math.floor((lo + hi + 1) / 2);
     if (await roundExists(mid)) lo = mid; else hi = mid - 1;
+  }
+
+  // Handle gaps: check a few IDs beyond the found highest in parallel
+  const base = lo;
+  const gapChecks = await Promise.all(
+    [1, 2, 3, 4, 5].map(offset =>
+      roundExists(base + offset).then(exists => ({ id: base + offset, exists }))
+    )
+  );
+  for (const { id, exists } of gapChecks) {
+    if (exists && id > lo) lo = id;
   }
 
   return (await roundExists(lo)) ? lo : 0;

@@ -106,7 +106,7 @@ export async function fetchRound(roundId: number): Promise<RoundState | null> {
 export function loadPositions(): UserPosition[] {
   try {
     const saved: { roundId: number; side: string; amount: number }[] =
-      JSON.parse(localStorage.getItem('pred_positions') || '[]');
+      JSON.parse(localStorage.getItem('v8_positions') || '[]');
 
     const map = new Map<number, UserPosition>();
     for (const p of saved) {
@@ -124,7 +124,7 @@ export function loadPositions(): UserPosition[] {
       }
     }
 
-    const claimed: number[] = JSON.parse(localStorage.getItem('pred_claimed') || '[]');
+    const claimed: number[] = JSON.parse(localStorage.getItem('v8_claimed') || '[]');
     for (const id of claimed) {
       const pos = map.get(id);
       if (pos) pos.claimed = true;
@@ -137,15 +137,47 @@ export function loadPositions(): UserPosition[] {
 }
 
 export function savePosition(roundId: number, side: 'YES' | 'NO', amount: number) {
-  const positions = JSON.parse(localStorage.getItem('pred_positions') || '[]');
+  const positions = JSON.parse(localStorage.getItem('v8_positions') || '[]');
   positions.push({ roundId, side, amount, timestamp: Date.now() });
-  localStorage.setItem('pred_positions', JSON.stringify(positions));
+  localStorage.setItem('v8_positions', JSON.stringify(positions));
 }
 
 export function markClaimed(roundId: number) {
-  const claimed: number[] = JSON.parse(localStorage.getItem('pred_claimed') || '[]');
+  const claimed: number[] = JSON.parse(localStorage.getItem('v8_claimed') || '[]');
   if (!claimed.includes(roundId)) {
     claimed.push(roundId);
-    localStorage.setItem('pred_claimed', JSON.stringify(claimed));
+    localStorage.setItem('v8_claimed', JSON.stringify(claimed));
   }
+}
+
+// ── v8 Commitment Storage ──────────────────────────────
+// Stores the bet preimage (side, amount, salt) needed to claim/forfeit later.
+// Keyed by address_roundId for lookup.
+
+export interface BetCommitmentData {
+  side: 'YES' | 'NO';
+  amount: number;
+  salt: string;
+  timestamp: number;
+}
+
+export function saveBetCommitment(
+  address: string,
+  roundId: number,
+  side: 'YES' | 'NO',
+  amount: number,
+  salt: string,
+) {
+  const commitments = JSON.parse(localStorage.getItem('v8_commitments') || '{}');
+  const key = `${address}_${roundId}`;
+  commitments[key] = { side, amount, salt, timestamp: Date.now() } as BetCommitmentData;
+  localStorage.setItem('v8_commitments', JSON.stringify(commitments));
+}
+
+export function getBetCommitment(
+  address: string,
+  roundId: number,
+): BetCommitmentData | null {
+  const commitments = JSON.parse(localStorage.getItem('v8_commitments') || '{}');
+  return commitments[`${address}_${roundId}`] ?? null;
 }

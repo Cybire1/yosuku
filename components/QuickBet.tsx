@@ -88,7 +88,7 @@ export default function QuickBet({ round, side, onClose, onSuccess }: QuickBetPr
       });
 
       // Save position to localStorage
-      const positions = JSON.parse(localStorage.getItem('pred_positions') || '[]');
+      const positions = JSON.parse(localStorage.getItem('v8_positions') || '[]');
       positions.push({
         roundId: round.id,
         side,
@@ -96,7 +96,7 @@ export default function QuickBet({ round, side, onClose, onSuccess }: QuickBetPr
         timestamp: Date.now(),
         txPending: true,
       });
-      localStorage.setItem('pred_positions', JSON.stringify(positions));
+      localStorage.setItem('v8_positions', JSON.stringify(positions));
 
       onSuccess?.();
       onClose();

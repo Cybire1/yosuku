@@ -12,7 +12,7 @@ import {
   type RoundState,
   type ReputationData,
 } from '@/lib/predictionContract';
-import { resolveSlotRecord } from '@/lib/recordResolver';
+import { getBetCommitment } from '@/lib/roundHelpers';
 
 interface ClaimWinningsProps {
   round: RoundState;
@@ -29,7 +29,7 @@ export default function ClaimWinnings({
   reputation,
   onClaimed,
 }: ClaimWinningsProps) {
-  const { address, executeTransaction, requestRecords, decrypt } = useWallet();
+  const { address, executeTransaction } = useWallet();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [claimed, setClaimed] = useState(false);
@@ -45,17 +45,15 @@ export default function ClaimWinnings({
     ? calcPayoutWithBonus(userDeposit, winPool, totalPool, bonusPct)
     : 0;
 
-  /** Find the active BetSlot record via requestRecords or tx-based decrypt */
-  const findSlotRecord = async (): Promise<string | null> => {
-    return resolveSlotRecord(
-      { requestRecords, decrypt },
-      round.id,
-    );
-  };
-
   const handleClaim = async () => {
     if (!address || !executeTransaction) {
       setError('Please connect your wallet');
+      return;
+    }
+
+    const commitment = getBetCommitment(address, round.id);
+    if (!commitment) {
+      setError('Commitment data not found. Did you bet from this browser?');
       return;
     }
 
@@ -63,16 +61,16 @@ export default function ClaimWinnings({
     setError('');
 
     try {
-      const slotPlaintext = await findSlotRecord();
+      // v8 claim: claim(rid: u64, side: bool, amt: u128, salt: field, payout: u128)
+      const sideVal = commitment.side === 'YES' ? 'true' : 'false';
 
-      if (!slotPlaintext) {
-        setError('Could not find your BetSlot record. Make sure you have an active bet.');
-        setLoading(false);
-        return;
-      }
-
-      const inputs = [slotPlaintext, `${estimatedPayout}u128`];
-      console.log('[Claim] Submitting with inputs:', inputs.length, inputs.map(i => i.slice(0, 80)));
+      const inputs = [
+        `${round.id}u64`,
+        sideVal,
+        `${commitment.amount}u128`,
+        commitment.salt,
+        `${estimatedPayout}u128`,
+      ];
 
       await executeTransaction({
         program: BTC_PREDICTION_PROGRAM,
@@ -80,7 +78,6 @@ export default function ClaimWinnings({
         inputs,
         fee: 2_000_000,
         privateFee: false,
-        recordIndices: [0],
       });
 
       // Optimistic balance update
@@ -88,10 +85,10 @@ export default function ClaimWinnings({
       setOptimisticBalance(curBalance + estimatedPayout);
 
       // Mark as claimed
-      const claimedRounds: number[] = JSON.parse(localStorage.getItem('pred_claimed') || '[]');
+      const claimedRounds: number[] = JSON.parse(localStorage.getItem('v8_claimed') || '[]');
       if (!claimedRounds.includes(round.id)) {
         claimedRounds.push(round.id);
-        localStorage.setItem('pred_claimed', JSON.stringify(claimedRounds));
+        localStorage.setItem('v8_claimed', JSON.stringify(claimedRounds));
       }
 
       setClaimed(true);
@@ -116,32 +113,39 @@ export default function ClaimWinnings({
       return;
     }
 
+    const commitment = getBetCommitment(address, round.id);
+    if (!commitment) {
+      setError('Commitment data not found.');
+      return;
+    }
+
     setLoading(true);
     setError('');
 
     try {
-      const slotPlaintext = await findSlotRecord();
+      // v8 forfeit: forfeit(rid: u64, side: bool, amt: u128, salt: field)
+      const sideVal = commitment.side === 'YES' ? 'true' : 'false';
 
-      if (!slotPlaintext) {
-        setError('Could not find your BetSlot record.');
-        setLoading(false);
-        return;
-      }
+      const inputs = [
+        `${round.id}u64`,
+        sideVal,
+        `${commitment.amount}u128`,
+        commitment.salt,
+      ];
 
       await executeTransaction({
         program: BTC_PREDICTION_PROGRAM,
         function: 'forfeit',
-        inputs: [slotPlaintext],
+        inputs,
         fee: 500_000,
         privateFee: false,
-        recordIndices: [0],
       });
 
       // Mark as claimed (forfeited)
-      const claimedRounds: number[] = JSON.parse(localStorage.getItem('pred_claimed') || '[]');
+      const claimedRounds: number[] = JSON.parse(localStorage.getItem('v8_claimed') || '[]');
       if (!claimedRounds.includes(round.id)) {
         claimedRounds.push(round.id);
-        localStorage.setItem('pred_claimed', JSON.stringify(claimedRounds));
+        localStorage.setItem('v8_claimed', JSON.stringify(claimedRounds));
       }
 
       setClaimed(true);
@@ -163,8 +167,8 @@ export default function ClaimWinnings({
           <div className="absolute inset-0 bg-neutral-900/40 backdrop-blur-2xl border border-white/5 rounded-xl" />
           <div className="relative p-4">
             <div className="text-center">
-              <p className="text-gray-400 font-bold text-sm uppercase tracking-widest">Slot Recycled</p>
-              <p className="text-gray-500 text-xs mt-1">Ready for next round</p>
+              <p className="text-gray-400 font-bold text-sm uppercase tracking-widest">Forfeited</p>
+              <p className="text-gray-500 text-xs mt-1">Commitment released</p>
             </div>
           </div>
         </div>
@@ -177,7 +181,7 @@ export default function ClaimWinnings({
         <div className="relative p-4">
           <div className="text-center space-y-3">
             <p className="text-off-red font-bold text-sm uppercase tracking-widest">Position Lost</p>
-            <p className="text-gray-400 text-xs">Forfeit to recycle your slot for the next round.</p>
+            <p className="text-gray-400 text-xs">Forfeit to release your commitment.</p>
             {error && (
               <p className="text-off-red text-xs font-bold animate-pulse">{error}</p>
             )}
@@ -189,12 +193,12 @@ export default function ClaimWinnings({
               {loading ? (
                 <>
                   <Loader className="w-4 h-4 animate-spin" />
-                  Recycling Slot...
+                  Forfeiting...
                 </>
               ) : (
                 <>
                   <XCircle className="w-3.5 h-3.5" />
-                  Forfeit & Recycle Slot
+                  Forfeit Position
                 </>
               )}
             </button>
@@ -258,7 +262,7 @@ export default function ClaimWinnings({
               Claiming...
             </>
           ) : (
-            'Claim & Recycle Slot'
+            'Claim Winnings'
           )}
         </button>
       </div>

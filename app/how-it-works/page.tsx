@@ -94,7 +94,7 @@ export default function HowItWorksPage() {
     },
     {
       question: 'How does DART protect my privacy?',
-      answer: 'DART uses three layers of Aleo privacy: (1) Private bet side — your Up/Down choice is encrypted in a BetSlot record that only your wallet can decrypt, (2) Dark pool — during betting, only the combined pool total is visible; the YES/NO split is hidden until resolution, (3) ZK-verified claims — when you claim, a zero-knowledge proof verifies your eligibility without revealing your position to the network.',
+      answer: 'DART uses four layers of Aleo privacy: (1) Private transition inputs — your bet side and amount are ZK-proven private inputs, hidden by Aleo\'s zero-knowledge proofs, (2) ZK commitment — your bet is bound to a cryptographic hash(side, amount, salt) that can\'t be forged, (3) Dark pool — during betting, only the combined pool total is visible; the YES/NO split is hidden until resolution, (4) Anti-MEV — nobody can see your position to front-run or manipulate odds.',
     },
     {
       question: 'Can I create my own rounds?',
@@ -245,7 +245,7 @@ export default function HowItWorksPage() {
                   <h3 className="text-base font-bold text-white">Private Bet Side</h3>
                 </div>
                 <p className="text-sm text-gray-400 leading-relaxed">
-                  Your bet side (Up/Down) is stored in an encrypted <span className="text-sky-400 font-medium">BetSlot</span> record — it never leaves your wallet. The contract only sees your bet amount on-chain, not which side you chose. This is true privacy that can only exist on Aleo.
+                  Your bet side (Up/Down) is a <span className="text-sky-400 font-medium">private transition input</span> — hidden by Aleo&apos;s ZK proofs and bound to a cryptographic commitment hash(side, amount, salt). The contract never sees your side on-chain during betting. This is true privacy that can only exist on Aleo.
                 </p>
               </motion.div>
               <motion.div
@@ -278,7 +278,7 @@ export default function HowItWorksPage() {
                 <h3 className="text-base font-bold text-white">ZK-Verified Claims</h3>
               </div>
               <p className="text-sm text-gray-400 leading-relaxed">
-                When you claim winnings, your encrypted <span className="text-sky-400 font-medium">BetSlot</span> record is consumed and verified with a zero-knowledge proof. The contract confirms you're on the winning side and calculates your payout — all without revealing your position to the network. Your slot is then recycled for the next round.
+                When you claim winnings, you reveal the <span className="text-sky-400 font-medium">commitment preimage</span> (side, amount, salt). The contract verifies this matches the stored hash — proving you placed the bet without anyone being able to forge it. Your side is only revealed after the round is over, when it no longer matters.
               </p>
             </motion.div>
           </div>
