@@ -8,8 +8,11 @@
 }
 
 :root {
-  --background: #080808;
+  --background: #181717;
   --foreground: #ffffff;
+  --surface-100: #211f1f;
+  --surface-200: #292725;
+  --surface-300: #f5f5f5;
 
   /* Global Color Palette */
   --color-aleo-blue: #3B82F6;
@@ -85,8 +88,8 @@ body {
 
 /* Monochrome Utilities */
 .mono-panel {
-  background: #0a0a0a;
-  border: 1px solid #333;
+  background: var(--surface-100);
+  border: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 .mono-card {
@@ -111,7 +114,7 @@ body {
 }
 
 .mono-card:hover {
-  background: #0a0a0a;
+  background: var(--surface-100);
   border-color: #fff;
 }
 
@@ -197,4 +200,65 @@ html.lenis {
   text-transform: lowercase !important;
   font-size: 11px !important;
   letter-spacing: 0.02em !important;
+}
+
+@keyframes hero-smoke-drift {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 0, 0) scale(0.82) rotate(0deg);
+  }
+
+  14% {
+    opacity: 0.18;
+  }
+
+  72% {
+    opacity: 0.1;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate3d(-16vw, -9vh, 0) scale(1.32) rotate(-8deg);
+  }
+}
+
+@keyframes hero-smoke-drift-alt {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 0, 0) scale(0.78) rotate(4deg);
+  }
+
+  16% {
+    opacity: 0.15;
+  }
+
+  70% {
+    opacity: 0.08;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate3d(-12vw, -7vh, 0) scale(1.22) rotate(-5deg);
+  }
+}
+
+.hero-smoke {
+  position: absolute;
+  bottom: -10vh;
+  border-radius: 9999px;
+  pointer-events: none;
+  opacity: 0;
+  filter: blur(38px);
+  mix-blend-mode: screen;
+  will-change: transform, opacity;
+  background:
+    radial-gradient(ellipse at 38% 48%, rgba(255, 255, 255, 0.18) 0%, rgba(225, 233, 232, 0.11) 26%, rgba(174, 187, 186, 0.06) 48%, rgba(0, 0, 0, 0) 72%);
+  animation: hero-smoke-drift 28s linear infinite;
+}
+
+.hero-smoke.alt {
+  filter: blur(46px);
+  background:
+    radial-gradient(ellipse at 48% 52%, rgba(255, 255, 255, 0.14) 0%, rgba(213, 223, 221, 0.1) 28%, rgba(168, 182, 180, 0.05) 50%, rgba(0, 0, 0, 0) 74%);
+  animation-name: hero-smoke-drift-alt;
 }

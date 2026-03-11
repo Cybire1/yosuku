@@ -1,6 +1,6 @@
 export default function Footer() {
     return (
-        <footer className="w-full bg-[#030303] border-t border-white/5 pt-16 pb-8 px-6 sm:px-12 md:px-[50px]">
+        <footer className="w-full border-t border-white/5 bg-[var(--surface-100)] pt-16 pb-8 px-6 sm:px-12 md:px-[50px]">
             <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center gap-10">
 
                 {/* Brand */}

@@ -21,7 +21,7 @@ export default function FeaturesScroll() {
 
         // Calculate how far we need to translate horizontally
         const getScrollAmount = () => {
-            let trackWidth = track.scrollWidth;
+            const trackWidth = track.scrollWidth;
             return -(trackWidth - window.innerWidth);
         };
 
@@ -127,30 +127,45 @@ export default function FeaturesScroll() {
     }, []);
 
     return (
-        <section ref={sectionRef} className="relative h-screen bg-zinc-900 border-t border-white/5 overflow-hidden">
+        <section ref={sectionRef} className="relative h-screen overflow-hidden border-t border-white/5 bg-[var(--background)]">
             <div
                 ref={trackRef}
                 className="flex h-full w-[300vw] will-change-transform"
             >
                 {/* --- SLIDE 1: Brutalist Typography --- */}
-                <div className="w-screen h-full flex items-center justify-center relative flex-shrink-0">
+                <div className="relative flex h-full w-screen flex-shrink-0 items-center justify-center overflow-hidden bg-[#6fcc9c]">
+                    <div
+                        className="absolute inset-0"
+                        style={{
+                            background:
+                                'radial-gradient(circle at 50% 48%, rgba(255,255,255,0.26), transparent 18%), linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0) 24%), linear-gradient(90deg, rgba(9,16,14,0.08) 0%, rgba(9,16,14,0) 18%, rgba(9,16,14,0) 82%, rgba(9,16,14,0.08) 100%)',
+                        }}
+                    />
+                    <div
+                        className="absolute inset-0 opacity-[0.08]"
+                        style={{
+                            backgroundImage:
+                                'linear-gradient(rgba(12,18,16,0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(12,18,16,0.08) 1px, transparent 1px)',
+                            backgroundSize: '72px 72px',
+                        }}
+                    />
                     {/* Massive masked text */}
-                    <div className="overflow-hidden mix-blend-difference z-10 w-full flex flex-col items-center">
-                        <h2 className="text-[18vw] font-black uppercase text-white leading-[0.85] tracking-tighter text-center">
+                    <div className="z-10 flex w-full flex-col items-center overflow-hidden">
+                        <h2 className="text-center text-[18vw] font-black uppercase leading-[0.85] tracking-tighter text-[#0b1311]">
                             THE CORE
                         </h2>
-                        <h2 className="text-[18vw] font-black uppercase text-white leading-[0.85] tracking-tighter text-center">
+                        <h2 className="text-center text-[18vw] font-black uppercase leading-[0.85] tracking-tighter text-[#0b1311]">
                             PROTOCOL
                         </h2>
                     </div>
                     {/* Geometric underlying element */}
-                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[35vw] h-[35vw] bg-white rounded-full mix-blend-screen opacity-10 blur-xl" />
-                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[20vw] h-[20vw] border-[1px] border-white/20 rounded-full" />
-                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[22vw] h-[22vw] border-[1px] border-white/10 rounded-full" />
+                    <div className="absolute left-1/2 top-1/2 h-[35vw] w-[35vw] -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/18 opacity-60 blur-xl" />
+                    <div className="absolute left-1/2 top-1/2 h-[20vw] w-[20vw] -translate-x-1/2 -translate-y-1/2 rounded-full border-[1px] border-[#0b1311]/16" />
+                    <div className="absolute left-1/2 top-1/2 h-[22vw] w-[22vw] -translate-x-1/2 -translate-y-1/2 rounded-full border-[1px] border-[#0b1311]/10" />
                 </div>
 
                 {/* --- SLIDE 2: Canvas Wave & Deep Liquidity --- */}
-                <div className="w-screen h-full flex flex-col items-center justify-center relative flex-shrink-0 bg-zinc-950">
+                <div className="relative flex h-full w-screen flex-shrink-0 flex-col items-center justify-center bg-[var(--surface-100)]">
                     {/* Canvas layer */}
                     <div className="absolute inset-0 z-0">
                         <canvas ref={canvasRef} className="w-full h-full" />
@@ -165,7 +180,7 @@ export default function FeaturesScroll() {
                 </div>
 
                 {/* --- SLIDE 3: Glass Cards / Global Access --- */}
-                <div className="w-screen h-full flex items-center justify-center flex-shrink-0 bg-[#030303] relative border-l border-white/5">
+                <div className="relative flex h-full w-screen flex-shrink-0 items-center justify-center border-l border-white/5 bg-[var(--surface-200)]">
                     <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 pointer-events-none mix-blend-overlay" />
 
                     <div className="w-full max-w-7xl mx-auto px-12 z-10 flex flex-col md:flex-row items-center justify-between gap-16">

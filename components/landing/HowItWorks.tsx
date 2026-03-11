@@ -60,9 +60,9 @@ export default function HowItWorks() {
             const projected: { x: number, y: number, z: number }[] = [];
 
             points.forEach(p => {
-                let nx = p.origX * Math.cos(rotY) - p.origZ * Math.sin(rotY);
+                const nx = p.origX * Math.cos(rotY) - p.origZ * Math.sin(rotY);
                 let nz = p.origZ * Math.cos(rotY) + p.origX * Math.sin(rotY);
-                let ny = p.origY * Math.cos(rotX) - nz * Math.sin(rotX);
+                const ny = p.origY * Math.cos(rotX) - nz * Math.sin(rotX);
                 nz = nz * Math.cos(rotX) + p.origY * Math.sin(rotX);
 
                 // Project 3D -> 2D
@@ -77,10 +77,10 @@ export default function HowItWorks() {
 
                 const alpha = Math.max(0.1, Math.min(1, scale - 0.2));
 
-                // Color transition: #60A5FA (blue) -> #34D399 (mint) -> #F43F5E (pink)
-                const r = Math.floor(96 + progress * 148);
-                const g = Math.floor(165 - progress * 102);
-                const b = Math.floor(250 - progress * 156);
+                // Start from a darker green instead of the original blue-led tone.
+                const r = Math.floor(46 + progress * 198);
+                const g = Math.floor(94 + progress * -31);
+                const b = Math.floor(74 + progress * 20);
 
                 ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
                 ctx.beginPath();
@@ -152,7 +152,7 @@ export default function HowItWorks() {
     }, []);
 
     return (
-        <section ref={containerRef} className="relative h-[400vh] w-full bg-[#030303]" data-cursor-text="Scroll">
+        <section ref={containerRef} className="relative h-[400vh] w-full bg-[var(--background)]" data-cursor-text="Scroll">
             <div className="sticky top-0 h-screen w-full flex items-center justify-center overflow-hidden">
 
                 <canvas
