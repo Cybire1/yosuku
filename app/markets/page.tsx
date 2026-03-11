@@ -114,7 +114,8 @@ export default function MarketsPage() {
   ];
 
   return (
-    <div className="min-h-screen overflow-x-hidden selection:bg-white selection:text-black">
+    <div className="relative isolate z-[1] min-h-screen overflow-x-hidden bg-[#080808] selection:bg-white selection:text-black">
+      <div aria-hidden className="fixed inset-0 z-0 bg-[#080808]" />
       <Header />
 
       {/* Win/Lose notification */}
@@ -157,7 +158,7 @@ export default function MarketsPage() {
       </AnimatePresence>
 
       <DoodleStrip />
-      <main className="pt-28 pb-24 sm:pb-12 relative">
+      <main className="relative z-10 bg-[#080808] pt-28 pb-24 sm:pb-12">
         <motion.div
           className="max-w-[1400px] mx-auto px-4 sm:px-6"
           initial="hidden"

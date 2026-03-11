@@ -35,6 +35,7 @@ export default function TradingCard({
   const targetUsd = round.targetPrice / 100;
   const priceDelta = price > 0 ? price - targetUsd : 0;
   const isAbove = price >= targetUsd;
+  const minsLeft = mins + secs / 60;
 
   // Countdown timer
   useEffect(() => {
@@ -67,7 +68,6 @@ export default function TradingCard({
 
     // During dark pool: use probability-based estimate
     // Pool breakdown is hidden, so estimate payout from probability
-    const minsLeft = Math.max(0, (round.endTime - Date.now()) / 60000);
     if (price > 0 && minsLeft > 0) {
       const prob = estimateProb(price, targetUsd, minsLeft);
       const sideProb = userSide === 'YES' ? prob : 1 - prob;
@@ -86,7 +86,7 @@ export default function TradingCard({
       {/* Ambient glow */}
       <div className="absolute -inset-1 bg-gradient-to-r from-new-mint/20 via-new-blue/10 to-new-mint/20 rounded-3xl blur-xl opacity-50" />
 
-      <div className="relative bg-neutral-900/80 backdrop-blur-2xl border border-white/10 rounded-3xl overflow-hidden">
+      <div className="relative bg-black/90 backdrop-blur-2xl border border-white/10 rounded-3xl overflow-hidden">
         {/* Progress bar */}
         <div className="h-1 bg-white/5">
           <motion.div
@@ -147,17 +147,17 @@ export default function TradingCard({
           </div>
 
           {/* Live BTC Chart */}
-          <div className="mb-5 bg-white/[0.02] border border-white/5 rounded-2xl overflow-hidden">
+          <div className="mb-5 bg-black/55 border border-white/5 rounded-2xl overflow-hidden">
             <div className="h-[220px] sm:h-[350px]">
               <LiveBtcChart targetPrice={round.targetPrice} />
             </div>
           </div>
 
           {/* Probability bar */}
-          {price > 0 && mins + secs > 0 && (
+          {price > 0 && minsLeft > 0 && (
             <div className="mb-5">
               {(() => {
-                const prob = estimateProb(price, targetUsd, mins + secs / 60);
+                const prob = estimateProb(price, targetUsd, minsLeft);
                 const yesPct = Math.round(prob * 100);
                 const noPct = 100 - yesPct;
                 return (
@@ -212,7 +212,7 @@ export default function TradingCard({
 
           {/* User position */}
           {userSide && (
-            <div className="mt-4 p-4 bg-white/[0.03] border border-white/5 rounded-2xl">
+            <div className="mt-4 p-4 bg-black/45 border border-white/5 rounded-2xl">
               <div className="flex items-center justify-between">
                 <div>
                   <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500 block mb-1">Your Position</span>
@@ -221,12 +221,15 @@ export default function TradingCard({
                   </span>
                 </div>
                 <div className="text-right">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500 block mb-1">Est. Payout</span>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500 block mb-1">Live Est. Payout</span>
                   <span className="text-sm font-mono font-bold text-white">
                     {formatPred(positionPayout)} USDCx
                   </span>
                 </div>
               </div>
+              <p className="text-[10px] text-gray-600 mt-2">
+                Final payout is determined at resolution and can move while betting stays open.
+              </p>
             </div>
           )}
         </div>

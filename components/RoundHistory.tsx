@@ -121,7 +121,7 @@ export default function RoundHistory({ rounds, positions, reputation, onClaim }:
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.05 }}
-            className="p-4 bg-white/[0.03] hover:bg-white/[0.05] border border-white/5 rounded-2xl transition-all"
+            className="p-4 bg-black/45 hover:bg-black/60 border border-white/5 rounded-2xl transition-all"
           >
             <div className="flex items-center justify-between">
               {/* Left: Round info */}

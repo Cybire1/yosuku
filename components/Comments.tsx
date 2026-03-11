@@ -83,7 +83,7 @@ export default function Comments({ roundId }: CommentsProps) {
   const displayed = comments.slice(0, 50);
 
   return (
-    <div className="bg-neutral-900/40 backdrop-blur-xl border border-white/5 rounded-2xl overflow-hidden">
+    <div className="bg-black/80 backdrop-blur-xl border border-white/5 rounded-2xl overflow-hidden">
       {/* Header */}
       <div className="px-5 py-4 border-b border-white/5 flex items-center gap-2">
         <MessageCircle className="w-4 h-4 text-gray-500" />
@@ -113,7 +113,7 @@ export default function Comments({ roundId }: CommentsProps) {
                 onKeyDown={handleKeyDown}
                 placeholder="Add a comment..."
                 rows={1}
-                className="w-full bg-white/[0.03] border border-white/5 rounded-xl px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:border-white/15 focus:outline-none resize-none transition-all"
+                className="w-full bg-black/45 border border-white/5 rounded-xl px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:border-white/15 focus:outline-none resize-none transition-all"
               />
             </div>
 

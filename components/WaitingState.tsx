@@ -12,7 +12,7 @@ export default function WaitingState() {
     <div className="relative">
       <div className="absolute -inset-1 bg-gradient-to-r from-white/5 via-new-blue/5 to-white/5 rounded-3xl blur-xl opacity-50" />
 
-      <div className="relative bg-neutral-900/80 backdrop-blur-2xl border border-white/10 rounded-3xl overflow-hidden">
+      <div className="relative bg-black/90 backdrop-blur-2xl border border-white/10 rounded-3xl overflow-hidden">
         {/* Subtle progress bar placeholder */}
         <div className="h-1 bg-white/5" />
 
@@ -38,20 +38,20 @@ export default function WaitingState() {
           </div>
 
           {/* Live chart without target line */}
-          <div className="mb-5 bg-white/[0.02] border border-white/5 rounded-2xl overflow-hidden">
+          <div className="mb-5 bg-black/55 border border-white/5 rounded-2xl overflow-hidden">
             <LiveBtcChart height={280} />
           </div>
 
           {/* Disabled YES/NO buttons */}
           <div className="grid grid-cols-2 gap-2 mb-4 opacity-40 pointer-events-none">
-            <div className="py-3 rounded-xl font-bold text-sm bg-white/[0.03] text-gray-500 border-2 border-transparent text-center">
+            <div className="py-3 rounded-xl font-bold text-sm bg-black/45 text-gray-500 border-2 border-transparent text-center">
               <div className="flex items-center justify-center gap-2">
                 <TrendingUp className="w-4 h-4" />
                 <span>Yes</span>
                 <span className="font-mono">—</span>
               </div>
             </div>
-            <div className="py-3 rounded-xl font-bold text-sm bg-white/[0.03] text-gray-500 border-2 border-transparent text-center">
+            <div className="py-3 rounded-xl font-bold text-sm bg-black/45 text-gray-500 border-2 border-transparent text-center">
               <div className="flex items-center justify-center gap-2">
                 <TrendingDown className="w-4 h-4" />
                 <span>No</span>
@@ -61,7 +61,7 @@ export default function WaitingState() {
           </div>
 
           {/* Message */}
-          <div className="text-center py-4 px-6 bg-white/[0.02] border border-white/5 rounded-2xl">
+          <div className="text-center py-4 px-6 bg-black/45 border border-white/5 rounded-2xl">
             <p className="text-sm text-gray-400 font-medium">
               Next round will appear when created on-chain
             </p>
