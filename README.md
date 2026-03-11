@@ -158,6 +158,10 @@ Prediction markets have binary outcomes (YES/NO). AMM curves (Uniswap-style) cre
 
 ## System Overview
 
+<p align="center">
+  <img src="public/image.png" alt="DART Architecture" width="700">
+</p>
+
 ```
                     ┌─────────────────────────────┐
                     │        DART Frontend         │
