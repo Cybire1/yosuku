@@ -9,12 +9,21 @@ if (typeof window !== 'undefined') {
     gsap.registerPlugin(ScrollTrigger);
 }
 
+const FEATURE_ITEMS = [
+    { title: 'ZkSNARKs', value: 'Verified', color: 'bg-[#34D399]' },
+    { title: 'Latency', value: 'Sub-second', color: 'bg-[#60A5FA]' },
+    { title: 'Uptime', value: '99.99%', color: 'bg-[#F43F5E]' },
+    { title: 'Privacy', value: 'Absolute', color: 'bg-white' }
+];
+
 export default function FeaturesScroll() {
     const sectionRef = useRef<HTMLDivElement>(null);
     const trackRef = useRef<HTMLDivElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
 
     useEffect(() => {
+        if (window.innerWidth < 768) return;
+
         const section = sectionRef.current;
         const track = trackRef.current;
         if (!section || !track) return;
@@ -127,7 +136,98 @@ export default function FeaturesScroll() {
     }, []);
 
     return (
-        <section ref={sectionRef} className="relative h-screen overflow-hidden border-t border-white/5 bg-[var(--background)]">
+        <>
+        <section className="border-t border-white/5 bg-[var(--background)] px-4 py-5 md:hidden">
+            <div className="space-y-4">
+                <div className="relative overflow-hidden rounded-[2rem] bg-[#6fcc9c] px-4 py-14">
+                    <div
+                        className="absolute inset-0"
+                        style={{
+                            background:
+                                'radial-gradient(circle at 50% 42%, rgba(255,255,255,0.26), transparent 22%), linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0) 24%)',
+                        }}
+                    />
+                    <div className="relative z-10">
+                        <div className="mb-10 text-center">
+                            <p className="font-mono text-[10px] uppercase tracking-[0.32em] text-[#0b1311]/55">
+                                Core Layer
+                            </p>
+                        </div>
+                        <div className="flex flex-col items-center">
+                            <h2 className="text-center text-[20vw] font-black uppercase leading-[0.84] tracking-[-0.06em] text-[#0b1311]">
+                                THE CORE
+                            </h2>
+                            <h2 className="text-center text-[20vw] font-black uppercase leading-[0.84] tracking-[-0.06em] text-[#0b1311]">
+                                PROTOCOL
+                            </h2>
+                        </div>
+                    </div>
+                    <div className="absolute left-1/2 top-1/2 h-[56vw] w-[56vw] -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/14 blur-xl" />
+                    <div className="absolute left-1/2 top-1/2 h-[36vw] w-[36vw] -translate-x-1/2 -translate-y-1/2 rounded-full border border-[#0b1311]/12" />
+                </div>
+
+                <div className="relative overflow-hidden rounded-[2rem] border border-white/8 bg-[var(--surface-100)] px-5 py-10">
+                    <div
+                        className="absolute inset-0 opacity-70"
+                        style={{
+                            background:
+                                'radial-gradient(circle at 50% 20%, rgba(255,255,255,0.08), transparent 24%), linear-gradient(180deg, rgba(52,211,153,0.08) 0%, rgba(52,211,153,0) 55%)',
+                        }}
+                    />
+                    <div className="absolute inset-x-0 bottom-0 h-40 opacity-60">
+                        <div
+                            className="h-full w-full"
+                            style={{
+                                backgroundImage:
+                                    'radial-gradient(circle at 0% 58%, rgba(111,204,156,0.9) 0 3px, transparent 4px), radial-gradient(circle at 16% 36%, rgba(111,204,156,0.82) 0 3px, transparent 4px), radial-gradient(circle at 32% 62%, rgba(111,204,156,0.84) 0 3px, transparent 4px), radial-gradient(circle at 48% 40%, rgba(111,204,156,0.86) 0 3px, transparent 4px), radial-gradient(circle at 64% 66%, rgba(111,204,156,0.82) 0 3px, transparent 4px), radial-gradient(circle at 80% 34%, rgba(111,204,156,0.88) 0 3px, transparent 4px), radial-gradient(circle at 100% 60%, rgba(111,204,156,0.9) 0 3px, transparent 4px)',
+                                backgroundRepeat: 'no-repeat',
+                            }}
+                        />
+                    </div>
+                    <div className="relative z-10 text-center">
+                        <p className="font-mono text-[10px] uppercase tracking-[0.32em] text-white/36">
+                            Liquidity Layer
+                        </p>
+                        <h3 className="mt-3 text-[3.1rem] font-black leading-[0.88] tracking-[-0.06em] text-white">
+                            DEEP
+                            <span className="block">LIQUIDITY</span>
+                        </h3>
+                        <p className="mx-auto mt-4 max-w-[17rem] text-[15px] leading-7 text-white/62">
+                            Mathematical precision flowing dynamically across global zero-knowledge prediction pools.
+                        </p>
+                    </div>
+                </div>
+
+                <div className="relative overflow-hidden rounded-[2rem] border border-white/8 bg-[var(--surface-200)] px-5 py-10">
+                    <div className="max-w-[19rem]">
+                        <p className="font-mono text-[10px] uppercase tracking-[0.32em] text-white/36">
+                            Access Layer
+                        </p>
+                        <h3 className="mt-3 text-[2.55rem] font-black leading-[0.92] tracking-[-0.05em] text-white">
+                            Global Access
+                        </h3>
+                        <p className="mt-4 text-[15px] leading-7 text-white/62">
+                            Unrestricted prediction markets that scale across chains while maintaining cryptographic privacy.
+                        </p>
+                    </div>
+
+                    <div className="mt-8 grid grid-cols-2 gap-3">
+                        {FEATURE_ITEMS.map((item) => (
+                            <div
+                                key={item.title}
+                                className="rounded-[1.6rem] border border-white/8 bg-white/[0.03] p-5 backdrop-blur-xl"
+                            >
+                                <div className={`mb-7 h-3 w-3 rounded-full ${item.color}`} />
+                                <p className="mb-2 text-[11px] uppercase tracking-[0.2em] text-white/30">{item.title}</p>
+                                <h4 className="text-[1.7rem] font-semibold leading-none text-white">{item.value}</h4>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section ref={sectionRef} className="relative hidden h-screen overflow-hidden border-t border-white/5 bg-[var(--background)] md:block">
             <div
                 ref={trackRef}
                 className="flex h-full w-[300vw] will-change-transform"
@@ -192,12 +292,7 @@ export default function FeaturesScroll() {
                         </div>
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 flex-1">
-                            {[
-                                { title: "ZkSNARKs", value: "Verified", color: "bg-[#34D399]" },
-                                { title: "Latency", value: "Sub-second", color: "bg-[#60A5FA]" },
-                                { title: "Uptime", value: "99.99%", color: "bg-[#F43F5E]" },
-                                { title: "Privacy", value: "Absolute", color: "bg-white" }
-                            ].map((item, idx) => (
+                            {FEATURE_ITEMS.map((item, idx) => (
                                 <TiltCard
                                     key={idx}
                                     className="p-8 rounded-3xl bg-white/[0.03] backdrop-blur-2xl border border-white/10 hover:border-white/20 transition-all duration-300 group cursor-pointer"
@@ -213,5 +308,6 @@ export default function FeaturesScroll() {
                 </div>
             </div>
         </section>
+        </>
     );
 }
