@@ -12,7 +12,7 @@ export default function HowItWorksPage() {
     {
       number: 1,
       title: 'Connect & Fund',
-      description: 'Connect your Leo Wallet and bridge USDCx from the Aleo bridge. USDCx is a stablecoin pegged to USDC.',
+      description: 'Connect your Shield Wallet and bridge USDCx from the Aleo bridge. USDCx is a stablecoin pegged to USDC.',
       icon: Coins,
       numClass: 'bg-new-mint/10 text-new-mint',
       iconClass: 'text-new-mint',
@@ -86,7 +86,7 @@ export default function HowItWorksPage() {
     },
     {
       question: 'What wallet do I need?',
-      answer: 'You need Leo Wallet, the browser extension for Aleo. It\'s free and works on Chrome and Firefox.',
+      answer: 'You need Shield Wallet, the browser extension for Aleo. It\'s free and works on Chrome and Firefox.',
     },
     {
       question: 'Is this real money?',

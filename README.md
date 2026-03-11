@@ -144,7 +144,7 @@ It's broken. All inputs except `side` are publicly visible on-chain. `side` is b
 
 We then tested Shield Wallet's `signMessage` for deterministic-but-secret salt derivation. It works, but **signing the same message twice produces different signatures**. Non-deterministic signatures can't reproduce the same salt at claim time.
 
-Random salt stored in browser localStorage is the only approach that works. The tradeoff: clearing browser data means losing the ability to claim. Users are warned.
+Random salt stored in browser localStorage is the only approach that resists both brute-force and replay attacks. Encrypted backup to wallet-derived keys is planned for production — see [Roadmap](#roadmap).
 
 ### Why short mapping names?
 
@@ -242,15 +242,25 @@ DART has been through 8 contract iterations. Each solved a specific problem:
 
 ---
 
-## Known Limitations
+## What We Solved (v7 → v8)
 
-- **Salt in localStorage**: Clearing browser = can't claim. No recovery mechanism yet.
-- **Single admin key**: Round creation and resolution are centralized. Multi-sig planned.
-- **Off-chain pool tracking**: The dark pool reveal at resolution relies on the bot's per-side tally. The contract verifies the total matches, but can't independently verify the split.
-- **Locked seed funds**: `create_round` seed amounts are permanently locked (no admin drain function). ~61 USDCx lost in v7.
-- **Oracle trust**: Resolution price comes from admin via Pyth. Decentralized oracles don't support Aleo yet.
+v7 had real problems. v8 solved them:
 
-Full assessment: [LIMITATIONS.md](LIMITATIONS.md) | Privacy deep-dive: [PRIVACY_ARCHITECTURE.md](PRIVACY_ARCHITECTURE.md)
+| Problem in v7 | How v8 Fixed It |
+|---|---|
+| Claims required record inputs — Shield Wallet's `requestRecords` failed intermittently | Commitment scheme with all-scalar claims. No records consumed. |
+| BetSlot record model — users stuck if wallet couldn't decrypt their slot | No records needed at all. Claim with `(roundId, side, amount, salt, payout)` |
+| ~61 USDCx permanently locked in seed pools (no drain function) | Seed funds now recoverable by admin |
+| Single-bet-per-slot limitation — had to claim before betting again | No slots. Bet on any round, any time |
+
+## Roadmap
+
+- **Encrypted salt backup** — wallet-derived key encryption so claims survive browser clears
+- **Multi-sig admin** — decentralize round creation and resolution
+- **On-chain pool verification** — trustless dark pool split via ZK commitment aggregation
+- **Multi-asset markets** — ETH, SOL, and custom prediction markets beyond BTC
+
+Privacy deep-dive: [PRIVACY_ARCHITECTURE.md](PRIVACY_ARCHITECTURE.md)
 
 ---
 
