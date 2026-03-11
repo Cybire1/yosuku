@@ -46,7 +46,7 @@ export default function FinalCTA() {
             ref={containerRef}
             onMouseMove={handleMouseMove}
             onMouseLeave={handleMouseLeave}
-            className="relative w-full h-[80vh] bg-[#34D399] flex flex-col items-center justify-center overflow-hidden cursor-pointer group"
+            className="relative flex h-[80vh] w-full cursor-pointer flex-col items-center justify-center overflow-hidden bg-black group"
             onClick={() => router.push('/markets')}
             data-cursor-text="Deploy"
         >
@@ -88,7 +88,7 @@ export default function FinalCTA() {
                 whileInView={{ opacity: 1 }}
                 viewport={{ once: true }}
                 transition={{ delay: 0.5, duration: 1 }}
-                className="absolute bottom-12 text-sm font-medium tracking-widest uppercase text-black/50 group-hover:text-black transition-colors z-10 mix-blend-overlay"
+                className="absolute bottom-12 z-10 text-sm font-medium uppercase tracking-widest text-white/40 transition-colors group-hover:text-black mix-blend-overlay"
             >
                 [ Click anywhere to launch the dashboard ]
             </motion.p>
