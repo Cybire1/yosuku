@@ -56,6 +56,7 @@ export function useRounds() {
   const [loading, setLoading] = useState(true);
   const activeRoundRef = useRef<RoundState | null>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollInFlightRef = useRef(false);
 
   // Keep ref in sync
   useEffect(() => {
@@ -134,20 +135,54 @@ export function useRounds() {
     if (loading) return;
 
     const poll = async () => {
-      const current = activeRoundRef.current;
+      if (pollInFlightRef.current) return;
+      pollInFlightRef.current = true;
 
-      if (current) {
-        const updated = await fetchRound(current.id);
-        if (!updated) return;
+      try {
+        const current = activeRoundRef.current;
 
-        if (updated.resolved && !current.resolved) {
-          // Round just resolved — move to past
-          setPastRounds(prev => [updated, ...prev].slice(0, 20));
-          setPositions(loadPositions());
+        if (current) {
+          const updated = await fetchRound(current.id);
+          if (!updated) return;
+          if (activeRoundRef.current?.id !== current.id) return;
 
-          // Find the latest round (resolver may have jumped ahead)
-          const newHighest = await findHighestRound(current.id);
-          if (newHighest > current.id) {
+          if (updated.resolved && !current.resolved) {
+            // Round just resolved — move to past
+            setPastRounds(prev => {
+              const merged = [updated, ...prev];
+              const byId = new Map(merged.map(round => [round.id, round]));
+              return Array.from(byId.values()).sort((a, b) => b.id - a.id).slice(0, 20);
+            });
+            setPositions(loadPositions());
+
+            // Find the latest round (resolver may have jumped ahead)
+            const newHighest = await findHighestRound(current.id);
+            if (activeRoundRef.current?.id !== current.id) return;
+            if (newHighest > current.id) {
+              localStorage.setItem(LAST_ROUND_KEY, String(newHighest));
+              const latest = await fetchRound(newHighest);
+              if (activeRoundRef.current?.id !== current.id) return;
+              if (latest && !latest.resolved) {
+                setActiveRound(latest);
+                return;
+              }
+            }
+
+            localStorage.setItem(LAST_ROUND_KEY, String(newHighest || current.id));
+            setActiveRound(prev => (prev?.id === current.id ? null : prev));
+            return;
+          }
+
+          // Normal pool update — keep endTime stable
+          setActiveRound(prev => {
+            if (!prev || prev.id !== current.id) return prev;
+            return { ...updated, endTime: prev.endTime };
+          });
+        } else {
+          // No active round — search for latest
+          const lastKnown = parseInt(localStorage.getItem(LAST_ROUND_KEY) || '0', 10);
+          const newHighest = await findHighestRound(lastKnown);
+          if (newHighest > lastKnown) {
             localStorage.setItem(LAST_ROUND_KEY, String(newHighest));
             const latest = await fetchRound(newHighest);
             if (latest && !latest.resolved) {
@@ -155,26 +190,9 @@ export function useRounds() {
               return;
             }
           }
-
-          localStorage.setItem(LAST_ROUND_KEY, String(newHighest || current.id));
-          setActiveRound(null);
-          return;
         }
-
-        // Normal pool update — keep endTime stable
-        setActiveRound(prev => prev ? { ...updated, endTime: prev.endTime } : updated);
-      } else {
-        // No active round — search for latest
-        const lastKnown = parseInt(localStorage.getItem(LAST_ROUND_KEY) || '0', 10);
-        const newHighest = await findHighestRound(lastKnown);
-        if (newHighest > lastKnown) {
-          localStorage.setItem(LAST_ROUND_KEY, String(newHighest));
-          const latest = await fetchRound(newHighest);
-          if (latest && !latest.resolved) {
-            setActiveRound(latest);
-            return;
-          }
-        }
+      } finally {
+        pollInFlightRef.current = false;
       }
     };
 

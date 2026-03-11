@@ -3,13 +3,15 @@
 import { useMemo } from 'react';
 import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, ReferenceLine, Tooltip } from 'recharts';
 import { formatPred, type RoundState, type UserPosition } from '@/lib/predictionContract';
+import { getSavedPayout } from '@/lib/roundHelpers';
 
 interface PnLChartProps {
   rounds: RoundState[];
   positions: UserPosition[];
+  address?: string | null;
 }
 
-export default function PnLChart({ rounds, positions }: PnLChartProps) {
+export default function PnLChart({ rounds, positions, address }: PnLChartProps) {
   const data = useMemo(() => {
     const resolved = rounds
       .filter(r => r.resolved && r.outcome !== null)
@@ -27,9 +29,7 @@ export default function PnLChart({ rounds, positions }: PnLChartProps) {
       const winningSide = round.outcome ? 'YES' : 'NO';
 
       if (userSide === winningSide) {
-        const totalPool = round.yesPool + round.noPool;
-        const winPool = round.outcome ? round.yesPool : round.noPool;
-        const payout = winPool > 0 ? (deposit / winPool) * totalPool * 0.9 : 0;
+        const payout = address ? getSavedPayout(address, round.id) : 0;
         cumPnl += payout - deposit;
       } else {
         cumPnl -= deposit;
@@ -39,7 +39,7 @@ export default function PnLChart({ rounds, positions }: PnLChartProps) {
     }
 
     return points;
-  }, [rounds, positions]);
+  }, [address, rounds, positions]);
 
   if (data.length < 3) {
     return (

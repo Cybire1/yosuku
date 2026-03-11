@@ -22,7 +22,7 @@ export default function WalletProvider({
       wallets={wallets}
       network={Network.TESTNET}
       decryptPermission={WalletDecryptPermission.AutoDecrypt}
-      programs={['btc_pred_v8.aleo', 'test_usdcx_stablecoin.aleo']}
+      programs={['btc_pred_v8.aleo', 'dart_mirror_v11.aleo', 'dart_mirror_v13.aleo', 'test_usdcx_stablecoin.aleo']}
       autoConnect
     >
       <WalletModalProvider>{children}</WalletModalProvider>

@@ -32,8 +32,9 @@ import {
   type ReputationData,
 } from '@/lib/predictionContract';
 import { fetchRound, loadPositions } from '@/lib/roundHelpers';
+import { executeWithRetry } from '@/lib/walletExecution';
 import ReputationCard from '@/components/ReputationCard';
-import ReputationBadge from '@/components/ReputationBadge';
+import MirrorPortfolioPanel from '@/components/MirrorPortfolioPanel';
 
 export default function PortfolioPage() {
   const router = useRouter();
@@ -120,19 +121,21 @@ export default function PortfolioPage() {
         return;
       }
       const sideVal = commitment.side === 'YES' ? 'true' : 'false';
-      await executeTransaction({
-        program: BTC_PREDICTION_PROGRAM,
-        function: 'claim',
-        inputs: [
-          `${roundId}u64`,
-          sideVal,
-          `${commitment.amount}u128`,
-          commitment.salt,
-          `${netPayout}u128`,
-        ],
-        fee: 2_000_000,
-        privateFee: false,
-      });
+      await executeWithRetry(() =>
+        executeTransaction({
+          program: BTC_PREDICTION_PROGRAM,
+          function: 'claim',
+          inputs: [
+            `${roundId}u64`,
+            sideVal,
+            `${commitment.amount}u128`,
+            commitment.salt,
+            `${netPayout}u128`,
+          ],
+          fee: 2_000_000,
+          privateFee: false,
+        })
+      );
 
       // Optimistic balance update — will reconcile when on-chain confirms
       const curBalance = parseInt(localStorage.getItem('usdcx_balance') || '0', 10);
@@ -285,7 +288,7 @@ export default function PortfolioPage() {
               </div>
               <h2 className="relative z-10 text-2xl sm:text-3xl font-black text-white tracking-tight mb-3">No Active Positions</h2>
               <p className="relative z-10 text-gray-400 max-w-sm mx-auto mb-8">
-                You haven't placed any predictions yet. Head over to the markets to make your first trade.
+                You haven&apos;t placed any predictions yet. Head over to the markets to make your first trade.
               </p>
               <button
                 onClick={() => router.push('/markets')}
@@ -355,6 +358,8 @@ export default function PortfolioPage() {
                   All positions stored as private Aleo records. Only your wallet can decrypt them.
                 </span>
               </div>
+
+              <MirrorPortfolioPanel />
 
               {/* Active Positions */}
               {activePositions.length > 0 && (

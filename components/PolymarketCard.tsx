@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { ExternalLink, TrendingUp, Copy, ArrowUpRight, Clock } from 'lucide-react';
+import { ExternalLink, TrendingUp, Copy } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 export interface PolymarketData {
@@ -23,9 +23,13 @@ export interface PolymarketData {
 
 interface PolymarketCardProps {
   market: PolymarketData;
+  showCloneAction?: boolean;
 }
 
-export default function PolymarketCard({ market }: PolymarketCardProps) {
+export default function PolymarketCard({
+  market,
+  showCloneAction = false,
+}: PolymarketCardProps) {
   const router = useRouter();
 
   // Calculate probability from price (0-1 range to percentage)
@@ -37,12 +41,6 @@ export default function PolymarketCard({ market }: PolymarketCardProps) {
     if (vol >= 1000000) return `$${(vol / 1000000).toFixed(1)}M`;
     if (vol >= 1000) return `$${(vol / 1000).toFixed(0)}K`;
     return `$${vol.toFixed(0)}`;
-  };
-
-  // Format date
-  const formatEndDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' });
   };
 
   const handleCloneToAleo = (e: React.MouseEvent) => {
@@ -102,7 +100,7 @@ export default function PolymarketCard({ market }: PolymarketCardProps) {
           </p>
         </div>
 
-        {/* Action Area: YES/NO Bar + Clone Overlay */}
+        {/* Action Area */}
         <div className="mt-auto relative h-14 bg-neutral-950 rounded-xl p-1.5 flex gap-1 border border-white/5 group/action">
 
           {/* YES Button (Green) */}
@@ -119,14 +117,15 @@ export default function PolymarketCard({ market }: PolymarketCardProps) {
             <span className="relative z-10 text-sm font-mono font-bold text-white">{noProb}%</span>
           </div>
 
-          {/* Clone Overlay Button (Visible on Hover) */}
-          <button
-            onClick={handleCloneToAleo}
-            className="absolute inset-1 bg-white text-black font-bold uppercase tracking-widest text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center gap-2 hover:scale-[1.02] shadow-xl z-20"
-          >
-            <Copy className="w-4 h-4" />
-            Clone to Aleo
-          </button>
+          {showCloneAction && (
+            <button
+              onClick={handleCloneToAleo}
+              className="absolute inset-1 bg-white text-black font-bold uppercase tracking-widest text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center gap-2 hover:scale-[1.02] shadow-xl z-20"
+            >
+              <Copy className="w-4 h-4" />
+              Clone to Aleo
+            </button>
+          )}
 
         </div>
 

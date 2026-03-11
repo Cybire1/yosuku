@@ -3,13 +3,15 @@
 import { useMemo } from 'react';
 import { formatPred, type RoundState, type UserPosition } from '@/lib/predictionContract';
 import { TrendingUp, Target, BarChart3, Flame } from 'lucide-react';
+import { getSavedPayout } from '@/lib/roundHelpers';
 
 interface PredictionStatsProps {
   rounds: RoundState[];
   positions: UserPosition[];
+  address?: string | null;
 }
 
-export default function PredictionStats({ rounds, positions }: PredictionStatsProps) {
+export default function PredictionStats({ rounds, positions, address }: PredictionStatsProps) {
   const stats = useMemo(() => {
     const totalTrades = positions.length;
     let wins = 0;
@@ -34,9 +36,7 @@ export default function PredictionStats({ rounds, positions }: PredictionStatsPr
 
       if (isWin) {
         wins++;
-        const totalPool = round.yesPool + round.noPool;
-        const winPool = round.outcome ? round.yesPool : round.noPool;
-        const payout = winPool > 0 ? (deposit / winPool) * totalPool * 0.9 : 0;
+        const payout = address ? getSavedPayout(address, round.id) : 0;
         pnl += payout - deposit;
         if (streakType === 'W') streak++;
         else { streak = 1; streakType = 'W'; }
@@ -52,7 +52,7 @@ export default function PredictionStats({ rounds, positions }: PredictionStatsPr
     const winRate = resolvedWithPos > 0 ? Math.round((wins / resolvedWithPos) * 100) : 0;
 
     return { totalTrades, winRate, pnl, streak, streakType };
-  }, [rounds, positions]);
+  }, [address, rounds, positions]);
 
   if (stats.totalTrades === 0) return null;
 

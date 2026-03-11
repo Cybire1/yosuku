@@ -27,8 +27,8 @@ RUN apt-get update && apt-get install -y \
 # Copy Leo binary
 COPY --from=leo-builder /usr/local/cargo/bin/leo /usr/local/bin/leo
 
-# Copy Leo project (btc_pred_v8 uses test_usdcx_stablecoin.aleo from network)
-COPY btc_pred_v8 /app/btc_pred_v8
+# Copy Leo project (btc_pred_v10 uses test_usdcx_stablecoin.aleo from network)
+COPY btc_pred_v10 /app/btc_pred_v10
 
 WORKDIR /app/backend
 

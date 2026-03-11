@@ -59,7 +59,7 @@ export default function TestWalletPage() {
       return;
     }
     try {
-      const history: any = await wallet.requestTransactionHistory('btc_pred_v8.aleo');
+      const history: any = await wallet.requestTransactionHistory('btc_pred_v10.aleo');
       const arr = Array.isArray(history) ? history : history?.transactions ?? [];
       log(`SUCCESS: type=${typeof history}, isArray=${Array.isArray(history)}, keys=${Object.keys(history || {}).join(',')}`);
       log(`  Items: ${arr.length}`);
@@ -73,7 +73,7 @@ export default function TestWalletPage() {
   };
 
   const testSignMessage = async () => {
-    const testMsg = 'DART_v8_round_1';
+    const testMsg = 'DART_v9_round_1';
     log(`--- signMessage("${testMsg}") attempt 1 ---`);
     if (!(wallet as any).signMessage) {
       log('ERROR: signMessage is undefined on wallet object');
@@ -131,11 +131,11 @@ export default function TestWalletPage() {
         <button onClick={dumpWalletObject} className="px-3 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-sm">
           Dump Wallet Object
         </button>
-        <button onClick={() => testRequestRecords('btc_pred_v8.aleo')} className="px-3 py-2 bg-sky-600 hover:bg-sky-500 rounded-lg text-sm">
-          requestRecords (v8)
+        <button onClick={() => testRequestRecords('btc_pred_v10.aleo')} className="px-3 py-2 bg-sky-600 hover:bg-sky-500 rounded-lg text-sm">
+          requestRecords (v10)
         </button>
-        <button onClick={() => testRequestRecords('btc_pred_v7.aleo')} className="px-3 py-2 bg-sky-800 hover:bg-sky-700 rounded-lg text-sm">
-          requestRecords (v7)
+        <button onClick={() => testRequestRecords('btc_pred_v9.aleo')} className="px-3 py-2 bg-sky-800 hover:bg-sky-700 rounded-lg text-sm">
+          requestRecords (v9)
         </button>
         <button onClick={() => testRequestRecords('test_usdcx_stablecoin.aleo')} className="px-3 py-2 bg-purple-700 hover:bg-purple-600 rounded-lg text-sm">
           requestRecords (USDCx)

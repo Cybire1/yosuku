@@ -6,19 +6,17 @@ import { useWallet } from '@provablehq/aleo-wallet-adaptor-react';
 import {
   BTC_PREDICTION_PROGRAM,
   formatPred,
-  calcPayoutWithBonus,
   setOptimisticBalance,
   fetchOnChainBalance,
   type RoundState,
-  type ReputationData,
 } from '@/lib/predictionContract';
-import { getBetCommitment } from '@/lib/roundHelpers';
+import { resolveSlotRecord } from '@/lib/recordResolver';
+import { getSavedPayout } from '@/lib/roundHelpers';
 
 interface ClaimWinningsProps {
   round: RoundState;
   userDeposit: number;       // microcredits
   userSide: 'YES' | 'NO';
-  reputation?: ReputationData;
   onClaimed?: () => void;
 }
 
@@ -26,10 +24,9 @@ export default function ClaimWinnings({
   round,
   userDeposit,
   userSide,
-  reputation,
   onClaimed,
 }: ClaimWinningsProps) {
-  const { address, executeTransaction } = useWallet();
+  const { address, executeTransaction, requestRecords, decrypt } = useWallet();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [claimed, setClaimed] = useState(false);
@@ -37,13 +34,8 @@ export default function ClaimWinnings({
   const winningSide = round.outcome ? 'YES' : 'NO';
   const isWinner = round.resolved && userSide === winningSide;
 
-  // Calculate payout with tier bonus — use revealed pools after resolution
-  const totalPool = round.yesPool + round.noPool;
-  const winPool = round.outcome ? round.yesPool : round.noPool;
-  const bonusPct = reputation?.bonusPct ?? 0;
-  const estimatedPayout = isWinner && winPool > 0
-    ? calcPayoutWithBonus(userDeposit, winPool, totalPool, bonusPct)
-    : 0;
+  // v10: payout is locked at bet time, stored in localStorage
+  const lockedPayout = address ? getSavedPayout(address, round.id) : 0;
 
   const handleClaim = async () => {
     if (!address || !executeTransaction) {
@@ -51,44 +43,38 @@ export default function ClaimWinnings({
       return;
     }
 
-    const commitment = getBetCommitment(address, round.id);
-    if (!commitment) {
-      setError('Commitment data not found. Did you bet from this browser?');
-      return;
-    }
-
     setLoading(true);
     setError('');
 
     try {
-      // v8 claim: claim(rid: u64, side: bool, amt: u128, salt: field, payout: u128)
-      const sideVal = commitment.side === 'YES' ? 'true' : 'false';
+      // Resolve BetReceipt record from chain
+      const record = await resolveSlotRecord({ requestRecords, decrypt }, round.id);
+      if (!record) {
+        setError('BetReceipt record not found. Ensure your wallet is connected.');
+        setLoading(false);
+        return;
+      }
 
-      const inputs = [
-        `${round.id}u64`,
-        sideVal,
-        `${commitment.amount}u128`,
-        commitment.salt,
-        `${estimatedPayout}u128`,
-      ];
-
+      // v10 claim: claim(receipt: BetReceipt)
+      // No public payout arg — payout is in the receipt itself
       await executeTransaction({
         program: BTC_PREDICTION_PROGRAM,
         function: 'claim',
-        inputs,
+        inputs: [record],
         fee: 2_000_000,
         privateFee: false,
+        recordIndices: [0],
       });
 
       // Optimistic balance update
       const curBalance = parseInt(localStorage.getItem('usdcx_balance') || '0', 10);
-      setOptimisticBalance(curBalance + estimatedPayout);
+      setOptimisticBalance(curBalance + lockedPayout);
 
       // Mark as claimed
-      const claimedRounds: number[] = JSON.parse(localStorage.getItem('v8_claimed') || '[]');
+      const claimedRounds: number[] = JSON.parse(localStorage.getItem('v10_claimed') || '[]');
       if (!claimedRounds.includes(round.id)) {
         claimedRounds.push(round.id);
-        localStorage.setItem('v8_claimed', JSON.stringify(claimedRounds));
+        localStorage.setItem('v10_claimed', JSON.stringify(claimedRounds));
       }
 
       setClaimed(true);
@@ -113,39 +99,33 @@ export default function ClaimWinnings({
       return;
     }
 
-    const commitment = getBetCommitment(address, round.id);
-    if (!commitment) {
-      setError('Commitment data not found.');
-      return;
-    }
-
     setLoading(true);
     setError('');
 
     try {
-      // v8 forfeit: forfeit(rid: u64, side: bool, amt: u128, salt: field)
-      const sideVal = commitment.side === 'YES' ? 'true' : 'false';
+      // Resolve BetReceipt record from chain
+      const record = await resolveSlotRecord({ requestRecords, decrypt }, round.id);
+      if (!record) {
+        setError('BetReceipt record not found.');
+        setLoading(false);
+        return;
+      }
 
-      const inputs = [
-        `${round.id}u64`,
-        sideVal,
-        `${commitment.amount}u128`,
-        commitment.salt,
-      ];
-
+      // v10 forfeit: forfeit(receipt: BetReceipt)
       await executeTransaction({
         program: BTC_PREDICTION_PROGRAM,
         function: 'forfeit',
-        inputs,
+        inputs: [record],
         fee: 500_000,
         privateFee: false,
+        recordIndices: [0],
       });
 
       // Mark as claimed (forfeited)
-      const claimedRounds: number[] = JSON.parse(localStorage.getItem('v8_claimed') || '[]');
+      const claimedRounds: number[] = JSON.parse(localStorage.getItem('v10_claimed') || '[]');
       if (!claimedRounds.includes(round.id)) {
         claimedRounds.push(round.id);
-        localStorage.setItem('v8_claimed', JSON.stringify(claimedRounds));
+        localStorage.setItem('v10_claimed', JSON.stringify(claimedRounds));
       }
 
       setClaimed(true);
@@ -168,7 +148,7 @@ export default function ClaimWinnings({
           <div className="relative p-4">
             <div className="text-center">
               <p className="text-gray-400 font-bold text-sm uppercase tracking-widest">Forfeited</p>
-              <p className="text-gray-500 text-xs mt-1">Commitment released</p>
+              <p className="text-gray-500 text-xs mt-1">Receipt released</p>
             </div>
           </div>
         </div>
@@ -181,7 +161,7 @@ export default function ClaimWinnings({
         <div className="relative p-4">
           <div className="text-center space-y-3">
             <p className="text-off-red font-bold text-sm uppercase tracking-widest">Position Lost</p>
-            <p className="text-gray-400 text-xs">Forfeit to release your commitment.</p>
+            <p className="text-gray-400 text-xs">Forfeit to release your receipt.</p>
             {error && (
               <p className="text-off-red text-xs font-bold animate-pulse">{error}</p>
             )}
@@ -216,7 +196,7 @@ export default function ClaimWinnings({
           <div className="text-center">
             <Trophy className="w-6 h-6 mx-auto text-off-green mb-2" />
             <p className="text-off-green font-bold text-sm uppercase tracking-widest">Claimed!</p>
-            <p className="text-gray-400 text-xs mt-1">+{formatPred(estimatedPayout)} USDCx</p>
+            <p className="text-gray-400 text-xs mt-1">+{formatPred(lockedPayout)} USDCx</p>
           </div>
         </div>
       </div>
@@ -240,7 +220,7 @@ export default function ClaimWinnings({
             <p className="text-xs text-gray-400">Round #{round.id}</p>
           </div>
           <div className="text-right">
-            <p className="text-2xl font-black text-white font-mono">+{formatPred(estimatedPayout)}</p>
+            <p className="text-2xl font-black text-white font-mono">+{formatPred(lockedPayout)}</p>
             <p className="text-[10px] text-gray-500 uppercase tracking-widest">USDCx</p>
           </div>
         </div>

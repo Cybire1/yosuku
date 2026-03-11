@@ -247,10 +247,21 @@ aleo1v5wrxmqe2urj30wqxyhnfymghw03kcdgu2pdcv7hhlw3z2vcs5rqwl2f7e
 ```
 
 Before final judging, add:
-- live frontend URL
 - short demo video
 - example bet transaction
 - example claim transaction
+
+Live frontend:
+
+```text
+https://cyberquill.xyz/
+```
+
+Vercel deployment:
+
+```text
+https://frontend-liln55rdu-afeezs-projects-2285b811.vercel.app/
+```
 
 ---
 
@@ -300,6 +311,8 @@ Testing flow:
 | | |
 |---|---|
 | **GitHub** | [github.com/shaibuafeez/dart](https://github.com/shaibuafeez/dart) |
+| **Live App** | [cyberquill.xyz](https://cyberquill.xyz/) |
+| **Vercel Deployment** | [frontend-liln55rdu-afeezs-projects-2285b811.vercel.app](https://frontend-liln55rdu-afeezs-projects-2285b811.vercel.app/) |
 | **USDCx Bridge** | [usdcx.aleo.dev](https://usdcx.aleo.dev/) |
 | **Shield Wallet** | [shieldwallet.xyz](https://www.shieldwallet.xyz/) |
 | **Aleo Explorer** | [testnet.explorer.provable.com](https://testnet.explorer.provable.com) |

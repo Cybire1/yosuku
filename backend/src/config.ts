@@ -31,8 +31,8 @@ export const config = {
   port: parseInt(optional('PORT', '3001'), 10),
   aleoEndpoint: optional('ALEO_ENDPOINT', 'https://api.explorer.provable.com/v1'),
   aleoNetwork: optional('ALEO_NETWORK', 'testnet'),
-  leoProjectDir: optional('LEO_PROJECT_DIR', '/app/btc_pred_v8'),
-  program: 'btc_pred_v8.aleo',
+  leoProjectDir: optional('LEO_PROJECT_DIR', '/app/btc_pred_v10'),
+  program: 'btc_pred_v10.aleo',
   programAddress: optional('PROGRAM_ADDRESS', 'aleo1v5wrxmqe2urj30wqxyhnfymghw03kcdgu2pdcv7hhlw3z2vcs5rqwl2f7e'),
   tokenProgram: 'test_usdcx_stablecoin.aleo',
 } as const;

@@ -3,10 +3,8 @@
 import { useState, useEffect } from 'react';
 import { Coins } from 'lucide-react';
 import { useWallet } from '@provablehq/aleo-wallet-adaptor-react';
-import { formatPred, fetchOnChainBalance } from '@/lib/predictionContract';
+import { BALANCE_KEY, BALANCE_UPDATED_EVENT, formatPred, fetchOnChainBalance } from '@/lib/predictionContract';
 import AnimatedNumber from './AnimatedNumber';
-
-const BALANCE_KEY = 'usdcx_balance';
 
 interface TokenBalanceProps {
   refreshTrigger?: number;
@@ -18,7 +16,6 @@ export default function TokenBalance({ refreshTrigger }: TokenBalanceProps) {
 
   useEffect(() => {
     if (!address) {
-      setBalance(0);
       return;
     }
 
@@ -33,16 +30,20 @@ export default function TokenBalance({ refreshTrigger }: TokenBalanceProps) {
     };
 
     syncChain();
-    const chainInterval = setInterval(syncChain, 15_000);
-
-    // Poll localStorage for fast local updates (mint/bet)
-    const localInterval = setInterval(() => {
+    const chainInterval = setInterval(syncChain, 10_000);
+    const handleBalanceUpdate = (event: Event) => {
+      const next = (event as CustomEvent<{ balance?: number }>).detail?.balance;
+      if (typeof next === 'number') {
+        setBalance(next);
+        return;
+      }
       setBalance(parseInt(localStorage.getItem(BALANCE_KEY) || '0', 10));
-    }, 2000);
+    };
+    window.addEventListener(BALANCE_UPDATED_EVENT, handleBalanceUpdate);
 
     return () => {
       clearInterval(chainInterval);
-      clearInterval(localInterval);
+      window.removeEventListener(BALANCE_UPDATED_EVENT, handleBalanceUpdate);
     };
   }, [address, refreshTrigger]);
 

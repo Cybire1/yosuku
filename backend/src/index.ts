@@ -37,7 +37,7 @@ app.get('/health', async (_req, res) => {
 });
 
 app.get('/', (_req, res) => {
-  res.json({ service: 'dart-resolver', version: '8.0.0' });
+  res.json({ service: 'dart-resolver', version: '10.0.0' });
 });
 
 // ── Bet Tracker (dark pool accumulator) ─────────────────
@@ -48,9 +48,9 @@ app.use(betTrackerRouter);
 async function main(): Promise<void> {
   console.log(`
 ╔═══════════════════════════════════════╗
-║       DART Auto-Resolver v8.0         ║
+║       DART Auto-Resolver v10.0        ║
 ║   BTC Prediction Market on Aleo       ║
-║   btc_pred_v8 (commitment + dark pool)║
+║   btc_pred_v10 (fixed-odds, escrow)   ║
 ╠═══════════════════════════════════════╣
 ║  Duration:  ${config.roundIntervalSecs}s (${config.roundIntervalSecs / 60} min)              ║
 ║  Blocks:    ${config.blocksPerRound} per round               ║

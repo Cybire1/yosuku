@@ -1,10 +1,38 @@
 import { NextResponse } from 'next/server';
 
+interface GammaMarket {
+  id: string;
+  question: string;
+  description?: string;
+  endDate?: string;
+  category?: string;
+  volumeNum: number;
+  liquidityNum: number;
+  image?: string;
+  icon?: string;
+  outcomePrices?: string;
+  outcomes?: string;
+  slug: string;
+  volume24hr?: number;
+  volume1wk?: number;
+  commentCount?: number;
+  clobTokenIds?: string;
+  createdAt?: string;
+  active: boolean;
+  closed: boolean;
+  archived: boolean;
+}
+
+interface ClobPriceResponse {
+  price?: string;
+}
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const limit = searchParams.get('limit') || '12';
     const active = searchParams.get('active') || 'true';
+    const query = (searchParams.get('query') || '').trim().toLowerCase();
 
     // Fetch more markets initially to have better selection
     const fetchLimit = Math.max(parseInt(limit) * 4, 50);
@@ -24,7 +52,7 @@ export async function GET(request: Request) {
       throw new Error('Failed to fetch from Polymarket Gamma API');
     }
 
-    const markets = await response.json();
+    const markets = await response.json() as GammaMarket[];
 
     // Function to fetch real-time price from CLOB API
     const fetchCLOBPrice = async (tokenId: string) => {
@@ -40,7 +68,7 @@ export async function GET(request: Request) {
         );
 
         if (clobResponse.ok) {
-          const priceData = await clobResponse.json();
+          const priceData = await clobResponse.json() as ClobPriceResponse;
           return priceData.price || null;
         }
       } catch (error) {
@@ -51,10 +79,19 @@ export async function GET(request: Request) {
 
     // Filter and transform data to match our format
     const now = new Date();
-    const filteredMarkets = markets.filter((market: any) => {
+    const filteredMarkets = markets.filter((market) => {
       // Check if market has ended
       const endDate = market.endDate ? new Date(market.endDate) : null;
       const hasEnded = endDate && endDate < now;
+      const haystack = [
+        market.question,
+        market.description,
+        market.category,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      const queryMatch = !query || haystack.includes(query);
 
       // Only show active, open markets with decent volume that haven't ended
       return (
@@ -62,13 +99,14 @@ export async function GET(request: Request) {
         !market.closed &&
         !market.archived &&
         !hasEnded &&
-        market.volumeNum > 50 // Lower threshold to get more markets
+        queryMatch &&
+        (query ? market.volumeNum > 0 : market.volumeNum > 50) // Lower threshold when user is filtering
       );
     }).slice(0, parseInt(limit) * 3); // Get 3x markets initially for better selection
 
     // Enrich with CLOB real-time pricing (parallel fetches for speed)
     const enrichedMarkets = await Promise.all(
-      filteredMarkets.map(async (market: any) => {
+      filteredMarkets.map(async (market) => {
         let livePrices = null;
 
         // Try to get live prices from CLOB API if we have token IDs
@@ -142,12 +180,13 @@ export async function GET(request: Request) {
         gammaApi: 'https://gamma-api.polymarket.com',
         clobApi: 'https://clob.polymarket.com',
         cacheDuration: '60s',
+        query: query || null,
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Polymarket API error:', error);
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to fetch markets' },
+      { success: false, error: error instanceof Error ? error.message : 'Failed to fetch markets' },
       { status: 500 }
     );
   }

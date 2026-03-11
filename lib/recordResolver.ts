@@ -1,22 +1,27 @@
 /**
- * Record resolver: finds and decrypts BetSlot records.
+ * Record resolver: finds and decrypts BetReceipt records.
  *
  * Strategy:
  *  1. Try wallet.requestRecords (fast, but blocked on some origins)
  *  2. Fallback: fetch the bet transaction from the API, extract the
  *     encrypted record output, decrypt via wallet.decrypt()
+ *
+ * v10: BetReceipt contains { owner, rid, side, amt, payout, salt }
+ *      so decryption recovers everything needed for claim/forfeit.
  */
 import { BTC_PREDICTION_PROGRAM, ALEO_API_URL, ALEO_NETWORK } from './predictionContract';
 
 /** Wallet methods we need (subset of useWallet return) */
 interface WalletMethods {
-  requestRecords?: (program: string) => Promise<any[]>;
+  requestRecords?: (program: string, includePlaintext?: boolean) => Promise<any[]>;
   decrypt?: (cipherText: string, tpk?: string, programId?: string, functionName?: string, index?: number) => Promise<string>;
 }
 
 /**
- * Try to find an active BetSlot record for the given round.
- * Returns the record plaintext string (ready to pass to executeTransaction), or null.
+ * Try to find a BetReceipt record for the given round.
+ * Returns the record plaintext string, or null.
+ *
+ * v10 BetReceipt has: { owner, rid, side, amt, payout, salt }
  */
 export async function resolveSlotRecord(
   wallet: WalletMethods,
@@ -25,21 +30,22 @@ export async function resolveSlotRecord(
   // ── Strategy 1: requestRecords ──
   if (wallet.requestRecords) {
     try {
-      const records = await wallet.requestRecords(BTC_PREDICTION_PROGRAM);
+      // includePlaintext=true asks wallet to include decrypted data on each record
+      const records = await wallet.requestRecords(BTC_PREDICTION_PROGRAM, true);
       console.log('[RecordResolver] requestRecords returned:', records?.length, 'records');
 
       if (records?.length) {
         for (const r of records) {
           const pt = extractPlaintext(r);
           if (!pt) continue;
-          const isActive = /active:\s*true/.test(pt) || /"active":\s*true/.test(pt);
-          if (isActive) {
-            // If a specific round is requested, check rid matches
-            if (roundId !== undefined) {
-              const ridMatch = pt.match(/rid:\s*(\d+)u64/);
-              if (ridMatch && parseInt(ridMatch[1], 10) !== roundId) continue;
-            }
-            console.log('[RecordResolver] Found active slot via requestRecords');
+          // Match by round ID if specified
+          if (roundId !== undefined) {
+            const ridMatch = pt.match(/rid:\s*(\d+)u64/);
+            if (!ridMatch || parseInt(ridMatch[1], 10) !== roundId) continue;
+          }
+          // Verify this looks like a BetReceipt (has payout field)
+          if (/payout:\s*\d+u128/.test(pt)) {
+            console.log('[RecordResolver] Found BetReceipt via requestRecords for round', roundId);
             return pt;
           }
         }

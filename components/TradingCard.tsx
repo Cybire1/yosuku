@@ -18,12 +18,14 @@ interface TradingCardProps {
   round: RoundState;
   userYesDeposit?: number;
   userNoDeposit?: number;
+  lockedPayout?: number;
 }
 
 export default function TradingCard({
   round,
   userYesDeposit = 0,
   userNoDeposit = 0,
+  lockedPayout = 0,
 }: TradingCardProps) {
   const { price, connected } = useBtcPrice();
 
@@ -54,31 +56,22 @@ export default function TradingCard({
   // User position calculations
   const userSide = userYesDeposit > 0 ? 'YES' : userNoDeposit > 0 ? 'NO' : null;
   const userDeposit = userYesDeposit || userNoDeposit;
+  const totalExposure = round.yesPool + round.noPool;
   const positionPayout = (() => {
     if (!userSide) return 0;
-    const deposit = userSide === 'YES' ? userYesDeposit : userNoDeposit;
-
-    // After resolution: use actual revealed pool data
-    if (round.yesPool > 0 || round.noPool > 0) {
-      const winPool = userSide === 'YES' ? round.yesPool : round.noPool;
-      const totalPool = round.yesPool + round.noPool;
-      if (winPool === 0) return 0;
-      return (deposit / winPool) * totalPool * 0.9;
-    }
+    if (lockedPayout > 0) return lockedPayout;
 
     // During dark pool: use probability-based estimate
-    // Pool breakdown is hidden, so estimate payout from probability
     if (price > 0 && minsLeft > 0) {
       const prob = estimateProb(price, targetUsd, minsLeft);
       const sideProb = userSide === 'YES' ? prob : 1 - prob;
       if (sideProb > 0) {
-        // Est. payout = bet / probability * 0.9 (10% fee)
-        return (deposit / sideProb) * 0.9;
+        return userDeposit / sideProb;
       }
     }
 
     // Fallback: assume 50/50
-    return deposit * 2 * 0.9;
+    return userDeposit * 2;
   })();
 
   return (
@@ -188,23 +181,23 @@ export default function TradingCard({
           {/* Pool stats */}
           <div className="flex items-center gap-4 px-1">
             <div className="flex items-center gap-2">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Pool</span>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Staked</span>
               <AnimatedNumber value={formatPred(totalPool)} className="text-sm font-mono font-bold text-new-mint" />
               <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">USDCx</span>
             </div>
             <div className="flex-1 h-2 bg-white/5 rounded-full overflow-hidden">
               <div
                 className="h-full bg-gradient-to-r from-new-mint to-new-mint/60 rounded-full transition-all duration-500"
-                style={{ width: `${totalPool > 0 ? (round.yesPool / totalPool) * 100 : 50}%` }}
+                style={{ width: `${totalExposure > 0 ? (round.yesPool / totalExposure) * 100 : 50}%` }}
               />
             </div>
             <div className="flex items-center gap-3 text-[10px] font-bold">
               <div className="flex items-center gap-1 text-new-mint">
-                <span>YES</span>
+                <span>YES lock</span>
                 <AnimatedNumber value={formatPred(round.yesPool)} />
               </div>
               <div className="flex items-center gap-1 text-off-red">
-                <span>NO</span>
+                <span>NO lock</span>
                 <AnimatedNumber value={formatPred(round.noPool)} />
               </div>
             </div>
@@ -221,14 +214,18 @@ export default function TradingCard({
                   </span>
                 </div>
                 <div className="text-right">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500 block mb-1">Live Est. Payout</span>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500 block mb-1">
+                    {lockedPayout > 0 ? 'Locked Payout' : 'Live Est. Payout'}
+                  </span>
                   <span className="text-sm font-mono font-bold text-white">
                     {formatPred(positionPayout)} USDCx
                   </span>
                 </div>
               </div>
               <p className="text-[10px] text-gray-600 mt-2">
-                Final payout is determined at resolution and can move while betting stays open.
+                {lockedPayout > 0
+                  ? 'Your fixed payout was locked when the bet executed on-chain.'
+                  : 'Estimate shown only while your fixed-odds receipt is still syncing.'}
               </p>
             </div>
           )}
