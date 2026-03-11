@@ -162,35 +162,6 @@ Prediction markets have binary outcomes (YES/NO). AMM curves (Uniswap-style) cre
   <img src="public/image.png" alt="DART Architecture" width="700">
 </p>
 
-```
-                    ┌─────────────────────────────┐
-                    │        DART Frontend         │
-                    │  Next.js 16 + Shield Wallet  │
-                    │                              │
-                    │  Markets ─ Portfolio ─ Voice  │
-                    │  Live BTC Chart ─ Dark Pool  │
-                    └──────────────┬───────────────┘
-                                   │
-                    ┌──────────────┴───────────────┐
-                    │      Aleo Testnet             │
-                    │                               │
-                    │  btc_pred_v8.aleo              │
-                    │  ├─ Commitments (bc, ba)       │
-                    │  ├─ Dark Pool (rp, ry, rn)     │
-                    │  ├─ Outcomes (ro, rt, rd)       │
-                    │  └─ Claims (cl, fe)             │
-                    │                               │
-                    │  test_usdcx_stablecoin.aleo   │
-                    │  └─ USDCx balances + transfers │
-                    └──────────────┬───────────────┘
-                                   │
-                    ┌──────────────┴───────────────┐
-                    │     Auto-Resolver (Railway)   │
-                    │  Pyth oracle ─ Round lifecycle │
-                    │  Create ─ Monitor ─ Resolve   │
-                    └─────────────────────────────┘
-```
-
 ### Frontend
 
 Next.js 16, TypeScript, Tailwind 4, Framer Motion. Live BTC price via Binance WebSocket. Polymarket-style probability display. Voice agent powered by Google Gemini 2.0 Live API.
