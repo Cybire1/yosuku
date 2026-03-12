@@ -8,6 +8,8 @@
 # Include Leo projects (needed by resolver)
 !btc_pred_v8/
 !btc_pred_v8/**
+!dart_mirror_v13/
+!dart_mirror_v13/**
 
 # Exclude node_modules inside backend
 backend/node_modules

@@ -1,42 +1,33 @@
-// Contract constants for BTC Prediction Market v10 (fixed-odds, atomic escrow)
+// Contract constants for BTC Prediction Market v8 (commitment scheme + dark pool)
 
 export const PRED_TOKEN_PROGRAM = 'test_usdcx_stablecoin.aleo';
-export const BTC_PREDICTION_PROGRAM = 'btc_pred_v10.aleo';
+export const BTC_PREDICTION_PROGRAM = 'btc_pred_v8.aleo';
 
-// On-chain address of btc_pred_v10.aleo (vault for token escrow)
-// TODO: update after deploy — run `leo deploy` and paste the program address here
+// On-chain address of btc_pred_v8.aleo (for token transfers to the program)
 export const BTC_PREDICTION_ADDRESS = 'aleo1v5wrxmqe2urj30wqxyhnfymghw03kcdgu2pdcv7hhlw3z2vcs5rqwl2f7e';
-
-// Vault address (same as program address — stored in aa[1u8])
-export const BTC_PREDICTION_VAULT = BTC_PREDICTION_ADDRESS;
 
 // Token decimals: 1 USDCx = 1_000_000 micro-USDCx (6 decimals)
 export const PRED_DECIMALS = 6;
 export const PRED_MULTIPLIER = 1_000_000;
 
+// Platform fee: 10% base (reduced by tier)
+export const PLATFORM_FEE_BPS = 1000;
+
 // Round duration in seconds
 export const ROUND_DURATION_SECONDS = 300; // 5 minutes
 
-// Frontend talks to the resolver through same-origin Next API routes.
-export const BACKEND_URL = '/api/resolver';
+// Default seed liquidity per side when creating a round (500 USDCx)
+export const DEFAULT_SEED_AMOUNT = 500 * PRED_MULTIPLIER;
+
+// Pool address: btc_pred_v8.aleo program address in USDCx balances
+export const POOL_ADDRESS = BTC_PREDICTION_ADDRESS;
+
+// Backend URL for dark pool bet reporting
+export const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
 
 // Aleo API endpoints
 export const ALEO_API_URL = 'https://api.explorer.provable.com/v1';
 export const ALEO_NETWORK = 'testnet';
-export const BALANCE_KEY = 'usdcx_balance';
-export const BALANCE_PENDING_KEY = 'usdcx_balance_pending';
-export const BALANCE_UPDATED_EVENT = 'dart:balance-updated';
-
-function broadcastBalance(balance: number) {
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent(BALANCE_UPDATED_EVENT, { detail: { balance } }));
-  }
-}
-
-function storeBalance(balance: number) {
-  localStorage.setItem(BALANCE_KEY, String(balance));
-  broadcastBalance(balance);
-}
 
 // Helper: format credits amount for display
 export function formatPred(microAmount: number): string {
@@ -90,42 +81,38 @@ export function parseU128(val: string | null): number {
 // Fetch on-chain USDCx balance for an address and sync to localStorage
 export async function fetchOnChainBalance(address: string): Promise<number> {
   const val = await fetchMapping(PRED_TOKEN_PROGRAM, 'balances', address);
-  const local = parseInt(localStorage.getItem(BALANCE_KEY) || '0', 10);
-  const pendingRaw = localStorage.getItem(BALANCE_PENDING_KEY);
+  const onChain = parseU128(val);
+  const local = parseInt(localStorage.getItem('usdcx_balance') || '0', 10);
 
-  // Any non-null mapping response is authoritative, including zero.
-  if (val !== null) {
-    const onChain = parseU128(val);
-    if (pendingRaw) {
-      try {
-        const pending = JSON.parse(pendingRaw);
-        const age = Date.now() - (pending.timestamp || 0);
-        if (pending.expectedBalance === onChain || age >= 300_000) {
-          localStorage.removeItem(BALANCE_PENDING_KEY);
-        }
-      } catch {
-        localStorage.removeItem(BALANCE_PENDING_KEY);
-      }
-    }
-    storeBalance(onChain);
-    return onChain;
+  // If on-chain returned a real positive value, trust it
+  if (onChain > 0) {
+    // Clear any pending optimistic update — chain has confirmed something
+    localStorage.removeItem('usdcx_balance_pending');
+    // Use whichever is higher: on-chain or local (local may include unconfirmed mints)
+    const best = Math.max(onChain, local);
+    localStorage.setItem('usdcx_balance', String(best));
+    return best;
   }
 
-  // Explorer was unavailable — fall back to a recent optimistic value if we have one.
+  // On-chain returned 0 or null — check if there's a pending optimistic update
+  const pendingRaw = localStorage.getItem('usdcx_balance_pending');
   if (pendingRaw) {
     try {
       const pending = JSON.parse(pendingRaw);
       const age = Date.now() - (pending.timestamp || 0);
+      // Keep optimistic value for up to 5 minutes (Aleo testnet can be slow)
       if (age < 300_000 && pending.expectedBalance > 0) {
-        storeBalance(pending.expectedBalance);
         return pending.expectedBalance;
       }
-      localStorage.removeItem(BALANCE_PENDING_KEY);
+      localStorage.removeItem('usdcx_balance_pending');
     } catch {
-      localStorage.removeItem(BALANCE_PENDING_KEY);
+      localStorage.removeItem('usdcx_balance_pending');
     }
   }
 
+  // No pending update but we have a local balance — keep it.
+  // Only an explicit spend (bet) or a positive on-chain value should reduce it.
+  // This prevents the API returning null from wiping out the user's balance.
   if (local > 0) {
     return local;
   }
@@ -135,54 +122,63 @@ export async function fetchOnChainBalance(address: string): Promise<number> {
 
 // Set an optimistic balance after a transaction (bet or claim)
 export function setOptimisticBalance(expectedBalance: number) {
-  storeBalance(expectedBalance);
-  localStorage.setItem(BALANCE_PENDING_KEY, JSON.stringify({
+  localStorage.setItem('usdcx_balance', String(expectedBalance));
+  localStorage.setItem('usdcx_balance_pending', JSON.stringify({
     expectedBalance,
     timestamp: Date.now(),
   }));
 }
 
-// Fetch multipliers for a round from on-chain mappings
-export async function fetchMultipliers(rid: number): Promise<{ yesMult: number; noMult: number }> {
-  const [ymRaw, nmRaw] = await Promise.all([
-    fetchMapping(BTC_PREDICTION_PROGRAM, 'ym', `${rid}u64`),
-    fetchMapping(BTC_PREDICTION_PROGRAM, 'nm', `${rid}u64`),
-  ]);
+// Helper: calculate estimated payout
+export function calcPayout(
+  deposit: number,
+  winningPool: number,
+  totalPool: number
+): number {
+  if (winningPool === 0) return 0;
+  const gross = (deposit / winningPool) * totalPool;
+  return gross * 0.9; // 10% fee
+}
+
+// Helper: calculate odds percentage
+export function calcOdds(yesPool: number, noPool: number): { yes: number; no: number } {
+  const total = yesPool + noPool;
+  if (total === 0) return { yes: 50, no: 50 };
   return {
-    yesMult: parseU64(ymRaw),
-    noMult: parseU64(nmRaw),
+    yes: Math.round((yesPool / total) * 100),
+    no: Math.round((noPool / total) * 100),
   };
 }
 
-// Calculate locked payout from stake and multiplier (basis points)
-export function calcLockedPayout(stake: number, multBps: number): number {
-  return Math.floor(stake * multBps / 10000);
+// Probability estimation using BTC volatility model
+// BTC_VOL ≈ 0.001 per minute (annualized ~75% vol)
+const BTC_VOL_PER_MIN = 0.001;
+
+export function estimateProb(
+  livePrice: number,
+  targetPrice: number,
+  minsLeft: number
+): number {
+  if (minsLeft <= 0 || targetPrice <= 0 || livePrice <= 0) {
+    return livePrice >= targetPrice ? 1 : 0;
+  }
+  const priceDiffPct = (livePrice - targetPrice) / targetPrice;
+  const sigma = BTC_VOL_PER_MIN * Math.sqrt(minsLeft);
+  const z = priceDiffPct / sigma;
+  // Logistic approximation of normal CDF
+  const probYes = 1 / (1 + Math.exp(-1.7 * z));
+  return Math.max(0.01, Math.min(0.99, probYes));
 }
 
-// Calculate display odds from multiplier (e.g. 18500 → "1.85x")
-export function formatMultiplier(multBps: number): string {
-  return (multBps / 10000).toFixed(2) + 'x';
-}
-
-// Calculate implied probability from multiplier (e.g. 18500 → 54.05%)
-export function impliedProb(multBps: number): number {
-  if (multBps <= 0) return 50;
-  return Math.round((10000 / multBps) * 100);
-}
-
-// Legacy UI helper kept for components that still animate a live YES/NO split.
-// It returns a normalized YES probability from 0..1 based on distance to target
-// and the time remaining in the round.
-export function estimateProb(price: number, targetUsd: number, minsLeft: number): number {
-  if (price <= 0 || targetUsd <= 0) return 0.5;
-
-  const pctDiff = (price - targetUsd) / targetUsd;
-  const cappedDiff = Math.max(-0.05, Math.min(0.05, pctDiff));
-  const timeWeight = Math.max(0.2, Math.min(1, minsLeft / 5));
-  const score = (cappedDiff / 0.05) * (2 - timeWeight);
-  const prob = 1 / (1 + Math.exp(-score * 2.2));
-
-  return Math.max(0.05, Math.min(0.95, prob));
+export function getConfidenceLabel(prob: number): {
+  label: string;
+  color: string;
+} {
+  if (prob >= 0.8) return { label: 'Strong YES', color: 'text-new-mint' };
+  if (prob >= 0.6) return { label: 'Lean YES', color: 'text-new-mint/70' };
+  if (prob >= 0.4) return { label: 'Toss-up', color: 'text-gray-400' };
+  if (prob >= 0.2) return { label: 'Lean NO', color: 'text-off-red/70' };
+  return { label: 'Strong NO', color: 'text-off-red' };
 }
 
 // Duration options
@@ -196,21 +192,16 @@ export const DURATION_OPTIONS = [
 
 export type DurationLabel = typeof DURATION_OPTIONS[number]['label'];
 
-// Round state interface — v10 fixed-odds model
+// Round state interface
 export interface RoundState {
   id: number;
   targetPrice: number;   // in cents
   deadline: number;       // block height
   durationMs: number;     // round duration in ms
   endTime: number;        // timestamp when round ends
-  yesMult: number;        // YES multiplier in basis points (18500 = 1.85x)
-  noMult: number;         // NO multiplier in basis points
-  bankroll: number;       // admin-funded bankroll (micro-USDCx)
-  totalPool: number;      // total premiums/stakes received
-  yesLocked: number;      // total YES locked payouts
-  noLocked: number;       // total NO locked payouts
-  yesPool: number;        // legacy alias for v8-style UI components
-  noPool: number;         // legacy alias for v8-style UI components
+  yesPool: number;        // microcredits (0 during betting, revealed at resolution)
+  noPool: number;         // microcredits (0 during betting, revealed at resolution)
+  totalPool: number;      // dark pool: combined total (always visible)
   resolved: boolean;
   outcome: boolean | null; // null if not resolved, true = YES won
 }
@@ -283,18 +274,24 @@ export function getReputationData(bets: number, wins: number, streak: number): R
   };
 }
 
-// Fetch reputation data — computed from local positions
+// Fetch reputation data — computed from local positions.
+// v8_wins tracks actual winning claims, v8_claimed tracks all settled (wins + forfeits).
 export async function fetchReputation(_address: string): Promise<ReputationData> {
   try {
     const positions: { roundId: number; side: string; amount: number }[] =
-      JSON.parse(localStorage.getItem('v10_positions') || '[]');
-    const claimed: number[] = JSON.parse(localStorage.getItem('v10_claimed') || '[]');
+      JSON.parse(localStorage.getItem('v8_positions') || '[]');
+    const wins: number[] = JSON.parse(localStorage.getItem('v8_wins') || '[]');
     const bets = positions.length;
-    const wins = claimed.length;
-    return getReputationData(bets, wins, 0);
+    return getReputationData(bets, wins.length, 0);
   } catch {
     return getReputationData(0, 0, 0);
   }
+}
+
+// Compute the same user hash key as the contract: BHP256::hash_to_field(address)
+async function fetchUserKey(address: string): Promise<string> {
+  const { bhp256HashToField } = await import('@/lib/aleoHash');
+  return bhp256HashToField(address);
 }
 
 // Calculate payout with tier bonus
@@ -307,6 +304,24 @@ export function calcPayoutWithBonus(
   if (winningPool === 0) return 0;
   const gross = (deposit / winningPool) * totalPool;
   const baseFee = gross * 0.1;
+  const bonusAmount = Math.floor(baseFee * (bonusPct / 100) * 10); // bonusPct of gross
   const basePayout = gross - baseFee;
+  // Bonus comes from fee reduction: base_net + (base_net * bonusPct / 100)
   return Math.floor(basePayout + basePayout * bonusPct / 100);
+}
+
+// Time-weight bonus multiplier
+export function getTimeWeightMultiplier(
+  betBlock: number,
+  roundStart: number,
+  roundDeadline: number,
+): number {
+  const totalBlocks = roundDeadline - roundStart;
+  if (totalBlocks <= 0) return 1.0;
+  const elapsed = betBlock - roundStart;
+  const pct = elapsed / totalBlocks;
+  if (pct <= 0.25) return 1.15;
+  if (pct <= 0.50) return 1.10;
+  if (pct <= 0.75) return 1.05;
+  return 1.0;
 }

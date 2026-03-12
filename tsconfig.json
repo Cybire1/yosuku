@@ -1,11 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2017",
-    "lib": [
-      "dom",
-      "dom.iterable",
-      "esnext"
-    ],
+    "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
@@ -23,9 +19,7 @@
       }
     ],
     "paths": {
-      "@/*": [
-        "./*"
-      ]
+      "@/*": ["./*"]
     }
   },
   "include": [
@@ -37,14 +31,7 @@
     "lib/**/*.ts",
     "lib/**/*.tsx",
     ".next/types/**/*.ts",
-    "next.config.ts",
-    "tailwind.config.ts",
     ".next/dev/types/**/*.ts"
   ],
-  "exclude": [
-    "node_modules",
-    "backend",
-    "btc_pred_v8",
-    ".next/dev"
-  ]
+  "exclude": ["node_modules"]
 }

@@ -77,16 +77,15 @@ export default function MirrorMarketDetailPage() {
 
           {loading ? (
             <div className="rounded-3xl border border-white/7 bg-neutral-950/70 p-8 text-sm text-gray-500">
-              Loading market...
+              Loading mirrored market...
             </div>
           ) : !market ? (
             <div className="rounded-3xl border border-white/7 bg-neutral-950/70 p-8 text-sm text-gray-400">
-              This market was not found in the current catalog.
+              This mirrored market was not found in the current catalog.
             </div>
           ) : (
             <>
               <PrivateRoomsPanel
-                className="mb-6"
                 activeRoomId={activeRoomId}
                 unlockedRooms={unlockedRooms}
                 onSelectRoom={setActiveRoomId}
@@ -99,7 +98,6 @@ export default function MirrorMarketDetailPage() {
               />
 
               <MirrorTradePanel
-                className="mt-6"
                 market={market}
                 roomId={activeRoomId}
                 roomLocked={roomLocked}

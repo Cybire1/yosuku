@@ -56,32 +56,38 @@ export function resetPool(roundId: number): void {
 
 export const betTrackerRouter = Router();
 
-// Frontend reports bet side here after placing on-chain bet
+// Frontend reports bet amount here after placing on-chain bet
+// Side is NOT reported — it is ZK-hidden on-chain and must stay hidden off-chain too.
+// The resolver gets per-side totals from on-chain data at resolution time.
 betTrackerRouter.post('/api/bet', (req, res) => {
   const { roundId, side, amount } = req.body;
 
   if (typeof roundId !== 'number' || roundId < 0) {
     return res.status(400).json({ error: 'Invalid roundId' });
   }
-  if (side !== 'YES' && side !== 'NO') {
-    return res.status(400).json({ error: 'Side must be YES or NO' });
-  }
   if (typeof amount !== 'number' || amount <= 0) {
     return res.status(400).json({ error: 'Invalid amount' });
   }
 
-  addBet(roundId, side, amount);
+  // Accept side if provided (backward compat) but it's no longer required
+  if (side === 'YES' || side === 'NO') {
+    addBet(roundId, side, amount);
+  } else {
+    // No side provided — track as total only (add to YES as accounting placeholder,
+    // the resolver will use on-chain data for actual per-side split)
+    addBet(roundId, 'YES', amount);
+  }
   res.json({ ok: true });
 });
 
-// Admin endpoint: view dark pool state
+// Dark pool endpoint: only exposes combined total (per-side split hidden until resolution)
 betTrackerRouter.get('/api/pool/:roundId', (req, res) => {
   const roundId = parseInt(req.params.roundId, 10);
   if (isNaN(roundId)) {
     return res.status(400).json({ error: 'Invalid roundId' });
   }
   const pool = getPoolTotals(roundId);
-  res.json({ roundId, ...pool, total: pool.yes + pool.no });
+  res.json({ roundId, total: pool.yes + pool.no });
 });
 
 // Round metadata: duration + start block (needed by frontend for accurate timers)

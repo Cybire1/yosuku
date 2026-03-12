@@ -2,55 +2,35 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Clock3, Loader, Lock, Shield, TrendingUp, Wallet } from 'lucide-react';
+import { Loader, Lock, Radar, Shield, Wallet } from 'lucide-react';
 import { useWallet } from '@provablehq/aleo-wallet-adaptor-react';
-import { fetchOnChainBalance } from '@/lib/predictionContract';
-import { formatPred, getMirrorPayout, submitMirrorBet } from '@/lib/mirrorTrade';
+import { fetchOnChainBalance, PRED_MULTIPLIER, setOptimisticBalance } from '@/lib/predictionContract';
+import { executeWithRetry } from '@/lib/walletExecution';
 import {
+  MIRROR_PROGRAM,
+  createMirrorPositionId,
   getOpenMirrorPosition,
-  type MirrorSide,
+  saveMirrorPosition,
   type MirrorMarketData,
 } from '@/lib/mirrorMarkets';
 
 const QUICK_AMOUNTS = [25, 50, 100, 250];
+
+function formatPred(microAmount: number) {
+  return (microAmount / PRED_MULTIPLIER).toLocaleString(undefined, {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  });
+}
 
 interface MirrorTradePanelProps {
   market: MirrorMarketData | null;
   onSuccess?: () => void;
   roomId?: string;
   roomLocked?: boolean;
-  className?: string;
-  compact?: boolean;
-  preferredSide?: MirrorSide | null;
 }
 
-function formatVolume(volume: number) {
-  if (volume >= 1_000_000) return `$${(volume / 1_000_000).toFixed(1)}M`;
-  if (volume >= 1_000) return `$${(volume / 1_000).toFixed(0)}K`;
-  return `$${volume.toFixed(0)}`;
-}
-
-function formatEndDate(endDate?: string) {
-  if (!endDate) return 'No close time';
-  const date = new Date(endDate);
-  if (Number.isNaN(date.getTime())) return 'Invalid close time';
-  return date.toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-}
-
-export default function MirrorTradePanel({
-  market,
-  onSuccess,
-  roomId,
-  roomLocked = false,
-  className = '',
-  compact = false,
-  preferredSide = null,
-}: MirrorTradePanelProps) {
+export default function MirrorTradePanel({ market, onSuccess, roomId, roomLocked = false }: MirrorTradePanelProps) {
   const { address, executeTransaction } = useWallet();
   const [side, setSide] = useState<'YES' | 'NO'>('YES');
   const [amount, setAmount] = useState('');
@@ -74,15 +54,17 @@ export default function MirrorTradePanel({
   useEffect(() => {
     setAmount('');
     setError('');
-    setSide(preferredSide ?? 'YES');
+    setSide('YES');
     setHasOpenPosition(market ? Boolean(getOpenMirrorPosition(market.marketId)) : false);
-  }, [market, preferredSide]);
+  }, [market]);
 
-  const microAmount = Math.floor(parseFloat(amount || '0') * 1_000_000);
+  const microAmount = Math.floor(parseFloat(amount || '0') * PRED_MULTIPLIER);
   const canTrade = Boolean(market?.onChainCreated && !market?.onChainResolved && market?.vaultAddress);
 
   const payout = useMemo(() => {
-    return getMirrorPayout(market, side, microAmount);
+    if (!market || microAmount <= 0) return 0;
+    const multiplier = side === 'YES' ? market.yesMultiplierBps : market.noMultiplierBps;
+    return Math.floor((microAmount * multiplier) / 10000);
   }, [market, microAmount, side]);
 
   const handleQuickAmount = (value: number) => {
@@ -101,7 +83,7 @@ export default function MirrorTradePanel({
       return;
     }
     if (!canTrade) {
-      setError('This market is not live yet');
+      setError('This mirrored market is not live on Aleo yet');
       return;
     }
     if (hasOpenPosition) {
@@ -121,14 +103,44 @@ export default function MirrorTradePanel({
     setError('');
 
     try {
-      await submitMirrorBet({
-        executeTransaction,
-        market,
-        side,
-        microAmount,
-        balance,
+      const result = await executeWithRetry(() =>
+        executeTransaction({
+          program: MIRROR_PROGRAM,
+          function: 'bet',
+          inputs: [
+            market.vaultAddress!,
+            `${market.marketId}u64`,
+            `${microAmount}u128`,
+            `${market.yesMultiplierBps}u64`,
+            `${market.noMultiplierBps}u64`,
+            side === 'YES' ? 'true' : 'false',
+          ],
+          fee: 2_000_000,
+          privateFee: false,
+        })
+      );
+
+      const newBalance = Math.max(0, balance - microAmount);
+      setOptimisticBalance(newBalance);
+      setBalance(newBalance);
+      saveMirrorPosition({
+        positionId: createMirrorPositionId(market.marketId),
+        marketId: market.marketId,
+        sourceMarketId: market.sourceMarketId,
+        question: market.question,
+        description: market.description,
+        slug: market.slug,
+        category: market.category,
         roomId,
-        onBalance: setBalance,
+        side,
+        amount: microAmount,
+        payout,
+        timestamp: Date.now(),
+        claimed: false,
+        forfeited: false,
+        refunded: false,
+        outcomeLabels: market.outcomeLabels,
+        ...(result?.transactionId ? { transactionId: result.transactionId } : {}),
       });
       setHasOpenPosition(true);
       setAmount('');
@@ -146,99 +158,106 @@ export default function MirrorTradePanel({
   };
 
   if (!market) {
-    return (
-      <section className={`${className} rounded-3xl border border-white/7 bg-neutral-950/70 p-5 sm:p-6`}>
-        <div className={`flex flex-col items-center justify-center rounded-[1.75rem] border border-dashed border-white/10 bg-black/25 px-6 text-center ${compact ? 'min-h-[300px]' : 'min-h-[420px]'}`}>
-          <div className="mb-4 rounded-full border border-white/8 bg-white/[0.03] p-3">
-            <TrendingUp className="h-5 w-5 text-gray-400" />
-          </div>
-          <h3 className="text-lg font-bold text-white">Select a market</h3>
-          <p className="mt-2 max-w-sm text-sm leading-relaxed text-gray-400">
-            Pick a market card to load the ticket and trade from here.
-          </p>
-        </div>
-      </section>
-    );
+    return null;
   }
 
   const yesPct = Math.round(market.publicYesPrice * 100);
   const noPct = Math.round(market.publicNoPrice * 100);
-  return (
-    <section className={`${className} rounded-3xl border border-white/7 bg-neutral-950/70 p-5 sm:p-6`}>
-      <h3 className={`${compact ? 'text-xl' : 'text-2xl'} font-black leading-tight text-white`}>{market.question}</h3>
-      {!compact && (
-        <p className="mt-2 text-sm leading-relaxed text-gray-400">
-          {market.description || 'This market is ready for hidden-side execution with fixed odds and shielded settlement.'}
-        </p>
-      )}
 
-      <div className={`mt-5 grid gap-3 ${compact ? '' : 'sm:grid-cols-2'}`}>
-        <div className="rounded-[1.5rem] border border-white/6 bg-black/35 p-4">
-          <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-gray-500">Signal</p>
-          <div className="mt-2 flex items-center justify-between text-base font-bold">
-            <span className="text-new-mint">{market.outcomeLabels[0]} {yesPct}%</span>
-            <span className="text-off-red">{market.outcomeLabels[1]} {noPct}%</span>
+  return (
+    <section className="mt-6 grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_360px]">
+      <div className="rounded-3xl border border-white/7 bg-neutral-950/70 p-5 sm:p-6">
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <span className="rounded-full border border-new-mint/20 bg-new-mint/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.24em] text-new-mint">
+            v13 hidden-side execution
+          </span>
+          <span className={`rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.24em] ${
+            market.onChainCreated
+              ? 'border-off-blue/20 bg-off-blue/10 text-off-blue'
+              : 'border-white/8 bg-white/[0.03] text-gray-400'
+          }`}>
+            {market.onChainCreated ? 'Live on Aleo' : 'Queued for Aleo'}
+          </span>
+          {market.onChainResolved && (
+            <span className="rounded-full border border-white/8 bg-white/[0.03] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.24em] text-gray-400">
+              Resolved
+            </span>
+          )}
+        </div>
+
+        <h3 className="text-2xl font-black leading-tight text-white">{market.question}</h3>
+        <p className="mt-2 max-w-3xl text-sm leading-relaxed text-gray-400">
+          {market.description || 'This market was mirrored from Polymarket and can now be traded privately on Aleo through dart_mirror_v13.'}
+        </p>
+
+        <div className="mt-5 grid gap-3 md:grid-cols-3">
+          <div className="rounded-2xl border border-white/6 bg-black/35 p-4">
+            <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-gray-500">Public consensus</p>
+            <div className="mt-2 flex items-center justify-between text-sm font-bold">
+              <span className="text-new-mint">{market.outcomeLabels[0]} {yesPct}%</span>
+              <span className="text-off-red">{market.outcomeLabels[1]} {noPct}%</span>
+            </div>
+          </div>
+          <div className="rounded-2xl border border-white/6 bg-black/35 p-4">
+            <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-gray-500">Aleo fixed odds</p>
+            <div className="mt-2 flex items-center justify-between text-sm font-bold">
+              <span className="text-new-mint">{(market.yesMultiplierBps / 10000).toFixed(2)}x</span>
+              <span className="text-off-red">{(market.noMultiplierBps / 10000).toFixed(2)}x</span>
+            </div>
+          </div>
+          <div className="rounded-2xl border border-white/6 bg-black/35 p-4">
+            <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-gray-500">Mirror market id</p>
+            <p className="mt-2 font-mono text-sm font-bold text-white">{market.marketId}</p>
           </div>
         </div>
-        <div className="rounded-[1.5rem] border border-white/6 bg-black/35 p-4">
-          <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-gray-500">Market stats</p>
-          <div className="mt-2 space-y-2 text-sm">
-            <div className="flex items-center justify-between">
-              <span className="text-gray-400">Volume</span>
-              <span className="font-semibold text-white">{formatVolume(market.volume24hr || market.volume)}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="inline-flex items-center gap-1 text-gray-400">
-                <Clock3 className="h-3.5 w-3.5" />
-                Close
-              </span>
-              <span className="font-semibold text-white">{formatEndDate(market.endDate)}</span>
-            </div>
+
+        <div className="mt-5 rounded-2xl border border-white/6 bg-black/35 p-4 text-sm text-gray-400">
+          <div className="flex flex-wrap items-center gap-2">
+            <Radar className="h-4 w-4 text-off-blue" />
+            <span className="font-semibold text-white">Mirror source:</span>
+            <a
+              href={`https://polymarket.com/event/${market.slug}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-off-blue hover:text-white transition-colors"
+            >
+              polymarket.com/event/{market.slug}
+            </a>
           </div>
+          <p className="mt-3">
+            Once the market is created on Aleo, bets route through the `dart_mirror_v13.aleo` contract with hidden-side receipts, worst-case reserve accounting, and fixed payouts locked privately at entry time.
+          </p>
         </div>
       </div>
 
-      {!compact && (
-        <div className="mt-5 rounded-[1.5rem] border border-white/6 bg-black/35 p-4 text-sm text-gray-400">
-          <p className="font-semibold text-white">Execution</p>
-          <p className="mt-2">
-            Bets settle through hidden-side receipts with fixed payouts locked at entry. Winning claims resolve to shielded USDCx records.
-          </p>
-        </div>
-      )}
-
-      {(roomLocked || !canTrade) && (
-        <div className="mt-5 rounded-2xl border border-white/6 bg-white/[0.03] p-3 text-sm text-gray-400">
-          {roomLocked
-            ? 'This market belongs to a private room. Unlock the room to place a trade.'
-            : market.onChainResolved
-            ? 'This market has already resolved.'
-            : 'This market is queued and not live yet. It can still be followed from the feed.'}
-        </div>
-      )}
-
-      {hasOpenPosition && (
-        <div className="mt-5 rounded-2xl border border-new-mint/15 bg-new-mint/10 p-3 text-sm text-new-mint">
-          You already have an open v13 position on this market. Claim, refund, or forfeit it from your portfolio after settlement.
-        </div>
-      )}
-
-      <div className="mt-5 rounded-[1.75rem] border border-white/6 bg-black/35 p-4">
+      <div className="rounded-3xl border border-white/7 bg-neutral-950/70 p-5 sm:p-6 xl:sticky xl:top-28 h-fit">
         <div className="mb-4 flex items-center gap-2">
-          <span className="rounded-full border border-new-mint/20 bg-new-mint/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.24em] text-new-mint">
-            Hidden-side execution
-          </span>
           <Shield className="h-4 w-4 text-new-mint" />
-          <h4 className="text-sm font-bold uppercase tracking-[0.22em] text-white">Place trade</h4>
+          <h4 className="text-sm font-bold uppercase tracking-[0.22em] text-white">Trade privately</h4>
         </div>
+
+        {(roomLocked || !canTrade) && (
+          <div className="mb-4 rounded-2xl border border-white/6 bg-white/[0.03] p-3 text-sm text-gray-400">
+            {roomLocked
+              ? 'This mirrored market belongs to a private room. Unlock the room to place a trade.'
+              : market.onChainResolved
+              ? 'This mirrored market has already resolved on Aleo.'
+              : 'This market is in the mirror queue, but it is not live on Aleo yet. Enable on-chain mirroring and deploy v13 to make it tradable.'}
+          </div>
+        )}
+        {hasOpenPosition && (
+          <div className="mb-4 rounded-2xl border border-new-mint/15 bg-new-mint/10 p-3 text-sm text-new-mint">
+            You already have an open v13 position on this mirrored market. Claim, refund, or forfeit it from your portfolio after settlement.
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-2">
           <button
             onClick={() => setSide('YES')}
             className={`rounded-2xl border px-4 py-3 text-left transition-all ${
               side === 'YES'
-                ? 'border-[#86efac]/35 bg-[#bbf7d8] text-[#07281d]'
-                : 'border-[#86efac]/20 bg-[#86efac]/10 text-[#b7f7d0] hover:bg-[#86efac]/16'
+                ? 'border-new-mint/30 bg-new-mint/10 text-white'
+                : 'border-white/8 bg-white/[0.03] text-gray-400 hover:text-white'
             }`}
           >
             <p className="text-[10px] font-bold uppercase tracking-[0.24em]">{market.outcomeLabels[0]}</p>
@@ -248,8 +267,8 @@ export default function MirrorTradePanel({
             onClick={() => setSide('NO')}
             className={`rounded-2xl border px-4 py-3 text-left transition-all ${
               side === 'NO'
-                ? 'border-[#fda4af]/35 bg-[#fecdd3] text-[#4a101c]'
-                : 'border-[#fda4af]/20 bg-[#fda4af]/10 text-[#fecdd3] hover:bg-[#fda4af]/16'
+                ? 'border-off-red/30 bg-off-red/10 text-white'
+                : 'border-white/8 bg-white/[0.03] text-gray-400 hover:text-white'
             }`}
           >
             <p className="text-[10px] font-bold uppercase tracking-[0.24em]">{market.outcomeLabels[1]}</p>
@@ -291,12 +310,12 @@ export default function MirrorTradePanel({
             <span className="font-bold text-white">{formatPred(payout)} USDCx</span>
           </div>
           <div className="mb-3 flex items-center justify-between text-sm">
-            <span className="text-gray-400">Market ID</span>
-            <span className="font-mono text-xs text-gray-300">{market.marketId}</span>
+            <span className="text-gray-400">Program</span>
+            <span className="font-mono text-xs text-gray-300">{MIRROR_PROGRAM}</span>
           </div>
           <div className="flex items-center gap-2 rounded-xl border border-new-mint/15 bg-new-mint/10 px-3 py-2 text-xs text-new-mint">
             <Lock className="h-3.5 w-3.5" />
-            Side stays hidden while the market is open.
+            Side stays hidden during active betting. Your payout is locked in the encrypted receipt, and winning claims settle to a shielded USDCx record.
           </div>
         </div>
 

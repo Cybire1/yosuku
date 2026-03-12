@@ -1,5 +1,4 @@
-import { ALEO_API_URL, ALEO_NETWORK, fetchMapping, parseU128 } from './predictionContract';
-import { getResolverBackendUrl } from './backendUrl';
+import { ALEO_API_URL, ALEO_NETWORK, BACKEND_URL, fetchMapping, parseU128 } from './predictionContract';
 
 export const MIRROR_PROGRAM = process.env.NEXT_PUBLIC_MIRROR_PROGRAM || 'dart_mirror_v13.aleo';
 export const MIRROR_POSITIONS_KEY = 'v13_mirror_positions';
@@ -23,9 +22,6 @@ export interface MirrorMarketData {
   noMultiplierBps: number;
   volume: number;
   volume24hr: number;
-  volume1wk: number;
-  yesPriceChange24h: number;
-  yesPriceChange1w: number;
   liquidity: number;
   commentCount: number;
   hasLivePrice: boolean;
@@ -108,7 +104,7 @@ export function getOpenMirrorPosition(marketId: string): MirrorStoredPosition | 
 }
 
 export async function fetchMirrorCatalog(): Promise<MirrorMarketData[]> {
-  const res = await fetch(`${getResolverBackendUrl()}/api/mirrors`);
+  const res = await fetch(`${BACKEND_URL}/api/mirrors`);
   if (!res.ok) throw new Error(`Mirror API ${res.status}`);
   const data = await res.json();
   return Array.isArray(data.markets) ? (data.markets as MirrorMarketData[]) : [];

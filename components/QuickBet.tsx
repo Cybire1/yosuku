@@ -4,16 +4,17 @@ import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, TrendingUp, Activity, Loader } from 'lucide-react';
 import { useWallet } from '@provablehq/aleo-wallet-adaptor-react';
+import { useBtcPrice } from '@/lib/hooks/useBtcPrice';
 import {
   BTC_PREDICTION_PROGRAM,
-  BTC_PREDICTION_VAULT,
+  BTC_PREDICTION_ADDRESS,
+  PRED_TOKEN_PROGRAM,
   PRED_MULTIPLIER,
   formatPred,
-  formatMultiplier,
-  calcLockedPayout,
+  estimateProb,
   type RoundState,
 } from '@/lib/predictionContract';
-import { savePosition, saveBetCommitment } from '@/lib/roundHelpers';
+import { executeWithRetry } from '@/lib/walletExecution';
 
 interface QuickBetProps {
   round: RoundState;
@@ -25,21 +26,32 @@ interface QuickBetProps {
 const QUICK_AMOUNTS = [50, 100, 250, 500];
 
 export default function QuickBet({ round, side, onClose, onSuccess }: QuickBetProps) {
-  const { address, executeTransaction, transactionStatus } = useWallet();
+  const { address, executeTransaction } = useWallet();
+  const { price } = useBtcPrice();
   const [amount, setAmount] = useState('100');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   const microAmount = Math.floor(parseFloat(amount || '0') * PRED_MULTIPLIER);
 
-  // Fixed odds from on-chain multipliers
-  const mult = side === 'YES' ? (round.yesMult || 18500) : (round.noMult || 21000);
+  const odds = useMemo(() => {
+    const targetUsd = round.targetPrice / 100;
+    const minsLeft = Math.max(0, (round.endTime - Date.now()) / 60000);
+    if (price > 0 && minsLeft > 0) {
+      const prob = estimateProb(price, targetUsd, minsLeft);
+      const yesPct = Math.round(prob * 100);
+      return { yes: Math.max(1, Math.min(99, yesPct)), no: Math.max(1, Math.min(99, 100 - yesPct)) };
+    }
+    return { yes: 50, no: 50 };
+  }, [price, round.targetPrice, round.endTime]);
 
-  // Locked payout from fixed odds
-  const lockedPayout = useMemo(() => {
+  // Estimate payout — dark pool, so use probability-based estimate
+  const estPayout = (() => {
     if (!microAmount) return 0;
-    return calcLockedPayout(microAmount, mult);
-  }, [microAmount, mult]);
+    const sideOdds = side === 'YES' ? odds.yes : odds.no;
+    if (sideOdds <= 0 || sideOdds >= 100) return microAmount * 0.9;
+    return (microAmount / (sideOdds / 100)) * 0.9;
+  })();
 
   const handleBet = async () => {
     if (!address || !executeTransaction) {
@@ -58,52 +70,38 @@ export default function QuickBet({ round, side, onClose, onSuccess }: QuickBetPr
     try {
       const sideVal = side === 'YES' ? 'true' : 'false';
 
-      // Generate random salt
-      const bytes = new Uint8Array(32);
-      crypto.getRandomValues(bytes);
-      bytes[0] &= 0x1f; // Aleo field < 2^253
-      const hex = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
-      const salt = BigInt('0x' + hex).toString() + 'field';
+      // Step 1: Transfer USDCx to the prediction program
+      await executeWithRetry(() =>
+        executeTransaction({
+          program: PRED_TOKEN_PROGRAM,
+          function: 'transfer_public',
+          inputs: [BTC_PREDICTION_ADDRESS, `${microAmount}u128`],
+          fee: 500_000,
+          privateFee: false,
+        })
+      );
 
-      const payout = calcLockedPayout(microAmount, mult);
+      // Step 2: Place the bet
+      await executeWithRetry(() =>
+        executeTransaction({
+          program: BTC_PREDICTION_PROGRAM,
+          function: 'bet',
+          inputs: [`${round.id}u64`, `${microAmount}u128`, sideVal],
+          fee: 500_000,
+          privateFee: false,
+        })
+      );
 
-      // v10: Single atomic transaction — bet() calls transfer_public_as_signer internally
-      const betResult = await executeTransaction({
-        program: BTC_PREDICTION_PROGRAM,
-        function: 'bet',
-        inputs: [
-          BTC_PREDICTION_VAULT,
-          `${round.id}u64`,
-          `${microAmount}u128`,
-          sideVal,
-          salt,
-          `${payout}u128`,
-        ],
-        fee: 2_000_000,
-        privateFee: false,
+      // Save position to localStorage
+      const positions = JSON.parse(localStorage.getItem('v8_positions') || '[]');
+      positions.push({
+        roundId: round.id,
+        side,
+        amount: microAmount,
+        timestamp: Date.now(),
+        txPending: true,
       });
-
-      // Save commitment + position to localStorage
-      const tempTxId = typeof betResult === 'string' ? betResult : (betResult as any)?.transactionId;
-      saveBetCommitment(address, round.id, side, microAmount, payout, salt, tempTxId ?? undefined);
-      savePosition(round.id, side, microAmount, payout);
-
-      // Background: poll for on-chain tx ID
-      if (tempTxId && transactionStatus) {
-        (async () => {
-          for (let i = 0; i < 30; i++) {
-            await new Promise(r => setTimeout(r, 10_000));
-            try {
-              const status = await transactionStatus(tempTxId);
-              if (status?.transactionId && status.transactionId !== tempTxId) {
-                saveBetCommitment(address!, round.id, side, microAmount, payout, salt, status.transactionId);
-                break;
-              }
-              if (status?.status === 'failed' || status?.status === 'rejected') break;
-            } catch { break; }
-          }
-        })();
-      }
+      localStorage.setItem('v8_positions', JSON.stringify(positions));
 
       onSuccess?.();
       onClose();
@@ -173,9 +171,9 @@ export default function QuickBet({ round, side, onClose, onSuccess }: QuickBetPr
                 </div>
                 <div className="text-right">
                   <span className="text-xl font-mono font-bold text-white">
-                    {formatMultiplier(mult)}
+                    {side === 'YES' ? odds.yes : odds.no}%
                   </span>
-                  <span className="block text-[10px] text-gray-500 uppercase tracking-widest">multiplier</span>
+                  <span className="block text-[10px] text-gray-500 uppercase tracking-widest">odds</span>
                 </div>
               </div>
             </div>
@@ -218,11 +216,11 @@ export default function QuickBet({ round, side, onClose, onSuccess }: QuickBetPr
               </div>
             </div>
 
-            {/* Locked payout */}
-            {lockedPayout > 0 && (
+            {/* Payout estimate */}
+            {estPayout > 0 && (
               <div className="flex justify-between items-center text-xs px-2 mb-4">
-                <span className="text-gray-500">Locked Payout (if {side} wins)</span>
-                <span className="font-mono font-bold text-new-mint">{formatPred(lockedPayout)} USDCx</span>
+                <span className="text-gray-500">Est. Payout (if {side} wins)</span>
+                <span className="font-mono font-bold text-new-mint">{formatPred(estPayout)} USDCx</span>
               </div>
             )}
 

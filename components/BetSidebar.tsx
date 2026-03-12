@@ -2,30 +2,37 @@
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Loader, Wallet, Droplets, Shield, Lock, KeyRound } from 'lucide-react';
+import { Loader, Wallet, Droplets, Shield, EyeOff, Lock, KeyRound, Download } from 'lucide-react';
 import { useWallet } from '@provablehq/aleo-wallet-adaptor-react';
+import { useBtcPrice } from '@/lib/hooks/useBtcPrice';
 import {
-  BALANCE_KEY,
-  BALANCE_UPDATED_EVENT,
   BTC_PREDICTION_PROGRAM,
-  BTC_PREDICTION_VAULT,
+  BTC_PREDICTION_ADDRESS,
+  PRED_TOKEN_PROGRAM,
   PRED_MULTIPLIER,
+  BACKEND_URL,
   formatPred,
-  formatMultiplier,
-  impliedProb,
-  calcLockedPayout,
+  estimateProb,
+  getConfidenceLabel,
   fetchOnChainBalance,
   setOptimisticBalance,
   type RoundState,
 } from '@/lib/predictionContract';
-import { savePosition, saveBetCommitment } from '@/lib/roundHelpers';
+import { savePosition, saveBetCommitment, exportCommitments } from '@/lib/roundHelpers';
+import { executeWithRetry } from '@/lib/walletExecution';
 import AnimatedNumber from './AnimatedNumber';
+
+const BALANCE_KEY = 'usdcx_balance';
 const QUICK_AMOUNTS = [50, 100, 250, 500];
 
-/** Generate a random field element (253-bit) as salt. */
+/** Generate a random field element (253-bit) as salt for ZK commitment.
+ *  Must be random (not deterministic) to preserve hiding property —
+ *  a deterministic salt from public inputs would let attackers brute-force
+ *  the binary YES/NO side by trying both possibilities. */
 function generateSalt(): string {
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
+  // Aleo field is < 2^253, zero out the top 3 bits to stay within range
   bytes[0] &= 0x1f;
   const hex = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
   const bigint = BigInt('0x' + hex);
@@ -52,29 +59,49 @@ interface BetSidebarProps {
 }
 
 export default function BetSidebar({ round, onSuccess }: BetSidebarProps) {
-  const { address, executeTransaction, transactionStatus } = useWallet();
+  const { address, executeTransaction } = useWallet();
+  const { price } = useBtcPrice();
   const [side, setSide] = useState<'YES' | 'NO'>('YES');
   const [amount, setAmount] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [balance, setBalance] = useState(0);
+  const [minsLeft, setMinsLeft] = useState(0);
   const [flashType, setFlashType] = useState<'none' | 'YES' | 'NO'>('none');
 
   // Check if user already bet on this round
   const [hasBet, setHasBet] = useState(false);
   useEffect(() => {
     if (!address) return;
-    const positions: { roundId: number }[] = JSON.parse(localStorage.getItem('v10_positions') || '[]');
+    const positions: { roundId: number }[] = JSON.parse(localStorage.getItem('v8_positions') || '[]');
     setHasBet(positions.some(p => p.roundId === round.id));
   }, [address, round.id]);
 
+  const targetUsd = round.targetPrice / 100;
   const microAmount = Math.floor(parseFloat(amount || '0') * PRED_MULTIPLIER);
+  const totalPool = round.totalPool;
 
-  // Fixed odds from on-chain multipliers
-  const yesMult = round.yesMult || 18500;
-  const noMult = round.noMult || 21000;
-  const yesProb = impliedProb(yesMult);
-  const noProb = impliedProb(noMult);
+  // Dynamic odds from live BTC price + time remaining (Polymarket-style)
+  // During dark pool phase, no pool-based odds available — purely probability model
+  const odds = (() => {
+    if (price > 0 && minsLeft > 0) {
+      const prob = estimateProb(price, targetUsd, minsLeft);
+      const yesPct = Math.round(prob * 100);
+      return { yes: Math.max(1, Math.min(99, yesPct)), no: Math.max(1, Math.min(99, 100 - yesPct)) };
+    }
+    return { yes: 50, no: 50 };
+  })();
+
+  // Track minutes remaining for probability
+  useEffect(() => {
+    const tick = () => {
+      const remaining = Math.max(0, round.endTime - Date.now());
+      setMinsLeft(remaining / 60000);
+    };
+    tick();
+    const interval = setInterval(tick, 5000);
+    return () => clearInterval(interval);
+  }, [round.endTime]);
 
   // Read balance
   useEffect(() => {
@@ -82,30 +109,17 @@ export default function BetSidebar({ round, onSuccess }: BetSidebarProps) {
       fetchOnChainBalance(address).then(setBalance).catch(() => {});
     }
     const read = () => setBalance(parseInt(localStorage.getItem(BALANCE_KEY) || '0', 10));
-    const handleBalanceUpdate = (event: Event) => {
-      const next = (event as CustomEvent<{ balance?: number }>).detail?.balance;
-      if (typeof next === 'number') {
-        setBalance(next);
-        return;
-      }
-      read();
-    };
     read();
-    window.addEventListener(BALANCE_UPDATED_EVENT, handleBalanceUpdate);
-    const interval = address ? setInterval(() => {
-      fetchOnChainBalance(address).then(setBalance).catch(() => read());
-    }, 10_000) : null;
-    return () => {
-      window.removeEventListener(BALANCE_UPDATED_EVENT, handleBalanceUpdate);
-      if (interval) clearInterval(interval);
-    };
+    const interval = setInterval(read, 2000);
+    return () => clearInterval(interval);
   }, [address]);
 
-  // Locked payout from fixed odds
-  const lockedPayout = (() => {
+  // Estimated payout — odds-based
+  const estPayout = (() => {
     if (!microAmount) return 0;
-    const mult = side === 'YES' ? yesMult : noMult;
-    return calcLockedPayout(microAmount, mult);
+    const sideOdds = side === 'YES' ? odds.yes : odds.no;
+    if (sideOdds <= 0 || sideOdds >= 100) return microAmount * 0.9;
+    return (microAmount / (sideOdds / 100)) * 0.9;
   })();
 
   const handleQuickAdd = (val: number) => {
@@ -137,53 +151,57 @@ export default function BetSidebar({ round, onSuccess }: BetSidebarProps) {
     try {
       const sideVal = side === 'YES' ? 'true' : 'false';
       const salt = generateSalt();
-      const mult = side === 'YES' ? yesMult : noMult;
-      const payout = calcLockedPayout(microAmount, mult);
 
-      // v10: Single atomic transaction — bet() calls transfer_public_as_signer internally
+      // Step 1: Transfer USDCx to the prediction program
+      await executeWithRetry(() =>
+        executeTransaction({
+          program: PRED_TOKEN_PROGRAM,
+          function: 'transfer_public',
+          inputs: [BTC_PREDICTION_ADDRESS, `${microAmount}u128`],
+          fee: 500_000,
+          privateFee: false,
+        })
+      );
+
+      // Step 2: Place the bet — v8 commitment scheme
+      // bet(rid: u64, amt: u128, side: bool, salt: field) -> (BetReceipt, Future)
+      // side, amt, salt are PRIVATE inputs — hidden by ZK proof
       const betInputs = [
-        BTC_PREDICTION_VAULT,
         `${round.id}u64`,
         `${microAmount}u128`,
         sideVal,
         salt,
-        `${payout}u128`,
       ];
 
-      const betResult = await executeTransaction({
-        program: BTC_PREDICTION_PROGRAM,
-        function: 'bet',
-        inputs: betInputs,
-        fee: 2_000_000,
-        privateFee: false,
-      });
+      await executeWithRetry(() =>
+        executeTransaction({
+          program: BTC_PREDICTION_PROGRAM,
+          function: 'bet',
+          inputs: betInputs,
+          fee: 2_000_000,
+          privateFee: false,
+        })
+      );
 
-      // Save commitment locally
-      const tempTxId = typeof betResult === 'string' ? betResult : (betResult as any)?.transactionId;
-      saveBetCommitment(address, round.id, side, microAmount, payout, salt, tempTxId ?? undefined);
+      // Step 3: Save commitment locally (salt needed for claim/forfeit)
+      saveBetCommitment(address, round.id, side, microAmount, salt);
 
-      // Background: poll for on-chain tx ID and update stored value
-      if (tempTxId && transactionStatus) {
-        (async () => {
-          for (let i = 0; i < 30; i++) {
-            await new Promise(r => setTimeout(r, 10_000));
-            try {
-              const status = await transactionStatus(tempTxId);
-              if (status?.transactionId && status.transactionId !== tempTxId) {
-                saveBetCommitment(address!, round.id, side, microAmount, payout, salt, status.transactionId);
-                break;
-              }
-              if (status?.status === 'failed' || status?.status === 'rejected') break;
-            } catch { break; }
-          }
-        })();
+      // Step 4: Report bet to backend (amount only — side is ZK-hidden)
+      try {
+        await fetch(`${BACKEND_URL}/api/bet`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ roundId: round.id, amount: microAmount }),
+        });
+      } catch {
+        // Non-critical — bet is already on-chain
       }
 
       const newBalance = Math.max(0, balance - microAmount);
       setOptimisticBalance(newBalance);
       setBalance(newBalance);
 
-      savePosition(round.id, side, microAmount, payout);
+      savePosition(round.id, side, microAmount);
       setHasBet(true);
 
       setAmount('');
@@ -215,15 +233,27 @@ export default function BetSidebar({ round, onSuccess }: BetSidebarProps) {
           <div>
             <p className="text-sm font-bold text-white">Bet Placed on Round #{round.id}</p>
             <p className="text-xs text-gray-400 mt-1">
-              Your receipt is stored on-chain. Claim or forfeit after resolution.
+              Your commitment is stored on-chain. Claim or forfeit after resolution.
             </p>
           </div>
           <div className="flex items-center gap-2 bg-white/[0.03] border border-white/5 rounded-xl px-3 py-2">
             <Shield className="w-3 h-3 text-sky-400" />
             <span className="text-[10px] text-gray-400">
-              Fixed payout locked at bet time — guaranteed if you win
+              Your bet side is hidden by a ZK commitment — nobody can see it
             </span>
           </div>
+          <button
+            onClick={() => {
+              if (!address) return;
+              const data = exportCommitments(address);
+              navigator.clipboard.writeText(data);
+              alert('Commitment data copied to clipboard. Save this — you need it to claim winnings if you clear your browser.');
+            }}
+            className="w-full py-2 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1.5 bg-white/[0.03] border border-white/5 text-gray-500 hover:text-sky-400 hover:border-sky-400/20 transition-all"
+          >
+            <Download className="w-3 h-3" />
+            Backup Commitment Data
+          </button>
         </div>
       </div>
     );
@@ -254,12 +284,9 @@ export default function BetSidebar({ round, onSuccess }: BetSidebarProps) {
                 }`}
               style={{ backgroundColor: '#1a3a2a' }}
             >
-              <div className="flex flex-col items-center gap-0.5">
-                <div className="flex items-center gap-2">
-                  <span>Up</span>
-                  <span className="font-mono">{formatMultiplier(yesMult)}</span>
-                </div>
-                <span className="text-[10px] opacity-60">{yesProb}% implied</span>
+              <div className="flex items-center justify-center gap-2">
+                <span>Up</span>
+                <span className="font-mono">{odds.yes}%</span>
               </div>
             </button>
 
@@ -271,29 +298,27 @@ export default function BetSidebar({ round, onSuccess }: BetSidebarProps) {
                 }`}
               style={{ backgroundColor: '#3a1a1e' }}
             >
-              <div className="flex flex-col items-center gap-0.5">
-                <div className="flex items-center gap-2">
-                  <span>Down</span>
-                  <span className="font-mono">{formatMultiplier(noMult)}</span>
-                </div>
-                <span className="text-[10px] opacity-60">{noProb}% implied</span>
+              <div className="flex items-center justify-center gap-2">
+                <span>Down</span>
+                <span className="font-mono">{odds.no}%</span>
               </div>
             </button>
           </div>
         </div>
 
-        {/* Fixed odds indicator */}
+        {/* Dark pool indicator */}
         <div className="px-4 pt-3">
           <div className="flex items-center gap-2 bg-white/[0.03] border border-white/5 rounded-xl px-3 py-2">
             <div className="relative">
-              <Lock className="w-3 h-3 text-sky-400" />
+              <Shield className="w-3 h-3 text-sky-400" />
               <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-sky-400 rounded-full animate-pulse" />
             </div>
-            <span className="text-[10px] text-sky-400/80 font-medium">Fixed Odds</span>
+            <span className="text-[10px] text-sky-400/80 font-medium">ZK Commitment</span>
             <span className="text-[10px] text-gray-600">·</span>
-            <span className="text-[10px] text-gray-500">Payout locked at bet time</span>
+            <Lock className="w-2.5 h-2.5 text-gray-500" />
+            <span className="text-[10px] text-gray-500">Dark Pool Active</span>
             <span className="text-[10px] text-gray-600">·</span>
-            <span className="text-[10px] text-gray-500 font-mono">{formatPred(round.totalPool)} staked</span>
+            <span className="text-[10px] text-gray-500 font-mono">{formatPred(totalPool)} USDCx</span>
           </div>
         </div>
 
@@ -341,11 +366,11 @@ export default function BetSidebar({ round, onSuccess }: BetSidebarProps) {
             </button>
           </div>
 
-          {lockedPayout > 0 && (
+          {estPayout > 0 && (
             <div className="flex justify-between items-center text-xs px-1 pt-1">
-              <span className="text-gray-500">Locked payout</span>
+              <span className="text-gray-500">Est. payout</span>
               <div className="flex items-center gap-1 font-mono font-bold text-new-mint">
-                <AnimatedNumber value={formatPred(lockedPayout)} />
+                <AnimatedNumber value={formatPred(estPayout)} />
                 <span>USDCx</span>
               </div>
             </div>
@@ -353,15 +378,51 @@ export default function BetSidebar({ round, onSuccess }: BetSidebarProps) {
 
           {/* Privacy explainer */}
           <div className="flex items-start gap-2 bg-white/[0.02] border border-white/5 rounded-lg px-3 py-2">
-            <Shield className="w-3 h-3 text-gray-600 mt-0.5 flex-shrink-0" />
+            <EyeOff className="w-3 h-3 text-gray-600 mt-0.5 flex-shrink-0" />
             <span className="text-[10px] text-gray-600 leading-relaxed">
-              Atomic escrow — your stake is locked in one transaction. Payout is fixed at bet time. No two-step approval needed.
+              Your bet side is hidden by a ZK commitment. Nobody can see your position. Pool breakdown hidden until resolution.
             </span>
           </div>
 
           {/* Error */}
           {error && (
             <p className="text-off-red text-xs font-bold text-center animate-pulse">{error}</p>
+          )}
+
+          {/* Confidence meter */}
+          {price > 0 && minsLeft > 0 && (
+            (() => {
+              const prob = estimateProb(price, targetUsd, minsLeft);
+              const { label, color } = getConfidenceLabel(prob);
+              const pct = Math.round(prob * 100);
+              return (
+                <div className="py-2">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Confidence</span>
+                    <span className={`text-[11px] font-bold ${color}`}>{label}</span>
+                  </div>
+                  <div className="relative h-2 bg-white/5 rounded-full overflow-hidden">
+                    <div
+                      className="absolute left-0 top-0 h-full bg-gradient-to-r from-off-red to-off-red/30 transition-all duration-700"
+                      style={{ width: `${100 - pct}%` }}
+                    />
+                    <div
+                      className="absolute right-0 top-0 h-full bg-gradient-to-l from-new-mint to-new-mint/30 transition-all duration-700"
+                      style={{ width: `${pct}%` }}
+                    />
+                    <div className="absolute left-1/2 top-0 w-px h-full bg-white/20" />
+                    <div
+                      className="absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full border-2 border-white bg-neutral-900 transition-all duration-700 z-10"
+                      style={{ left: `calc(${pct}% - 5px)` }}
+                    />
+                  </div>
+                  <div className="flex justify-between mt-1">
+                    <span className="text-[9px] text-off-red/60">NO</span>
+                    <span className="text-[9px] text-new-mint/60">YES</span>
+                  </div>
+                </div>
+              );
+            })()
           )}
 
           {/* CTA button */}
@@ -386,7 +447,7 @@ export default function BetSidebar({ round, onSuccess }: BetSidebarProps) {
               {loading ? (
                 <>
                   <Loader className="w-4 h-4 animate-spin" />
-                  Placing Bet...
+                  Generating ZK Proof...
                 </>
               ) : (
                 <>

@@ -91,6 +91,7 @@ export default function MirrorPortfolioPanel({ refreshTrigger = 0 }: MirrorPortf
           inputs: [receipt],
           fee: action === 'forfeit' ? 500_000 : 2_000_000,
           privateFee: false,
+          recordIndices: [0],
         })
       );
 

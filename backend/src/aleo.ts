@@ -20,7 +20,12 @@ export async function getBlockHeight(): Promise<number> {
 
 /** Read a public mapping value. Returns null if key doesn't exist. */
 export async function getMapping(mapping: string, key: string): Promise<string | null> {
-  const url = `${aleoEndpoint}/${aleoNetwork}/program/${program}/mapping/${mapping}/${key}`;
+  return getProgramMappingValue(program, mapping, key);
+}
+
+/** Read a public mapping value from an arbitrary program. */
+export async function getProgramMappingValue(programName: string, mapping: string, key: string): Promise<string | null> {
+  const url = `${aleoEndpoint}/${aleoNetwork}/program/${programName}/mapping/${mapping}/${key}`;
   const res = await fetch(url);
   if (!res.ok) return null;
   const text = await res.text();
@@ -46,6 +51,12 @@ export function parseU128(val: string | null): number {
 export function parseU32(val: string | null): number {
   if (!val) return 0;
   return parseInt(val.replace('u32', '').trim(), 10) || 0;
+}
+
+/** Parse a u8 mapping value to number */
+export function parseU8(val: string | null): number {
+  if (!val) return 0;
+  return parseInt(val.replace('u8', '').trim(), 10) || 0;
 }
 
 /** Get the program's USDCx balance (how much the contract can pay out) */

@@ -1,84 +1,85 @@
 'use client';
 
-import Link from 'next/link';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { motion } from 'framer-motion';
-import { ArrowUpRight, Search, Sparkles } from 'lucide-react';
-import { useWallet } from '@provablehq/aleo-wallet-adaptor-react';
+import { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import Header from '@/components/Header';
-import DoodleStrip from '@/components/DoodleStrip';
+import TradingCard from '@/components/TradingCard';
+import BetSidebar from '@/components/BetSidebar';
+import WaitingState from '@/components/WaitingState';
+import RoundHistory from '@/components/RoundHistory';
+import Comments from '@/components/Comments';
 import TokenBalance from '@/components/TokenBalance';
+import TokenFaucet from '@/components/TokenFaucet';
+import PredictionStats from '@/components/PredictionStats';
+import PnLChart from '@/components/PnLChart';
+import MirrorQueuePanel from '@/components/MirrorQueuePanel';
 import MirrorTradePanel from '@/components/MirrorTradePanel';
-import MirrorMarketCard from '@/components/MirrorMarketCard';
-import LiveBtcChart from '@/components/charts/LiveBtcChart';
-import NewsFeed from '@/components/NewsFeed';
+import PrivateRoomsPanel from '@/components/PrivateRoomsPanel';
+import { useRounds } from '@/lib/hooks/useRounds';
 import { useBtcPrice } from '@/lib/hooks/useBtcPrice';
+import { useWallet } from '@provablehq/aleo-wallet-adaptor-react';
+import { fetchRound, loadPositions, markClaimed } from '@/lib/roundHelpers';
 import { fetchMirrorCatalog, type MirrorMarketData } from '@/lib/mirrorMarkets';
-import type { MirrorSide } from '@/lib/mirrorMarkets';
+import {
+  isRoomUnlocked,
+  isMirrorVisibleInRoom,
+  loadUnlockedRooms,
+  unlockRoom,
+  type PrivateRoomId,
+} from '@/lib/privateRooms';
+import {
+  BACKEND_URL,
+  DURATION_OPTIONS,
+  formatPred,
+  type DurationLabel,
+} from '@/lib/predictionContract';
+import { Activity, Timer, Trophy, XCircle, BarChart3, MessageCircle, BookOpen, History, Shield, ChevronDown, ChevronUp } from 'lucide-react';
+import BitcoinIcon from '@/components/icons/BitcoinIcon';
+import NewsFeed from '@/components/NewsFeed';
+import TickerTape from '@/components/TickerTape';
+import DoodleStrip from '@/components/DoodleStrip';
 
-type CategoryBucket = 'all' | 'crypto' | 'sports' | 'politics' | 'tech' | 'economics' | 'science' | 'other';
-
-const CATEGORY_BUCKETS: Array<{ id: CategoryBucket; label: string }> = [
-  { id: 'all', label: 'All markets' },
-  { id: 'crypto', label: 'Crypto' },
-  { id: 'sports', label: 'Sports' },
-  { id: 'politics', label: 'Politics' },
-  { id: 'tech', label: 'Tech' },
-  { id: 'economics', label: 'Economics' },
-  { id: 'science', label: 'Science' },
-  { id: 'other', label: 'Other' },
-];
-
-function getCategoryBucket(market: MirrorMarketData): CategoryBucket {
-  const text = `${market.category} ${market.question} ${market.description || ''}`.toLowerCase();
-
-  if (/(bitcoin|btc|eth|ethereum|sol|solana|doge|xrp|sui|token|crypto|stablecoin|altcoin|memecoin)/.test(text)) {
-    return 'crypto';
-  }
-  if (/(fifa|nba|nfl|mlb|nhl|sports|cup|tournament|qualify|match|team|league|championship)/.test(text)) {
-    return 'sports';
-  }
-  if (/(election|trump|senate|president|government|policy|war|iran|ukraine|politic|congress|vote)/.test(text)) {
-    return 'politics';
-  }
-  if (/(openai|ai|hardware|tech|apple|google|meta|nvidia|startup|consumer product)/.test(text)) {
-    return 'tech';
-  }
-  if (/(economy|fed|rates|inflation|recession|gdp|tariff|etf|macro|oil|yield|employment|finance)/.test(text)) {
-    return 'economics';
-  }
-  if (/(science|space|nasa|drug|trial|research|physics|biology|medical)/.test(text)) {
-    return 'science';
-  }
-
-  return 'other';
-}
+type BottomTab = 'activity' | 'comments' | 'stats' | 'rules';
 
 export default function MarketsPage() {
   const { address } = useWallet();
-  const { price: btcPrice, change24h, connected: btcConnected } = useBtcPrice();
+  const { change24h } = useBtcPrice();
+  const { activeRound, pastRounds, positions, loading, reloadPositions, setActiveRound } = useRounds();
 
   const [mintTrigger, setMintTrigger] = useState(0);
+  const [selectedDuration, setSelectedDuration] = useState<DurationLabel>('5 Minutes');
+  const [notification, setNotification] = useState<{ type: 'win' | 'lose'; amount: number; roundId: number } | null>(null);
+  const [bottomTab, setBottomTab] = useState<BottomTab>('comments');
   const [mirrorMarkets, setMirrorMarkets] = useState<MirrorMarketData[]>([]);
   const [mirrorLoading, setMirrorLoading] = useState(true);
+  const [mirrorLastSyncAt, setMirrorLastSyncAt] = useState<string | null>(null);
+  const [mirrorCreateOnChain, setMirrorCreateOnChain] = useState(false);
   const [selectedMirrorMarketId, setSelectedMirrorMarketId] = useState<string | null>(null);
-  const [selectedTradeSide, setSelectedTradeSide] = useState<MirrorSide | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'live' | 'queued'>('all');
-  const [sortBy, setSortBy] = useState<'volume' | 'ending' | 'signal'>('volume');
-  const [categoryFilter, setCategoryFilter] = useState<CategoryBucket>('all');
-  const tradePanelRef = useRef<HTMLDivElement | null>(null);
+  const [activeRoomId, setActiveRoomId] = useState<PrivateRoomId>('public');
+  const [unlockedRooms, setUnlockedRooms] = useState<PrivateRoomId[]>([]);
+  const [showLegacyTrader, setShowLegacyTrader] = useState(false);
+
+  // Auto-select duration tab to match active round
+  useEffect(() => {
+    if (!activeRound) return;
+    const durationSecs = activeRound.durationMs / 1000;
+    const match = DURATION_OPTIONS.find(d => Math.abs(d.seconds - durationSecs) < 10);
+    if (match) setSelectedDuration(match.label);
+  }, [activeRound]);
 
   useEffect(() => {
     let cancelled = false;
+    setUnlockedRooms(loadUnlockedRooms());
 
     async function loadMirrorCatalog() {
       try {
         const markets = await fetchMirrorCatalog();
         if (cancelled) return;
-
         setMirrorMarkets(markets);
-
+        const res = await fetch(`${BACKEND_URL}/api/mirrors`);
+        const data = res.ok ? await res.json() : null;
+        setMirrorLastSyncAt(data?.status?.lastSyncAt || null);
+        setMirrorCreateOnChain(Boolean(data?.status?.createOnChain));
         setSelectedMirrorMarketId((current) => {
           if (current && markets.some((market) => market.marketId === current)) {
             return current;
@@ -111,63 +112,9 @@ export default function MarketsPage() {
     };
   }, []);
 
-  const categoryCounts = useMemo(() => {
-    return mirrorMarkets.reduce<Record<CategoryBucket, number>>(
-      (counts, market) => {
-        counts.all += 1;
-        counts[getCategoryBucket(market)] += 1;
-        return counts;
-      },
-      {
-        all: 0,
-        crypto: 0,
-        sports: 0,
-        politics: 0,
-        tech: 0,
-        economics: 0,
-        science: 0,
-        other: 0,
-      }
-    );
-  }, [mirrorMarkets]);
-
-  const visibleMirrorMarkets = useMemo(() => {
-    const normalizedQuery = searchQuery.trim().toLowerCase();
-
-    const filtered = mirrorMarkets.filter((market) => {
-      const matchesQuery =
-        !normalizedQuery ||
-        `${market.question} ${market.description || ''} ${market.category}`.toLowerCase().includes(normalizedQuery);
-
-      const matchesStatus =
-        statusFilter === 'all'
-          ? true
-          : statusFilter === 'live'
-            ? Boolean(market.onChainCreated && !market.onChainResolved)
-            : !market.onChainCreated;
-
-      const matchesCategory =
-        categoryFilter === 'all' || getCategoryBucket(market) === categoryFilter;
-
-      return matchesQuery && matchesStatus && matchesCategory;
-    });
-
-    return [...filtered].sort((a, b) => {
-      if (sortBy === 'ending') {
-        const aTime = a.endDate ? new Date(a.endDate).getTime() : Number.MAX_SAFE_INTEGER;
-        const bTime = b.endDate ? new Date(b.endDate).getTime() : Number.MAX_SAFE_INTEGER;
-        return aTime - bTime;
-      }
-
-      if (sortBy === 'signal') {
-        const aSignal = Math.abs(a.publicYesPrice - 0.5);
-        const bSignal = Math.abs(b.publicYesPrice - 0.5);
-        return bSignal - aSignal;
-      }
-
-      return (b.volume24hr || b.volume) - (a.volume24hr || a.volume);
-    });
-  }, [mirrorMarkets, searchQuery, statusFilter, sortBy, categoryFilter]);
+  const visibleMirrorMarkets = mirrorMarkets.filter((market) =>
+    isMirrorVisibleInRoom(market, activeRoomId, unlockedRooms)
+  );
 
   useEffect(() => {
     setSelectedMirrorMarketId((current) => {
@@ -180,284 +127,455 @@ export default function MarketsPage() {
     });
   }, [visibleMirrorMarkets]);
 
-  const selectedMirrorMarket =
-    visibleMirrorMarkets.find((market) => market.marketId === selectedMirrorMarketId) || null;
-  const btcPriceLabel = btcPrice > 0 ? `$${btcPrice.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : 'Loading';
-  const btcChangeLabel = `${change24h >= 0 ? '+' : ''}${change24h.toFixed(2)}%`;
+  const selectedMirrorMarket = visibleMirrorMarkets.find((market) => market.marketId === selectedMirrorMarketId) || null;
+  const selectedRoomLocked = !isRoomUnlocked(activeRoomId, unlockedRooms);
 
-  const handleChooseSide = (market: MirrorMarketData, side: MirrorSide) => {
-    setSelectedMirrorMarketId(market.marketId);
-    setSelectedTradeSide(side);
+  // Check if active round's duration matches selected tab
+  const durationMs = DURATION_OPTIONS.find(d => d.label === selectedDuration)!.seconds * 1000;
+  const roundMatchesTab = activeRound && Math.abs(activeRound.durationMs - durationMs) < 10_000;
 
-    if (typeof window !== 'undefined' && window.innerWidth < 1280) {
-      window.requestAnimationFrame(() => {
-        tradePanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  // Show win/lose notification when round resolves (useRounds handles the actual transition)
+  const prevRoundRef = useRef<{ id: number; resolved: boolean } | null>(null);
+  useEffect(() => {
+    if (!activeRound) {
+      // Check if previous round just disappeared (resolved and transitioned by useRounds)
+      if (prevRoundRef.current && !prevRoundRef.current.resolved) {
+        // Round was active, now gone — check for notification from pastRounds
+        const resolved = pastRounds.find(r => r.id === prevRoundRef.current!.id);
+        if (resolved) {
+          const currentPositions = loadPositions();
+          const pos = currentPositions.find(p => p.roundId === resolved.id);
+          if (pos) {
+            const userSide = pos.yesDeposit > 0 ? 'YES' : 'NO';
+            const winningSide = resolved.outcome ? 'YES' : 'NO';
+            const userDeposit = Math.max(pos.yesDeposit, pos.noDeposit);
+            const isWinner = userSide === winningSide;
+
+            if (isWinner) {
+              const totalPool = resolved.yesPool + resolved.noPool;
+              const winPool = resolved.outcome ? resolved.yesPool : resolved.noPool;
+              const payout = winPool > 0 ? (userDeposit / winPool) * totalPool * 0.9 : 0;
+              setNotification({ type: 'win', amount: payout, roundId: resolved.id });
+            } else {
+              setNotification({ type: 'lose', amount: userDeposit, roundId: resolved.id });
+            }
+            setTimeout(() => setNotification(null), 8000);
+          }
+        }
+      }
+      prevRoundRef.current = null;
+      return;
+    }
+    prevRoundRef.current = { id: activeRound.id, resolved: activeRound.resolved };
+  }, [activeRound, pastRounds]);
+
+  const handleBetSuccess = () => {
+    setMintTrigger(prev => prev + 1);
+    reloadPositions();
+    if (activeRound) {
+      fetchRound(activeRound.id).then(updated => {
+        if (updated) setActiveRound(prev => prev ? { ...updated, endTime: prev.endTime } : updated);
       });
     }
   };
 
+  const handleClaim = (roundId: number) => {
+    markClaimed(roundId);
+    reloadPositions();
+    setMintTrigger(prev => prev + 1);
+  };
+
+  const currentPosition = activeRound
+    ? positions.find(p => p.roundId === activeRound.id)
+    : undefined;
+
+  const BOTTOM_TABS: { key: BottomTab; label: string; icon: typeof History }[] = [
+    { key: 'activity', label: 'Activity', icon: History },
+    { key: 'comments', label: 'Comments', icon: MessageCircle },
+    { key: 'stats', label: 'Stats', icon: BarChart3 },
+    { key: 'rules', label: 'Rules', icon: BookOpen },
+  ];
+
   return (
     <div className="min-h-screen overflow-x-hidden selection:bg-white selection:text-black">
       <Header />
-      <DoodleStrip />
 
-      <main className="relative pb-24 pt-28 sm:pt-30">
-        <div className="pointer-events-none absolute inset-0 -z-10 bg-[#050505]" />
-        <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.045),transparent_42%),radial-gradient(circle_at_bottom,rgba(255,255,255,0.02),transparent_38%)]" />
+      {/* Win/Lose notification */}
+      <AnimatePresence>
+        {notification && (
+          <motion.div
+            initial={{ y: -80, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: -80, opacity: 0 }}
+            transition={{ type: 'spring', damping: 20 }}
+            className="fixed top-20 left-1/2 -translate-x-1/2 z-[55]"
+          >
+            <div className={`flex items-center gap-3 px-6 py-3.5 rounded-2xl border backdrop-blur-xl shadow-2xl ${notification.type === 'win'
+              ? 'bg-new-mint/15 border-new-mint/30 shadow-new-mint/10'
+              : 'bg-off-red/15 border-off-red/30 shadow-off-red/10'
+              }`}>
+              {notification.type === 'win' ? (
+                <Trophy className="w-5 h-5 text-new-mint" />
+              ) : (
+                <XCircle className="w-5 h-5 text-off-red" />
+              )}
+              <div>
+                <span className={`text-sm font-bold ${notification.type === 'win' ? 'text-new-mint' : 'text-off-red'}`}>
+                  {notification.type === 'win' ? 'You Won!' : 'Round Lost'}
+                </span>
+                <span className="text-xs text-gray-400 ml-2">
+                  Round #{notification.roundId} —{' '}
+                  {notification.type === 'win'
+                    ? `+${formatPred(notification.amount)} USDCx`
+                    : `-${formatPred(notification.amount)} USDCx`
+                  }
+                </span>
+              </div>
+              {notification.type === 'win' && (
+                <span className="text-xs font-bold text-new-mint/60 ml-2">Claim in history</span>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <DoodleStrip />
+      <main className="pt-28 pb-24 sm:pb-12 relative">
         <motion.div
-          className="mx-auto max-w-[1400px] px-4 sm:px-6"
+          className="max-w-[1400px] mx-auto px-4 sm:px-6"
           initial="hidden"
           animate="visible"
           variants={{
             hidden: { opacity: 0 },
-            visible: { opacity: 1, transition: { staggerChildren: 0.05 } },
+            visible: {
+              opacity: 1,
+              transition: { staggerChildren: 0.1 }
+            }
           }}
         >
+
           <motion.section
             variants={{
-              hidden: { opacity: 0, y: 16 },
-              visible: { opacity: 1, y: 0, transition: { type: 'spring', damping: 24, stiffness: 220 } },
+              hidden: { opacity: 0, y: 24 },
+              visible: { opacity: 1, y: 0, transition: { type: 'spring', damping: 24, stiffness: 220 } }
             }}
-            className="mb-5 rounded-[1.9rem] border border-white/7 bg-neutral-950/75 p-4 sm:p-5"
+            className="mb-6 rounded-[2rem] border border-white/7 bg-neutral-950/75 p-5 sm:p-6"
           >
-            <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-              <div>
-                <h1 className="text-2xl font-black tracking-tight text-white sm:text-3xl">Markets</h1>
+            <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+              <div className="max-w-3xl">
+                <div className="mb-3 flex flex-wrap items-center gap-2">
+                  <span className="rounded-full border border-new-mint/20 bg-new-mint/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.24em] text-new-mint">
+                    DART v13
+                  </span>
+                  <span className="rounded-full border border-off-blue/20 bg-off-blue/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.24em] text-off-blue">
+                    Autonomous mirror markets
+                  </span>
+                  <span className="rounded-full border border-white/8 bg-white/[0.03] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.24em] text-gray-300">
+                    {mirrorCreateOnChain ? 'On-chain mirroring enabled' : 'Catalog + trading mode'}
+                  </span>
+                </div>
+
+                <h1 className="text-3xl font-black tracking-tight text-white sm:text-4xl">
+                  Private execution for public markets.
+                </h1>
+                <p className="mt-3 max-w-2xl text-sm leading-relaxed text-gray-400 sm:text-base">
+                  DART mirrors high-signal public markets into Aleo-native private rooms. In v13, bet direction stays hidden during active betting,
+                  payouts settle to shielded USDCx records, and cancelled markets can be refunded privately.
+                </p>
+
+                <div className="mt-4 flex flex-wrap items-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em]">
+                  <span className="rounded-full border border-white/8 bg-white/[0.03] px-3 py-1 text-gray-300">Hidden-side betting</span>
+                  <span className="rounded-full border border-white/8 bg-white/[0.03] px-3 py-1 text-gray-300">Shielded payouts</span>
+                  <span className="rounded-full border border-white/8 bg-white/[0.03] px-3 py-1 text-gray-300">Private rooms</span>
+                  <span className="rounded-full border border-white/8 bg-white/[0.03] px-3 py-1 text-gray-300">Auto-mirrored from Polymarket</span>
+                </div>
               </div>
 
-              <div className="flex flex-col gap-3 sm:flex-row">
+              <div className="flex flex-col gap-3 xl:min-w-[280px] xl:items-end">
                 {address && (
-                  <div className="rounded-[1.35rem] border border-white/8 bg-black/35 px-4 py-3">
-                    <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.22em] text-gray-500">Balance</p>
-                    <TokenBalance refreshTrigger={mintTrigger} />
+                  <div className="rounded-2xl border border-white/7 bg-black/30 px-4 py-3">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-gray-500">Public wallet balance</p>
+                    <div className="mt-2">
+                      <TokenBalance refreshTrigger={mintTrigger} />
+                    </div>
                   </div>
                 )}
+
+                <button
+                  onClick={() => setShowLegacyTrader((prev) => !prev)}
+                  className="inline-flex items-center gap-2 rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3 text-xs font-bold uppercase tracking-[0.2em] text-gray-300 transition-colors hover:text-white"
+                >
+                  {showLegacyTrader ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                  {showLegacyTrader ? 'Hide Legacy BTC Trader' : 'Show Legacy BTC Trader'}
+                </button>
               </div>
             </div>
+          </motion.section>
 
-            <div className="mb-4 flex flex-wrap items-center gap-2">
-              {CATEGORY_BUCKETS.map((category) => (
+          <PrivateRoomsPanel
+            activeRoomId={activeRoomId}
+            unlockedRooms={unlockedRooms}
+            onSelectRoom={setActiveRoomId}
+            onUnlockRoom={(roomId, code) => {
+              const ok = unlockRoom(roomId, code);
+              if (ok) {
+                setUnlockedRooms(loadUnlockedRooms());
+              }
+              return ok;
+            }}
+          />
+
+          <MirrorQueuePanel
+            markets={visibleMirrorMarkets}
+            loading={mirrorLoading}
+            lastSyncAt={mirrorLastSyncAt}
+            createOnChain={mirrorCreateOnChain}
+            selectedMarketId={selectedMirrorMarketId}
+            onSelectMarket={(market) => setSelectedMirrorMarketId(market.marketId)}
+          />
+
+          <MirrorTradePanel
+            market={selectedMirrorMarket}
+            roomId={activeRoomId}
+            roomLocked={selectedRoomLocked}
+            onSuccess={() => {
+              setMintTrigger((prev) => prev + 1);
+            }}
+          />
+
+          {showLegacyTrader && (
+          <>
+          {/* Top bar: Duration tabs + Balance */}
+          <motion.div
+            variants={{
+              hidden: { opacity: 0, y: 30 },
+              visible: { opacity: 1, y: 0, transition: { type: 'spring', damping: 25, stiffness: 200 } }
+            }}
+            className="flex items-center justify-between gap-3 mb-6"
+          >
+            <div className="flex items-center gap-1.5 sm:gap-3 overflow-x-auto scrollbar-hide">
+              <div className="flex items-center gap-2 mr-1 sm:mr-3 flex-shrink-0">
+                <BitcoinIcon className="w-5 h-5 sm:w-7 sm:h-7" />
+                <span className="text-base font-black uppercase tracking-tight text-white hidden sm:inline">BTC</span>
+              </div>
+              <Timer className="w-3.5 h-3.5 text-gray-500 flex-shrink-0 hidden sm:block" />
+              {DURATION_OPTIONS.map((opt) => (
                 <button
-                  key={category.id}
-                  onClick={() => setCategoryFilter(category.id)}
-                  className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-[10px] font-bold uppercase tracking-[0.22em] transition-colors ${
-                    categoryFilter === category.id
-                      ? 'border-white bg-white text-black'
-                      : 'border-white/8 bg-white/[0.03] text-gray-400 hover:text-white'
-                  }`}
+                  key={opt.label}
+                  onClick={() => setSelectedDuration(opt.label)}
+                  className={`px-2.5 sm:px-5 py-1.5 sm:py-2 rounded-lg text-[11px] sm:text-xs font-bold tracking-wide transition-all flex-shrink-0 ${selectedDuration === opt.label
+                    ? 'bg-new-mint/15 text-new-mint border border-new-mint/30'
+                    : 'bg-white/[0.03] text-gray-500 border border-white/5 hover:text-white hover:bg-white/5'
+                    }`}
                 >
-                  <span>{category.label}</span>
-                  <span className={`rounded-full px-2 py-0.5 text-[9px] tracking-[0.18em] ${
-                    categoryFilter === category.id ? 'bg-black/10 text-black/70' : 'bg-black/25 text-gray-500'
-                  }`}>
-                    {categoryCounts[category.id]}
-                  </span>
+                  {opt.label.replace(' Minutes', 'm').replace(' Minute', 'm').replace(' Hour', 'h')}
                 </button>
               ))}
             </div>
 
-            <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto_auto]">
-              <label className="flex items-center gap-3 rounded-[1.35rem] border border-white/8 bg-black/35 px-4 py-3">
-                <Search className="h-4 w-4 text-gray-500" />
-                <input
-                  value={searchQuery}
-                  onChange={(event) => setSearchQuery(event.target.value)}
-                  placeholder="Search markets"
-                  className="w-full bg-transparent text-sm text-white outline-none placeholder:text-gray-600"
-                />
-              </label>
+            {address && (
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <TokenBalance refreshTrigger={mintTrigger} />
+              </div>
+            )}
+          </motion.div>
 
-              <div className="flex items-center gap-2 rounded-[1.35rem] border border-white/8 bg-black/35 px-3 py-2">
-                {(['all', 'live', 'queued'] as const).map((filter) => (
+          {/* Scrolling ticker tape */}
+          <div className="-mx-4 sm:-mx-6">
+            <TickerTape />
+          </div>
+
+          {/* Faucet */}
+          {address && (
+            <motion.div
+              variants={{
+                hidden: { opacity: 0, y: 30 },
+                visible: { opacity: 1, y: 0, transition: { type: 'spring', damping: 25, stiffness: 200 } }
+              }}
+              className="mb-5"
+            >
+              <TokenFaucet onMinted={() => setMintTrigger(prev => prev + 1)} />
+            </motion.div>
+          )}
+
+          {/* Two-column: Card + Sidebar */}
+          <motion.div
+            variants={{
+              hidden: { opacity: 0, scale: 0.95 },
+              visible: { opacity: 1, scale: 1, transition: { type: 'spring', damping: 25, stiffness: 200 } }
+            }}
+            className="flex gap-6"
+          >
+            {/* Main content */}
+            <div className="flex-1 min-w-0">
+              {/* Main Trading Card */}
+              {loading ? (
+                <div className="bg-neutral-900/50 border border-white/5 rounded-3xl p-12 text-center">
+                  <Activity className="w-8 h-8 text-gray-600 mx-auto mb-3 animate-pulse" />
+                  <p className="text-gray-500">Fetching rounds from chain...</p>
+                </div>
+              ) : roundMatchesTab && activeRound ? (
+                <motion.div
+                  key={activeRound.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.5 }}
+                >
+                  <TradingCard
+                    round={activeRound}
+                    userYesDeposit={currentPosition?.yesDeposit || 0}
+                    userNoDeposit={currentPosition?.noDeposit || 0}
+                  />
+                </motion.div>
+              ) : (
+                <WaitingState />
+              )}
+
+              {/* Mobile bet panel */}
+              {roundMatchesTab && activeRound && (
+                <div className="lg:hidden mt-5">
+                  <BetSidebar round={activeRound} onSuccess={handleBetSuccess} />
+                </div>
+              )}
+
+              {/* Bottom tab bar */}
+              <div className="mt-8 flex items-center gap-1 border-b border-white/5 mb-4">
+                {BOTTOM_TABS.map(({ key, label, icon: Icon }) => (
                   <button
-                    key={filter}
-                    onClick={() => setStatusFilter(filter)}
-                    className={`rounded-full px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.22em] transition-colors ${
-                      statusFilter === filter ? 'bg-white text-black' : 'text-gray-400 hover:text-white'
-                    }`}
+                    key={key}
+                    onClick={() => setBottomTab(key)}
+                    className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-4 py-2.5 text-[11px] sm:text-xs font-bold transition-all border-b-2 ${bottomTab === key
+                      ? 'text-white border-new-mint'
+                      : 'text-gray-500 border-transparent hover:text-gray-300'
+                      }`}
                   >
-                    {filter}
+                    <Icon className="w-3.5 h-3.5" />
+                    {label}
                   </button>
                 ))}
               </div>
 
-              <Link
-                href="/markets/btc"
-                className="group hidden items-center justify-between gap-3 rounded-[1.35rem] border border-white/8 bg-white/[0.03] px-4 py-3 transition-colors hover:border-white/16 lg:flex"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full border border-new-mint/20 bg-new-mint/10">
-                    <Sparkles className="h-4 w-4 text-new-mint" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold text-white">BTC Arena</p>
-                    <p className="text-xs text-gray-500">5-minute route</p>
-                  </div>
-                </div>
-                <ArrowUpRight className="h-4 w-4 text-gray-400 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-white" />
-              </Link>
-            </div>
-          </motion.section>
+              {/* Bottom tab content */}
+              <div className="min-h-[200px]">
+                {bottomTab === 'activity' && (
+                  <RoundHistory
+                    rounds={pastRounds}
+                    positions={positions}
+                    onClaim={handleClaim}
+                  />
+                )}
 
-          <motion.section
-            variants={{
-              hidden: { opacity: 0, y: 16 },
-              visible: { opacity: 1, y: 0, transition: { type: 'spring', damping: 24, stiffness: 220 } },
-            }}
-            className="mb-6 grid gap-5 xl:grid-cols-[minmax(0,1.45fr)_340px]"
-          >
-            <div className="flex h-full flex-col rounded-[1.9rem] border border-white/7 bg-neutral-950/75 p-5 sm:p-6">
-              <div className="mb-3 flex flex-wrap items-center gap-2">
-                <span className="rounded-full border border-white/8 bg-white/[0.03] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.24em] text-gray-300">
-                  Featured
-                </span>
-                <span className="rounded-full border border-[#f59e0b]/15 bg-[#f59e0b]/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.24em] text-[#fbbf24]">
-                  BTC 5m
-                </span>
-                <span className={`rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.24em] ${
-                  btcConnected
-                    ? 'border-new-mint/20 bg-new-mint/10 text-new-mint'
-                    : 'border-white/8 bg-white/[0.03] text-gray-400'
-                }`}>
-                  {btcConnected ? 'Pyth live' : 'Connecting'}
-                </span>
-              </div>
+                {bottomTab === 'comments' && (
+                  <Comments roundId={activeRound?.id || 0} />
+                )}
 
-              <div className="flex flex-1 flex-col rounded-[1.5rem] border border-white/6 bg-black/35 p-5">
-                <div className="mb-4 flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                  <div className="max-w-4xl">
-                    <h2 className="text-3xl font-black leading-tight text-white">
-                      Bitcoin up or down in 5 minutes?
-                    </h2>
-                    <p className="mt-3 max-w-3xl text-sm leading-relaxed text-gray-400">
-                      Live BTC/USD is streamed from Pyth. Enter the classic arena to trade the next five-minute move with the dedicated BTC route.
-                    </p>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <span className="rounded-full bg-white/[0.04] px-3 py-2 text-sm font-bold text-white">
-                        <span className="mr-2 text-[10px] uppercase tracking-[0.22em] text-gray-500">BTC</span>
-                        {btcPriceLabel}
-                      </span>
-                      <span className={`rounded-full px-3 py-2 text-sm font-bold ${
-                        change24h >= 0 ? 'bg-new-mint/12 text-white' : 'bg-off-red/12 text-white'
-                      }`}>
-                        <span className={`mr-2 text-[10px] uppercase tracking-[0.22em] ${change24h >= 0 ? 'text-new-mint' : 'text-off-red'}`}>
-                          24h
-                        </span>
-                        <span className={change24h >= 0 ? 'text-new-mint' : 'text-off-red'}>{btcChangeLabel}</span>
-                      </span>
-                      <span className="rounded-full border border-white/8 bg-white/[0.03] px-3 py-2 text-[11px] font-bold uppercase tracking-[0.2em] text-gray-300">
-                        Pyth BTC/USD
-                      </span>
+                {bottomTab === 'stats' && (
+                  <div className="space-y-4">
+                    {address && positions.length > 0 ? (
+                      <>
+                        <PredictionStats rounds={pastRounds} positions={positions} />
+                        <PnLChart rounds={pastRounds} positions={positions} />
+                      </>
+                    ) : (
+                      <div className="text-center py-12">
+                        <BarChart3 className="w-8 h-8 text-gray-600 mx-auto mb-3" />
+                        <p className="text-gray-500 text-sm">
+                          {address ? 'Place some bets to see your stats' : 'Connect wallet to see stats'}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* BTC / Pool stats */}
+                    {activeRound && (
+                      <div className="bg-neutral-900/40 border border-white/5 rounded-xl p-4 space-y-3">
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs text-gray-500">BTC 24h</span>
+                          <span className={`text-xs font-mono font-bold ${change24h >= 0 ? 'text-new-mint' : 'text-off-red'}`}>
+                            {change24h >= 0 ? '+' : ''}{change24h.toFixed(2)}%
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs text-gray-500">Pool</span>
+                          <span className="text-xs font-mono font-bold text-new-mint">
+                            {formatPred(activeRound.totalPool)} USDCx
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs text-gray-500">Fee</span>
+                          <span className="text-xs font-bold text-gray-400">10%</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {bottomTab === 'rules' && (
+                  <div className="bg-neutral-900/40 border border-white/5 rounded-xl p-5 space-y-4">
+                    <h4 className="text-sm font-bold text-white">How it works</h4>
+                    <div className="space-y-3 text-[13px] text-gray-400 leading-relaxed">
+                      <p>
+                        Each round sets a <span className="text-new-blue font-bold">target BTC price</span>.
+                        Predict whether BTC will be at or above the target when the round ends.
+                      </p>
+                      <p>
+                        Resolves <span className="text-new-mint font-bold">YES</span> if BTC price at round end
+                        is greater than or equal to the target price. Otherwise resolves{' '}
+                        <span className="text-off-red font-bold">NO</span>.
+                      </p>
+                      <p>
+                        Winners split the pool proportionally (minus <span className="text-white font-bold">10% fee</span>).
+                        Stake with <span className="text-white font-bold">USDCx stablecoin</span>.
+                        Your bets are encrypted as private Aleo records.
+                      </p>
+                      <div className="border-t border-white/5 pt-3 space-y-2 text-xs text-gray-500">
+                        <div className="flex justify-between">
+                          <span>Platform fee</span>
+                          <span className="text-white font-bold">10%</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Token</span>
+                          <span className="text-white font-bold">USDCx</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Network</span>
+                          <span className="text-white font-bold">Aleo Testnet</span>
+                        </div>
+                        <div className="border-t border-white/5 pt-2 mt-2 space-y-2">
+                          <div className="flex justify-between items-center">
+                            <span>Bet Privacy</span>
+                            <span className="flex items-center gap-1 text-sky-400 font-bold"><Shield className="w-3 h-3" /> Encrypted</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span>Identity</span>
+                            <span className="text-sky-400 font-bold">BHP256 Hashed</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span>Claims</span>
+                            <span className="text-sky-400 font-bold">ZK-Verified</span>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
+                )}
+              </div>
 
-                  <div className="flex flex-wrap items-center gap-3">
-                    <Link
-                      href="/markets/btc"
-                      className="rounded-full bg-white px-4 py-2 text-[11px] font-bold uppercase tracking-[0.22em] text-black"
-                    >
-                      Open BTC
-                    </Link>
-                    <a
-                      href="https://www.pyth.network"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="rounded-full border border-white/8 bg-white/[0.03] px-4 py-2 text-[11px] font-bold uppercase tracking-[0.22em] text-gray-300 transition-colors hover:text-white"
-                    >
-                      View Pyth
-                    </a>
-                  </div>
-                </div>
-
-                <div className="min-h-[420px] flex-1 overflow-hidden rounded-[1.25rem] border border-white/6 bg-black/60">
-                  <LiveBtcChart height={420} />
-                </div>
+              {/* BTC News Feed — mobile */}
+              <div className="lg:hidden">
+                <NewsFeed />
               </div>
             </div>
 
-            <NewsFeed className="mt-0 sm:mt-0" />
-          </motion.section>
-
-          <motion.section
-            variants={{
-              hidden: { opacity: 0, y: 16 },
-              visible: { opacity: 1, y: 0, transition: { type: 'spring', damping: 24, stiffness: 220 } },
-            }}
-            className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_390px]"
-          >
-            <div className="rounded-[1.9rem] border border-white/7 bg-neutral-950/75 p-5 sm:p-6">
-              <div className="mb-4 flex flex-col gap-4">
-                <div>
-                  <h2 className="text-2xl font-black text-white">All markets</h2>
-                  <p className="mt-1 text-sm text-gray-500">
-                    {visibleMirrorMarkets.length} shown in {CATEGORY_BUCKETS.find((bucket) => bucket.id === categoryFilter)?.label.toLowerCase()}
-                  </p>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2">
-                  {([
-                    ['volume', 'Highest volume'],
-                    ['ending', 'Ending soon'],
-                    ['signal', 'Strongest signal'],
-                  ] as const).map(([value, label]) => (
-                    <button
-                      key={value}
-                      onClick={() => setSortBy(value)}
-                      className={`rounded-full border px-3 py-2 text-[10px] font-bold uppercase tracking-[0.22em] transition-colors ${
-                        sortBy === value
-                          ? 'border-new-mint/20 bg-new-mint/10 text-new-mint'
-                          : 'border-white/8 bg-white/[0.03] text-gray-400 hover:text-white'
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
+            {/* Sidebar — bet panel + news (desktop only) */}
+            {roundMatchesTab && activeRound && (
+              <div className="hidden lg:block w-[340px] flex-shrink-0">
+                <BetSidebar round={activeRound} onSuccess={handleBetSuccess} />
+                <NewsFeed />
               </div>
-
-              {mirrorLoading && visibleMirrorMarkets.length === 0 ? (
-                <div className="rounded-[1.5rem] border border-white/6 bg-black/35 px-6 py-16 text-center text-sm text-gray-500">
-                  Loading market board...
-                </div>
-              ) : visibleMirrorMarkets.length === 0 ? (
-                <div className="rounded-[1.5rem] border border-white/6 bg-black/35 px-6 py-16 text-center text-sm text-gray-500">
-                  No markets match the current filters.
-                </div>
-              ) : (
-                <div className="grid items-start gap-5 md:grid-cols-2 2xl:grid-cols-3">
-                  {visibleMirrorMarkets.map((market) => (
-                    <MirrorMarketCard
-                      key={market.marketId}
-                      market={market}
-                      selected={selectedMirrorMarketId === market.marketId}
-                      activeSide={selectedMirrorMarketId === market.marketId ? selectedTradeSide : null}
-                      onSelect={(candidate) => setSelectedMirrorMarketId(candidate.marketId)}
-                      onChooseSide={handleChooseSide}
-                      roomLocked={false}
-                      roomId="public"
-                      onTradeSuccess={() => {
-                        setMintTrigger((prev) => prev + 1);
-                      }}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div ref={tradePanelRef}>
-              <MirrorTradePanel
-                className="xl:sticky xl:top-28 xl:self-start"
-                compact
-                market={selectedMirrorMarket}
-                roomId="public"
-                roomLocked={false}
-                preferredSide={selectedTradeSide}
-                onSuccess={() => {
-                  setMintTrigger((prev) => prev + 1);
-                }}
-              />
-            </div>
-          </motion.section>
+            )}
+          </motion.div>
+          </>
+          )}
         </motion.div>
       </main>
     </div>

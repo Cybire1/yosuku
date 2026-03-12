@@ -35,6 +35,7 @@ import { fetchRound, loadPositions } from '@/lib/roundHelpers';
 import { executeWithRetry } from '@/lib/walletExecution';
 import ReputationCard from '@/components/ReputationCard';
 import MirrorPortfolioPanel from '@/components/MirrorPortfolioPanel';
+import { loadMirrorPositions } from '@/lib/mirrorMarkets';
 
 export default function PortfolioPage() {
   const router = useRouter();
@@ -45,9 +46,11 @@ export default function PortfolioPage() {
   const [claimingId, setClaimingId] = useState<number | null>(null);
   const [mounted, setMounted] = useState(false);
   const [reputation, setReputation] = useState<ReputationData | null>(null);
+  const [hasMirrorPositions, setHasMirrorPositions] = useState(false);
 
   useEffect(() => {
     setMounted(true);
+    try { setHasMirrorPositions(loadMirrorPositions().length > 0); } catch {}
   }, []);
 
   const scan = useCallback(async () => {
@@ -273,7 +276,7 @@ export default function PortfolioPage() {
                 Loading...
               </p>
             </div>
-          ) : positions.length === 0 ? (
+          ) : positions.length === 0 && !hasMirrorPositions ? (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}

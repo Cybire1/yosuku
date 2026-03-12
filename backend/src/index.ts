@@ -5,6 +5,7 @@ import { startPriceFeed, getBtcPrice } from './price.js';
 import { getBlockHeight } from './aleo.js';
 import { startRoundManager, getCurrentRoundId, getRoundStatus } from './round-manager.js';
 import { betTrackerRouter } from './bet-tracker.js';
+import { getMirrorCatalog, getMirrorStatus, startMirrorManager, syncMirrorCatalog } from './mirror-manager.js';
 
 const app = express();
 app.use(cors());
@@ -20,16 +21,19 @@ app.get('/health', async (_req, res) => {
       status: 'healthy',
       currentRoundId: getCurrentRoundId(),
       roundStatus: getRoundStatus(),
+      mirror: getMirrorStatus(),
       btcPrice: getBtcPrice(),
       blockHeight,
       uptime: Math.floor((Date.now() - startTime) / 1000),
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
     res.status(500).json({
       status: 'degraded',
-      error: err.message,
+      error: message,
       currentRoundId: getCurrentRoundId(),
       roundStatus: getRoundStatus(),
+      mirror: getMirrorStatus(),
       btcPrice: getBtcPrice(),
       uptime: Math.floor((Date.now() - startTime) / 1000),
     });
@@ -37,20 +41,44 @@ app.get('/health', async (_req, res) => {
 });
 
 app.get('/', (_req, res) => {
-  res.json({ service: 'dart-resolver', version: '10.0.0' });
+  res.json({ service: 'dart-resolver', version: '13.0.0', mirror: getMirrorStatus() });
 });
 
 // ── Bet Tracker (dark pool accumulator) ─────────────────
 app.use(betTrackerRouter);
+
+// ── Polymarket mirror engine ────────────────────────────
+app.get('/api/mirrors', (_req, res) => {
+  res.json({
+    success: true,
+    status: getMirrorStatus(),
+    markets: getMirrorCatalog(),
+    count: getMirrorCatalog().length,
+  });
+});
+
+app.post('/api/mirrors/sync', async (_req, res) => {
+  try {
+    const summary = await syncMirrorCatalog('manual');
+    res.json({ success: true, summary, status: getMirrorStatus(), markets: getMirrorCatalog() });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Mirror sync failed';
+    res.status(500).json({
+      success: false,
+      error: message,
+      status: getMirrorStatus(),
+    });
+  }
+});
 
 // ── Start ───────────────────────────────────────────────
 
 async function main(): Promise<void> {
   console.log(`
 ╔═══════════════════════════════════════╗
-║       DART Auto-Resolver v10.0        ║
-║   BTC Prediction Market on Aleo       ║
-║   btc_pred_v10 (fixed-odds, escrow)   ║
+║      DART Resolver + Mirror v13       ║
+║  Hidden-Side Mirror Markets on Aleo   ║
+║  btc_pred_v8 + dart_mirror_v13        ║
 ╠═══════════════════════════════════════╣
 ║  Duration:  ${config.roundIntervalSecs}s (${config.roundIntervalSecs / 60} min)              ║
 ║  Blocks:    ${config.blocksPerRound} per round               ║
@@ -74,6 +102,9 @@ async function main(): Promise<void> {
 
   // 4. Start round manager (main tick loop)
   await startRoundManager();
+
+  // 5. Start mirror manager
+  await startMirrorManager();
 }
 
 main().catch((err) => {

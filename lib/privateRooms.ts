@@ -15,8 +15,8 @@ const UNLOCKED_ROOMS_KEY = 'dart_private_rooms';
 export const PRIVATE_ROOMS: PrivateRoom[] = [
   {
     id: 'public',
-    name: 'Open Feed',
-    description: 'Open Aleo markets visible to everyone.',
+    name: 'Public Feed',
+    description: 'Open benchmark markets visible to everyone.',
     privacy: 'public',
   },
   {
@@ -36,7 +36,7 @@ export const PRIVATE_ROOMS: PrivateRoom[] = [
   {
     id: 'signal-room',
     name: 'Signal Room',
-    description: 'Restricted room for high-sensitivity markets that should not sit in the open queue.',
+    description: 'Restricted room for private mirrors that should not sit in the public queue.',
     privacy: 'invite-only',
     code: 'DART-SIGNAL',
   },
@@ -76,18 +76,16 @@ export function getRoomIdsForMirrorMarket(market: MirrorMarketData): PrivateRoom
   if (isMajor) {
     return volume >= 100_000
       ? ['public', 'macro-desk', 'signal-room']
-      : ['public', 'macro-desk'];
+      : ['macro-desk', 'signal-room'];
   }
 
   if (isAlt) {
     return volume >= 50_000
       ? ['public', 'altcoin-war-room', 'signal-room']
-      : ['public', 'altcoin-war-room'];
+      : ['altcoin-war-room', 'signal-room'];
   }
 
-  // Default to public visibility so the mirror feed never looks empty.
-  // Private rooms remain useful as curated sub-feeds rather than hard gates.
-  return ['public', 'signal-room'];
+  return ['signal-room'];
 }
 
 export function isMirrorVisibleInRoom(

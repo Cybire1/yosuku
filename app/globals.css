@@ -1,4 +1,8 @@
-@import "tailwindcss";
+@import "tailwindcss" source(none);
+
+@source "./app";
+@source "./components";
+@source "./lib";
 
 @theme {
   --color-black: var(--background);
