@@ -173,11 +173,11 @@ export default function MirrorMarketCard({
         </span>
       </div>
 
-      <button onClick={() => onSelect?.(market)} className="block w-full text-left">
-        <h3 className="line-clamp-3 text-[1.55rem] font-black leading-[1.1] tracking-tight text-white">
+      <Link href={`/markets/${market.marketId}`} className="block w-full text-left">
+        <h3 className="line-clamp-3 text-[1.55rem] font-black leading-[1.1] tracking-tight text-white hover:text-new-mint transition-colors">
           {market.question}
         </h3>
-      </button>
+      </Link>
 
       <div className="mt-4 flex flex-wrap gap-2">
         <span
