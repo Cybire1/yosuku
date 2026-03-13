@@ -105,6 +105,11 @@ export async function fetchRound(roundId: number): Promise<RoundState | null> {
       deadline,
       durationMs,
       endTime,
+      yesMult: 0,
+      noMult: 0,
+      bankroll: 0,
+      yesLocked: 0,
+      noLocked: 0,
       yesPool,
       noPool,
       totalPool,
@@ -193,6 +198,16 @@ export function getBetCommitment(
 ): BetCommitmentData | null {
   const commitments = JSON.parse(localStorage.getItem('v8_commitments') || '{}');
   return commitments[`${address}_${roundId}`] ?? null;
+}
+
+// Get saved payout for a position (stored at bet time from on-chain multiplier)
+export function getSavedPayout(address: string, roundId: number): number {
+  const commitment = getBetCommitment(address, roundId);
+  if ((commitment as any)?.payout) return (commitment as any).payout;
+  const positions: { roundId: number; payout?: number }[] =
+    JSON.parse(localStorage.getItem('v10_positions') || '[]');
+  const match = positions.find(p => p.roundId === roundId);
+  return match?.payout ?? 0;
 }
 
 // Export all commitments for backup (salt loss = permanent fund lock)

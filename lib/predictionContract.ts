@@ -29,6 +29,10 @@ export const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localh
 export const ALEO_API_URL = 'https://api.explorer.provable.com/v1';
 export const ALEO_NETWORK = 'testnet';
 
+// Balance cache keys
+export const BALANCE_KEY = 'usdcx_balance';
+export const BALANCE_UPDATED_EVENT = 'dart:balance-updated';
+
 // Helper: format credits amount for display
 export function formatPred(microAmount: number): string {
   return (microAmount / PRED_MULTIPLIER).toLocaleString(undefined, {
@@ -150,6 +154,17 @@ export function calcOdds(yesPool: number, noPool: number): { yes: number; no: nu
   };
 }
 
+// Calculate display odds from multiplier (e.g. 18500 → "1.85x")
+export function formatMultiplier(multBps: number): string {
+  return (multBps / 10000).toFixed(2) + 'x';
+}
+
+// Calculate implied probability from multiplier (e.g. 18500 → 54.05%)
+export function impliedProb(multBps: number): number {
+  if (multBps <= 0) return 50;
+  return Math.round((10000 / multBps) * 100);
+}
+
 // Probability estimation using BTC volatility model
 // BTC_VOL ≈ 0.001 per minute (annualized ~75% vol)
 const BTC_VOL_PER_MIN = 0.001;
@@ -192,16 +207,21 @@ export const DURATION_OPTIONS = [
 
 export type DurationLabel = typeof DURATION_OPTIONS[number]['label'];
 
-// Round state interface
+// Round state interface — v10 fixed-odds model
 export interface RoundState {
   id: number;
   targetPrice: number;   // in cents
   deadline: number;       // block height
   durationMs: number;     // round duration in ms
   endTime: number;        // timestamp when round ends
-  yesPool: number;        // microcredits (0 during betting, revealed at resolution)
-  noPool: number;         // microcredits (0 during betting, revealed at resolution)
-  totalPool: number;      // dark pool: combined total (always visible)
+  yesMult: number;        // YES multiplier in basis points (18500 = 1.85x)
+  noMult: number;         // NO multiplier in basis points
+  bankroll: number;       // admin-funded bankroll (micro-USDCx)
+  totalPool: number;      // total premiums/stakes received
+  yesLocked: number;      // total YES locked payouts
+  noLocked: number;       // total NO locked payouts
+  yesPool: number;        // legacy alias for v8-style UI components
+  noPool: number;         // legacy alias for v8-style UI components
   resolved: boolean;
   outcome: boolean | null; // null if not resolved, true = YES won
 }

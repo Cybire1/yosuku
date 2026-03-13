@@ -73,10 +73,16 @@ const LiveDot = ({ cx, cy, index, total, color }: any) => {
 
 export default function LiveBtcChart({ targetPrice, height }: LiveBtcChartProps) {
   const { price } = useBtcPrice();
-  const [data, setData] = useState<PricePoint[]>(() => loadCachedData());
+  const [data, setData] = useState<PricePoint[]>([]);
   const priceRef = useRef(0);
 
   const targetUsd = targetPrice ? targetPrice / 100 : undefined;
+
+  // Hydrate from sessionStorage after mount
+  useEffect(() => {
+    const cached = loadCachedData();
+    if (cached.length > 0) setData(cached);
+  }, []);
 
   // Keep ref in sync with latest price
   useEffect(() => {

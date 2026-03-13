@@ -22,6 +22,9 @@ export interface MirrorMarketData {
   noMultiplierBps: number;
   volume: number;
   volume24hr: number;
+  volume1wk: number;
+  yesPriceChange24h: number;
+  yesPriceChange1w: number;
   liquidity: number;
   commentCount: number;
   hasLivePrice: boolean;
