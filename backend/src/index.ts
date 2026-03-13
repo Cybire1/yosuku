@@ -1,7 +1,9 @@
 import express from 'express';
 import cors from 'cors';
 import { config } from './config.js';
+import { startPriceFeed, getBtcPrice } from './price.js';
 import { getBlockHeight } from './aleo.js';
+import { startRoundManager, getCurrentRoundId, getRoundStatus } from './round-manager.js';
 import { betTrackerRouter } from './bet-tracker.js';
 import { getMirrorCatalog, getMirrorStatus, startMirrorManager, syncMirrorCatalog } from './mirror-manager.js';
 
@@ -17,7 +19,10 @@ app.get('/health', async (_req, res) => {
     const blockHeight = await getBlockHeight();
     res.json({
       status: 'healthy',
+      currentRoundId: getCurrentRoundId(),
+      roundStatus: getRoundStatus(),
       mirror: getMirrorStatus(),
+      btcPrice: getBtcPrice(),
       blockHeight,
       uptime: Math.floor((Date.now() - startTime) / 1000),
     });
@@ -26,7 +31,10 @@ app.get('/health', async (_req, res) => {
     res.status(500).json({
       status: 'degraded',
       error: message,
+      currentRoundId: getCurrentRoundId(),
+      roundStatus: getRoundStatus(),
       mirror: getMirrorStatus(),
+      btcPrice: getBtcPrice(),
       uptime: Math.floor((Date.now() - startTime) / 1000),
     });
   }
@@ -68,23 +76,35 @@ app.post('/api/mirrors/sync', async (_req, res) => {
 async function main(): Promise<void> {
   console.log(`
 ╔═══════════════════════════════════════╗
-║        DART Mirror Engine v13         ║
-║  Hidden-Side Mirror Markets on Aleo   ║
-║  dart_mirror_v13.aleo                 ║
+║      DART Resolver + Mirror v13       ║
+║  BTC Rounds + Polymarket Mirrors      ║
+║  btc_pred_v8 + dart_mirror_v13        ║
 ╠═══════════════════════════════════════╣
-║  Mirror limit: ${String(config.mirrorLimit).padEnd(4)} markets           ║
-║  Sync:   every ${config.mirrorSyncMs / 1000}s                ║
-║  Create: ${config.mirrorCreateOnChain ? 'on-chain' : 'catalog '}                    ║
-║  Resolve: ${config.mirrorResolveOnChain ? 'on-chain' : 'catalog '}                   ║
+║  Duration:  ${config.roundIntervalSecs}s (${config.roundIntervalSecs / 60} min)              ║
+║  Blocks:    ${config.blocksPerRound} per round               ║
+║  Poll:      ${config.pollIntervalMs / 1000}s interval               ║
+║  Seed:      ${config.seedAmount} micro-USDCx      ║
+║  Mirror:    ${String(config.mirrorLimit).padEnd(4)} markets           ║
+║  Price:     Pyth oracle               ║
 ╚═══════════════════════════════════════╝
 `);
 
-  // 1. Start Express server
+  // 1. Start price feed
+  startPriceFeed();
+
+  // 2. Wait for initial price
+  console.log('[Main] Waiting 3s for initial price feed...');
+  await new Promise((r) => setTimeout(r, 3000));
+
+  // 3. Start Express server
   app.listen(config.port, '0.0.0.0', () => {
     console.log(`[Main] Health endpoint: http://0.0.0.0:${config.port}/health`);
   });
 
-  // 2. Start mirror manager (Polymarket → Aleo)
+  // 4. Start round manager (BTC 5-min rounds)
+  await startRoundManager();
+
+  // 5. Start mirror manager (Polymarket → Aleo)
   await startMirrorManager();
 }
 
