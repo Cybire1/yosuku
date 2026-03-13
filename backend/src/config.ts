@@ -43,7 +43,7 @@ export const config = {
   tokenProgram: 'test_usdcx_stablecoin.aleo',
   mirrorEnabled: optionalBool('MIRROR_ENABLED', true),
   mirrorSyncMs: parseInt(optional('MIRROR_SYNC_MS', '300000'), 10),
-  mirrorLimit: parseInt(optional('MIRROR_LIMIT', '18'), 10),
+  mirrorLimit: parseInt(optional('MIRROR_LIMIT', '50'), 10),
   mirrorMinVolume: parseInt(optional('MIRROR_MIN_VOLUME', '50'), 10),
   mirrorMaxDurationSecs: parseInt(optional('MIRROR_MAX_DURATION_SECS', '5184000'), 10), // 60 days
   mirrorQuery: optional('MIRROR_QUERY', ''),

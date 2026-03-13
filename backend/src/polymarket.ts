@@ -264,7 +264,7 @@ async function fetchGammaMarkets(active: boolean, closed: boolean, limit: number
 
 export async function fetchMirrorCandidates(options: FetchMirrorOptions): Promise<MirrorCandidate[]> {
   const queryTerms = normalizeQueryTerms(options.query);
-  const fetchLimit = Math.max(options.limit * 4, options.closed ? 60 : 40);
+  const fetchLimit = Math.max(options.limit * 3, options.closed ? 100 : 100);
   const now = Date.now();
   const oneFutureMs = options.maxDurationSecs * 1000;
 
