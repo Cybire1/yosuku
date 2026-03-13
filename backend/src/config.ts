@@ -45,7 +45,7 @@ export const config = {
   mirrorSyncMs: parseInt(optional('MIRROR_SYNC_MS', '300000'), 10),
   mirrorLimit: parseInt(optional('MIRROR_LIMIT', '50'), 10),
   mirrorMinVolume: parseInt(optional('MIRROR_MIN_VOLUME', '50'), 10),
-  mirrorMaxDurationSecs: parseInt(optional('MIRROR_MAX_DURATION_SECS', '5184000'), 10), // 60 days
+  mirrorMaxDurationSecs: parseInt(optional('MIRROR_MAX_DURATION_SECS', '31536000'), 10), // 365 days
   mirrorQuery: optional('MIRROR_QUERY', ''),
   mirrorCreateOnChain: optionalBool('MIRROR_CREATE_ON_CHAIN', true),
   mirrorResolveOnChain: optionalBool('MIRROR_RESOLVE_ON_CHAIN', true),
