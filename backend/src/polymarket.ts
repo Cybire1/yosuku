@@ -95,6 +95,24 @@ function hashToField(value: string): { decimal: string; field: string } {
   };
 }
 
+const CATEGORY_RULES: [RegExp, string][] = [
+  [/\b(bitcoin|btc|ethereum|eth|crypto|solana|defi|nft|blockchain|altcoin|stablecoin|memecoin|dogecoin|xrp|binance|coinbase)\b/i, 'Crypto'],
+  [/\b(trump|biden|election|congress|senate|president|democrat|republican|gop|governor|vote|ballot|political|white house|cabinet|impeach|partisan)\b/i, 'Politics'],
+  [/\b(fed\b|interest rate|inflation|gdp|recession|stock market|nasdaq|dow jones|s&p|tariff|trade war|unemployment|cpi|fomc|treasury|economic)\b/i, 'Economics'],
+  [/\b(nba|nfl|mlb|nhl|fifa|world cup|premier league|champions league|super bowl|playoff|mvp|soccer|basketball|baseball|tennis|formula 1|ufc|boxing|olympics)\b/i, 'Sports'],
+  [/\b(openai|gpt|chatgpt|google|apple|microsoft|tesla|spacex|nvidia|semiconductor|artificial intelligence|agi|android|iphone)\b/i, 'Tech'],
+  [/\b(war|ceasefire|ukraine|russia|israel|gaza|nato|taiwan|missile|sanction|nuclear|invasion|troops)\b/i, 'Geopolitics'],
+  [/\b(oscar|grammy|album|movie|film|netflix|spotify|tiktok|youtube|celebrity|rapper|gta|rihanna|drake|kanye|taylor swift|emmy)\b/i, 'Entertainment'],
+];
+
+function inferCategory(question: string, description?: string): string {
+  const text = `${question} ${description || ''}`;
+  for (const [pattern, category] of CATEGORY_RULES) {
+    if (pattern.test(text)) return category;
+  }
+  return 'Other';
+}
+
 function deriveMirrorMarketId(sourceHash: string): string {
   const numeric = BigInt(sourceHash) % MIRROR_MARKET_ID_SPACE;
   return (numeric === 0n ? 1n : numeric).toString();
@@ -324,7 +342,7 @@ export async function fetchMirrorCandidates(options: FetchMirrorOptions): Promis
         slug: market.slug,
         question: market.question,
         description: market.description,
-        category: market.category || 'Other',
+        category: market.category || inferCategory(market.question, market.description),
         endDate: market.endDate,
         outcomeLabels,
         outcomePrices: [publicYesPrice, publicNoPrice] as [number, number],
