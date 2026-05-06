@@ -1,117 +1,72 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { motion, useMotionValue, useSpring } from 'framer-motion';
+import { useEffect, useRef } from 'react';
 
 export default function CustomCursor() {
-    const [isHovering, setIsHovering] = useState(false);
-    const [hoverText, setHoverText] = useState('');
+  const dotRef = useRef<HTMLDivElement>(null);
+  const ringRef = useRef<HTMLDivElement>(null);
 
-    // Track raw mouse position
-    const mouseX = useMotionValue(-100);
-    const mouseY = useMotionValue(-100);
+  useEffect(() => {
+    const dot = dotRef.current;
+    const ring = ringRef.current;
+    if (!dot || !ring) return;
 
-    // Smooth the mouse values for the main cursor dot
-    const springConfigDot = { damping: 25, stiffness: 300, mass: 0.5 };
-    const smoothX = useSpring(mouseX, springConfigDot);
-    const smoothY = useSpring(mouseY, springConfigDot);
+    let mx = window.innerWidth / 2;
+    let my = window.innerHeight / 2;
+    let rx = mx, ry = my;
+    let dx = mx, dy = my;
+    let animId: number;
 
-    // Smooth the mouse values for the larger ring ring
-    const springConfigRing = { damping: 20, stiffness: 150, mass: 0.8 };
-    const smoothRingX = useSpring(mouseX, springConfigRing);
-    const smoothRingY = useSpring(mouseY, springConfigRing);
+    const onMove = (e: MouseEvent) => {
+      mx = e.clientX;
+      my = e.clientY;
+    };
 
-    useEffect(() => {
-        // Hide default cursor
-        document.body.style.cursor = 'none';
+    const tick = () => {
+      rx += (mx - rx) * 0.18;
+      ry += (my - ry) * 0.18;
+      dx += (mx - dx) * 0.55;
+      dy += (my - dy) * 0.55;
+      dot.style.transform = `translate(${dx}px, ${dy}px) translate(-50%, -50%)`;
+      ring.style.transform = `translate(${rx}px, ${ry}px) translate(-50%, -50%)`;
+      animId = requestAnimationFrame(tick);
+    };
 
-        const handleMouseMove = (e: MouseEvent) => {
-            mouseX.set(e.clientX);
-            mouseY.set(e.clientY);
-        };
+    const onOver = (e: MouseEvent) => {
+      const t = (e.target as HTMLElement).closest?.('[data-cursor]') as HTMLElement | null;
+      if (!t) return;
+      if (t.dataset.cursor === 'up') {
+        ring.classList.add('up');
+        ring.classList.remove('hover');
+      } else if (t.dataset.cursor === 'hover') {
+        ring.classList.add('hover');
+        ring.classList.remove('up');
+      }
+    };
 
-        const handleMouseOver = (e: MouseEvent) => {
-            const target = e.target as HTMLElement;
-            // Check if we are hovering over an interactive element
-            const isInteractive = window.getComputedStyle(target).cursor === 'pointer' || target.tagName === 'A' || target.tagName === 'BUTTON';
+    const onOut = (e: MouseEvent) => {
+      const t = (e.target as HTMLElement).closest?.('[data-cursor]') as HTMLElement | null;
+      if (!t) return;
+      ring.classList.remove('hover', 'up');
+    };
 
-            // Look for a specific data attribute for custom cursor text
-            const customText = target.closest('[data-cursor-text]')?.getAttribute('data-cursor-text');
+    window.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseover', onOver);
+    document.addEventListener('mouseout', onOut);
+    animId = requestAnimationFrame(tick);
 
-            if (customText) {
-                setIsHovering(true);
-                setHoverText(customText);
-            } else if (isInteractive) {
-                setIsHovering(true);
-                setHoverText('');
-            } else {
-                setIsHovering(false);
-                setHoverText('');
-            }
-        };
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseover', onOver);
+      document.removeEventListener('mouseout', onOut);
+      cancelAnimationFrame(animId);
+    };
+  }, []);
 
-        window.addEventListener('mousemove', handleMouseMove);
-        window.addEventListener('mouseover', handleMouseOver);
-
-        return () => {
-            document.body.style.cursor = 'auto';
-            window.removeEventListener('mousemove', handleMouseMove);
-            window.removeEventListener('mouseover', handleMouseOver);
-        };
-    }, [mouseX, mouseY]);
-
-    return (
-        <>
-            {/* Small Leading Dot */}
-            <motion.div
-                className="fixed top-0 left-0 w-2 h-2 bg-white rounded-full pointer-events-none z-[100] mix-blend-difference"
-                style={{
-                    x: smoothX,
-                    y: smoothY,
-                    translateX: '-50%',
-                    translateY: '-50%',
-                }}
-                animate={{
-                    scale: isHovering ? 0 : 1,
-                    opacity: isHovering ? 0 : 1,
-                }}
-                transition={{ duration: 0.2 }}
-            />
-
-            {/* Outer Ring / Interaction Bubble */}
-            <motion.div
-                className="fixed top-0 left-0 flex items-center justify-center rounded-full pointer-events-none z-[99] border border-white/40 overflow-hidden mix-blend-difference bg-transparent backdrop-blur-[2px]"
-                style={{
-                    x: smoothRingX,
-                    y: smoothRingY,
-                    translateX: '-50%',
-                    translateY: '-50%',
-                    width: isHovering ? (hoverText ? 80 : 50) : 32,
-                    height: isHovering ? (hoverText ? 80 : 50) : 32,
-                    backgroundColor: isHovering ? 'rgba(255, 255, 255, 1)' : 'transparent',
-                    color: 'black',
-                }}
-                animate={{
-                    scale: isHovering ? 1.2 : 1,
-                }}
-                transition={{
-                    type: "spring",
-                    stiffness: 150,
-                    damping: 15,
-                    mass: 0.5
-                }}
-            >
-                {isHovering && hoverText && (
-                    <motion.span
-                        initial={{ opacity: 0, scale: 0.5 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, scale: 0.5 }}
-                        className="text-[10px] font-bold tracking-widest uppercase flex text-center leading-none"
-                    >
-                        {hoverText}
-                    </motion.span>
-                )}
-            </motion.div>
-        </>
-    );
+  return (
+    <>
+      <div ref={dotRef} className="cursor-dot" />
+      <div ref={ringRef} className="cursor-ring" />
+    </>
+  );
 }

@@ -1,42 +1,5 @@
-function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  return String(error ?? '');
-}
-
-function isRetryableWakeError(error: unknown): boolean {
-  const message = getErrorMessage(error).toLowerCase();
-
-  // Never retry user-meaningful failures.
-  const nonRetryablePatterns = [
-    'not_granted',
-    'permission',
-    'rejected',
-    'denied',
-    'insufficient',
-    'assert',
-    'execution failed',
-    'invalid',
-  ];
-
-  if (nonRetryablePatterns.some((pattern) => message.includes(pattern))) {
-    return false;
-  }
-
-  // Retry only on likely wallet wake-up / popup bootstrap failures.
-  const retryablePatterns = [
-    'no response',
-    'did not respond',
-    'wallet not ready',
-    'initializing',
-    'popup',
-  ];
-
-  return retryablePatterns.some((pattern) => message.includes(pattern));
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
+// Sui transaction execution wrapper
+// Simpler than Aleo — Sui txs are deterministic, minimal retry needed
 
 export async function executeWithRetry<T>(
   execute: () => Promise<T>,
@@ -48,13 +11,23 @@ export async function executeWithRetry<T>(
   try {
     return await execute();
   } catch (error) {
-    if (!isRetryableWakeError(error)) {
+    const message = error instanceof Error ? error.message.toLowerCase() : '';
+
+    // Don't retry user rejections or validation errors
+    const nonRetryable = [
+      'rejected',
+      'denied',
+      'cancelled',
+      'insufficient',
+      'user rejected',
+    ];
+    if (nonRetryable.some(p => message.includes(p))) {
       throw error;
     }
 
+    // Retry once for transient wallet errors
     options?.onRetry?.();
-    await sleep(options?.retryDelayMs ?? 1000);
-
+    await new Promise(r => setTimeout(r, options?.retryDelayMs ?? 1000));
     return execute();
   }
 }

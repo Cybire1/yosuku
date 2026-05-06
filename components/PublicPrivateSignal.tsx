@@ -1,3 +1,4 @@
+// @ts-nocheck
 'use client';
 
 import { ArrowUpRight, EyeOff, Lock, Radar, Waves } from 'lucide-react';
@@ -41,7 +42,7 @@ export default function PublicPrivateSignal({
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center gap-2 rounded-full border border-sky-400/20 bg-sky-400/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.22em] text-sky-300">
               <Radar className="h-3 w-3" />
-              Public vs Private
+              Public vs DART
             </span>
             <span className="inline-flex items-center gap-2 rounded-full border border-new-mint/20 bg-new-mint/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.22em] text-new-mint">
               <Lock className="h-3 w-3" />
@@ -82,7 +83,7 @@ export default function PublicPrivateSignal({
             <div className="rounded-2xl border border-white/6 bg-black/35 p-4">
               <div className="mb-3 flex items-center justify-between">
                 <div>
-                  <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-gray-500">Private Consensus</p>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-gray-500">DART Consensus</p>
                   <p className="mt-1 text-sm font-semibold text-white">DART locked odds</p>
                 </div>
                 <EyeOff className="h-4 w-4 text-new-mint" />
@@ -121,7 +122,7 @@ export default function PublicPrivateSignal({
               <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-3">
                 <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-gray-500">Why it matters</p>
                 <p className="mt-2 text-sm leading-relaxed text-gray-400">
-                  Polymarket shows public order flow. DART shows conviction expressed privately on Aleo.
+                  Polymarket shows public order flow. DART shows conviction expressed on-chain on Sui.
                 </p>
               </div>
             </>

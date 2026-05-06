@@ -1,9 +1,15 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Enable WASM support for @provablehq/wasm (Aleo BHP256 hashing)
   turbopack: {},
-  serverExternalPackages: ['@provablehq/wasm'],
+  async rewrites() {
+    return [
+      {
+        source: '/api/predict/:path*',
+        destination: 'https://predict-server.testnet.mystenlabs.com/:path*',
+      },
+    ];
+  },
 };
 
 export default nextConfig;

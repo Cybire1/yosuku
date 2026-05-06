@@ -1,5 +1,5 @@
 // Local storage for user positions
-// Since Aleo positions are private records, we track them locally
+// We track positions locally for quick UI access alongside on-chain data
 
 export interface StoredPosition {
   marketId: string;

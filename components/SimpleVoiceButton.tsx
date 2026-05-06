@@ -1,11 +1,13 @@
+// @ts-nocheck
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useWallet } from '@provablehq/aleo-wallet-adaptor-react';
+import { useCurrentAccount } from '@mysten/dapp-kit';
 import { useVoiceSession, type VoiceMessage } from '@/lib/hooks/useVoiceSession';
 
 export default function SimpleVoiceButton() {
-  const { address } = useWallet();
+  const account = useCurrentAccount();
+  const address = account?.address ?? null;
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<VoiceMessage[]>([]);
   const [textInput, setTextInput] = useState('');

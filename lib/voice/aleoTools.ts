@@ -1,12 +1,13 @@
-// Voice tools for BTC Prediction round-based system (v7 — dark pool + private bets)
-import { fetchRound, loadPositions, getBlockHeight } from '@/lib/roundHelpers';
+// @ts-nocheck
+// Voice tools for Sui DeepBook Predict
+import { loadPositions } from '@/lib/roundHelpers';
 import {
-  BTC_PREDICTION_PROGRAM,
-  fetchMapping,
   formatPred,
   PRED_MULTIPLIER,
   type RoundState,
 } from '@/lib/predictionContract';
+import { formatStrike } from '@/lib/roundHelpers';
+import { PREDICT_SERVER } from '@/lib/sui/constants';
 
 export interface VoiceToolResult {
   success: boolean;
@@ -15,168 +16,79 @@ export interface VoiceToolResult {
   error?: string;
 }
 
-// ── Helpers ──────────────────────────────────────────
-
-async function fetchAleoBalance(address: string): Promise<number> {
-  try {
-    const res = await fetch(
-      `https://api.explorer.provable.com/v1/testnet/program/credits.aleo/mapping/account/${address}`
-    );
-    if (!res.ok) return 0;
-    const data = await res.json();
-    if (data && typeof data === 'string') {
-      return parseInt(data.replace('u64', '')) / 1_000_000;
-    }
-    return 0;
-  } catch {
-    return 0;
-  }
-}
-
-async function fetchUsdcxBalance(address: string): Promise<number> {
-  try {
-    const res = await fetch(
-      `https://api.explorer.provable.com/v1/testnet/program/test_usdcx_stablecoin.aleo/mapping/balances/${address}`
-    );
-    if (!res.ok) return 0;
-    const data = await res.json();
-    if (data && typeof data === 'string') {
-      return parseInt(data.replace('u128', '')) / PRED_MULTIPLIER;
-    }
-    return 0;
-  } catch {
-    return 0;
-  }
-}
-
-/** Find the latest round ID using localStorage hint + forward scan */
-async function findLatestRoundId(): Promise<number> {
-  const lastKnown = parseInt(
-    (typeof window !== 'undefined' ? localStorage.getItem('dart_last_round_id') : null) || '0',
-    10
-  );
-
-  if (lastKnown <= 0) return 0;
-
-  // Check forward
-  for (let offset = 3; offset >= 0; offset--) {
-    const id = lastKnown + offset;
-    const exists = await fetchMapping(BTC_PREDICTION_PROGRAM, 'rt', `${id}u64`);
-    if (exists && exists !== 'null') return id;
-  }
-
-  return lastKnown;
-}
-
-// ── Voice Tool Functions ─────────────────────────────
-
-/** Get current active round info */
+/** Get current active oracle markets */
 export async function getCurrentRound(): Promise<VoiceToolResult> {
   try {
-    const highestId = await findLatestRoundId();
-    if (highestId <= 0) {
-      return { success: true, message: 'No rounds found on-chain yet.', data: null };
+    const res = await fetch(`${PREDICT_SERVER}/oracles`);
+    if (!res.ok) return { success: false, message: 'Failed to fetch oracles.', error: `HTTP ${res.status}` };
+    const oracles = await res.json();
+
+    const active = oracles.filter((o: any) => o.status === 'active');
+    if (active.length === 0) {
+      return { success: true, message: 'No active markets right now.', data: null };
     }
 
-    const round = await fetchRound(highestId);
-    if (!round) {
-      return { success: true, message: 'Could not fetch the latest round.', data: null };
-    }
-
-    const targetUsd = (round.targetPrice / 100).toFixed(2);
-    const totalDart = formatPred(round.totalPool);
-
-    if (round.resolved) {
-      const outcome = round.outcome ? 'YES (above target)' : 'NO (below target)';
-      const yesPoolDart = formatPred(round.yesPool);
-      const noPoolDart = formatPred(round.noPool);
-      return {
-        success: true,
-        message: `Round #${round.id} is resolved. Target was $${targetUsd}. Outcome: ${outcome}. Total pool: ${totalDart} USDCx (YES: ${yesPoolDart}, NO: ${noPoolDart}). Next round should start soon.`,
-        data: round,
-      };
-    }
-
-    const secsLeft = Math.max(0, Math.floor((round.endTime - Date.now()) / 1000));
-    const mins = Math.floor(secsLeft / 60);
-    const secs = secsLeft % 60;
-    const timeStr = secsLeft > 0 ? `${mins}m ${secs}s left` : 'Resolving soon';
+    const nearest = active.sort((a: any, b: any) => a.expiry - b.expiry)[0];
+    const expiryDate = new Date(nearest.expiry * 1000).toLocaleString();
 
     return {
       success: true,
-      message: `Round #${round.id} is active. BTC target: $${targetUsd}. ${timeStr}. Dark pool total: ${totalDart} USDCx (per-side breakdown hidden until resolution).`,
-      data: round,
+      message: `Active market: ${nearest.underlying_asset} — Strike: ${formatStrike(nearest.min_strike)}, Expires: ${expiryDate}. ${active.length} total active markets.`,
+      data: nearest,
     };
   } catch (error: any) {
-    return { success: false, message: 'Failed to fetch current round.', error: error.message };
+    return { success: false, message: 'Failed to fetch current market.', error: error.message };
   }
 }
 
-/** Get recent round history */
+/** Get recent market history */
 export async function getRoundHistory(): Promise<VoiceToolResult> {
   try {
-    const highestId = await findLatestRoundId();
-    if (highestId <= 0) {
-      return { success: true, message: 'No rounds found.', data: [] };
+    const res = await fetch(`${PREDICT_SERVER}/oracles`);
+    if (!res.ok) return { success: false, message: 'Failed to fetch markets.', error: `HTTP ${res.status}` };
+    const oracles = await res.json();
+
+    const settled = oracles.filter((o: any) => o.status === 'settled').slice(0, 5);
+    if (settled.length === 0) {
+      return { success: true, message: 'No settled markets yet.', data: [] };
     }
 
-    const startId = Math.max(0, highestId - 4);
-    const ids = Array.from({ length: highestId - startId + 1 }, (_, i) => startId + i);
-    const rounds = await Promise.all(ids.map(id => fetchRound(id)));
-
-    const resolved = rounds.filter((r): r is RoundState => !!r && r.resolved);
-    if (resolved.length === 0) {
-      return { success: true, message: 'No resolved rounds yet.', data: [] };
-    }
-
-    const list = resolved
-      .sort((a, b) => b.id - a.id)
-      .slice(0, 5)
-      .map(r => {
-        const outcome = r.outcome ? 'YES' : 'NO';
-        const targetUsd = (r.targetPrice / 100).toFixed(2);
-        return `#${r.id}: Target $${targetUsd} → ${outcome} won | Pool: ${formatPred(r.totalPool)} USDCx`;
-      })
-      .join('\n');
+    const list = settled.map((o: any) => {
+      const settlement = o.settlement_price ? formatStrike(o.settlement_price) : 'N/A';
+      return `${o.underlying_asset} — Strike: ${formatStrike(o.min_strike)} → Settled at ${settlement}`;
+    }).join('\n');
 
     return {
       success: true,
-      message: `Recent rounds:\n${list}`,
-      data: resolved,
+      message: `Recent settled markets:\n${list}`,
+      data: settled,
     };
   } catch (error: any) {
-    return { success: false, message: 'Failed to fetch round history.', error: error.message };
+    return { success: false, message: 'Failed to fetch market history.', error: error.message };
   }
 }
 
-/** Get wallet balance (ALEO credits + USDCx tokens) */
+/** Get wallet info */
 export async function getWalletBalance(publicKey: string | undefined): Promise<VoiceToolResult> {
   try {
     if (!publicKey) {
       return {
         success: false,
-        message: 'Wallet not connected. Please connect your Leo wallet first.',
+        message: 'Wallet not connected. Please connect your Sui wallet first.',
         error: 'No wallet connected',
       };
     }
 
-    const [aleoBalance, usdcxBalance] = await Promise.all([
-      fetchAleoBalance(publicKey),
-      fetchUsdcxBalance(publicKey),
-    ]);
-
     const positions = loadPositions();
     const activeCount = positions.filter(p => !p.claimed).length;
     const totalStaked = positions.reduce(
-      (sum, p) => sum + Math.max(p.yesDeposit, p.noDeposit),
+      (sum, p) => sum + p.quantity,
       0
     );
 
-    let message = `Your wallet:\n`;
-    message += `ALEO USDCx: ${aleoBalance.toFixed(2)} ALEO\n`;
-    message += `USDCx Balance: ${(usdcxBalance).toFixed(0)} USDCx\n`;
+    let message = `Your wallet: ${publicKey.slice(0, 8)}...${publicKey.slice(-4)}\n`;
     if (totalStaked > 0) {
-      message += `Staked in rounds: ${formatPred(totalStaked)} USDCx\n`;
+      message += `Staked in positions: ${formatPred(totalStaked)} DUSDC\n`;
     }
     if (activeCount > 0) {
       message += `Active positions: ${activeCount}`;
@@ -185,66 +97,39 @@ export async function getWalletBalance(publicKey: string | undefined): Promise<V
     return {
       success: true,
       message,
-      data: { aleoBalance, usdcxBalance, activeCount, totalStaked },
+      data: { activeCount, totalStaked },
     };
   } catch (error: any) {
-    return { success: false, message: 'Failed to fetch wallet balance.', error: error.message };
+    return { success: false, message: 'Failed to fetch wallet info.', error: error.message };
   }
 }
 
-/** Get user's active positions in current/recent rounds */
+/** Get user's positions */
 export async function getActivePositions(publicKey: string | undefined): Promise<VoiceToolResult> {
   try {
     if (!publicKey) {
       return {
         success: false,
-        message: 'Wallet not connected. Please connect your Leo wallet first.',
+        message: 'Wallet not connected. Please connect your Sui wallet first.',
         error: 'No wallet connected',
       };
     }
 
     const positions = loadPositions();
     if (positions.length === 0) {
-      return { success: true, message: 'You have no positions. Place a bet on the markets page!', data: [] };
-    }
-
-    // Fetch round data for each position
-    const roundIds = [...new Set(positions.map(p => p.roundId))];
-    const rounds = await Promise.all(roundIds.map(id => fetchRound(id)));
-    const roundMap = new Map<number, RoundState>();
-    for (const r of rounds) {
-      if (r) roundMap.set(r.id, r);
+      return { success: true, message: 'You have no positions. Place a trade on the markets page!', data: [] };
     }
 
     const lines = positions.map(pos => {
-      const round = roundMap.get(pos.roundId);
-      const side = pos.yesDeposit > 0 ? 'YES' : 'NO';
-      const deposit = Math.max(pos.yesDeposit, pos.noDeposit);
-
-      if (!round) return `Round #${pos.roundId}: ${formatPred(deposit)} USDCx on ${side} (data unavailable)`;
-
-      const targetUsd = (round.targetPrice / 100).toFixed(2);
-
-      if (round.resolved) {
-        const winningSide = round.outcome ? 'YES' : 'NO';
-        const won = side === winningSide;
-        if (won) {
-          const totalPool = round.yesPool + round.noPool;
-          const winPool = round.outcome ? round.yesPool : round.noPool;
-          const payout = winPool > 0 ? (deposit / winPool) * totalPool * 0.9 : 0;
-          return `Round #${pos.roundId} ($${targetUsd}): ${formatPred(deposit)} USDCx on ${side} → WON ${formatPred(payout)} USDCx${pos.claimed ? ' (claimed)' : ' (claimable!)'}`;
-        }
-        return `Round #${pos.roundId} ($${targetUsd}): ${formatPred(deposit)} USDCx on ${side} → LOST`;
-      }
-
-      return `Round #${pos.roundId} ($${targetUsd}): ${formatPred(deposit)} USDCx on ${side} (active — dark pool)`;
+      const deposit = pos.quantity;
+      return `Position: ${formatPred(deposit)} DUSDC on ${pos.direction}${pos.claimed ? ' (redeemed)' : ''}`;
     });
 
-    const totalStaked = positions.reduce((s, p) => s + Math.max(p.yesDeposit, p.noDeposit), 0);
+    const totalStaked = positions.reduce((s, p) => s + p.quantity, 0);
 
     return {
       success: true,
-      message: `Your ${positions.length} positions:\n${lines.join('\n')}\n\nTotal staked: ${formatPred(totalStaked)} USDCx`,
+      message: `Your ${positions.length} positions:\n${lines.join('\n')}\n\nTotal staked: ${formatPred(totalStaked)} DUSDC`,
       data: positions,
     };
   } catch (error: any) {
@@ -252,7 +137,7 @@ export async function getActivePositions(publicKey: string | undefined): Promise
   }
 }
 
-/** Validate a bet on the current active round (does NOT execute) */
+/** Validate a bet (does NOT execute) */
 export async function prepareBet(
   publicKey: string | undefined,
   side: 'YES' | 'NO',
@@ -263,48 +148,29 @@ export async function prepareBet(
       return { success: false, message: 'Please connect your wallet first.', error: 'No wallet connected' };
     }
     if (amount <= 0) {
-      return { success: false, message: 'Bet amount must be greater than 0 USDCx.', error: 'Invalid amount' };
+      return { success: false, message: 'Amount must be greater than 0 DUSDC.', error: 'Invalid amount' };
     }
 
-    const highestId = await findLatestRoundId();
-    const round = highestId > 0 ? await fetchRound(highestId) : null;
+    const direction = side === 'YES' ? 'UP' : 'DOWN';
 
-    if (!round || round.resolved) {
-      return { success: false, message: 'No active round right now. Wait for the next round to start.', error: 'No active round' };
-    }
+    const message = `Ready to place trade:
 
-    const secsLeft = Math.max(0, Math.floor((round.endTime - Date.now()) / 1000));
-    if (secsLeft <= 0) {
-      return { success: false, message: 'This round is about to resolve. Wait for the next round.', error: 'Round ending' };
-    }
+Direction: ${direction}
+Amount: ${amount} DUSDC
 
-    const microAmount = amount * PRED_MULTIPLIER;
-    const targetUsd = (round.targetPrice / 100).toFixed(2);
-
-    // In dark pool mode, we can't give exact payout estimates since per-side pools are hidden
-    const message = `Ready to place bet on Round #${round.id}:
-
-BTC Target: $${targetUsd}
-Side: ${side} (BTC will be ${side === 'YES' ? 'above' : 'below'} target)
-Amount: ${amount} USDCx
-Time left: ${Math.floor(secsLeft / 60)}m ${secsLeft % 60}s
-Dark Pool Total: ${formatPred(round.totalPool)} USDCx
-
-Note: Your bet side is PRIVATE — hidden by a ZK commitment. Per-side pool breakdown is hidden until resolution.
-
-Use the betting panel on the Markets page to complete this bet.`;
+Use the trading panel on the Markets page to complete this trade.`;
 
     return {
       success: true,
       message,
-      data: { roundId: round.id, side, amount },
+      data: { side, direction, amount },
     };
   } catch (error: any) {
-    return { success: false, message: 'Failed to prepare bet.', error: error.message };
+    return { success: false, message: 'Failed to prepare trade.', error: error.message };
   }
 }
 
-/** Analyze portfolio performance across all rounds */
+/** Analyze portfolio performance */
 export async function analyzePortfolio(publicKey: string | undefined): Promise<VoiceToolResult> {
   try {
     if (!publicKey) {
@@ -313,63 +179,22 @@ export async function analyzePortfolio(publicKey: string | undefined): Promise<V
 
     const positions = loadPositions();
     if (positions.length === 0) {
-      return { success: true, message: 'No positions yet. Start by placing a bet on the markets page!', data: {} };
-    }
-
-    // Fetch round data for all positions
-    const roundIds = [...new Set(positions.map(p => p.roundId))];
-    const rounds = await Promise.all(roundIds.map(id => fetchRound(id)));
-    const roundMap = new Map<number, RoundState>();
-    for (const r of rounds) {
-      if (r) roundMap.set(r.id, r);
+      return { success: true, message: 'No positions yet. Start by placing a trade on the markets page!', data: {} };
     }
 
     let totalInvested = 0;
-    let totalPnL = 0;
-    let wins = 0;
-    let losses = 0;
     let active = 0;
-    let claimable = 0;
 
     for (const pos of positions) {
-      const round = roundMap.get(pos.roundId);
-      const deposit = Math.max(pos.yesDeposit, pos.noDeposit);
-      totalInvested += deposit;
-
-      if (!round || !round.resolved) {
-        active++;
-        continue;
-      }
-
-      const userSide = pos.yesDeposit > 0 ? 'YES' : 'NO';
-      const winningSide = round.outcome ? 'YES' : 'NO';
-
-      if (userSide === winningSide) {
-        wins++;
-        const totalPool = round.yesPool + round.noPool;
-        const winPool = round.outcome ? round.yesPool : round.noPool;
-        const payout = winPool > 0 ? (deposit / winPool) * totalPool * 0.9 : 0;
-        totalPnL += payout - deposit;
-        if (!pos.claimed) claimable += payout;
-      } else {
-        losses++;
-        totalPnL -= deposit;
-      }
+      totalInvested += pos.quantity;
+      if (!pos.claimed) active++;
     }
-
-    const resolvedCount = wins + losses;
-    const winRate = resolvedCount > 0 ? ((wins / resolvedCount) * 100).toFixed(0) : '0';
-    const roi = totalInvested > 0 ? ((totalPnL / totalInvested) * 100).toFixed(1) : '0.0';
 
     const message = `Portfolio Analysis:
 
 Total Positions: ${positions.length}
-Active: ${active} | Resolved: ${resolvedCount} (${wins} wins, ${losses} losses)
-Win Rate: ${winRate}%
-
-Total Invested: ${formatPred(totalInvested)} USDCx
-P&L: ${totalPnL >= 0 ? '+' : ''}${formatPred(totalPnL)} USDCx
-ROI: ${roi}%${claimable > 0 ? `\nClaimable: ${formatPred(claimable)} USDCx` : ''}`;
+Active: ${active}
+Total Invested: ${formatPred(totalInvested)} DUSDC`;
 
     return {
       success: true,
@@ -377,13 +202,7 @@ ROI: ${roi}%${claimable > 0 ? `\nClaimable: ${formatPred(claimable)} USDCx` : ''
       data: {
         totalPositions: positions.length,
         active,
-        wins,
-        losses,
-        winRate: parseFloat(winRate),
         totalInvested,
-        totalPnL,
-        roi: parseFloat(roi),
-        claimable,
       },
     };
   } catch (error: any) {

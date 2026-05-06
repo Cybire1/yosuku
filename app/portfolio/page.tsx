@@ -1,571 +1,252 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { useWallet } from '@provablehq/aleo-wallet-adaptor-react';
-import { motion } from 'framer-motion';
-import {
-  TrendingUp,
-  TrendingDown,
-  Clock,
-  Wallet,
-  Trophy,
-  Check,
-  X,
-  PieChart,
-  Shield,
-  EyeOff,
-  Lock,
-} from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { useCurrentAccount } from '@mysten/dapp-kit';
 import Header from '@/components/Header';
-import PredictionStats from '@/components/PredictionStats';
-import PnLChart from '@/components/PnLChart';
-import {
-  BTC_PREDICTION_PROGRAM,
-  formatPred,
-  calcPayoutWithBonus,
-  fetchReputation,
-  setOptimisticBalance,
-  fetchOnChainBalance,
-  type RoundState,
-  type UserPosition,
-  type ReputationData,
-} from '@/lib/predictionContract';
-import { fetchRound, loadPositions } from '@/lib/roundHelpers';
-import { executeWithRetry } from '@/lib/walletExecution';
-import ReputationCard from '@/components/ReputationCard';
-import MirrorPortfolioPanel from '@/components/MirrorPortfolioPanel';
-import { loadMirrorPositions } from '@/lib/mirrorMarkets';
+import Footer from '@/components/Footer';
+import Marquee from '@/components/Marquee';
+import GrainOverlay from '@/components/GrainOverlay';
+import CustomCursor from '@/components/CustomCursor';
+import SectionHeader from '@/components/SectionHeader';
+import PortfolioTable from '@/components/PortfolioTable';
+import TokenBalance from '@/components/TokenBalance';
+import { useManager, useDUSDCBalance, useManagerBalance, usePositions, useSviPricing, useOraclePrices } from '@/lib/sui/hooks';
+import { DUSDC_MULTIPLIER } from '@/lib/sui/constants';
+import { fetchReputation, type ReputationData } from '@/lib/predictionContract';
+import { fetchTrades } from '@/lib/sui/predictApi';
+import { drawEquityCurve } from '@/lib/charts/canvasChart';
+import { computePositionPnL, computeRealizedPnL } from '@/lib/sui/pnlCalculator';
 
 export default function PortfolioPage() {
   const router = useRouter();
-  const { address, executeTransaction } = useWallet();
-  const [rounds, setRounds] = useState<RoundState[]>([]);
-  const [positions, setPositions] = useState<UserPosition[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [claimingId, setClaimingId] = useState<number | null>(null);
+  const account = useCurrentAccount();
+  const address = account?.address ?? null;
   const [mounted, setMounted] = useState(false);
   const [reputation, setReputation] = useState<ReputationData | null>(null);
-  const [hasMirrorPositions, setHasMirrorPositions] = useState(false);
+  const equityRef = useRef<HTMLCanvasElement>(null);
+
+  const { manager, loading: managerLoading } = useManager();
+  const { balance: walletBalance } = useDUSDCBalance();
+  const { balance: managerBalance } = useManagerBalance(manager?.manager_id ?? null);
+  const { positions, loading: positionsLoading } = usePositions(manager?.manager_id ?? null);
+
+  // SVI pricing for unrealized P&L
+  const primaryOracleId = positions.length > 0 ? positions[0].oracle_id : null;
+  const { sviData } = useSviPricing(primaryOracleId);
+  const { prices } = useOraclePrices(primaryOracleId);
+
+  const [totalUnrealizedPnL, setTotalUnrealizedPnL] = useState(0);
+
+  useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
-    setMounted(true);
-    try { setHasMirrorPositions(loadMirrorPositions().length > 0); } catch {}
-  }, []);
-
-  const scan = useCallback(async () => {
-    setLoading(true);
-    const allPositions = loadPositions();
-    setPositions(allPositions);
-
-    // Only fetch rounds that the user has positions in
-    const roundIds = [...new Set(allPositions.map(p => p.roundId))];
-
-    // Also fetch the latest few rounds for context
-    const lastKnown = parseInt(localStorage.getItem('dart_last_round_id') || '0', 10);
-    if (lastKnown > 0) {
-      for (let i = Math.max(0, lastKnown - 4); i <= lastKnown; i++) {
-        if (!roundIds.includes(i)) roundIds.push(i);
-      }
-    }
-
-    const results = await Promise.all(roundIds.map(id => fetchRound(id)));
-    const found: RoundState[] = [];
-    for (const r of results) {
-      if (r) found.push(r);
-    }
-    setRounds(found.sort((a, b) => b.id - a.id));
-
-    // Filter positions to only those with matching on-chain rounds
-    const validIds = new Set(found.map(r => r.id));
-    const validPositions = allPositions.filter(p => validIds.has(p.roundId));
-    setPositions(validPositions);
-
-    // Fetch reputation data
     if (address) {
-      try {
-        const rep = await fetchReputation(address);
-        setReputation(rep);
-      } catch {
-        // Reputation not available yet (first time user)
-      }
+      fetchReputation(address).then(setReputation).catch(() => {});
+    } else {
+      setReputation(null);
     }
-
-    setLoading(false);
   }, [address]);
 
+  // Compute unrealized P&L across positions
   useEffect(() => {
-    scan();
-  }, [scan]);
-
-  const handleClaim = async (roundId: number) => {
-    if (!address || !executeTransaction) return;
-
-    const round = rounds.find((r) => r.id === roundId);
-    const pos = positions.find((p) => p.roundId === roundId);
-    if (!round || !pos) return;
-
-    const deposit = Math.max(pos.yesDeposit, pos.noDeposit);
-    const totalPool = round.yesPool + round.noPool;
-    const winPool = round.outcome ? round.yesPool : round.noPool;
-    if (winPool === 0) return;
-
-    // Calculate payout with tier bonus
-    const bonusPct = reputation?.bonusPct ?? 0;
-    const netPayout = calcPayoutWithBonus(deposit, winPool, totalPool, bonusPct);
-
-    setClaimingId(roundId);
-    try {
-      // v8 commitment-based claim: reveal preimage (side, amt, salt) + payout
-      const { getBetCommitment } = await import('@/lib/roundHelpers');
-      const commitment = getBetCommitment(address, roundId);
-      if (!commitment) {
-        setClaimingId(null);
-        return;
-      }
-      const sideVal = commitment.side === 'YES' ? 'true' : 'false';
-      await executeWithRetry(() =>
-        executeTransaction({
-          program: BTC_PREDICTION_PROGRAM,
-          function: 'claim',
-          inputs: [
-            `${roundId}u64`,
-            sideVal,
-            `${commitment.amount}u128`,
-            commitment.salt,
-            `${netPayout}u128`,
-          ],
-          fee: 2_000_000,
-          privateFee: false,
-        })
-      );
-
-      // Optimistic balance update — will reconcile when on-chain confirms
-      const curBalance = parseInt(localStorage.getItem('usdcx_balance') || '0', 10);
-      setOptimisticBalance(curBalance + netPayout);
-
-      // Also kick off an on-chain refresh after a short delay
-      setTimeout(() => {
-        if (address) fetchOnChainBalance(address);
-      }, 10_000);
-
-      const claimed: number[] = JSON.parse(localStorage.getItem('v8_claimed') || '[]');
-      if (!claimed.includes(roundId)) {
-        claimed.push(roundId);
-        localStorage.setItem('v8_claimed', JSON.stringify(claimed));
-      }
-      setPositions((prev) =>
-        prev.map((p) => (p.roundId === roundId ? { ...p, claimed: true } : p))
-      );
-    } catch (err) {
-      console.error('Claim error:', err);
-    } finally {
-      setClaimingId(null);
+    if (!sviData?.params || !prices?.forward || positions.length === 0) {
+      setTotalUnrealizedPnL(0);
+      return;
     }
-  };
-
-  // Compute portfolio-level stats
-  const resolvedRounds = rounds.filter((r) => r.resolved && r.outcome !== null);
-  const roundsWithPosition = resolvedRounds.filter((r) =>
-    positions.some((p) => p.roundId === r.id)
-  );
-
-  let totalInvested = 0;
-  let totalPnL = 0;
-  let claimableAmount = 0;
-
-  for (const round of resolvedRounds) {
-    const pos = positions.find((p) => p.roundId === round.id);
-    if (!pos) continue;
-    const deposit = Math.max(pos.yesDeposit, pos.noDeposit);
-    totalInvested += deposit;
-    const userSide = pos.yesDeposit > 0 ? 'YES' : 'NO';
-    const winningSide = round.outcome ? 'YES' : 'NO';
-    if (userSide === winningSide) {
-      const totalPool = round.yesPool + round.noPool;
-      const winPool = round.outcome ? round.yesPool : round.noPool;
-      const payout = winPool > 0 ? (deposit / winPool) * totalPool * 0.9 : 0;
-      totalPnL += payout - deposit;
-      if (!pos.claimed) claimableAmount += payout;
-    } else {
-      totalPnL -= deposit;
+    let total = 0;
+    for (const pos of positions) {
+      if (pos.oracle_id === primaryOracleId) {
+        const pnl = computePositionPnL(pos, sviData.params, prices.forward);
+        if (pnl) total += pnl.unrealizedPnL;
+      }
     }
-  }
+    setTotalUnrealizedPnL(total);
+  }, [positions, sviData, prices, primaryOracleId]);
 
-  // Active (unresolved) positions
-  const activePositions = positions.filter((p) => {
-    const round = rounds.find((r) => r.id === p.roundId);
-    return round && !round.resolved;
-  });
+  // Draw equity curve from real trade data
+  useEffect(() => {
+    if (!equityRef.current || !address) return;
 
-  // Resolved positions for history
-  const historyItems = resolvedRounds
-    .map((round) => {
-      const pos = positions.find((p) => p.roundId === round.id);
-      return { round, pos };
-    })
-    .filter(({ pos }) => pos);
+    // Gather unique oracle IDs from positions
+    const oracleIds = new Set(positions.map(p => p.oracle_id));
+
+    // Fetch trades for all oracles and build equity curve
+    const loadTradesAndDraw = async () => {
+      const allTrades = [];
+      for (const oid of oracleIds) {
+        try {
+          const trades = await fetchTrades(oid);
+          allTrades.push(...trades);
+        } catch { /* ignore */ }
+      }
+
+      const realized = computeRealizedPnL(allTrades);
+
+      if (realized.length > 0) {
+        // Build cumulative equity curve from realized trades
+        const curveData = [0, ...realized.map(r => r.cumPnl)];
+        // Add current unrealized P&L to the last point
+        curveData.push(curveData[curveData.length - 1] + totalUnrealizedPnL);
+        drawEquityCurve(equityRef.current!, curveData);
+      } else {
+        // Fallback: flat line at current total
+        const total = (walletBalance + managerBalance) / DUSDC_MULTIPLIER;
+        drawEquityCurve(equityRef.current!, [total, total]);
+      }
+    };
+
+    loadTradesAndDraw();
+  }, [walletBalance, managerBalance, address, positions, totalUnrealizedPnL]);
+
+  const totalPositions = positions.length;
 
   return (
-    <div className="min-h-screen overflow-x-hidden selection:bg-white selection:text-black">
+    <div className="min-h-screen relative">
+      <Marquee />
       <Header />
+      <CustomCursor />
+      <GrainOverlay />
 
-      <main className="pt-28 pb-12 relative">
-        <motion.div
-          className="max-w-[1100px] mx-auto px-4 sm:px-6"
-          initial="hidden"
-          animate="visible"
-          variants={{
-            hidden: { opacity: 0 },
-            visible: {
-              opacity: 1,
-              transition: { staggerChildren: 0.1 }
-            }
-          }}
-        >
-          {/* Page Header */}
-          <motion.div
-            variants={{
-              hidden: { opacity: 0, y: 30 },
-              visible: { opacity: 1, y: 0, transition: { type: 'spring', damping: 25, stiffness: 200 } }
-            }}
-            className="mb-8"
-          >
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-8 h-8 bg-new-mint/10 rounded-lg flex items-center justify-center">
-                <PieChart className="w-4 h-4 text-new-mint" />
-              </div>
-              <h1 className="text-2xl font-black uppercase tracking-tight text-white">
-                Portfolio
-              </h1>
+      <main className="container pt-[120px] pb-12">
+        {/* Breadcrumb */}
+        <div className="font-mono text-[11px] tracking-[0.18em] uppercase text-gray-500 mb-7 flex items-center gap-3">
+          <a href="/" className="hover:text-white transition-colors">Yosuku</a>
+          <span className="text-gray-700">/</span>
+          <span className="text-white">Portfolio</span>
+        </div>
+
+        <h1 className="font-display font-[800] text-4xl text-white tracking-tight mb-2">
+          Portfolio
+        </h1>
+        <p className="font-jp text-gray-500 text-sm mb-10">ポートフォリオ</p>
+
+        {!mounted ? (
+          <div className="text-center py-20">
+            <div className="w-6 h-6 border border-gray-600 border-t-white rounded-full animate-spin mx-auto" />
+          </div>
+        ) : !address ? (
+          <div className="border border-white/[0.08] rounded bg-bg p-16 text-center">
+            <div className="w-16 h-16 mx-auto mb-6 border border-white/10 rounded-full flex items-center justify-center">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-gray-500">
+                <rect x="2" y="6" width="20" height="14" rx="2" />
+                <path d="M22 10H2" />
+              </svg>
             </div>
-            <p className="text-sm text-gray-500">
-              Your encrypted positions and private prediction history.
+            <h2 className="font-display font-[700] text-xl text-white mb-2">Connect Wallet</h2>
+            <p className="text-gray-500 text-sm max-w-sm mx-auto">
+              Connect your Sui wallet to view positions, balances, and trade history.
             </p>
-          </motion.div>
-
-          {!mounted ? (
-            <div className="text-center py-20">
-              <div className="inline-block animate-spin rounded-full h-10 w-10 border-4 border-white/10 border-t-new-mint" />
-              <p className="mt-4 text-gray-500 text-sm font-bold uppercase tracking-widest">
-                Loading...
-              </p>
-            </div>
-          ) : !address ? (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="relative overflow-hidden bg-neutral-900/40 backdrop-blur-2xl border border-white/10 rounded-[24px] sm:rounded-[32px] p-10 sm:p-16 md:p-20 text-center shadow-2xl"
-            >
-              {/* Premium Glow */}
-              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3/4 h-32 bg-new-mint/20 blur-[100px] rounded-full pointer-events-none" />
-
-              <div className="relative z-10 w-20 h-20 sm:w-24 sm:h-24 mx-auto mb-6 bg-gradient-to-b from-neutral-800 to-black rounded-full border border-white/10 flex items-center justify-center shadow-inner">
-                <div className="absolute inset-0 bg-new-mint/20 blur-xl rounded-full animate-pulse" />
-                <Wallet className="w-8 h-8 sm:w-10 sm:h-10 text-white/70 relative z-10" />
-              </div>
-              <h2 className="relative z-10 text-2xl sm:text-3xl font-black text-white tracking-tight mb-3">Connect Your Wallet</h2>
-              <p className="relative z-10 text-gray-400 max-w-sm mx-auto">
-                Connect your Aleo wallet to track your positions, view your P&L, and claim your winnings.
-              </p>
-            </motion.div>
-          ) : loading ? (
-            <div className="text-center py-20">
-              <div className="inline-block animate-spin rounded-full h-10 w-10 border-4 border-white/10 border-t-new-mint" />
-              <p className="mt-4 text-gray-500 text-sm font-bold uppercase tracking-widest">
-                Loading...
-              </p>
-            </div>
-          ) : positions.length === 0 && !hasMirrorPositions ? (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="relative overflow-hidden bg-neutral-900/40 backdrop-blur-2xl border border-white/10 rounded-[24px] sm:rounded-[32px] p-10 sm:p-16 md:p-20 text-center shadow-2xl"
-            >
-              {/* Premium Glow */}
-              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3/4 h-32 bg-new-blue/20 blur-[100px] rounded-full pointer-events-none" />
-
-              <div className="relative z-10 w-20 h-20 sm:w-24 sm:h-24 mx-auto mb-6 bg-gradient-to-b from-neutral-800 to-black rounded-full border border-white/10 flex items-center justify-center shadow-inner group">
-                <div className="absolute inset-0 bg-new-blue/20 blur-xl rounded-full group-hover:bg-new-blue/30 transition-all duration-500" />
-                <Clock className="w-8 h-8 sm:w-10 sm:h-10 text-white/70 relative z-10 group-hover:scale-110 transition-transform duration-500" />
-              </div>
-              <h2 className="relative z-10 text-2xl sm:text-3xl font-black text-white tracking-tight mb-3">No Active Positions</h2>
-              <p className="relative z-10 text-gray-400 max-w-sm mx-auto mb-8">
-                You haven&apos;t placed any predictions yet. Head over to the markets to make your first trade.
-              </p>
-              <button
-                onClick={() => router.push('/markets')}
-                className="relative z-10 px-8 py-4 bg-new-blue text-white font-bold text-sm uppercase tracking-widest rounded-2xl hover:bg-new-blue/90 shadow-[0_0_30px_rgba(59,130,246,0.3)] hover:shadow-[0_0_40px_rgba(59,130,246,0.5)] hover:scale-105 active:scale-95 transition-all"
-              >
-                Go to Markets
-              </button>
-            </motion.div>
-          ) : (
-            <motion.div
-              variants={{
-                hidden: { opacity: 0, scale: 0.95 },
-                visible: { opacity: 1, scale: 1, transition: { type: 'spring', damping: 25, stiffness: 200 } }
-              }}
-              className="space-y-6"
-            >
-              {/* Stats overview cards */}
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                <StatCard
-                  label="Invested"
-                  value={`${formatPred(totalInvested)}`}
-                  sub="USDCx"
-                  color="text-white"
-                />
-                <StatCard
-                  label="P&L"
-                  value={`${totalPnL >= 0 ? '+' : ''}${formatPred(totalPnL)}`}
-                  sub="USDCx"
-                  color={totalPnL >= 0 ? 'text-new-mint' : 'text-off-red'}
-                  icon={totalPnL >= 0 ? TrendingUp : TrendingDown}
-                />
-                <StatCard
-                  label="Claimable"
-                  value={formatPred(claimableAmount)}
-                  sub="USDCx"
-                  color="text-new-mint"
-                  icon={Trophy}
-                />
-                <StatCard
-                  label="Rounds"
-                  value={String(roundsWithPosition.length)}
-                  sub="resolved"
-                  color="text-new-blue"
-                />
-                <StatCard
-                  label="Privacy"
-                  value="Active"
-                  sub="ZK Records"
-                  color="text-sky-400"
-                  icon={Shield}
-                />
-              </div>
-
-              {/* Reputation + Charts */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {reputation && <ReputationCard data={reputation} />}
-                <div className={`${reputation ? 'md:col-span-2' : 'md:col-span-3'} grid grid-cols-1 md:grid-cols-2 gap-4`}>
-                  <PredictionStats rounds={rounds} positions={positions} />
-                  <PnLChart rounds={rounds} positions={positions} />
-                </div>
-              </div>
-
-              {/* Privacy notice */}
-              <div className="flex items-center gap-2 bg-sky-400/5 border border-sky-400/10 rounded-xl px-4 py-2.5">
-                <EyeOff className="w-3.5 h-3.5 text-sky-400/60 flex-shrink-0" />
-                <span className="text-[11px] text-sky-400/60">
-                  All positions stored as private Aleo records. Only your wallet can decrypt them.
-                </span>
-              </div>
-
-              <MirrorPortfolioPanel />
-
-              {/* Active Positions */}
-              {activePositions.length > 0 && (
-                <div className="bg-neutral-900/40 backdrop-blur-xl border border-white/5 rounded-2xl p-5">
-                  <h3 className="text-xs font-black text-gray-500 uppercase tracking-[0.2em] mb-4">
-                    Active Positions
-                  </h3>
-                  <div className="space-y-2">
-                    {activePositions.map((pos) => {
-                      const round = rounds.find((r) => r.id === pos.roundId);
-                      if (!round) return null;
-                      const side = pos.yesDeposit > 0 ? 'YES' : 'NO';
-                      const deposit = Math.max(pos.yesDeposit, pos.noDeposit);
-                      const totalPool = round.yesPool + round.noPool;
-                      const winPool = side === 'YES' ? round.yesPool : round.noPool;
-                      const estPayout =
-                        winPool > 0 ? (deposit / winPool) * totalPool * 0.9 : 0;
-
-                      return (
-                        <div
-                          key={pos.roundId}
-                          onClick={() => router.push('/markets')}
-                          className="flex items-center justify-between p-4 bg-white/[0.03] border border-white/5 rounded-xl hover:bg-white/[0.06] cursor-pointer transition-all"
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center">
-                              <Clock className="w-4 h-4 text-gray-500" />
-                            </div>
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <span className="text-sm font-bold text-white">
-                                  Round #{round.id}
-                                </span>
-                                <span className="text-xs font-mono text-gray-500">
-                                  ${(round.targetPrice / 100).toFixed(2)}
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-1.5">
-                                <span
-                                  className={`text-[10px] font-bold uppercase tracking-wider ${side === 'YES' ? 'text-new-mint' : 'text-off-red'
-                                    }`}
-                                >
-                                  {side} &middot; {formatPred(deposit)} USDCx
-                                </span>
-                                <span className="inline-flex items-center gap-0.5 text-[9px] text-sky-400/60 bg-sky-400/5 px-1.5 py-0.5 rounded">
-                                  <Lock className="w-2.5 h-2.5" /> Private
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <span className="text-xs text-gray-500 block">Est. payout</span>
-                            <span className="text-sm font-mono font-bold text-white">
-                              {formatPred(estPayout)} USDCx
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
+          </div>
+        ) : (
+          <div className="space-y-8">
+            {/* Ledger Plate — stats overview */}
+            <div className="ledger-plate">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <span className="font-mono text-[9px] tracking-[0.16em] uppercase" style={{ color: '#6B6353' }}>
+                    Account Overview
+                  </span>
+                  <div className="font-mono text-3xl font-semibold mt-1" style={{ color: '#1A1612' }}>
+                    {((walletBalance + managerBalance) / DUSDC_MULTIPLIER).toFixed(2)}
+                    <span className="text-sm ml-2" style={{ color: '#6B6353' }}>DUSDC</span>
                   </div>
                 </div>
-              )}
-
-              {/* Resolved History */}
-              {historyItems.length > 0 && (
-                <div className="bg-neutral-900/40 backdrop-blur-xl border border-white/5 rounded-2xl p-5">
-                  <h3 className="text-xs font-black text-gray-500 uppercase tracking-[0.2em] mb-4">
-                    Round History
-                  </h3>
-                  <div className="space-y-2">
-                    {historyItems.map(({ round, pos }) => {
-                      if (!pos) return null;
-                      const userSide = pos.yesDeposit > 0 ? 'YES' : 'NO';
-                      const deposit = Math.max(pos.yesDeposit, pos.noDeposit);
-                      const winningSide = round.outcome ? 'YES' : 'NO';
-                      const isWinner = userSide === winningSide;
-                      const totalPool = round.yesPool + round.noPool;
-                      const winPool = round.outcome ? round.yesPool : round.noPool;
-                      const payout =
-                        isWinner && winPool > 0
-                          ? (deposit / winPool) * totalPool * 0.9
-                          : 0;
-                      const canClaim = isWinner && !pos.claimed;
-
-                      return (
-                        <div
-                          key={round.id}
-                          className="flex items-center justify-between p-4 bg-white/[0.03] border border-white/5 rounded-xl"
-                        >
-                          <div className="flex items-center gap-3">
-                            <div
-                              className={`w-8 h-8 rounded-full flex items-center justify-center ${isWinner ? 'bg-new-mint/10' : 'bg-off-red/10'
-                                }`}
-                            >
-                              {isWinner ? (
-                                <Check className="w-4 h-4 text-new-mint" />
-                              ) : (
-                                <X className="w-4 h-4 text-off-red" />
-                              )}
-                            </div>
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <span className="text-sm font-bold text-white">
-                                  #{round.id}
-                                </span>
-                                <span className="text-xs font-mono text-gray-500">
-                                  ${(round.targetPrice / 100).toFixed(2)}
-                                </span>
-                                <span
-                                  className={`text-[10px] font-bold uppercase ${round.outcome ? 'text-new-mint' : 'text-off-red'
-                                    }`}
-                                >
-                                  {round.outcome ? 'YES' : 'NO'} Won
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-[10px] text-gray-500">
-                                  Your bet: {userSide} &middot; {formatPred(deposit)} USDCx
-                                </span>
-                                <span className="inline-flex items-center gap-0.5 text-[9px] text-sky-400/60 bg-sky-400/5 px-1.5 py-0.5 rounded">
-                                  <Lock className="w-2.5 h-2.5" /> Private
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="text-right flex items-center gap-3">
-                            {isWinner ? (
-                              <>
-                                <div>
-                                  <span className="text-sm font-bold text-new-mint">
-                                    +{formatPred(payout)}
-                                  </span>
-                                  <span className="block text-[10px] text-gray-500">USDCx</span>
-                                </div>
-                                {canClaim && (
-                                  <button
-                                    onClick={() => handleClaim(round.id)}
-                                    disabled={claimingId === round.id}
-                                    className="px-3 py-1.5 bg-new-mint/10 hover:bg-new-mint/20 border border-new-mint/30 rounded-lg text-[10px] font-bold text-new-mint uppercase tracking-wider transition-all disabled:opacity-50"
-                                  >
-                                    {claimingId === round.id ? '...' : 'Claim'}
-                                  </button>
-                                )}
-                                {pos.claimed && (
-                                  <div className="flex items-center gap-1">
-                                    <Trophy className="w-3 h-3 text-new-mint" />
-                                    <span className="text-[10px] text-new-mint font-bold">
-                                      Claimed
-                                    </span>
-                                  </div>
-                                )}
-                              </>
-                            ) : (
-                              <div>
-                                <span className="text-sm font-bold text-off-red">
-                                  -{formatPred(deposit)}
-                                </span>
-                                <span className="block text-[10px] text-gray-500">USDCx</span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
+                <div className="text-right">
+                  <span className="font-mono text-[9px] tracking-[0.16em] uppercase" style={{ color: '#6B6353' }}>
+                    {reputation?.tier || 'Novice'}
+                  </span>
+                  <div className="font-mono text-sm mt-1" style={{ color: '#1A1612' }}>
+                    {reputation ? `${reputation.bets} bets` : '0 bets'}
                   </div>
                 </div>
-              )}
-            </motion.div>
-          )}
-        </motion.div>
+              </div>
+
+              <div className="grid grid-cols-5 gap-4 pt-4" style={{ borderTop: '1px solid rgba(201,191,166,0.3)' }}>
+                <div>
+                  <span className="font-mono text-[8px] tracking-[0.14em] uppercase" style={{ color: '#6B6353' }}>Wallet</span>
+                  <div className="font-mono text-sm" style={{ color: '#1A1612' }}>{(walletBalance / DUSDC_MULTIPLIER).toFixed(2)}</div>
+                </div>
+                <div>
+                  <span className="font-mono text-[8px] tracking-[0.14em] uppercase" style={{ color: '#6B6353' }}>Manager</span>
+                  <div className="font-mono text-sm" style={{ color: '#1A1612' }}>{(managerBalance / DUSDC_MULTIPLIER).toFixed(2)}</div>
+                </div>
+                <div>
+                  <span className="font-mono text-[8px] tracking-[0.14em] uppercase" style={{ color: '#6B6353' }}>Positions</span>
+                  <div className="font-mono text-sm" style={{ color: '#1A1612' }}>{totalPositions}</div>
+                </div>
+                <div>
+                  <span className="font-mono text-[8px] tracking-[0.14em] uppercase" style={{ color: '#6B6353' }}>Unrealized P&L</span>
+                  <div className="font-mono text-sm" style={{ color: totalUnrealizedPnL >= 0 ? '#34D399' : '#F43F5E' }}>
+                    {totalUnrealizedPnL >= 0 ? '+' : ''}{totalUnrealizedPnL.toFixed(2)}
+                  </div>
+                </div>
+                <div>
+                  <span className="font-mono text-[8px] tracking-[0.14em] uppercase" style={{ color: '#6B6353' }}>Address</span>
+                  <div className="font-mono text-sm" style={{ color: '#1A1612' }}>{address.slice(0, 8)}…</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Equity Curve */}
+            <section>
+              <SectionHeader number="01" title="Equity Curve" jp="損益曲線" />
+              <div className="border border-white/[0.08] rounded bg-bg p-4">
+                <canvas ref={equityRef} className="w-full h-[200px]" />
+              </div>
+            </section>
+
+            {/* Manager info */}
+            {manager && (
+              <div className="border border-white/[0.06] rounded px-4 py-3 flex items-center justify-between">
+                <div>
+                  <span className="font-mono text-[9px] tracking-[0.16em] uppercase text-gray-600">PredictManager</span>
+                  <p className="text-xs font-mono text-gray-400 mt-0.5 truncate max-w-[300px]">{manager.manager_id}</p>
+                </div>
+                <a
+                  href={`https://suiscan.xyz/testnet/object/${manager.manager_id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-mono text-[10px] text-vermilion/60 hover:text-vermilion transition-colors"
+                  data-cursor="hover"
+                >
+                  Suiscan ↗
+                </a>
+              </div>
+            )}
+
+            {!manager && !managerLoading && (
+              <div className="border border-white/[0.06] rounded p-4 text-center">
+                <p className="text-sm text-gray-400 mb-1">No PredictManager account</p>
+                <p className="text-xs text-gray-600 font-mono">Created automatically on first trade</p>
+              </div>
+            )}
+
+            {/* Positions */}
+            <section>
+              <SectionHeader number="02" title="Open Positions" jp="ポジション" count={totalPositions} />
+              <div className="border border-white/[0.08] rounded bg-bg p-5">
+                <PortfolioTable />
+              </div>
+            </section>
+
+            {/* CTA */}
+            {totalPositions === 0 && (
+              <div className="text-center py-6">
+                <button
+                  onClick={() => router.push('/markets')}
+                  className="btn btn-primary"
+                  data-cursor="hover"
+                >
+                  Go to Markets →
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        <Footer />
       </main>
     </div>
-  );
-}
-
-function StatCard({
-  label,
-  value,
-  sub,
-  color,
-  icon: Icon,
-}: {
-  label: string;
-  value: string;
-  sub: string;
-  color: string;
-  icon?: React.ComponentType<{ className?: string }>;
-}) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="bg-neutral-900/60 backdrop-blur-xl border border-white/5 rounded-xl p-4"
-    >
-      <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500 block mb-1">
-        {label}
-      </span>
-      <div className="flex items-center gap-1.5">
-        {Icon && <Icon className={`w-4 h-4 ${color}`} />}
-        <span className={`text-xl font-mono font-black ${color}`}>{value}</span>
-        <span className="text-xs text-gray-600 ml-0.5">{sub}</span>
-      </div>
-    </motion.div>
   );
 }

@@ -1,34 +1,38 @@
 import type { Metadata } from "next";
-import { Outfit, Space_Grotesk, Caveat } from "next/font/google";
+import { Sora, Inter, JetBrains_Mono, Noto_Serif_JP } from "next/font/google";
 import "./globals.css";
 import WalletProvider from "@/components/WalletProvider";
-import SmoothScroll from "@/components/SmoothScroll";
-import VoiceAgent from "@/components/VoiceAgent";
-import AnimatedBackground from "@/components/AnimatedBackground";
 
-import Preloader from "@/components/Preloader";
+const sora = Sora({
+  variable: "--font-sora",
+  subsets: ["latin"],
+  display: 'swap',
+  weight: ['400', '600', '700', '800'],
+});
 
-const outfit = Outfit({
-  variable: "--font-outfit",
+const inter = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
   display: 'swap',
 });
 
-const spaceGrotesk = Space_Grotesk({
-  variable: "--font-space",
+const jetbrainsMono = JetBrains_Mono({
+  variable: "--font-jetbrains",
   subsets: ["latin"],
   display: 'swap',
+  weight: ['400', '500', '600'],
 });
 
-const caveat = Caveat({
-  variable: "--font-hand",
+const notoSerifJP = Noto_Serif_JP({
+  variable: "--font-noto-serif-jp",
   subsets: ["latin"],
   display: 'swap',
+  weight: ['500', '700'],
 });
 
 export const metadata: Metadata = {
-  title: "Dart - Prediction Markets on Aleo",
-  description: "Bet on anything. Stay anonymous if you want. Privacy-first prediction markets powered by Aleo blockchain.",
+  title: "Yosuku — Prediction Markets on Sui",
+  description: "Trade binary positions on BTC price direction. Oracle-based settlement, DUSDC stablecoins, 15-minute rounds.",
 };
 
 export default function RootLayout({
@@ -38,36 +42,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <head>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              // Suppress wallet extension errors
-              const originalError = console.error;
-              console.error = function(...args) {
-                const msg = args[0]?.toString() || '';
-                // Filter out wallet extension errors
-                if (msg.includes('sseError') ||
-                    msg.includes('chrome-extension://') ||
-                    msg.includes('inpage.js')) {
-                  return;
-                }
-                originalError.apply(console, args);
-              };
-            `,
-          }}
-        />
-      </head>
       <body
-        className={`${outfit.variable} ${spaceGrotesk.variable} ${caveat.variable} antialiased text-white font-sans`}
+        className={`${sora.variable} ${inter.variable} ${jetbrainsMono.variable} ${notoSerifJP.variable} antialiased cursor-custom`}
         suppressHydrationWarning
       >
         <WalletProvider>
-          <AnimatedBackground />
-          <Preloader />
-          <SmoothScroll />
           {children}
-          <VoiceAgent />
         </WalletProvider>
       </body>
     </html>

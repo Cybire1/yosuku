@@ -1,25 +1,12 @@
-import { PRED_MULTIPLIER, setOptimisticBalance } from './predictionContract';
-import { executeWithRetry } from './walletExecution';
+import { PRED_MULTIPLIER } from './predictionContract';
 import {
-  MIRROR_PROGRAM,
   createMirrorPositionId,
   saveMirrorPosition,
   type MirrorMarketData,
   type MirrorSide,
 } from './mirrorMarkets';
 
-interface ExecuteTransactionResult {
-  transactionId?: string;
-}
-
 interface SubmitMirrorBetArgs {
-  executeTransaction: (params: {
-    program: string;
-    function: string;
-    inputs: string[];
-    fee: number;
-    privateFee: boolean;
-  }) => Promise<ExecuteTransactionResult | undefined>;
   market: MirrorMarketData;
   side: MirrorSide;
   microAmount: number;
@@ -46,7 +33,6 @@ export function getMirrorPayout(
 }
 
 export async function submitMirrorBet({
-  executeTransaction,
   market,
   side,
   microAmount,
@@ -56,25 +42,8 @@ export async function submitMirrorBet({
 }: SubmitMirrorBetArgs) {
   const payout = getMirrorPayout(market, side, microAmount);
 
-  const result = await executeWithRetry(() =>
-    executeTransaction({
-      program: MIRROR_PROGRAM,
-      function: 'bet',
-      inputs: [
-        market.vaultAddress!,
-        `${market.marketId}u64`,
-        `${microAmount}u128`,
-        `${market.yesMultiplierBps}u64`,
-        `${market.noMultiplierBps}u64`,
-        side === 'YES' ? 'true' : 'false',
-      ],
-      fee: 2_000_000,
-      privateFee: false,
-    })
-  );
-
+  // Mirror trades are saved locally — on-chain Sui integration TBD
   const newBalance = Math.max(0, balance - microAmount);
-  setOptimisticBalance(newBalance);
   onBalance?.(newBalance);
 
   saveMirrorPosition({
@@ -94,12 +63,10 @@ export async function submitMirrorBet({
     forfeited: false,
     refunded: false,
     outcomeLabels: market.outcomeLabels,
-    ...(result?.transactionId ? { transactionId: result.transactionId } : {}),
   });
 
   return {
     payout,
     balanceAfter: newBalance,
-    transactionId: result?.transactionId,
   };
 }

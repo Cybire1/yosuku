@@ -12,7 +12,7 @@ export default function HowItWorksPage() {
     {
       number: 1,
       title: 'Connect & Fund',
-      description: 'Connect your Shield Wallet and bridge USDCx from the Aleo bridge. USDCx is a stablecoin pegged to USDC.',
+      description: 'Connect your Sui wallet and fund it with DUSDC. DUSDC is the stablecoin used on DeepBook Predict.',
       icon: Coins,
       numClass: 'bg-new-mint/10 text-new-mint',
       iconClass: 'text-new-mint',
@@ -28,7 +28,7 @@ export default function HowItWorksPage() {
     {
       number: 3,
       title: 'Bet YES or NO',
-      description: 'Bet YES if you think BTC will be at or above the target price. Bet NO if you think it\'ll be below. Choose your amount in USDCx.',
+      description: 'Bet YES if you think BTC will be at or above the target price. Bet NO if you think it\'ll be below. Choose your amount in DUSDC.',
       icon: Zap,
       numClass: 'bg-new-mint/10 text-new-mint',
       iconClass: 'text-new-mint',
@@ -61,12 +61,12 @@ export default function HowItWorksPage() {
     },
     {
       title: 'On-Chain Settlement',
-      description: 'Everything runs on Aleo smart contracts. Bets, pools, and payouts are all verifiable on-chain with zero-knowledge proofs. No middleman, full privacy.',
+      description: 'Everything runs on Sui smart contracts via DeepBook Predict. Bets, pools, and payouts are all verifiable on-chain. No middleman, full transparency.',
       icon: Zap,
     },
     {
-      title: 'Dark Pool + Private Bets',
-      description: 'Your bet side (Up/Down) is encrypted — nobody can see which side you chose. During betting, only the combined pool total is visible. Per-side breakdown is revealed only at resolution.',
+      title: 'On-Chain Settlement',
+      description: 'Your bets are recorded transparently on Sui. All positions and payouts are settled on-chain through DeepBook Predict smart contracts with instant finality.',
       icon: Shield,
     },
   ];
@@ -74,7 +74,7 @@ export default function HowItWorksPage() {
   const faqs = [
     {
       question: 'What currency does DART use?',
-      answer: 'DART uses USDCx (test_usdcx_stablecoin.aleo) — a USDC-pegged stablecoin on Aleo. Bridge USDC from Ethereum Sepolia to get USDCx at usdcx.aleo.dev.',
+      answer: 'DART uses DUSDC — a stablecoin on Sui used by DeepBook Predict. You can get DUSDC from the testnet faucet.',
     },
     {
       question: 'How is the winner decided?',
@@ -82,19 +82,19 @@ export default function HowItWorksPage() {
     },
     {
       question: 'How much do I win?',
-      answer: 'Your payout = (your bet / winning pool) × total pool × 90%. The 10% fee goes to the platform. For example, if you bet 100 USDCx on YES, the YES pool is 500, and total pool is 1000 — you\'d get (100/500) × 1000 × 0.9 = 180 USDCx.',
+      answer: 'Your payout = (your bet / winning pool) × total pool × 90%. The 10% fee goes to the platform. For example, if you bet 100 DUSDC on YES, the YES pool is 500, and total pool is 1000 — you\'d get (100/500) × 1000 × 0.9 = 180 DUSDC.',
     },
     {
       question: 'What wallet do I need?',
-      answer: 'You need Shield Wallet, the browser extension for Aleo. It\'s free and works on Chrome and Firefox.',
+      answer: 'You need a Sui-compatible wallet such as Sui Wallet, Suiet, or Martian. They are free browser extensions.',
     },
     {
       question: 'Is this real money?',
-      answer: 'On testnet, USDCx is bridged from Sepolia test USDC. This is a demo running on Aleo testnet for educational and testing purposes.',
+      answer: 'On testnet, DUSDC is available from the faucet. This is a demo running on Sui testnet for educational and testing purposes.',
     },
     {
-      question: 'How does DART protect my privacy?',
-      answer: 'DART uses four layers of Aleo privacy: (1) Private transition inputs — your bet side and amount are ZK-proven private inputs, hidden by Aleo\'s zero-knowledge proofs, (2) ZK commitment — your bet is bound to a cryptographic hash(side, amount, salt) that can\'t be forged, (3) Dark pool — during betting, only the combined pool total is visible; the YES/NO split is hidden until resolution, (4) Anti-MEV — nobody can see your position to front-run or manipulate odds.',
+      question: 'How does DART ensure fair markets?',
+      answer: 'DART runs entirely on Sui smart contracts via DeepBook Predict: (1) On-chain positions — your bet side and amount are recorded transparently on-chain, (2) Verifiable settlement — all payouts are calculated and settled by smart contracts, (3) Instant finality — Sui provides sub-second transaction finality, (4) No middleman — the protocol is fully decentralized with no central authority controlling funds.',
     },
     {
       question: 'Can I create my own rounds?',
@@ -132,7 +132,7 @@ export default function HowItWorksPage() {
               How It Works
             </h1>
             <p className="text-lg text-gray-400 max-w-2xl leading-relaxed">
-              Predict BTC price movements. Bet with USDCx stablecoin. Win from the pool.
+              Predict BTC price movements. Bet with DUSDC stablecoin. Win from the pool.
             </p>
           </motion.div>
 
@@ -176,26 +176,26 @@ export default function HowItWorksPage() {
             <div className="grid grid-cols-3 gap-3 sm:gap-6 mb-6">
               <div className="text-center">
                 <div className="text-xl sm:text-2xl md:text-3xl font-black font-mono text-new-mint">500</div>
-                <div className="text-xs text-gray-500 mt-1">YES Pool (USDCx)</div>
+                <div className="text-xs text-gray-500 mt-1">YES Pool (DUSDC)</div>
               </div>
               <div className="text-center">
                 <div className="text-xl sm:text-2xl md:text-3xl font-black font-mono text-off-red">500</div>
-                <div className="text-xs text-gray-500 mt-1">NO Pool (USDCx)</div>
+                <div className="text-xs text-gray-500 mt-1">NO Pool (DUSDC)</div>
               </div>
               <div className="text-center">
                 <div className="text-xl sm:text-2xl md:text-3xl font-black font-mono text-white">1,000</div>
-                <div className="text-xs text-gray-500 mt-1">Total Pool (USDCx)</div>
+                <div className="text-xs text-gray-500 mt-1">Total Pool (DUSDC)</div>
               </div>
             </div>
             <div className="border-t border-white/5 pt-6">
               <div className="flex items-center gap-3 flex-wrap">
                 <span className="text-sm text-gray-400">You bet</span>
-                <span className="px-3 py-1 bg-new-mint/10 text-new-mint font-mono font-bold text-sm rounded-lg">100 USDCx on YES</span>
+                <span className="px-3 py-1 bg-new-mint/10 text-new-mint font-mono font-bold text-sm rounded-lg">100 DUSDC on YES</span>
                 <ArrowRight className="w-4 h-4 text-gray-600" />
                 <span className="text-sm text-gray-400">YES wins</span>
                 <ArrowRight className="w-4 h-4 text-gray-600" />
                 <span className="text-sm text-gray-400">You get</span>
-                <span className="px-3 py-1 bg-new-mint/10 text-new-mint font-mono font-bold text-sm rounded-lg">180 USDCx</span>
+                <span className="px-3 py-1 bg-new-mint/10 text-new-mint font-mono font-bold text-sm rounded-lg">180 DUSDC</span>
                 <span className="text-xs text-gray-600">(100/500 × 1000 × 90%)</span>
               </div>
             </div>
@@ -229,7 +229,7 @@ export default function HowItWorksPage() {
           <div className="mb-20">
             <h2 className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-8 flex items-center gap-2">
               <Shield className="w-4 h-4 text-sky-400" />
-              Privacy Architecture
+              On-Chain Architecture
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               <motion.div
@@ -242,10 +242,10 @@ export default function HowItWorksPage() {
                   <div className="w-8 h-8 rounded-lg bg-sky-400/10 flex items-center justify-center">
                     <EyeOff className="w-4 h-4 text-sky-400" />
                   </div>
-                  <h3 className="text-base font-bold text-white">Private Bet Side</h3>
+                  <h3 className="text-base font-bold text-white">Transparent Positions</h3>
                 </div>
                 <p className="text-sm text-gray-400 leading-relaxed">
-                  Your bet side (Up/Down) is a <span className="text-sky-400 font-medium">private transition input</span> — hidden by Aleo&apos;s ZK proofs and bound to a cryptographic commitment hash(side, amount, salt). The contract never sees your side on-chain during betting. This is true privacy that can only exist on Aleo.
+                  Your bet side (Up/Down) and amount are recorded <span className="text-sky-400 font-medium">transparently on-chain</span> through Sui smart contracts. Every position is verifiable and settled by DeepBook Predict with no intermediaries.
                 </p>
               </motion.div>
               <motion.div
@@ -258,10 +258,10 @@ export default function HowItWorksPage() {
                   <div className="w-8 h-8 rounded-lg bg-sky-400/10 flex items-center justify-center">
                     <Lock className="w-4 h-4 text-sky-400" />
                   </div>
-                  <h3 className="text-base font-bold text-white">Dark Pool</h3>
+                  <h3 className="text-base font-bold text-white">Instant Finality</h3>
                 </div>
                 <p className="text-sm text-gray-400 leading-relaxed">
-                  During betting, only the <span className="text-sky-400 font-medium">combined pool total</span> is visible on-chain. The YES/NO breakdown is hidden until the round resolves — preventing front-running and ensuring fair odds for everyone.
+                  Sui provides <span className="text-sky-400 font-medium">sub-second transaction finality</span>. Your bets are confirmed almost instantly, and when the round resolves, payouts are settled on-chain without delay.
                 </p>
               </motion.div>
             </div>
@@ -275,10 +275,10 @@ export default function HowItWorksPage() {
                 <div className="w-8 h-8 rounded-lg bg-sky-400/10 flex items-center justify-center">
                   <Shield className="w-4 h-4 text-sky-400" />
                 </div>
-                <h3 className="text-base font-bold text-white">ZK-Verified Claims</h3>
+                <h3 className="text-base font-bold text-white">Smart Contract Settlement</h3>
               </div>
               <p className="text-sm text-gray-400 leading-relaxed">
-                When you claim winnings, you reveal the <span className="text-sky-400 font-medium">commitment preimage</span> (side, amount, salt). The contract verifies this matches the stored hash — proving you placed the bet without anyone being able to forge it. Your side is only revealed after the round is over, when it no longer matters.
+                When you claim winnings, the <span className="text-sky-400 font-medium">DeepBook Predict smart contract</span> verifies your position on-chain and calculates your payout automatically. All funds are held and distributed by the contract -- no trust required.
               </p>
             </motion.div>
           </div>
@@ -314,7 +314,7 @@ export default function HowItWorksPage() {
           >
             <h2 className="text-2xl font-black mb-3">Ready to Predict?</h2>
             <p className="text-gray-400 text-sm mb-6 max-w-md mx-auto">
-              Bridge USDCx, pick a side, and see if you can beat the market.
+              Get DUSDC, pick a side, and see if you can beat the market.
             </p>
             <button
               onClick={() => router.push('/markets')}

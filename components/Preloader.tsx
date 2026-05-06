@@ -7,8 +7,8 @@ import styles from './Preloader.module.css';
 
 const LOGO_TEXT = 'DART';
 const FOOTER_LINES = [
-  'Meet DART - private and fast',
-  'markets, built on Aleo.',
+  'Meet DART - fast and transparent',
+  'markets, built on Sui.',
 ];
 
 export default function Preloader() {

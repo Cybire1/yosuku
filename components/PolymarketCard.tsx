@@ -43,7 +43,7 @@ export default function PolymarketCard({
     return `$${vol.toFixed(0)}`;
   };
 
-  const handleCloneToAleo = (e: React.MouseEvent) => {
+  const handleCloneToSui = (e: React.MouseEvent) => {
     e.stopPropagation();
     // Store market data in sessionStorage to pre-fill create form
     sessionStorage.setItem('cloneMarket', JSON.stringify({
@@ -119,11 +119,11 @@ export default function PolymarketCard({
 
           {showCloneAction && (
             <button
-              onClick={handleCloneToAleo}
+              onClick={handleCloneToSui}
               className="absolute inset-1 bg-white text-black font-bold uppercase tracking-widest text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center gap-2 hover:scale-[1.02] shadow-xl z-20"
             >
               <Copy className="w-4 h-4" />
-              Clone to Aleo
+              Clone to Sui
             </button>
           )}
 

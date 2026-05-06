@@ -112,9 +112,9 @@ export default function HeroSection() {
             className="flex flex-col items-start gap-2 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between sm:gap-3"
           >
             <div className="flex flex-wrap gap-2">
-              <MetaPill label="Private 5m Markets" accent />
+              <MetaPill label="On-chain 5m Markets" accent />
               <div className="hidden sm:block">
-                <MetaPill label="Aleo Testnet" />
+                <MetaPill label="Sui Testnet" />
               </div>
             </div>
 
@@ -145,10 +145,10 @@ export default function HeroSection() {
                 DART
               </h1>
               <p className="mt-4 max-w-[18rem] text-[1.02rem] font-medium leading-[1.2] text-white/84 sm:mt-5 sm:max-w-[25rem] sm:text-[2rem] lg:max-w-[23rem] lg:text-[2.15rem]">
-                Private 5-minute markets for live conviction.
+                On-chain 5-minute markets for live conviction.
               </p>
               <p className="mt-4 max-w-[18rem] text-[13px] leading-6 text-white/60 sm:max-w-[28rem] sm:text-base sm:leading-7">
-                Built on Aleo. Bet direction stays hidden while the round is open, then settles on-chain after the reveal.
+                Built on Sui. Bet direction is recorded on-chain through DeepBook Predict, with instant settlement after the round closes.
               </p>
 
               <div className="mt-8 flex flex-col gap-3 sm:mt-10 sm:flex-row sm:items-center">

@@ -1,239 +1,148 @@
-import {
-  BTC_PREDICTION_PROGRAM,
-  BACKEND_URL,
-  ROUND_DURATION_SECONDS,
-  fetchMapping,
-  parseU64,
-  parseU128,
-  type RoundState,
-  type UserPosition,
-} from '@/lib/predictionContract';
+// Oracle market helpers for DeepBook Predict
+// Uses the predict server API for oracle/market data
 
-// Avg block time on Aleo testnet (~3.5s)
-const AVG_BLOCK_TIME_MS = 3500;
+import { FLOAT_SCALING } from './sui/constants';
+import type { OracleData } from './sui/predictApi';
 
-// Cache for round metadata from backend
-const metaCache = new Map<number, { durationSecs: number; startBlock: number }>();
-let backendReachable = true;
-let backendCheckTime = 0;
+// ── Local Position Storage ───────────────────────────────
+// On-chain positions live in PredictManager.
+// We keep a local record for instant UI updates.
 
-async function fetchRoundMeta(roundId: number): Promise<{ durationSecs: number; startBlock: number } | null> {
-  const cached = metaCache.get(roundId);
-  if (cached) return cached;
-  // Skip if backend is localhost (env not configured)
-  if (BACKEND_URL.includes('localhost')) return null;
-  // Skip if backend was unreachable or returned errors recently (retry every 60s)
-  if (!backendReachable && Date.now() - backendCheckTime < 60_000) return null;
-  try {
-    const res = await fetch(`${BACKEND_URL}/api/round-meta/${roundId}`, { signal: AbortSignal.timeout(3000) });
-    if (!res.ok) {
-      backendReachable = false;
-      backendCheckTime = Date.now();
-      return null;
-    }
-    backendReachable = true;
-    const data = await res.json();
-    const meta = { durationSecs: data.durationSecs, startBlock: data.startBlock };
-    metaCache.set(roundId, meta);
-    return meta;
-  } catch {
-    backendReachable = false;
-    backendCheckTime = Date.now();
-    return null;
-  }
+export interface LocalPosition {
+  oracleId: string;
+  expiry: number;
+  strike: number;
+  direction: 'UP' | 'DOWN';
+  quantity: number;
+  cost: number;
+  timestamp: number;
+  txDigest?: string;
+  claimed?: boolean;
 }
 
-// Cached block height
-let cachedHeight = 0;
-let heightFetchedAt = 0;
+const POSITIONS_KEY = 'sui_positions';
+const CLAIMED_KEY = 'sui_claimed';
 
-export async function getBlockHeight(): Promise<number> {
-  if (cachedHeight > 0 && Date.now() - heightFetchedAt < 10_000) return cachedHeight;
+export function loadPositions(): LocalPosition[] {
   try {
-    const res = await fetch('https://api.explorer.provable.com/v1/testnet/latest/height');
-    if (!res.ok) return cachedHeight;
-    cachedHeight = parseInt(await res.text(), 10);
-    heightFetchedAt = Date.now();
-    return cachedHeight;
-  } catch {
-    return cachedHeight;
-  }
-}
-
-export async function fetchRound(roundId: number): Promise<RoundState | null> {
-  try {
-    // v7 mapping names: rt=target, rd=deadline, ro=outcome(u8), rp=dark_pool, ry=yes_pool, rn=no_pool
-    // ry/rn are only set at resolution (dark pool mechanic)
-    const [targetRaw, deadlineRaw, outcomeRaw, darkPoolRaw, yesRaw, noRaw, currentHeight] = await Promise.all([
-      fetchMapping(BTC_PREDICTION_PROGRAM, 'rt', `${roundId}u64`),
-      fetchMapping(BTC_PREDICTION_PROGRAM, 'rd', `${roundId}u64`),
-      fetchMapping(BTC_PREDICTION_PROGRAM, 'ro', `${roundId}u64`),
-      fetchMapping(BTC_PREDICTION_PROGRAM, 'rp', `${roundId}u64`),
-      fetchMapping(BTC_PREDICTION_PROGRAM, 'ry', `${roundId}u64`),
-      fetchMapping(BTC_PREDICTION_PROGRAM, 'rn', `${roundId}u64`),
-      getBlockHeight(),
-    ]);
-
-    if (!targetRaw || targetRaw === 'null') return null;
-
-    const targetPrice = parseU64(targetRaw);
-    const deadline = parseInt(deadlineRaw?.replace('u32', '').trim() || '0', 10);
-
-    // Fetch round metadata from backend for accurate duration
-    const meta = await fetchRoundMeta(roundId);
-    const durationSecs = meta?.durationSecs ?? ROUND_DURATION_SECONDS;
-    const durationMs = durationSecs * 1000;
-
-    // v7: outcome is u8 (0=pending, 1=YES, 2=NO)
-    const outcomeVal = outcomeRaw ? parseInt(outcomeRaw.replace('u8', '').trim(), 10) : 0;
-    const resolved = outcomeVal === 1 || outcomeVal === 2;
-    const outcome = resolved ? (outcomeVal === 1 ? true : false) : null;
-
-    const blocksLeft = Math.max(0, deadline - currentHeight);
-    const msLeft = blocksLeft * AVG_BLOCK_TIME_MS;
-    const endTime = Date.now() + msLeft;
-
-    // Dark pool: during betting, only totalPool (rp) is visible
-    // After resolution, ry/rn are revealed
-    const totalPool = parseU128(darkPoolRaw);
-    const yesPool = resolved ? parseU128(yesRaw) : 0;
-    const noPool = resolved ? parseU128(noRaw) : 0;
-
-    return {
-      id: roundId,
-      targetPrice,
-      deadline,
-      durationMs,
-      endTime,
-      yesMult: 0,
-      noMult: 0,
-      bankroll: 0,
-      yesLocked: 0,
-      noLocked: 0,
-      yesPool,
-      noPool,
-      totalPool,
-      resolved,
-      outcome,
-    };
-  } catch {
-    return null;
-  }
-}
-
-export function loadPositions(): UserPosition[] {
-  try {
-    const saved: { roundId: number; side: string; amount: number }[] =
-      JSON.parse(localStorage.getItem('v8_positions') || '[]');
-
-    const map = new Map<number, UserPosition>();
-    for (const p of saved) {
-      const existing = map.get(p.roundId);
-      if (existing) {
-        if (p.side === 'YES') existing.yesDeposit += p.amount;
-        else existing.noDeposit += p.amount;
-      } else {
-        map.set(p.roundId, {
-          roundId: p.roundId,
-          yesDeposit: p.side === 'YES' ? p.amount : 0,
-          noDeposit: p.side === 'NO' ? p.amount : 0,
-          claimed: false,
-        });
-      }
-    }
-
-    const claimed: number[] = JSON.parse(localStorage.getItem('v8_claimed') || '[]');
-    for (const id of claimed) {
-      const pos = map.get(id);
-      if (pos) pos.claimed = true;
-    }
-
-    return Array.from(map.values());
+    return JSON.parse(localStorage.getItem(POSITIONS_KEY) || '[]');
   } catch {
     return [];
   }
 }
 
-export function savePosition(roundId: number, side: 'YES' | 'NO', amount: number) {
-  const positions = JSON.parse(localStorage.getItem('v8_positions') || '[]');
-  positions.push({ roundId, side, amount, timestamp: Date.now() });
-  localStorage.setItem('v8_positions', JSON.stringify(positions));
+export function savePosition(position: LocalPosition) {
+  const positions = loadPositions();
+  positions.push(position);
+  localStorage.setItem(POSITIONS_KEY, JSON.stringify(positions));
 }
 
-export function markClaimed(roundId: number) {
-  const claimed: number[] = JSON.parse(localStorage.getItem('v8_claimed') || '[]');
-  if (!claimed.includes(roundId)) {
-    claimed.push(roundId);
-    localStorage.setItem('v8_claimed', JSON.stringify(claimed));
+export function markClaimed(oracleId: string) {
+  const claimed: string[] = JSON.parse(localStorage.getItem(CLAIMED_KEY) || '[]');
+  if (!claimed.includes(oracleId)) {
+    claimed.push(oracleId);
+    localStorage.setItem(CLAIMED_KEY, JSON.stringify(claimed));
   }
 }
 
-// ── v8 Commitment Storage ──────────────────────────────
-// Stores the bet preimage (side, amount, salt) needed to claim/forfeit later.
-// Keyed by address_roundId for lookup.
-
-export interface BetCommitmentData {
-  side: 'YES' | 'NO';
-  amount: number;
-  salt: string;
-  timestamp: number;
+export function isPositionClaimed(oracleId: string): boolean {
+  const claimed: string[] = JSON.parse(localStorage.getItem(CLAIMED_KEY) || '[]');
+  return claimed.includes(oracleId);
 }
 
-export function saveBetCommitment(
-  address: string,
-  roundId: number,
-  side: 'YES' | 'NO',
-  amount: number,
-  salt: string,
-) {
-  const commitments = JSON.parse(localStorage.getItem('v8_commitments') || '{}');
-  const key = `${address}_${roundId}`;
-  commitments[key] = { side, amount, salt, timestamp: Date.now() } as BetCommitmentData;
-  localStorage.setItem('v8_commitments', JSON.stringify(commitments));
+// ── Strike Grid Helpers ──────────────────────────────────
+
+export function generateStrikeGrid(
+  minStrike: number,
+  tickSize: number,
+  numTicks: number = 50,
+): number[] {
+  const strikes: number[] = [];
+  for (let i = 0; i < numTicks; i++) {
+    strikes.push(minStrike + tickSize * i);
+  }
+  return strikes;
 }
 
-export function getBetCommitment(
-  address: string,
-  roundId: number,
-): BetCommitmentData | null {
-  const commitments = JSON.parse(localStorage.getItem('v8_commitments') || '{}');
-  return commitments[`${address}_${roundId}`] ?? null;
+export function formatStrike(scaledStrike: number): string {
+  return '$' + (scaledStrike / FLOAT_SCALING).toLocaleString(undefined, {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  });
 }
 
-// Get saved payout for a position (stored at bet time from on-chain multiplier)
-export function getSavedPayout(address: string, roundId: number): number {
-  const commitment = getBetCommitment(address, roundId);
-  if ((commitment as any)?.payout) return (commitment as any).payout;
-  const positions: { roundId: number; payout?: number }[] =
-    JSON.parse(localStorage.getItem('v10_positions') || '[]');
-  const match = positions.find(p => p.roundId === roundId);
-  return match?.payout ?? 0;
+/** Find the nearest strike in the grid to a given price */
+export function nearestStrike(price: number, minStrike: number, tickSize: number): number {
+  if (tickSize <= 0) return minStrike;
+  const ticks = Math.round((price - minStrike) / tickSize);
+  return minStrike + Math.max(0, ticks) * tickSize;
 }
 
-// Export all commitments for backup (salt loss = permanent fund lock)
-export function exportCommitments(address: string): string {
-  const all = JSON.parse(localStorage.getItem('v8_commitments') || '{}');
-  const userCommitments: Record<string, BetCommitmentData> = {};
-  const prefix = `${address}_`;
-  for (const [key, val] of Object.entries(all)) {
-    if (key.startsWith(prefix)) {
-      userCommitments[key] = val as BetCommitmentData;
+// ── Time helpers ─────────────────────────────────────────
+
+export function getTimeRemaining(expiryMs: number): {
+  totalMs: number;
+  hours: number;
+  minutes: number;
+  seconds: number;
+  expired: boolean;
+} {
+  const totalMs = Math.max(0, expiryMs - Date.now());
+  const expired = totalMs <= 0;
+  const totalSeconds = Math.floor(totalMs / 1000);
+  return {
+    totalMs,
+    hours: Math.floor(totalSeconds / 3600),
+    minutes: Math.floor((totalSeconds % 3600) / 60),
+    seconds: totalSeconds % 60,
+    expired,
+  };
+}
+
+export function formatTimeRemaining(expiryMs: number): string {
+  const { hours, minutes, seconds, expired } = getTimeRemaining(expiryMs);
+  if (expired) return 'Expired';
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  if (minutes > 0) return `${minutes}m ${seconds}s`;
+  return `${seconds}s`;
+}
+
+/** Stub: get saved payout (for legacy PnLChart/PredictionStats) */
+export function getSavedPayout(_oracleId: string): number {
+  return 0;
+}
+
+/** Stub: fetch round data (legacy) */
+export async function fetchRound(_id: string | number): Promise<null> {
+  return null;
+}
+
+/** Stub: get bet commitment (legacy) */
+export function getBetCommitment(_address: string, _roundId: number): null {
+  return null;
+}
+
+/** Group oracles by time proximity */
+export function groupOraclesByTimeframe(oracles: OracleData[]): {
+  expiringSoon: OracleData[];
+  nextHour: OracleData[];
+  later: OracleData[];
+} {
+  const now = Date.now();
+  const expiringSoon: OracleData[] = [];
+  const nextHour: OracleData[] = [];
+  const later: OracleData[] = [];
+
+  for (const o of oracles) {
+    const msLeft = o.expiry - now;
+    if (msLeft <= 15 * 60 * 1000) {
+      expiringSoon.push(o);
+    } else if (msLeft <= 60 * 60 * 1000) {
+      nextHour.push(o);
+    } else {
+      later.push(o);
     }
   }
-  return JSON.stringify(userCommitments, null, 2);
-}
 
-// Import commitments from backup
-export function importCommitments(json: string): number {
-  const imported = JSON.parse(json) as Record<string, BetCommitmentData>;
-  const existing = JSON.parse(localStorage.getItem('v8_commitments') || '{}');
-  let count = 0;
-  for (const [key, val] of Object.entries(imported)) {
-    if (!existing[key] && val.salt && val.side && val.amount) {
-      existing[key] = val;
-      count++;
-    }
-  }
-  localStorage.setItem('v8_commitments', JSON.stringify(existing));
-  return count;
+  return { expiringSoon, nextHour, later };
 }

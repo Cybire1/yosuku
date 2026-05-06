@@ -1,6 +1,5 @@
-import { ALEO_API_URL, ALEO_NETWORK, BACKEND_URL, fetchMapping, parseU128 } from './predictionContract';
+import { BACKEND_URL } from './predictionContract';
 
-export const MIRROR_PROGRAM = process.env.NEXT_PUBLIC_MIRROR_PROGRAM || 'dart_mirror_v13.aleo';
 export const MIRROR_POSITIONS_KEY = 'v13_mirror_positions';
 
 export type MirrorSide = 'YES' | 'NO';
@@ -52,10 +51,6 @@ export interface MirrorStoredPosition {
   refunded?: boolean;
   outcomeLabels: [string, string];
   transactionId?: string;
-}
-
-interface WalletMethods {
-  requestRecords?: (program: string, includePlaintext?: boolean) => Promise<unknown[]>;
 }
 
 export function createMirrorPositionId(marketId: string): string {
@@ -119,83 +114,13 @@ export async function fetchMirrorMarket(marketId: string): Promise<MirrorMarketD
 }
 
 export async function fetchMirrorOutcome(marketId: string): Promise<number> {
-  const raw = await fetchMapping(MIRROR_PROGRAM, 'mo', `${marketId}u64`);
-  if (!raw) return 0;
-  return parseInt(raw.replace('u8', '').trim(), 10) || 0;
-}
-
-export async function fetchMirrorVaultAddress(): Promise<string | null> {
-  const raw = await fetchMapping(MIRROR_PROGRAM, 'aa', '1u8');
-  return raw ? raw.replace(/"/g, '').trim() : null;
-}
-
-export async function fetchMirrorPayoutCapacity(address: string): Promise<number> {
-  const raw = await fetch(`${ALEO_API_URL}/${ALEO_NETWORK}/program/test_usdcx_stablecoin.aleo/mapping/balances/${address}`);
-  if (!raw.ok) return 0;
-  const text = (await raw.text()).replace(/"/g, '').trim();
-  if (!text || text === 'null') return 0;
-  return parseU128(text);
-}
-
-function extractPlaintext(record: unknown): string | null {
-  if (typeof record === 'string') return record;
-  if (record && typeof record === 'object') {
-    const candidate = record as Record<string, unknown>;
-    if (typeof candidate.plaintext === 'string') return candidate.plaintext;
-    if (typeof candidate.data === 'string') return candidate.data;
-    if (candidate.data && typeof candidate.data === 'object') {
-      try {
-        return JSON.stringify(candidate.data);
-      } catch {
-        return null;
-      }
-    }
-  }
-  return null;
-}
-
-export function parseMirrorReceiptPlaintext(plaintext: string): {
-  marketId: string;
-  side: MirrorSide;
-  amount: number;
-  payout: number;
-} | null {
-  const midMatch = plaintext.match(/mid:\s*(\d+)u64/);
-  const sideMatch = plaintext.match(/side:\s*(true|false)/);
-  const amountMatch = plaintext.match(/amt:\s*(\d+)u128/);
-  const payoutMatch = plaintext.match(/payout:\s*(\d+)u128/);
-
-  if (!midMatch || !sideMatch || !amountMatch || !payoutMatch) {
-    return null;
-  }
-
-  return {
-    marketId: midMatch[1],
-    side: sideMatch[1] === 'true' ? 'YES' : 'NO',
-    amount: parseInt(amountMatch[1], 10),
-    payout: parseInt(payoutMatch[1], 10),
-  };
-}
-
-export async function resolveMirrorReceipt(
-  wallet: WalletMethods,
-  marketId: string,
-): Promise<string | null> {
-  if (!wallet.requestRecords) return null;
-
+  // Mirror outcome tracking — check from backend catalog
   try {
-    const records = await wallet.requestRecords(MIRROR_PROGRAM, true);
-    for (const record of records) {
-      const plaintext = extractPlaintext(record);
-      if (!plaintext) continue;
-      const parsed = parseMirrorReceiptPlaintext(plaintext);
-      if (parsed?.marketId === marketId) {
-        return plaintext;
-      }
-    }
-  } catch (error) {
-    console.warn('[MirrorMarkets] requestRecords failed:', error);
+    const market = await fetchMirrorMarket(marketId);
+    if (!market) return 0;
+    if (market.onChainResolved) return 1; // Resolved
+    return 0; // Pending
+  } catch {
+    return 0;
   }
-
-  return null;
 }

@@ -166,17 +166,17 @@ export default function HowItWorks() {
                         The Math of Trust.
                     </h2>
                     <p className="text-xl text-white/80 max-w-2xl mx-auto font-light leading-relaxed">
-                        Scroll to uncover how zero-knowledge proofs mathematically guarantee your privacy while smart contracts resolve markets instantly.
+                        Scroll to uncover how Sui smart contracts transparently guarantee fair settlement while DeepBook Predict resolves markets instantly.
                     </p>
                 </div>
 
-                {/* Floating Text overlay 2: Zero-Knowledge */}
+                {/* Floating Text overlay 2: On-Chain */}
                 <div ref={text2Ref} className="absolute inset-0 z-10 flex flex-col items-center justify-center max-w-4xl mx-auto px-4 text-center pointer-events-none mix-blend-difference opacity-0 will-change-transform">
                     <h2 className="text-5xl md:text-7xl lg:text-8xl font-black text-white mb-6 tracking-tighter text-[#34D399]">
-                        Zero-Knowledge.
+                        On-Chain.
                     </h2>
                     <p className="text-xl text-white/80 max-w-2xl mx-auto font-light leading-relaxed">
-                        Execute massive volume and complex prediction logic off-chain. Only the cryptographic proof is submitted to the Aleo network. No one sees your positions but you.
+                        Execute prediction markets with instant finality on Sui. All positions are settled transparently on-chain through DeepBook Predict smart contracts.
                     </p>
                 </div>
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useWallet } from '@provablehq/aleo-wallet-adaptor-react';
+import { useCurrentAccount } from '@mysten/dapp-kit';
 import { MessageCircle, Send, Trash2 } from 'lucide-react';
 
 interface Comment {
@@ -34,7 +34,8 @@ function timeAgo(ts: number) {
 }
 
 export default function Comments({ roundId }: CommentsProps) {
-  const { address } = useWallet();
+  const account = useCurrentAccount();
+  const address = account?.address ?? null;
   const [comments, setComments] = useState<Comment[]>([]);
   const [text, setText] = useState('');
 

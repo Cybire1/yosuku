@@ -1,583 +1,376 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import Header from '@/components/Header';
-import TradingCard from '@/components/TradingCard';
-import BetSidebar from '@/components/BetSidebar';
-import WaitingState from '@/components/WaitingState';
-import RoundHistory from '@/components/RoundHistory';
-import Comments from '@/components/Comments';
-import TokenBalance from '@/components/TokenBalance';
-import TokenFaucet from '@/components/TokenFaucet';
-import PredictionStats from '@/components/PredictionStats';
-import PnLChart from '@/components/PnLChart';
-import MirrorQueuePanel from '@/components/MirrorQueuePanel';
-import MirrorTradePanel from '@/components/MirrorTradePanel';
-import PrivateRoomsPanel from '@/components/PrivateRoomsPanel';
-import { useRounds } from '@/lib/hooks/useRounds';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { useCurrentAccount } from '@mysten/dapp-kit';
+import { useOracles } from '@/lib/sui/hooks';
+import { fetchLatestPrices, type PriceData } from '@/lib/sui/predictApi';
+import { groupOraclesByTimeframe } from '@/lib/roundHelpers';
 import { useBtcPrice } from '@/lib/hooks/useBtcPrice';
-import { useWallet } from '@provablehq/aleo-wallet-adaptor-react';
-import { fetchRound, loadPositions, markClaimed } from '@/lib/roundHelpers';
-import { fetchMirrorCatalog, type MirrorMarketData } from '@/lib/mirrorMarkets';
-import {
-  isRoomUnlocked,
-  isMirrorVisibleInRoom,
-  loadUnlockedRooms,
-  unlockRoom,
-  type PrivateRoomId,
-} from '@/lib/privateRooms';
-import {
-  BACKEND_URL,
-  DURATION_OPTIONS,
-  formatPred,
-  type DurationLabel,
-} from '@/lib/predictionContract';
-import { Activity, Timer, Trophy, XCircle, BarChart3, MessageCircle, BookOpen, History, Shield, ChevronDown, ChevronUp } from 'lucide-react';
-import BitcoinIcon from '@/components/icons/BitcoinIcon';
-import NewsFeed from '@/components/NewsFeed';
-import TickerTape from '@/components/TickerTape';
-import DoodleStrip from '@/components/DoodleStrip';
-
-type BottomTab = 'activity' | 'comments' | 'stats' | 'rules';
+import { genCandles, drawCandles } from '@/lib/charts/canvasChart';
+import { FLOAT_SCALING } from '@/lib/sui/constants';
+import Header from '@/components/Header';
+import Footer from '@/components/Footer';
+import Marquee from '@/components/Marquee';
+import GrainOverlay from '@/components/GrainOverlay';
+import MarketCard from '@/components/MarketCard';
+import SectionHeader from '@/components/SectionHeader';
+import TheBell from '@/components/TheBell';
 
 export default function MarketsPage() {
-  const { address } = useWallet();
-  const { change24h } = useBtcPrice();
-  const { activeRound, pastRounds, positions, loading, reloadPositions, setActiveRound } = useRounds();
+  const account = useCurrentAccount();
+  const address = account?.address ?? null;
+  const { active, settled, loading, error } = useOracles(15_000);
+  const [prices, setPrices] = useState<Record<string, PriceData>>({});
+  const { price: btcPrice } = useBtcPrice();
+  const heroCanvasRef = useRef<HTMLCanvasElement>(null);
+  const [filter, setFilter] = useState('all');
 
-  const [mintTrigger, setMintTrigger] = useState(0);
-  const [selectedDuration, setSelectedDuration] = useState<DurationLabel>('5 Minutes');
-  const [notification, setNotification] = useState<{ type: 'win' | 'lose'; amount: number; roundId: number } | null>(null);
-  const [bottomTab, setBottomTab] = useState<BottomTab>('comments');
-  const [mirrorMarkets, setMirrorMarkets] = useState<MirrorMarketData[]>([]);
-  const [mirrorLoading, setMirrorLoading] = useState(true);
-  const [mirrorLastSyncAt, setMirrorLastSyncAt] = useState<string | null>(null);
-  const [mirrorCreateOnChain, setMirrorCreateOnChain] = useState(false);
-  const [selectedMirrorMarketId, setSelectedMirrorMarketId] = useState<string | null>(null);
-  const [activeRoomId, setActiveRoomId] = useState<PrivateRoomId>('public');
-  const [unlockedRooms, setUnlockedRooms] = useState<PrivateRoomId[]>([]);
-  const [showLegacyTrader, setShowLegacyTrader] = useState(false);
-
-  // Auto-select duration tab to match active round
+  // Fetch prices for active oracles
   useEffect(() => {
-    if (!activeRound) return;
-    const durationSecs = activeRound.durationMs / 1000;
-    const match = DURATION_OPTIONS.find(d => Math.abs(d.seconds - durationSecs) < 10);
-    if (match) setSelectedDuration(match.label);
-  }, [activeRound]);
-
-  useEffect(() => {
+    if (active.length === 0) return;
     let cancelled = false;
-    setUnlockedRooms(loadUnlockedRooms());
-
-    async function loadMirrorCatalog() {
-      try {
-        const markets = await fetchMirrorCatalog();
-        if (cancelled) return;
-        setMirrorMarkets(markets);
-        const res = await fetch(`${BACKEND_URL}/api/mirrors`);
-        const data = res.ok ? await res.json() : null;
-        setMirrorLastSyncAt(data?.status?.lastSyncAt || null);
-        setMirrorCreateOnChain(Boolean(data?.status?.createOnChain));
-        setSelectedMirrorMarketId((current) => {
-          if (current && markets.some((market) => market.marketId === current)) {
-            return current;
-          }
-          return markets.find((market) => market.onChainCreated && !market.onChainResolved)?.marketId
-            || markets[0]?.marketId
-            || null;
-        });
-      } catch (error) {
-        if (!cancelled) {
-          console.error('Failed to load mirror catalog:', error);
-          setMirrorMarkets([]);
-          setSelectedMirrorMarketId(null);
+    async function loadPrices() {
+      const results = await Promise.allSettled(
+        active.map(o => fetchLatestPrices(o.oracle_id))
+      );
+      if (cancelled) return;
+      const newPrices: Record<string, PriceData> = {};
+      results.forEach((r, i) => {
+        if (r.status === 'fulfilled' && r.value) {
+          newPrices[active[i].oracle_id] = r.value;
         }
-      } finally {
-        if (!cancelled) {
-          setMirrorLoading(false);
-        }
-      }
-    }
-
-    void loadMirrorCatalog();
-    const interval = window.setInterval(() => {
-      void loadMirrorCatalog();
-    }, 60_000);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(interval);
-    };
-  }, []);
-
-  const visibleMirrorMarkets = mirrorMarkets.filter((market) =>
-    isMirrorVisibleInRoom(market, activeRoomId, unlockedRooms)
-  );
-
-  useEffect(() => {
-    setSelectedMirrorMarketId((current) => {
-      if (current && visibleMirrorMarkets.some((market) => market.marketId === current)) {
-        return current;
-      }
-      return visibleMirrorMarkets.find((market) => market.onChainCreated && !market.onChainResolved)?.marketId
-        || visibleMirrorMarkets[0]?.marketId
-        || null;
-    });
-  }, [visibleMirrorMarkets]);
-
-  const selectedMirrorMarket = visibleMirrorMarkets.find((market) => market.marketId === selectedMirrorMarketId) || null;
-  const selectedRoomLocked = !isRoomUnlocked(activeRoomId, unlockedRooms);
-
-  // Check if active round's duration matches selected tab
-  const durationMs = DURATION_OPTIONS.find(d => d.label === selectedDuration)!.seconds * 1000;
-  const roundMatchesTab = activeRound && Math.abs(activeRound.durationMs - durationMs) < 10_000;
-
-  // Show win/lose notification when round resolves (useRounds handles the actual transition)
-  const prevRoundRef = useRef<{ id: number; resolved: boolean } | null>(null);
-  useEffect(() => {
-    if (!activeRound) {
-      // Check if previous round just disappeared (resolved and transitioned by useRounds)
-      if (prevRoundRef.current && !prevRoundRef.current.resolved) {
-        // Round was active, now gone — check for notification from pastRounds
-        const resolved = pastRounds.find(r => r.id === prevRoundRef.current!.id);
-        if (resolved) {
-          const currentPositions = loadPositions();
-          const pos = currentPositions.find(p => p.roundId === resolved.id);
-          if (pos) {
-            const userSide = pos.yesDeposit > 0 ? 'YES' : 'NO';
-            const winningSide = resolved.outcome ? 'YES' : 'NO';
-            const userDeposit = Math.max(pos.yesDeposit, pos.noDeposit);
-            const isWinner = userSide === winningSide;
-
-            if (isWinner) {
-              const totalPool = resolved.yesPool + resolved.noPool;
-              const winPool = resolved.outcome ? resolved.yesPool : resolved.noPool;
-              const payout = winPool > 0 ? (userDeposit / winPool) * totalPool * 0.9 : 0;
-              setNotification({ type: 'win', amount: payout, roundId: resolved.id });
-            } else {
-              setNotification({ type: 'lose', amount: userDeposit, roundId: resolved.id });
-            }
-            setTimeout(() => setNotification(null), 8000);
-          }
-        }
-      }
-      prevRoundRef.current = null;
-      return;
-    }
-    prevRoundRef.current = { id: activeRound.id, resolved: activeRound.resolved };
-  }, [activeRound, pastRounds]);
-
-  const handleBetSuccess = () => {
-    setMintTrigger(prev => prev + 1);
-    reloadPositions();
-    if (activeRound) {
-      fetchRound(activeRound.id).then(updated => {
-        if (updated) setActiveRound(prev => prev ? { ...updated, endTime: prev.endTime } : updated);
       });
+      setPrices(newPrices);
     }
+    loadPrices();
+    const interval = setInterval(loadPrices, 5_000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [active]);
+
+  // Hero chart
+  useEffect(() => {
+    if (!heroCanvasRef.current) return;
+    const spot = btcPrice || 95420;
+    const candles = genCandles(7, 60, spot - 1200, spot, 280);
+    drawCandles(heroCanvasRef.current, candles, {
+      strike: spot - 400,
+      maxCandleW: 6,
+      gridLines: true,
+      marker: true,
+      padX: 14,
+      padTop: 12,
+      padBot: 12,
+    });
+  }, [btcPrice]);
+
+  const groups = groupOraclesByTimeframe(active);
+  const recentSettled = settled.slice(0, 6);
+
+  // Determine next expiry for TheBell
+  const nextExpiry = useMemo(() => {
+    if (active.length === 0) return undefined;
+    const sorted = [...active].sort((a, b) => a.expiry - b.expiry);
+    return sorted[0]?.expiry;
+  }, [active]);
+
+  // Filter
+  const filterOracles = (oracles: typeof active) => {
+    if (filter === 'all') return oracles;
+    return oracles.filter(o => o.underlying_asset === filter);
   };
 
-  const handleClaim = (roundId: number) => {
-    markClaimed(roundId);
-    reloadPositions();
-    setMintTrigger(prev => prev + 1);
-  };
-
-  const currentPosition = activeRound
-    ? positions.find(p => p.roundId === activeRound.id)
-    : undefined;
-
-  const BOTTOM_TABS: { key: BottomTab; label: string; icon: typeof History }[] = [
-    { key: 'activity', label: 'Activity', icon: History },
-    { key: 'comments', label: 'Comments', icon: MessageCircle },
-    { key: 'stats', label: 'Stats', icon: BarChart3 },
-    { key: 'rules', label: 'Rules', icon: BookOpen },
-  ];
+  const FILTERS = ['all', 'BTC', 'ETH', 'SOL', 'SUI'];
 
   return (
-    <div className="min-h-screen overflow-x-hidden selection:bg-white selection:text-black">
+    <div className="min-h-screen relative">
+      <Marquee />
       <Header />
+      <GrainOverlay />
 
-      {/* Win/Lose notification */}
-      <AnimatePresence>
-        {notification && (
-          <motion.div
-            initial={{ y: -80, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: -80, opacity: 0 }}
-            transition={{ type: 'spring', damping: 20 }}
-            className="fixed top-20 left-1/2 -translate-x-1/2 z-[55]"
-          >
-            <div className={`flex items-center gap-3 px-6 py-3.5 rounded-2xl border backdrop-blur-xl shadow-2xl ${notification.type === 'win'
-              ? 'bg-new-mint/15 border-new-mint/30 shadow-new-mint/10'
-              : 'bg-off-red/15 border-off-red/30 shadow-off-red/10'
-              }`}>
-              {notification.type === 'win' ? (
-                <Trophy className="w-5 h-5 text-new-mint" />
-              ) : (
-                <XCircle className="w-5 h-5 text-off-red" />
-              )}
-              <div>
-                <span className={`text-sm font-bold ${notification.type === 'win' ? 'text-new-mint' : 'text-off-red'}`}>
-                  {notification.type === 'win' ? 'You Won!' : 'Round Lost'}
-                </span>
-                <span className="text-xs text-gray-400 ml-2">
-                  Round #{notification.roundId} —{' '}
-                  {notification.type === 'win'
-                    ? `+${formatPred(notification.amount)} USDCx`
-                    : `-${formatPred(notification.amount)} USDCx`
-                  }
-                </span>
+      {/* Page Hero */}
+      <section className="page-hero">
+        <span className="crop tl" />
+        <span className="crop tr" />
+        <span className="crop bl" />
+        <span className="crop br" />
+
+        <span className="hero-meta tl">
+          LAT 35.6762
+          <span className="ln">LON 139.6503 / TOKYO</span>
+        </span>
+        <span className="hero-meta tr">
+          EDITION 04 / OF 2026
+          <span className="ln">SUI · TESTNET</span>
+        </span>
+        <span className="hero-meta bl">
+          PLATE M-04
+          <span className="ln">FLOOR · OPEN</span>
+        </span>
+        <span className="hero-meta br">
+          R/N 015-2026-Q2
+          <span className="ln">15 MIN CADENCE</span>
+        </span>
+
+        <div className="container">
+          <div className="breadcrumb">
+            <a href="/" data-cursor="hover">Home</a>
+            <span className="sep">/</span>
+            <span style={{ color: 'var(--white)' }}>Markets</span>
+          </div>
+
+          <div className="hero-grid">
+            <div className="hero-left">
+              <div className="eyebrow">
+                <span className="dash" />
+                <span className="live-dot" />
+                <span>The floor · open</span>
+                <span style={{ color: 'var(--gray-700)' }}>·</span>
+                <span>15-min binary rounds</span>
               </div>
-              {notification.type === 'win' && (
-                <span className="text-xs font-bold text-new-mint/60 ml-2">Claim in history</span>
-              )}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+              <h1 className="page-title">
+                The<br />
+                <span className="accent">floor</span> is<br />
+                open.
+              </h1>
+              <div className="page-title-jp">予測の場が、開いています。</div>
+              <p className="page-subtitle">
+                Binary rounds across BTC, ETH, SOL and SUI. Strike, window
+                and oracle are deterministic. Take a side before the bell.
+              </p>
 
-      <DoodleStrip />
-      <main className="pt-28 pb-24 sm:pb-12 relative">
-        <motion.div
-          className="max-w-[1400px] mx-auto px-4 sm:px-6"
-          initial="hidden"
-          animate="visible"
-          variants={{
-            hidden: { opacity: 0 },
-            visible: {
-              opacity: 1,
-              transition: { staggerChildren: 0.1 }
-            }
-          }}
-        >
-
-          <motion.section
-            variants={{
-              hidden: { opacity: 0, y: 24 },
-              visible: { opacity: 1, y: 0, transition: { type: 'spring', damping: 24, stiffness: 220 } }
-            }}
-            className="mb-6 rounded-[2rem] border border-white/7 bg-neutral-950/75 p-5 sm:p-6"
-          >
-            <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-              <div className="max-w-3xl">
-                <div className="mb-3 flex flex-wrap items-center gap-2">
-                  <span className="rounded-full border border-new-mint/20 bg-new-mint/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.24em] text-new-mint">
-                    DART v13
-                  </span>
-                  <span className="rounded-full border border-off-blue/20 bg-off-blue/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.24em] text-off-blue">
-                    Autonomous mirror markets
-                  </span>
-                  <span className="rounded-full border border-white/8 bg-white/[0.03] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.24em] text-gray-300">
-                    {mirrorCreateOnChain ? 'On-chain mirroring enabled' : 'Catalog + trading mode'}
-                  </span>
+              <div className="hero-status">
+                <div className="item">
+                  <div className="lbl">Open markets</div>
+                  <div className="val">{active.length}</div>
+                  <div className="meta">{filterOracles(groups.expiringSoon).length} closing &lt; 10:00</div>
                 </div>
-
-                <h1 className="text-3xl font-black tracking-tight text-white sm:text-4xl">
-                  Private execution for public markets.
-                </h1>
-                <p className="mt-3 max-w-2xl text-sm leading-relaxed text-gray-400 sm:text-base">
-                  DART mirrors high-signal public markets into Aleo-native private rooms. In v13, bet direction stays hidden during active betting,
-                  payouts settle to shielded USDCx records, and cancelled markets can be refunded privately.
-                </p>
-
-                <div className="mt-4 flex flex-wrap items-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em]">
-                  <span className="rounded-full border border-white/8 bg-white/[0.03] px-3 py-1 text-gray-300">Hidden-side betting</span>
-                  <span className="rounded-full border border-white/8 bg-white/[0.03] px-3 py-1 text-gray-300">Shielded payouts</span>
-                  <span className="rounded-full border border-white/8 bg-white/[0.03] px-3 py-1 text-gray-300">Private rooms</span>
-                  <span className="rounded-full border border-white/8 bg-white/[0.03] px-3 py-1 text-gray-300">Auto-mirrored from Polymarket</span>
+                <div className="item">
+                  <div className="lbl">BTC Spot</div>
+                  <div className="val">{btcPrice ? `$${btcPrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '—'}</div>
+                  <div className="meta">Pyth · live</div>
                 </div>
-              </div>
-
-              <div className="flex flex-col gap-3 xl:min-w-[280px] xl:items-end">
                 {address && (
-                  <div className="rounded-2xl border border-white/7 bg-black/30 px-4 py-3">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-gray-500">Public wallet balance</p>
-                    <div className="mt-2">
-                      <TokenBalance refreshTrigger={mintTrigger} />
-                    </div>
+                  <div className="item">
+                    <div className="lbl">Wallet</div>
+                    <div className="val">{address.slice(0, 6)}…{address.slice(-4)}</div>
+                    <div className="meta">Connected</div>
                   </div>
                 )}
-
-                <button
-                  onClick={() => setShowLegacyTrader((prev) => !prev)}
-                  className="inline-flex items-center gap-2 rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3 text-xs font-bold uppercase tracking-[0.2em] text-gray-300 transition-colors hover:text-white"
-                >
-                  {showLegacyTrader ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                  {showLegacyTrader ? 'Hide Legacy BTC Trader' : 'Show Legacy BTC Trader'}
-                </button>
               </div>
             </div>
-          </motion.section>
 
-          <PrivateRoomsPanel
-            activeRoomId={activeRoomId}
-            unlockedRooms={unlockedRooms}
-            onSelectRoom={setActiveRoomId}
-            onUnlockRoom={(roomId, code) => {
-              const ok = unlockRoom(roomId, code);
-              if (ok) {
-                setUnlockedRooms(loadUnlockedRooms());
-              }
-              return ok;
-            }}
-          />
-
-          <MirrorQueuePanel
-            markets={visibleMirrorMarkets}
-            loading={mirrorLoading}
-            lastSyncAt={mirrorLastSyncAt}
-            createOnChain={mirrorCreateOnChain}
-            selectedMarketId={selectedMirrorMarketId}
-            onSelectMarket={(market) => setSelectedMirrorMarketId(market.marketId)}
-          />
-
-          <MirrorTradePanel
-            market={selectedMirrorMarket}
-            roomId={activeRoomId}
-            roomLocked={selectedRoomLocked}
-            onSuccess={() => {
-              setMintTrigger((prev) => prev + 1);
-            }}
-          />
-
-          {showLegacyTrader && (
-          <>
-          {/* Top bar: Duration tabs + Balance */}
-          <motion.div
-            variants={{
-              hidden: { opacity: 0, y: 30 },
-              visible: { opacity: 1, y: 0, transition: { type: 'spring', damping: 25, stiffness: 200 } }
-            }}
-            className="flex items-center justify-between gap-3 mb-6"
-          >
-            <div className="flex items-center gap-1.5 sm:gap-3 overflow-x-auto scrollbar-hide">
-              <div className="flex items-center gap-2 mr-1 sm:mr-3 flex-shrink-0">
-                <BitcoinIcon className="w-5 h-5 sm:w-7 sm:h-7" />
-                <span className="text-base font-black uppercase tracking-tight text-white hidden sm:inline">BTC</span>
+            {/* Hero chart */}
+            <div className="hero-chart">
+              <div className="hero-chart-head">
+                <div className="left">
+                  <span className="glyph">₿</span>
+                  <div>
+                    <div className="pair">BTC · USD</div>
+                    <div className="pair-meta">spot · pyth · 1m candles</div>
+                  </div>
+                </div>
+                <div className="left" style={{ textAlign: 'right', flexDirection: 'column', alignItems: 'flex-end', gap: 0 }}>
+                  <div>
+                    <span className="price">
+                      {btcPrice ? `$${btcPrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '—'}
+                    </span>
+                    <span className="delta">+1.24%</span>
+                  </div>
+                  <div className="pair-meta" style={{ fontSize: '9px' }}>last update · live</div>
+                </div>
               </div>
-              <Timer className="w-3.5 h-3.5 text-gray-500 flex-shrink-0 hidden sm:block" />
-              {DURATION_OPTIONS.map((opt) => (
+              <canvas ref={heroCanvasRef} />
+              <div className="hero-chart-foot">
+                <span>LIVE · PYTH ORACLE</span>
+                <span className="ramp">
+                  <span>YES</span>
+                  <span className="bar"><span className="fill" /></span>
+                  <span style={{ color: 'var(--vermilion)' }}>64¢</span>
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Filter bar (sticky) */}
+      <div className="filter-bar">
+        <div className="container">
+          <div className="filter-row">
+            <div className="filter-tabs">
+              {FILTERS.map(f => (
                 <button
-                  key={opt.label}
-                  onClick={() => setSelectedDuration(opt.label)}
-                  className={`px-2.5 sm:px-5 py-1.5 sm:py-2 rounded-lg text-[11px] sm:text-xs font-bold tracking-wide transition-all flex-shrink-0 ${selectedDuration === opt.label
-                    ? 'bg-new-mint/15 text-new-mint border border-new-mint/30'
-                    : 'bg-white/[0.03] text-gray-500 border border-white/5 hover:text-white hover:bg-white/5'
-                    }`}
+                  key={f}
+                  className={`filter-tab ${filter === f ? 'active' : ''}`}
+                  onClick={() => setFilter(f)}
                 >
-                  {opt.label.replace(' Minutes', 'm').replace(' Minute', 'm').replace(' Hour', 'h')}
+                  {f === 'all' ? 'All' : f}
+                  <span className="ct">
+                    {f === 'all'
+                      ? String(active.length).padStart(2, '0')
+                      : String(active.filter(o => o.underlying_asset === f).length).padStart(2, '0')
+                    }
+                  </span>
                 </button>
               ))}
             </div>
-
-            {address && (
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <TokenBalance refreshTrigger={mintTrigger} />
-              </div>
-            )}
-          </motion.div>
-
-          {/* Scrolling ticker tape */}
-          <div className="-mx-4 sm:-mx-6">
-            <TickerTape />
           </div>
+        </div>
+      </div>
 
-          {/* Faucet */}
-          {address && (
-            <motion.div
-              variants={{
-                hidden: { opacity: 0, y: 30 },
-                visible: { opacity: 1, y: 0, transition: { type: 'spring', damping: 25, stiffness: 200 } }
-              }}
-              className="mb-5"
-            >
-              <TokenFaucet onMinted={() => setMintTrigger(prev => prev + 1)} />
-            </motion.div>
+      {/* Main content */}
+      <main>
+        <div className="container">
+          {/* Loading */}
+          {loading && (
+            <div className="empty-state">
+              <div className="jp">予</div>
+              <h3>Loading markets...</h3>
+              <p>Fetching oracles from DeepBook Predict</p>
+            </div>
           )}
 
-          {/* Two-column: Card + Sidebar */}
-          <motion.div
-            variants={{
-              hidden: { opacity: 0, scale: 0.95 },
-              visible: { opacity: 1, scale: 1, transition: { type: 'spring', damping: 25, stiffness: 200 } }
-            }}
-            className="flex gap-6"
-          >
-            {/* Main content */}
-            <div className="flex-1 min-w-0">
-              {/* Main Trading Card */}
-              {loading ? (
-                <div className="bg-neutral-900/50 border border-white/5 rounded-3xl p-12 text-center">
-                  <Activity className="w-8 h-8 text-gray-600 mx-auto mb-3 animate-pulse" />
-                  <p className="text-gray-500">Fetching rounds from chain...</p>
-                </div>
-              ) : roundMatchesTab && activeRound ? (
-                <motion.div
-                  key={activeRound.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.5 }}
-                >
-                  <TradingCard
-                    round={activeRound}
-                    userYesDeposit={currentPosition?.yesDeposit || 0}
-                    userNoDeposit={currentPosition?.noDeposit || 0}
+          {/* Error */}
+          {error && !loading && (
+            <div className="empty-state">
+              <div className="jp">誤</div>
+              <h3>Connection error</h3>
+              <p>{error}</p>
+            </div>
+          )}
+
+          {/* No markets */}
+          {!loading && !error && active.length === 0 && (
+            <div className="empty-state">
+              <div className="jp">空</div>
+              <h3>No active markets</h3>
+              <p>New oracle rounds are created every 15 minutes</p>
+            </div>
+          )}
+
+          {/* Closing soon */}
+          {filterOracles(groups.expiringSoon).length > 0 && (
+            <section className="markets-section" data-section="closing">
+              <SectionHeader
+                number="01"
+                title="Closing soon"
+                jp="締切間近"
+                desc="Last call. Strike, side, and stake — the bell does the rest."
+                live
+                meta={`${filterOracles(groups.expiringSoon).length} markets · < 10:00`}
+              />
+              <div className="markets-grid">
+                {filterOracles(groups.expiringSoon).map(oracle => (
+                  <MarketCard
+                    key={oracle.oracle_id}
+                    oracle={oracle}
+                    spotPrice={prices[oracle.oracle_id]?.spot}
+                    forwardPrice={prices[oracle.oracle_id]?.forward}
                   />
-                </motion.div>
-              ) : (
-                <WaitingState />
-              )}
-
-              {/* Mobile bet panel */}
-              {roundMatchesTab && activeRound && (
-                <div className="lg:hidden mt-5">
-                  <BetSidebar round={activeRound} onSuccess={handleBetSuccess} />
-                </div>
-              )}
-
-              {/* Bottom tab bar */}
-              <div className="mt-8 flex items-center gap-1 border-b border-white/5 mb-4">
-                {BOTTOM_TABS.map(({ key, label, icon: Icon }) => (
-                  <button
-                    key={key}
-                    onClick={() => setBottomTab(key)}
-                    className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-4 py-2.5 text-[11px] sm:text-xs font-bold transition-all border-b-2 ${bottomTab === key
-                      ? 'text-white border-new-mint'
-                      : 'text-gray-500 border-transparent hover:text-gray-300'
-                      }`}
-                  >
-                    <Icon className="w-3.5 h-3.5" />
-                    {label}
-                  </button>
                 ))}
               </div>
-
-              {/* Bottom tab content */}
-              <div className="min-h-[200px]">
-                {bottomTab === 'activity' && (
-                  <RoundHistory
-                    rounds={pastRounds}
-                    positions={positions}
-                    onClaim={handleClaim}
-                  />
-                )}
-
-                {bottomTab === 'comments' && (
-                  <Comments roundId={activeRound?.id || 0} />
-                )}
-
-                {bottomTab === 'stats' && (
-                  <div className="space-y-4">
-                    {address && positions.length > 0 ? (
-                      <>
-                        <PredictionStats rounds={pastRounds} positions={positions} />
-                        <PnLChart rounds={pastRounds} positions={positions} />
-                      </>
-                    ) : (
-                      <div className="text-center py-12">
-                        <BarChart3 className="w-8 h-8 text-gray-600 mx-auto mb-3" />
-                        <p className="text-gray-500 text-sm">
-                          {address ? 'Place some bets to see your stats' : 'Connect wallet to see stats'}
-                        </p>
-                      </div>
-                    )}
-
-                    {/* BTC / Pool stats */}
-                    {activeRound && (
-                      <div className="bg-neutral-900/40 border border-white/5 rounded-xl p-4 space-y-3">
-                        <div className="flex justify-between items-center">
-                          <span className="text-xs text-gray-500">BTC 24h</span>
-                          <span className={`text-xs font-mono font-bold ${change24h >= 0 ? 'text-new-mint' : 'text-off-red'}`}>
-                            {change24h >= 0 ? '+' : ''}{change24h.toFixed(2)}%
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-xs text-gray-500">Pool</span>
-                          <span className="text-xs font-mono font-bold text-new-mint">
-                            {formatPred(activeRound.totalPool)} USDCx
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-xs text-gray-500">Fee</span>
-                          <span className="text-xs font-bold text-gray-400">10%</span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {bottomTab === 'rules' && (
-                  <div className="bg-neutral-900/40 border border-white/5 rounded-xl p-5 space-y-4">
-                    <h4 className="text-sm font-bold text-white">How it works</h4>
-                    <div className="space-y-3 text-[13px] text-gray-400 leading-relaxed">
-                      <p>
-                        Each round sets a <span className="text-new-blue font-bold">target BTC price</span>.
-                        Predict whether BTC will be at or above the target when the round ends.
-                      </p>
-                      <p>
-                        Resolves <span className="text-new-mint font-bold">YES</span> if BTC price at round end
-                        is greater than or equal to the target price. Otherwise resolves{' '}
-                        <span className="text-off-red font-bold">NO</span>.
-                      </p>
-                      <p>
-                        Winners split the pool proportionally (minus <span className="text-white font-bold">10% fee</span>).
-                        Stake with <span className="text-white font-bold">USDCx stablecoin</span>.
-                        Your bets are encrypted as private Aleo records.
-                      </p>
-                      <div className="border-t border-white/5 pt-3 space-y-2 text-xs text-gray-500">
-                        <div className="flex justify-between">
-                          <span>Platform fee</span>
-                          <span className="text-white font-bold">10%</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Token</span>
-                          <span className="text-white font-bold">USDCx</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Network</span>
-                          <span className="text-white font-bold">Aleo Testnet</span>
-                        </div>
-                        <div className="border-t border-white/5 pt-2 mt-2 space-y-2">
-                          <div className="flex justify-between items-center">
-                            <span>Bet Privacy</span>
-                            <span className="flex items-center gap-1 text-sky-400 font-bold"><Shield className="w-3 h-3" /> Encrypted</span>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <span>Identity</span>
-                            <span className="text-sky-400 font-bold">BHP256 Hashed</span>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <span>Claims</span>
-                            <span className="text-sky-400 font-bold">ZK-Verified</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* BTC News Feed — mobile */}
-              <div className="lg:hidden">
-                <NewsFeed />
-              </div>
-            </div>
-
-            {/* Sidebar — bet panel + news (desktop only) */}
-            {roundMatchesTab && activeRound && (
-              <div className="hidden lg:block w-[340px] flex-shrink-0">
-                <BetSidebar round={activeRound} onSuccess={handleBetSuccess} />
-                <NewsFeed />
-              </div>
-            )}
-          </motion.div>
-          </>
+            </section>
           )}
-        </motion.div>
+
+          {/* Next hour */}
+          {filterOracles(groups.nextHour).length > 0 && (
+            <section className="markets-section" data-section="hour">
+              <SectionHeader
+                number="02"
+                title="Next hour"
+                jp="次の一時間"
+                desc="Open positions ahead of the next four bells. Liquidity is forming."
+                meta={`${filterOracles(groups.nextHour).length} markets · 15:00 → 60:00`}
+              />
+              <div className="markets-grid">
+                {filterOracles(groups.nextHour).map(oracle => (
+                  <MarketCard
+                    key={oracle.oracle_id}
+                    oracle={oracle}
+                    spotPrice={prices[oracle.oracle_id]?.spot}
+                    forwardPrice={prices[oracle.oracle_id]?.forward}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* Later */}
+          {filterOracles(groups.later).length > 0 && (
+            <section className="markets-section" data-section="later">
+              <SectionHeader
+                number="03"
+                title="Later today"
+                jp="後ほど"
+                desc="Longer horizons. Lower density, higher conviction."
+                meta={`${filterOracles(groups.later).length} markets · 1h → 24h`}
+              />
+              <div className="markets-grid">
+                {filterOracles(groups.later).map(oracle => (
+                  <MarketCard
+                    key={oracle.oracle_id}
+                    oracle={oracle}
+                    spotPrice={prices[oracle.oracle_id]?.spot}
+                    forwardPrice={prices[oracle.oracle_id]?.forward}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* Fallback: show all active */}
+          {!loading && active.length > 0 &&
+            groups.expiringSoon.length === 0 &&
+            groups.nextHour.length === 0 &&
+            groups.later.length === 0 && (
+            <section className="markets-section">
+              <SectionHeader
+                number="01"
+                title="Active Markets"
+                jp="市場"
+                count={filterOracles(active).length}
+              />
+              <div className="markets-grid">
+                {filterOracles(active).map(oracle => (
+                  <MarketCard
+                    key={oracle.oracle_id}
+                    oracle={oracle}
+                    spotPrice={prices[oracle.oracle_id]?.spot}
+                    forwardPrice={prices[oracle.oracle_id]?.forward}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* Recently Settled */}
+          {recentSettled.length > 0 && (
+            <section className="markets-section settled" data-section="settled" style={{ paddingTop: '96px' }}>
+              <SectionHeader
+                number="04"
+                title="Recently settled"
+                jp="確定済"
+                desc="Last 60 minutes. Receipts on Suiscan, payouts in DUSDC."
+                meta="last 60 minutes"
+              />
+              <div className="markets-grid">
+                {recentSettled.map(oracle => (
+                  <MarketCard
+                    key={oracle.oracle_id}
+                    oracle={oracle}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+        </div>
       </main>
+
+      {/* Footer */}
+      <Footer />
+
+      {/* The Bell */}
+      {nextExpiry && <TheBell targetTime={nextExpiry} />}
     </div>
   );
 }

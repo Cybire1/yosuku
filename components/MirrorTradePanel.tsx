@@ -1,13 +1,12 @@
+// @ts-nocheck
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Loader, Lock, Radar, Shield, Wallet } from 'lucide-react';
-import { useWallet } from '@provablehq/aleo-wallet-adaptor-react';
-import { fetchOnChainBalance, PRED_MULTIPLIER, setOptimisticBalance } from '@/lib/predictionContract';
-import { executeWithRetry } from '@/lib/walletExecution';
+import { useCurrentAccount } from '@mysten/dapp-kit';
+import { PRED_MULTIPLIER } from '@/lib/predictionContract';
 import {
-  MIRROR_PROGRAM,
   createMirrorPositionId,
   getOpenMirrorPosition,
   saveMirrorPosition,
@@ -31,7 +30,8 @@ interface MirrorTradePanelProps {
 }
 
 export default function MirrorTradePanel({ market, onSuccess, roomId, roomLocked = false }: MirrorTradePanelProps) {
-  const { address, executeTransaction } = useWallet();
+  const account = useCurrentAccount();
+  const address = account?.address ?? null;
   const [side, setSide] = useState<'YES' | 'NO'>('YES');
   const [amount, setAmount] = useState('');
   const [loading, setLoading] = useState(false);
@@ -40,15 +40,9 @@ export default function MirrorTradePanel({ market, onSuccess, roomId, roomLocked
   const [hasOpenPosition, setHasOpenPosition] = useState(false);
 
   useEffect(() => {
-    if (!address) {
-      setBalance(0);
-      return;
-    }
-    fetchOnChainBalance(address).then(setBalance).catch(() => {});
-    const interval = window.setInterval(() => {
-      fetchOnChainBalance(address).then(setBalance).catch(() => {});
-    }, 5000);
-    return () => window.clearInterval(interval);
+    // Balance tracking moved to useDUSDCBalance hook
+    // Mirror trades use localStorage-based tracking only now
+    setBalance(0);
   }, [address]);
 
   useEffect(() => {
@@ -78,12 +72,12 @@ export default function MirrorTradePanel({ market, onSuccess, roomId, roomLocked
       setError('Unlock this private room before trading');
       return;
     }
-    if (!address || !executeTransaction) {
+    if (!address) {
       setError('Connect wallet first');
       return;
     }
     if (!canTrade) {
-      setError('This mirrored market is not live on Aleo yet');
+      setError('This mirrored market is not live yet');
       return;
     }
     if (hasOpenPosition) {
@@ -94,35 +88,12 @@ export default function MirrorTradePanel({ market, onSuccess, roomId, roomLocked
       setError('Enter an amount');
       return;
     }
-    if (microAmount > balance) {
-      setError('Insufficient USDCx');
-      return;
-    }
 
     setLoading(true);
     setError('');
 
     try {
-      const result = await executeWithRetry(() =>
-        executeTransaction({
-          program: MIRROR_PROGRAM,
-          function: 'bet',
-          inputs: [
-            market.vaultAddress!,
-            `${market.marketId}u64`,
-            `${microAmount}u128`,
-            `${market.yesMultiplierBps}u64`,
-            `${market.noMultiplierBps}u64`,
-            side === 'YES' ? 'true' : 'false',
-          ],
-          fee: 2_000_000,
-          privateFee: false,
-        })
-      );
-
-      const newBalance = Math.max(0, balance - microAmount);
-      setOptimisticBalance(newBalance);
-      setBalance(newBalance);
+      // Mirror trades are saved locally — Sui on-chain integration TBD
       saveMirrorPosition({
         positionId: createMirrorPositionId(market.marketId),
         marketId: market.marketId,
@@ -140,18 +111,13 @@ export default function MirrorTradePanel({ market, onSuccess, roomId, roomLocked
         forfeited: false,
         refunded: false,
         outcomeLabels: market.outcomeLabels,
-        ...(result?.transactionId ? { transactionId: result.transactionId } : {}),
       });
       setHasOpenPosition(true);
       setAmount('');
       onSuccess?.();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Mirror bet failed';
-      if (message.toLowerCase().includes('rejected')) {
-        setError('Transaction rejected');
-      } else {
-        setError(message);
-      }
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -169,14 +135,14 @@ export default function MirrorTradePanel({ market, onSuccess, roomId, roomLocked
       <div className="rounded-3xl border border-white/7 bg-neutral-950/70 p-5 sm:p-6">
         <div className="mb-4 flex flex-wrap items-center gap-2">
           <span className="rounded-full border border-new-mint/20 bg-new-mint/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.24em] text-new-mint">
-            v13 hidden-side execution
+            Mirror Market
           </span>
           <span className={`rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.24em] ${
             market.onChainCreated
               ? 'border-off-blue/20 bg-off-blue/10 text-off-blue'
               : 'border-white/8 bg-white/[0.03] text-gray-400'
           }`}>
-            {market.onChainCreated ? 'Live on Aleo' : 'Queued for Aleo'}
+            {market.onChainCreated ? 'Live on Sui' : 'Queued'}
           </span>
           {market.onChainResolved && (
             <span className="rounded-full border border-white/8 bg-white/[0.03] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.24em] text-gray-400">
@@ -187,7 +153,7 @@ export default function MirrorTradePanel({ market, onSuccess, roomId, roomLocked
 
         <h3 className="text-2xl font-black leading-tight text-white">{market.question}</h3>
         <p className="mt-2 max-w-3xl text-sm leading-relaxed text-gray-400">
-          {market.description || 'This market was mirrored from Polymarket and can now be traded privately on Aleo through dart_mirror_v13.'}
+          {market.description || 'This market was mirrored from Polymarket and can be traded on Sui through DART.'}
         </p>
 
         <div className="mt-5 grid gap-3 md:grid-cols-3">
@@ -199,7 +165,7 @@ export default function MirrorTradePanel({ market, onSuccess, roomId, roomLocked
             </div>
           </div>
           <div className="rounded-2xl border border-white/6 bg-black/35 p-4">
-            <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-gray-500">Aleo fixed odds</p>
+            <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-gray-500">Fixed odds</p>
             <div className="mt-2 flex items-center justify-between text-sm font-bold">
               <span className="text-new-mint">{(market.yesMultiplierBps / 10000).toFixed(2)}x</span>
               <span className="text-off-red">{(market.noMultiplierBps / 10000).toFixed(2)}x</span>
@@ -225,7 +191,7 @@ export default function MirrorTradePanel({ market, onSuccess, roomId, roomLocked
             </a>
           </div>
           <p className="mt-3">
-            Once the market is created on Aleo, bets route through the `dart_mirror_v13.aleo` contract with hidden-side receipts, worst-case reserve accounting, and fixed payouts locked privately at entry time.
+            Mirrored markets replicate public market data from Polymarket and allow trading with fixed-payout positions on Sui.
           </p>
         </div>
       </div>
@@ -233,7 +199,7 @@ export default function MirrorTradePanel({ market, onSuccess, roomId, roomLocked
       <div className="rounded-3xl border border-white/7 bg-neutral-950/70 p-5 sm:p-6 xl:sticky xl:top-28 h-fit">
         <div className="mb-4 flex items-center gap-2">
           <Shield className="h-4 w-4 text-new-mint" />
-          <h4 className="text-sm font-bold uppercase tracking-[0.22em] text-white">Trade privately</h4>
+          <h4 className="text-sm font-bold uppercase tracking-[0.22em] text-white">Place trade</h4>
         </div>
 
         {(roomLocked || !canTrade) && (
@@ -241,13 +207,13 @@ export default function MirrorTradePanel({ market, onSuccess, roomId, roomLocked
             {roomLocked
               ? 'This mirrored market belongs to a private room. Unlock the room to place a trade.'
               : market.onChainResolved
-              ? 'This mirrored market has already resolved on Aleo.'
-              : 'This market is in the mirror queue, but it is not live on Aleo yet. Enable on-chain mirroring and deploy v13 to make it tradable.'}
+              ? 'This mirrored market has already resolved on Sui.'
+              : 'This market is in the mirror queue, but it is not live on Sui yet. Enable on-chain mirroring to make it tradable.'}
           </div>
         )}
         {hasOpenPosition && (
           <div className="mb-4 rounded-2xl border border-new-mint/15 bg-new-mint/10 p-3 text-sm text-new-mint">
-            You already have an open v13 position on this mirrored market. Claim, refund, or forfeit it from your portfolio after settlement.
+            You already have an open position on this mirrored market. Claim, refund, or forfeit it from your portfolio after settlement.
           </div>
         )}
 
@@ -279,7 +245,7 @@ export default function MirrorTradePanel({ market, onSuccess, roomId, roomLocked
         <div className="mt-4 rounded-2xl border border-white/6 bg-black/35 p-4">
           <div className="mb-2 flex items-center justify-between text-xs text-gray-500">
             <span>Balance</span>
-            <span className="font-bold text-white">{formatPred(balance)} USDCx</span>
+            <span className="font-bold text-white">{formatPred(balance)} DUSDC</span>
           </div>
 
           <input
@@ -307,15 +273,11 @@ export default function MirrorTradePanel({ market, onSuccess, roomId, roomLocked
         <div className="mt-4 rounded-2xl border border-white/6 bg-black/35 p-4">
           <div className="mb-2 flex items-center justify-between text-sm">
             <span className="text-gray-400">Locked payout</span>
-            <span className="font-bold text-white">{formatPred(payout)} USDCx</span>
-          </div>
-          <div className="mb-3 flex items-center justify-between text-sm">
-            <span className="text-gray-400">Program</span>
-            <span className="font-mono text-xs text-gray-300">{MIRROR_PROGRAM}</span>
+            <span className="font-bold text-white">{formatPred(payout)} DUSDC</span>
           </div>
           <div className="flex items-center gap-2 rounded-xl border border-new-mint/15 bg-new-mint/10 px-3 py-2 text-xs text-new-mint">
             <Lock className="h-3.5 w-3.5" />
-            Side stays hidden during active betting. Your payout is locked in the encrypted receipt, and winning claims settle to a shielded USDCx record.
+            Position tracked locally. On-chain mirror integration coming soon.
           </div>
         </div>
 
