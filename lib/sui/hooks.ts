@@ -5,9 +5,12 @@ import { useCurrentAccount, useSuiClient } from '@mysten/dapp-kit';
 import {
   fetchOracles,
   fetchManagerForAddress,
+  fetchManagers,
   fetchLatestPrices,
   fetchLatestSvi,
   fetchManagerPositions,
+  fetchPriceHistory,
+  fetchTrades,
   type OracleData,
   type ManagerData,
   type PriceData,
@@ -377,4 +380,151 @@ export function getPositionStrike(
   if (direction === 'DOWN') return Number(higherStrike);
   // RANGE: return lower bound
   return Number(lowerStrike);
+}
+
+// ── Protocol-wide aggregate stats ─────────────────────
+
+export interface ProtocolStats {
+  volumeSettled: number;
+  marketsResolved: number;
+  activeWallets: number;
+}
+
+/** Hook: aggregate protocol stats from real API data */
+export function useProtocolStats(pollInterval = 60_000) {
+  const [stats, setStats] = useState<ProtocolStats | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const refresh = useCallback(async () => {
+    try {
+      const [oracles, managers] = await Promise.all([
+        fetchOracles(),
+        fetchManagers(),
+      ]);
+
+      const settled = oracles.filter(o => o.status === 'settled');
+      const marketsResolved = settled.length;
+      const activeWallets = managers.length;
+
+      // Sum volume from trades on recent oracles (up to 20 most recent)
+      const recentOracles = [...oracles]
+        .sort((a, b) => (b.settled_at ?? b.expiry) - (a.settled_at ?? a.expiry))
+        .slice(0, 20);
+
+      let volumeSettled = 0;
+      const tradeResults = await Promise.allSettled(
+        recentOracles.map(o => fetchTrades(o.oracle_id))
+      );
+      for (const r of tradeResults) {
+        if (r.status === 'fulfilled') {
+          for (const t of r.value) {
+            volumeSettled += Math.abs(Number(t.quantity));
+          }
+        }
+      }
+      // Convert from raw units (DUSDC has 6 decimals)
+      volumeSettled = volumeSettled / 1_000_000;
+
+      setStats({ volumeSettled, marketsResolved, activeWallets });
+    } catch (err) {
+      console.error('Failed to fetch protocol stats:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    refresh();
+    const interval = setInterval(refresh, pollInterval);
+    return () => clearInterval(interval);
+  }, [refresh, pollInterval]);
+
+  return { stats, loading, refresh };
+}
+
+// ── Price history with polling ────────────────────────
+
+/** Hook: price history for an oracle with polling */
+export function usePriceHistory(oracleId: string | null, limit = 100, pollInterval = 30_000) {
+  const [history, setHistory] = useState<PriceData[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const refresh = useCallback(async () => {
+    if (!oracleId) {
+      setHistory([]);
+      setLoading(false);
+      return;
+    }
+    try {
+      const data = await fetchPriceHistory(oracleId, limit);
+      setHistory(data);
+    } catch (err) {
+      console.error('Failed to fetch price history:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [oracleId, limit]);
+
+  useEffect(() => {
+    refresh();
+    const interval = setInterval(refresh, pollInterval);
+    return () => clearInterval(interval);
+  }, [refresh, pollInterval]);
+
+  return { history, loading, refresh };
+}
+
+// ── Leaderboard from API route ────────────────────────
+
+export interface LeaderboardTrader {
+  manager_id: string;
+  owner: string;
+  pnl: number;
+  winRate: number;
+  tradeCount: number;
+  bestStreak: number;
+  volume: number;
+}
+
+export interface LeaderboardRecord {
+  label: string;
+  badge: string;
+  value: string;
+  unit: string;
+  desc: string;
+  trader: string;
+  date: string;
+}
+
+export interface LeaderboardData {
+  rankings: LeaderboardTrader[];
+  meta: { totalWallets: number; totalVolume: number };
+  records: LeaderboardRecord[];
+}
+
+/** Hook: fetches leaderboard from server-side API route */
+export function useLeaderboard(pollInterval = 60_000) {
+  const [data, setData] = useState<LeaderboardData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const refresh = useCallback(async () => {
+    try {
+      const res = await fetch('/api/leaderboard');
+      if (!res.ok) throw new Error(`Leaderboard API: ${res.status}`);
+      const json = await res.json();
+      setData(json);
+    } catch (err) {
+      console.error('Failed to fetch leaderboard:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    refresh();
+    const interval = setInterval(refresh, pollInterval);
+    return () => clearInterval(interval);
+  }, [refresh, pollInterval]);
+
+  return { data, loading, refresh };
 }

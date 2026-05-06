@@ -6,7 +6,8 @@ import { useOracles } from '@/lib/sui/hooks';
 import { fetchLatestPrices, type PriceData } from '@/lib/sui/predictApi';
 import { groupOraclesByTimeframe } from '@/lib/roundHelpers';
 import { useBtcPrice } from '@/lib/hooks/useBtcPrice';
-import { genCandles, drawCandles } from '@/lib/charts/canvasChart';
+import { genCandles, drawCandles, priceHistoryToCandles } from '@/lib/charts/canvasChart';
+import { fetchPriceHistory } from '@/lib/sui/predictApi';
 import { FLOAT_SCALING } from '@/lib/sui/constants';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
@@ -47,21 +48,81 @@ export default function MarketsPage() {
     return () => { cancelled = true; clearInterval(interval); };
   }, [active]);
 
-  // Hero chart
+  // Hero chart — use real BTC price history from first BTC oracle
+  const [heroChartDelta, setHeroChartDelta] = useState<string | null>(null);
+  const [heroYesProb, setHeroYesProb] = useState<number | null>(null);
+
   useEffect(() => {
     if (!heroCanvasRef.current) return;
-    const spot = btcPrice || 95420;
-    const candles = genCandles(7, 60, spot - 1200, spot, 280);
-    drawCandles(heroCanvasRef.current, candles, {
-      strike: spot - 400,
-      maxCandleW: 6,
-      gridLines: true,
-      marker: true,
-      padX: 14,
-      padTop: 12,
-      padBot: 12,
-    });
-  }, [btcPrice]);
+    let cancelled = false;
+
+    async function renderHeroChart() {
+      // Find a BTC oracle to get real price history
+      const btcOracle = active.find(o => o.underlying_asset === 'BTC');
+      if (btcOracle) {
+        try {
+          const history = await fetchPriceHistory(btcOracle.oracle_id, 100);
+          if (!cancelled && history.length > 5) {
+            const scaled = history.map(h => ({ spot: h.spot / FLOAT_SCALING, timestamp: h.timestamp }));
+            const candles = priceHistoryToCandles(scaled, 60);
+            if (candles.length > 0) {
+              const first = candles[0].open;
+              const last = candles[candles.length - 1].close;
+              const delta = first > 0 ? ((last - first) / first * 100).toFixed(2) : '0.00';
+              if (!cancelled) setHeroChartDelta(`${Number(delta) >= 0 ? '+' : ''}${delta}%`);
+
+              const midStrike = btcOracle.min_strike + btcOracle.tick_size * 25;
+              const midDollars = midStrike / FLOAT_SCALING;
+
+              if (!cancelled) {
+                // Compute yes probability from forward
+                const p = prices[btcOracle.oracle_id];
+                if (p) {
+                  const fwd = p.forward / FLOAT_SCALING;
+                  const diff = (fwd - midDollars) / midDollars;
+                  const secsLeft = Math.max(60, (btcOracle.expiry * 1000 - Date.now()) / 1000);
+                  const sigma = 0.001 * Math.sqrt(secsLeft / 60);
+                  const z = diff / (sigma || 0.01);
+                  setHeroYesProb(Math.round(Math.max(1, Math.min(99, 100 / (1 + Math.exp(-1.7 * z))))));
+                }
+              }
+
+              if (!cancelled && heroCanvasRef.current) {
+                drawCandles(heroCanvasRef.current, candles, {
+                  strike: midDollars,
+                  maxCandleW: 6,
+                  gridLines: true,
+                  marker: true,
+                  padX: 14,
+                  padTop: 12,
+                  padBot: 12,
+                });
+                return;
+              }
+            }
+          }
+        } catch { /* ignore, fall through to fallback */ }
+      }
+
+      // Fallback
+      if (!cancelled && heroCanvasRef.current) {
+        const spot = btcPrice || 95420;
+        const candles = genCandles(7, 60, spot - 1200, spot, 280);
+        drawCandles(heroCanvasRef.current, candles, {
+          strike: spot - 400,
+          maxCandleW: 6,
+          gridLines: true,
+          marker: true,
+          padX: 14,
+          padTop: 12,
+          padBot: 12,
+        });
+      }
+    }
+
+    renderHeroChart();
+    return () => { cancelled = true; };
+  }, [btcPrice, active, prices]);
 
   const groups = groupOraclesByTimeframe(active);
   const recentSettled = settled.slice(0, 6);
@@ -174,7 +235,7 @@ export default function MarketsPage() {
                     <span className="price">
                       {btcPrice ? `$${btcPrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '—'}
                     </span>
-                    <span className="delta">+1.24%</span>
+                    <span className="delta">{heroChartDelta || '\u2014'}</span>
                   </div>
                   <div className="pair-meta" style={{ fontSize: '9px' }}>last update · live</div>
                 </div>
@@ -185,7 +246,7 @@ export default function MarketsPage() {
                 <span className="ramp">
                   <span>YES</span>
                   <span className="bar"><span className="fill" /></span>
-                  <span style={{ color: 'var(--vermilion)' }}>64¢</span>
+                  <span style={{ color: 'var(--vermilion)' }}>{heroYesProb ? `${heroYesProb}¢` : '\u2014'}</span>
                 </span>
               </div>
             </div>

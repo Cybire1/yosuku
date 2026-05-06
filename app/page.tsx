@@ -1,40 +1,22 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import Link from 'next/link';
 import Header from '@/components/Header';
 import Marquee from '@/components/Marquee';
 import GrainOverlay from '@/components/GrainOverlay';
 
 import { useBtcPrice } from '@/lib/hooks/useBtcPrice';
+import { useOracles, useProtocolStats } from '@/lib/sui/hooks';
+import { fetchLatestPrices, type PriceData } from '@/lib/sui/predictApi';
+import { FLOAT_SCALING } from '@/lib/sui/constants';
 
 /* ───────── Types ───────── */
-interface MarketItem {
-  asset: string;
-  glyph: string;
-  question: string;
-  yesC: number;
-  vol: string;
-  traders: number;
-  secsLeft: number;
-  hot?: boolean;
-  featured?: boolean;
-  spark: number[];
-}
-
 interface FaqItem {
   q: string;
   a: string;
   tags: string[];
   cat: string;
-}
-
-interface StatItem {
-  idx: string;
-  label: string;
-  value: string;
-  spark: string;
-  meta: string;
 }
 
 interface HowStep {
@@ -80,24 +62,17 @@ function sparklineSVG(
   return `<path d="${pathD}" fill="none" stroke="${color}" stroke-width="1.2" stroke-linecap="round"/>`;
 }
 
-function genSparkData(len: number = 20): number[] {
-  const data: number[] = [];
-  let v = 50;
-  for (let i = 0; i < len; i++) {
-    v += (Math.random() - 0.48) * 8;
-    v = Math.max(10, Math.min(90, v));
-    data.push(v);
-  }
-  return data;
-}
-
 /* ───────── Static data ───────── */
-const STATS: StatItem[] = [
-  { idx: '01', label: 'Volume settled', value: '$42.8M', spark: 'M0,20 L8,14 L16,16 L24,8 L32,10 L40,4 L48,6 L56,2', meta: '+12.4% this epoch' },
-  { idx: '02', label: 'Markets resolved', value: '18,420', spark: 'M0,18 L8,12 L16,14 L24,6 L32,8 L40,4 L48,10 L56,3', meta: '~1,200 daily avg' },
-  { idx: '03', label: 'Active wallets', value: '3,142', spark: 'M0,20 L8,16 L16,18 L24,10 L32,12 L40,6 L48,8 L56,4', meta: '72% return rate' },
-  { idx: '04', label: 'Settlement time', value: '0.42s', spark: 'M0,10 L8,8 L16,12 L24,6 L32,4 L40,8 L48,3 L56,2', meta: 'p99 < 0.8s' },
+const STAT_SPARKS = [
+  'M0,20 L8,14 L16,16 L24,8 L32,10 L40,4 L48,6 L56,2',
+  'M0,18 L8,12 L16,14 L24,6 L32,8 L40,4 L48,10 L56,3',
+  'M0,20 L8,16 L16,18 L24,10 L32,12 L40,6 L48,8 L56,4',
+  'M0,10 L8,8 L16,12 L24,6 L32,4 L40,8 L48,3 L56,2',
 ];
+
+const ASSET_GLYPH: Record<string, string> = {
+  BTC: '\u20BF', ETH: '\u039E', SOL: 'S', SUI: '\u25E2',
+};
 
 const HOW_STEPS: HowStep[] = [
   { num: '01', jp: '\u5E02\u5834', kicker: 'Choose', title: 'Pick a market.', body: 'BTC, ETH, SOL, SUI \u2014 each with a strike price and a fifteen-minute window. One question: above or below at the bell.', meta: '4 assets \u00B7 15-min rounds \u00B7 continuous' },
@@ -130,15 +105,6 @@ const SPEC_ROWS: SpecRow[] = [
   { label: 'Audits', value: 'In progress' },
 ];
 
-const INITIAL_MARKETS: MarketItem[] = [
-  { asset: 'BTC', glyph: '\u20BF', question: 'BTC above $95,000 at 15:00 UTC?', yesC: 64, vol: '84.2K', traders: 312, secsLeft: 8 * 60 + 12, hot: true, featured: true, spark: genSparkData() },
-  { asset: 'ETH', glyph: '\u039E', question: 'ETH above $3,500 at 15:00 UTC?', yesC: 42, vol: '21.6K', traders: 117, secsLeft: 8 * 60 + 12, spark: genSparkData() },
-  { asset: 'SOL', glyph: 'S', question: 'SOL above $185 at 15:00 UTC?', yesC: 71, vol: '12.5K', traders: 88, secsLeft: 8 * 60 + 12, spark: genSparkData() },
-  { asset: 'BTC', glyph: '\u20BF', question: 'BTC above $96,000 at 15:15 UTC?', yesC: 48, vol: '38.0K', traders: 192, secsLeft: 23 * 60 + 12, spark: genSparkData() },
-  { asset: 'ETH', glyph: '\u039E', question: 'ETH above $3,520 at 15:15 UTC?', yesC: 53, vol: '14.1K', traders: 74, secsLeft: 23 * 60 + 12, spark: genSparkData() },
-  { asset: 'SUI', glyph: '\u25E2', question: 'SUI above $4.20 at 15:15 UTC?', yesC: 36, vol: '6.8K', traders: 41, secsLeft: 23 * 60 + 12, spark: genSparkData() },
-];
-
 const FOOTER_COLS = [
   { title: 'Product', links: ['Markets', 'Portfolio', 'Leaderboard', 'Docs'] },
   { title: 'Develop', links: ['GitHub', 'SDK', 'API', 'Status'] },
@@ -163,13 +129,13 @@ function clamp(v: number, lo: number, hi: number): number {
    ═══════════════════════════════════════════════════ */
 export default function HomePage() {
   const { price: btcPrice } = useBtcPrice();
+  const { active: liveOracles, loading: oraclesLoading } = useOracles(15_000);
+  const { stats: protocolStats, loading: statsLoading } = useProtocolStats();
+  const [oraclePrices, setOraclePrices] = useState<Record<string, PriceData>>({});
 
   /* ── state ── */
-  const [probability, setProbability] = useState<number>(64);
-  const [dialCountdown, setDialCountdown] = useState<number>(4 * 60 + 12);
-  const [nextRound, setNextRound] = useState<number>(14 * 60 + 17);
+  const [probability, setProbability] = useState<number>(50);
   const [sparkPath, setSparkPath] = useState<string>('');
-  const [markets, setMarkets] = useState<MarketItem[]>(INITIAL_MARKETS);
   const [marketTab, setMarketTab] = useState<string>('All');
   const [faqOpen, setFaqOpen] = useState<number>(0);
   const [activeFeature, setActiveFeature] = useState<number>(0);
@@ -182,18 +148,49 @@ export default function HomePage() {
   const featuresRef = useRef<HTMLDivElement>(null);
   const featurePinRef = useRef<HTMLDivElement>(null);
 
-  /* ── Dial probability drift ── */
+  /* ── Fetch prices for active oracles ── */
   useEffect(() => {
-    const iv = setInterval(() => {
-      setProbability(p => {
-        const drift = (Math.random() - 0.5) * 4.8;
-        return clamp(p + drift, 18, 82);
+    if (liveOracles.length === 0) return;
+    let cancelled = false;
+    async function loadPrices() {
+      const results = await Promise.allSettled(
+        liveOracles.slice(0, 6).map(o => fetchLatestPrices(o.oracle_id))
+      );
+      if (cancelled) return;
+      const newPrices: Record<string, PriceData> = {};
+      results.forEach((r, i) => {
+        if (r.status === 'fulfilled' && r.value) {
+          newPrices[liveOracles[i].oracle_id] = r.value;
+        }
       });
-    }, 1800);
-    return () => clearInterval(iv);
-  }, []);
+      setOraclePrices(newPrices);
+    }
+    loadPrices();
+    const interval = setInterval(loadPrices, 10_000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [liveOracles]);
 
-  /* ── Dial sparkline ── */
+  /* ── Derive probability from first oracle ── */
+  useEffect(() => {
+    if (liveOracles.length === 0) return;
+    const firstOracle = liveOracles[0];
+    const prices = oraclePrices[firstOracle.oracle_id];
+    if (!prices) return;
+    const numStrikes = 50;
+    const midStrike = firstOracle.min_strike + firstOracle.tick_size * Math.floor(numStrikes / 2);
+    const midStrikeDollars = midStrike / FLOAT_SCALING;
+    const forward = prices.forward / FLOAT_SCALING;
+    if (midStrikeDollars > 0 && forward > 0) {
+      const diff = (forward - midStrikeDollars) / midStrikeDollars;
+      const secsLeft = Math.max(60, (firstOracle.expiry * 1000 - Date.now()) / 1000);
+      const sigma = 0.001 * Math.sqrt(secsLeft / 60);
+      const z = diff / (sigma || 0.01);
+      const p = Math.round(Math.max(1, Math.min(99, 100 / (1 + Math.exp(-1.7 * z)))));
+      setProbability(p);
+    }
+  }, [liveOracles, oraclePrices]);
+
+  /* ── Dial sparkline (decorative) ── */
   useEffect(() => {
     function genPath(): string {
       const pts: number[] = [];
@@ -219,32 +216,120 @@ export default function HomePage() {
     return () => clearInterval(iv);
   }, []);
 
-  /* ── Dial countdown ── */
+  /* ── Real next-expiry countdown ── */
+  const nextExpirySec = useMemo(() => {
+    if (liveOracles.length === 0) return 0;
+    const nearest = Math.min(...liveOracles.map(o => o.expiry));
+    return Math.max(0, Math.floor(nearest - Date.now() / 1000));
+  }, [liveOracles]);
+
+  const [nextRound, setNextRound] = useState<number>(0);
+  useEffect(() => {
+    setNextRound(nextExpirySec);
+  }, [nextExpirySec]);
+
   useEffect(() => {
     const iv = setInterval(() => {
-      setDialCountdown(t => (t <= 0 ? 4 * 60 + 12 : t - 1));
+      setNextRound(t => Math.max(0, t - 1));
     }, 1000);
     return () => clearInterval(iv);
   }, []);
 
-  /* ── Next round countdown ── */
+  /* ── Per-oracle dial countdown (first oracle) ── */
+  const dialExpiry = useMemo(() => {
+    if (liveOracles.length === 0) return 0;
+    return Math.max(0, Math.floor(liveOracles[0].expiry - Date.now() / 1000));
+  }, [liveOracles]);
+
+  const [dialCountdown, setDialCountdown] = useState<number>(0);
+  useEffect(() => {
+    setDialCountdown(dialExpiry);
+  }, [dialExpiry]);
+
   useEffect(() => {
     const iv = setInterval(() => {
-      setNextRound(t => (t <= 0 ? 14 * 60 + 17 : t - 1));
+      setDialCountdown(t => Math.max(0, t - 1));
     }, 1000);
     return () => clearInterval(iv);
   }, []);
 
-  /* ── Market countdowns ── */
-  useEffect(() => {
-    const iv = setInterval(() => {
-      setMarkets(prev => prev.map(m => ({
-        ...m,
-        secsLeft: m.secsLeft <= 0 ? 15 * 60 : m.secsLeft - 1,
-      })));
-    }, 1000);
-    return () => clearInterval(iv);
-  }, []);
+  /* ── Build market cards from real oracles ── */
+  const displayMarkets = useMemo(() => {
+    return liveOracles.slice(0, 6).map((oracle, i) => {
+      const asset = oracle.underlying_asset || 'BTC';
+      const glyph = ASSET_GLYPH[asset] || asset[0];
+      const prices = oraclePrices[oracle.oracle_id];
+      const numStrikes = 50;
+      const midStrike = oracle.min_strike + oracle.tick_size * Math.floor(numStrikes / 2);
+      const midStrikeDollars = midStrike / FLOAT_SCALING;
+
+      let yesC = 50;
+      if (prices) {
+        const forward = prices.forward / FLOAT_SCALING;
+        if (midStrikeDollars > 0 && forward > 0) {
+          const diff = (forward - midStrikeDollars) / midStrikeDollars;
+          const secsLeft = Math.max(60, (oracle.expiry * 1000 - Date.now()) / 1000);
+          const sigma = 0.001 * Math.sqrt(secsLeft / 60);
+          const z = diff / (sigma || 0.01);
+          yesC = Math.round(Math.max(1, Math.min(99, 100 / (1 + Math.exp(-1.7 * z)))));
+        }
+      }
+
+      const secsLeft = Math.max(0, Math.floor(oracle.expiry - Date.now() / 1000));
+      const formatStrike = (n: number) => '$' + n.toLocaleString(undefined, { maximumFractionDigits: 0 });
+      const expDate = new Date(oracle.expiry * 1000);
+      const timeStr = expDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'UTC' });
+
+      // Generate a deterministic sparkline from oracle id
+      const sparkSeed = oracle.oracle_id.charCodeAt(4) || 7;
+      const spark: number[] = [];
+      let sv = 50;
+      let s = sparkSeed * 9301 + 49297;
+      for (let j = 0; j < 20; j++) {
+        s = (s * 9301 + 49297) % 233280;
+        sv += (s / 233280 - 0.48) * 8;
+        sv = Math.max(10, Math.min(90, sv));
+        spark.push(sv);
+      }
+
+      return {
+        asset,
+        glyph,
+        question: `${asset} above ${formatStrike(midStrikeDollars)} at ${timeStr} UTC?`,
+        yesC,
+        vol: '—',
+        traders: 0,
+        secsLeft,
+        hot: i === 0,
+        featured: i === 0,
+        spark,
+        oracleId: oracle.oracle_id,
+      };
+    });
+  }, [liveOracles, oraclePrices]);
+
+  /* ── Derive spot prices for ticker ── */
+  const spotPrices = useMemo(() => {
+    const byAsset: Record<string, number> = {};
+    for (const oracle of liveOracles) {
+      const asset = oracle.underlying_asset || 'BTC';
+      const prices = oraclePrices[oracle.oracle_id];
+      if (prices && !byAsset[asset]) {
+        byAsset[asset] = prices.spot / FLOAT_SCALING;
+      }
+    }
+    return byAsset;
+  }, [liveOracles, oraclePrices]);
+
+  /* ── Dial question label ── */
+  const dialLabel = useMemo(() => {
+    if (liveOracles.length === 0) return 'BTC > $95,000';
+    const o = liveOracles[0];
+    const asset = o.underlying_asset || 'BTC';
+    const midStrike = o.min_strike + o.tick_size * 25;
+    const dollars = midStrike / FLOAT_SCALING;
+    return `${asset} > $${dollars.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+  }, [liveOracles]);
 
   /* ── IntersectionObserver for .how-steps ── */
   useEffect(() => {
@@ -301,8 +386,16 @@ export default function HomePage() {
   /* ── Derived ── */
   const dashOffset = 100 - probability;
   const needleAngle = (probability / 100) * 360 - 90;
-  const filteredMarkets = marketTab === 'All' ? markets : markets.filter(m => m.asset === marketTab);
+  const filteredMarkets = marketTab === 'All' ? displayMarkets : displayMarkets.filter(m => m.asset === marketTab);
   const marketTabs = ['All', 'BTC', 'ETH', 'SOL', 'SUI'];
+
+  /* ── Stats band data from protocol ── */
+  const statsData = [
+    { idx: '01', label: 'Volume settled', value: protocolStats ? `$${(protocolStats.volumeSettled).toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '\u2014', spark: STAT_SPARKS[0], meta: 'on-chain total' },
+    { idx: '02', label: 'Markets resolved', value: protocolStats ? protocolStats.marketsResolved.toLocaleString() : '\u2014', spark: STAT_SPARKS[1], meta: 'oracle-settled' },
+    { idx: '03', label: 'Active wallets', value: protocolStats ? protocolStats.activeWallets.toLocaleString() : '\u2014', spark: STAT_SPARKS[2], meta: 'unique managers' },
+    { idx: '04', label: 'Settlement time', value: '0.42s', spark: STAT_SPARKS[3], meta: 'p99 < 0.8s' },
+  ];
 
   return (
     <div className="landing">
@@ -362,15 +455,15 @@ export default function HomePage() {
           <div className="hero-pillrow">
             <span className="hero-pill">
               <span className="live-dot" />
-              <span>4 assets live</span>
+              <span>{oraclesLoading ? '\u2014' : `${liveOracles.length} markets live`}</span>
             </span>
             <span className="hero-pill">
               <span className="live-dot" />
-              <span>312 traders</span>
+              <span>{protocolStats ? `${protocolStats.activeWallets} wallets` : '\u2014'}</span>
             </span>
             <span className="hero-pill">
               <span className="live-dot" />
-              <span>$84.2K vol</span>
+              <span>{protocolStats ? `$${protocolStats.volumeSettled.toLocaleString('en-US', { maximumFractionDigits: 0 })} vol` : '\u2014'}</span>
             </span>
           </div>
         </div>
@@ -440,7 +533,7 @@ export default function HomePage() {
             <div className="hero-dial-center">
               <div className="label">YES PROBABILITY</div>
               <div className="yes-num">{probability.toFixed(0)}%</div>
-              <div className="question">BTC &gt; $95,000</div>
+              <div className="question">{dialLabel}</div>
               <div className="countdown">closes in <b>{fmtTime(dialCountdown)}</b></div>
             </div>
           </div>
@@ -451,20 +544,24 @@ export default function HomePage() {
           <div className="ticker-cell">
             <span className="ticker-label">BTC</span>
             <span className="ticker-value">
-              {btcPrice ? `$${btcPrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '$94,812'}
+              {btcPrice ? `$${btcPrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : spotPrices.BTC ? `$${spotPrices.BTC.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '\u2014'}
             </span>
           </div>
           <div className="ticker-cell">
             <span className="ticker-label">ETH</span>
-            <span className="ticker-value">$3,512</span>
+            <span className="ticker-value">
+              {spotPrices.ETH ? `$${spotPrices.ETH.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '\u2014'}
+            </span>
           </div>
           <div className="ticker-cell">
             <span className="ticker-label">SOL</span>
-            <span className="ticker-value">$184.30</span>
+            <span className="ticker-value">
+              {spotPrices.SOL ? `$${spotPrices.SOL.toLocaleString('en-US', { maximumFractionDigits: 2 })}` : '\u2014'}
+            </span>
           </div>
           <div className="ticker-cell">
             <span className="ticker-label">Next round</span>
-            <span className="ticker-value">{fmtTime(nextRound)}</span>
+            <span className="ticker-value">{nextRound > 0 ? fmtTime(nextRound) : '\u2014'}</span>
           </div>
         </div>
 
@@ -479,7 +576,7 @@ export default function HomePage() {
       <section className="stats fade-up">
         <div className="stats-jp">{'\u6570'}</div>
         <div className="stats-grid">
-          {STATS.map(s => (
+          {statsData.map(s => (
             <div className="stat" key={s.idx}>
               <span className="stat-idx">{s.idx}</span>
               <span className="stat-label">{s.label}</span>
@@ -785,8 +882,13 @@ export default function HomePage() {
         </div>
 
         <div className="lp-markets-grid">
+          {filteredMarkets.length === 0 && !oraclesLoading && (
+            <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '48px 0', opacity: 0.4, fontFamily: 'var(--font-mono)', fontSize: '12px' }}>
+              No active markets right now
+            </div>
+          )}
           {filteredMarkets.map((m, i) => (
-            <Link href="/markets" key={i} className={`lp-market-card ${m.hot ? 'hot' : ''}`} data-cursor="hover">
+            <Link href={`/markets/${m.oracleId}`} key={m.oracleId} className={`lp-market-card ${m.hot ? 'hot' : ''}`} data-cursor="hover">
               <div className="market-row1">
                 <div className="market-glyph">{m.glyph}</div>
                 <div className="market-asset-block">

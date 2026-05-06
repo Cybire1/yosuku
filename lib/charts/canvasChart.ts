@@ -20,6 +20,41 @@ export interface DrawOptions {
   padBot?: number;
 }
 
+// ─── Convert PriceData[] into Candle[] ───
+export function priceHistoryToCandles(
+  history: { spot: number; timestamp: number }[],
+  bucketCount = 30,
+): Candle[] {
+  if (history.length === 0) return [];
+  // Sort ascending by timestamp
+  const sorted = [...history].sort((a, b) => a.timestamp - b.timestamp);
+  const tMin = sorted[0].timestamp;
+  const tMax = sorted[sorted.length - 1].timestamp;
+  const tRange = tMax - tMin || 1;
+  const bucketSize = tRange / bucketCount;
+
+  const candles: Candle[] = [];
+  for (let i = 0; i < bucketCount; i++) {
+    const lo = tMin + i * bucketSize;
+    const hi = lo + bucketSize;
+    const pts = sorted.filter(p => p.timestamp >= lo && (i === bucketCount - 1 ? p.timestamp <= hi : p.timestamp < hi));
+    if (pts.length === 0) {
+      // carry forward from previous candle
+      if (candles.length > 0) {
+        const prev = candles[candles.length - 1];
+        candles.push({ open: prev.close, high: prev.close, low: prev.close, close: prev.close });
+      }
+      continue;
+    }
+    const open = pts[0].spot;
+    const close = pts[pts.length - 1].spot;
+    const high = Math.max(...pts.map(p => p.spot));
+    const low = Math.min(...pts.map(p => p.spot));
+    candles.push({ open, high, low, close });
+  }
+  return candles;
+}
+
 // ─── Deterministic candle generation ───
 export function genCandles(
   seed: number,

@@ -15,7 +15,8 @@ import { useOraclePrices, useSviPricing } from '@/lib/sui/hooks';
 import { FLOAT_SCALING, DUSDC_MULTIPLIER } from '@/lib/sui/constants';
 import { computeSviPrice } from '@/lib/sui/sviPricing';
 import { generateStrikeGrid, getTimeRemaining } from '@/lib/roundHelpers';
-import { genCandles, drawCandles } from '@/lib/charts/canvasChart';
+import { genCandles, drawCandles, priceHistoryToCandles } from '@/lib/charts/canvasChart';
+import { fetchPriceHistory } from '@/lib/sui/predictApi';
 
 export default function MarketDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: oracleId } = use(params);
@@ -76,22 +77,43 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
     return () => clearInterval(iv);
   }, [oracle]);
 
-  // Canvas chart
+  // Canvas chart — real price history with genCandles fallback
   useEffect(() => {
     if (!chartCanvasRef.current || !oracle) return;
+    let cancelled = false;
     const midStrike = oracle.min_strike + oracle.tick_size * 25;
     const strikeD = (selectedStrike || midStrike) / FLOAT_SCALING;
-    const spot = prices?.spot ? prices.spot / FLOAT_SCALING : strikeD;
-    const candles = genCandles(oracleId.charCodeAt(2) || 5, 60, spot - spot * 0.01, spot, spot * 0.005);
-    drawCandles(chartCanvasRef.current, candles, {
-      strike: strikeD,
-      maxCandleW: 6,
-      gridLines: true,
-      marker: true,
-      padX: 14,
-      padTop: 12,
-      padBot: 12,
-    });
+
+    async function renderChart() {
+      let candles;
+      try {
+        const history = await fetchPriceHistory(oracleId, 100);
+        if (!cancelled && history.length > 5) {
+          const scaled = history.map(h => ({ spot: h.spot / FLOAT_SCALING, timestamp: h.timestamp }));
+          candles = priceHistoryToCandles(scaled, 60);
+        }
+      } catch { /* ignore */ }
+
+      // Fallback
+      if (!candles || candles.length === 0) {
+        const spot = prices?.spot ? prices.spot / FLOAT_SCALING : strikeD;
+        candles = genCandles(oracleId.charCodeAt(2) || 5, 60, spot - spot * 0.01, spot, spot * 0.005);
+      }
+
+      if (!cancelled && chartCanvasRef.current) {
+        drawCandles(chartCanvasRef.current, candles, {
+          strike: strikeD,
+          maxCandleW: 6,
+          gridLines: true,
+          marker: true,
+          padX: 14,
+          padTop: 12,
+          padBot: 12,
+        });
+      }
+    }
+    renderChart();
+    return () => { cancelled = true; };
   }, [prices, oracle, selectedStrike, oracleId]);
 
   if (loading) {

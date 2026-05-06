@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import type { OracleData } from '@/lib/sui/predictApi';
 import { FLOAT_SCALING } from '@/lib/sui/constants';
 import { getTimeRemaining } from '@/lib/roundHelpers';
-import { genCandles, drawCandles } from '@/lib/charts/canvasChart';
+import { genCandles, drawCandles, priceHistoryToCandles } from '@/lib/charts/canvasChart';
+import { fetchPriceHistory } from '@/lib/sui/predictApi';
 
 interface MarketCardProps {
   oracle: OracleData;
@@ -50,23 +51,44 @@ export default function MarketCard({ oracle, spotPrice, forwardPrice }: MarketCa
   const isSettled = oracle.status === 'settled';
   const isUrgent = !isExpired && timeLeft.totalMs < 5 * 60 * 1000;
 
-  // Sparkline chart
+  // Sparkline chart — real price history with genCandles fallback
   useEffect(() => {
     if (!canvasRef.current || isSettled) return;
-    const seed = oracle.oracle_id.charCodeAt(4) || 7;
     const strike = midStrikeDollars;
-    const spotVal = spot || strike;
-    const range = strike * 0.012;
-    const start = strike - range * 0.4;
-    const candles = genCandles(seed, 28, start, spotVal, range * 0.5);
-    drawCandles(canvasRef.current, candles, {
-      strike,
-      maxCandleW: 4,
-      padX: 4,
-      padTop: 6,
-      padBot: 6,
-      marker: true,
-    });
+    let cancelled = false;
+
+    async function render() {
+      let candles;
+      try {
+        const history = await fetchPriceHistory(oracle.oracle_id, 60);
+        if (!cancelled && history.length > 5) {
+          const scaled = history.map(h => ({ spot: h.spot / FLOAT_SCALING, timestamp: h.timestamp }));
+          candles = priceHistoryToCandles(scaled, 28);
+        }
+      } catch { /* ignore */ }
+
+      // Fallback to generated candles
+      if (!candles || candles.length === 0) {
+        const seed = oracle.oracle_id.charCodeAt(4) || 7;
+        const spotVal = spot || strike;
+        const range = strike * 0.012;
+        const start = strike - range * 0.4;
+        candles = genCandles(seed, 28, start, spotVal, range * 0.5);
+      }
+
+      if (!cancelled && canvasRef.current) {
+        drawCandles(canvasRef.current, candles, {
+          strike,
+          maxCandleW: 4,
+          padX: 4,
+          padTop: 6,
+          padBot: 6,
+          marker: true,
+        });
+      }
+    }
+    render();
+    return () => { cancelled = true; };
   }, [spot, midStrikeDollars, isSettled, oracle.oracle_id]);
 
   const formatPrice = (n: number) =>
