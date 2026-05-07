@@ -84,19 +84,20 @@ export default function Header() {
         {/* Mobile toggle */}
         <button
           onClick={() => setMobileOpen(!mobileOpen)}
-          className="md:hidden w-10 h-10 flex items-center justify-center text-white"
-          style={{ display: 'none' }}
+          className="mobile-menu-toggle"
+          aria-label="Menu"
           data-cursor="hover"
         >
-          ☰
+          <span className="burger-line" />
+          <span className="burger-line" />
         </button>
       </header>
 
       {/* Mobile overlay */}
       {mobileOpen && (
-        <div className="fixed inset-0 z-[900] bg-black/95 backdrop-blur-xl md:hidden flex flex-col p-8">
+        <div className="fixed inset-0 z-[900] bg-black/95 backdrop-blur-xl flex flex-col p-8">
           <div className="flex justify-between items-center mb-16">
-            <span className="font-display font-[800] text-xl tracking-[0.18em]">YOSUKU</span>
+            <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '20px', letterSpacing: '0.18em' }}>YOSUKU</span>
             <button
               onClick={() => setMobileOpen(false)}
               className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-white"
@@ -112,15 +113,33 @@ export default function Header() {
                 onClick={() => setMobileOpen(false)}
                 className="flex items-center gap-6 group"
               >
-                <span className="text-sm font-mono text-vermilion/40 group-hover:text-vermilion transition-colors w-8">
+                <span className="text-sm font-mono" style={{ color: 'rgba(224,77,38,0.4)', width: '32px' }}>
                   0{i + 1}
                 </span>
-                <span className="text-3xl font-display font-[800] text-white/50 group-hover:text-white transition-all tracking-tight group-hover:tracking-normal">
+                <span className="text-3xl" style={{ fontFamily: 'var(--font-display)', fontWeight: 800, color: 'rgba(255,255,255,0.5)', letterSpacing: '-0.02em', transition: 'color 200ms, letter-spacing 200ms' }}>
                   {link.name}
                 </span>
               </a>
             ))}
           </nav>
+          <div className="pt-6 border-t border-white/10">
+            {mounted && (
+              <div className="flex justify-center">
+                {address ? (
+                  <a
+                    href="/portfolio"
+                    onClick={() => setMobileOpen(false)}
+                    className="flex items-center gap-2 px-4 py-2 border border-white/10 rounded-full text-sm"
+                  >
+                    <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                    <span>{shortAddr}</span>
+                  </a>
+                ) : (
+                  <ConnectButton />
+                )}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </>
