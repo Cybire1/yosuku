@@ -1,6 +1,6 @@
 'use client';
 
-import { useCurrentAccount, ConnectButton } from '@mysten/dapp-kit';
+import { useCurrentAccount, useDisconnectWallet, ConnectButton } from '@mysten/dapp-kit';
 import { usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
 
@@ -41,9 +41,11 @@ const MOBILE_NAV = [
 
 export default function Header() {
   const account = useCurrentAccount();
+  const { mutate: disconnect } = useDisconnectWallet();
   const address = account?.address ?? null;
   const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -92,12 +94,34 @@ export default function Header() {
             )}
 
             {mounted && (
-              <div data-cursor="hover">
+              <div data-cursor="hover" className="relative">
                 {address ? (
-                  <a className="wallet-pill" href="/portfolio">
-                    <span className="addr-dot" />
-                    <span>{shortAddr}</span>
-                  </a>
+                  <>
+                    <button
+                      className="wallet-pill"
+                      onClick={() => setShowMenu(prev => !prev)}
+                    >
+                      <span className="addr-dot" />
+                      <span>{shortAddr}</span>
+                    </button>
+                    {showMenu && (
+                      <div className="absolute right-0 top-full mt-2 z-50 border border-white/10 rounded bg-bg backdrop-blur-md min-w-[160px] py-1">
+                        <a
+                          href="/portfolio"
+                          className="block px-4 py-2 text-xs font-mono text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
+                          onClick={() => setShowMenu(false)}
+                        >
+                          Portfolio
+                        </a>
+                        <button
+                          onClick={() => { disconnect(); setShowMenu(false); }}
+                          className="block w-full text-left px-4 py-2 text-xs font-mono text-vermilion/70 hover:bg-white/5 hover:text-vermilion transition-colors"
+                        >
+                          Disconnect
+                        </button>
+                      </div>
+                    )}
+                  </>
                 ) : (
                   <ConnectButton />
                 )}
