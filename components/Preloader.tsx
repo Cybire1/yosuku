@@ -5,10 +5,10 @@ import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
 import styles from './Preloader.module.css';
 
-const LOGO_TEXT = 'DART';
+const LOGO_TEXT = 'YOSUKU';
 const FOOTER_LINES = [
-  'Meet DART - fast and transparent',
-  'markets, built on Sui.',
+  'Prediction markets on Sui.',
+  'Oracle-settled. Sub-second finality.',
 ];
 
 export default function Preloader() {

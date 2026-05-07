@@ -526,12 +526,12 @@ export default function HomePage() {
               <circle cx="150" cy="150" r="3" className="dial-center" />
             </svg>
 
-            <div className="hero-dial-up">YES</div>
-            <div className="hero-dial-down">NO</div>
+            <div className="hero-dial-up">UP</div>
+            <div className="hero-dial-down">DOWN</div>
             <div className="hero-dial-legend">probability index</div>
 
             <div className="hero-dial-center">
-              <div className="label">YES PROBABILITY</div>
+              <div className="label">UP PROBABILITY</div>
               <div className="yes-num">{probability.toFixed(0)}%</div>
               <div className="question">{dialLabel}</div>
               <div className="countdown">closes in <b>{fmtTime(dialCountdown)}</b></div>
@@ -624,7 +624,7 @@ export default function HomePage() {
                         <text x="30" y="70" fontSize="9" fill="rgba(255,255,255,0.6)" fontFamily="system-ui">BTC above $95,000?</text>
                         <rect x="30" y="90" width="140" height="20" rx="3" fill="none" stroke="rgba(255,255,255,0.08)" />
                         <rect x="30" y="90" width="90" height="20" rx="3" fill="rgba(224,77,38,0.15)" />
-                        <text x="60" y="104" fontSize="8" fill="var(--vermilion)" fontFamily="monospace">64% YES</text>
+                        <text x="60" y="104" fontSize="8" fill="var(--vermilion)" fontFamily="monospace">64% UP</text>
                         <rect x="30" y="120" width="65" height="24" rx="3" fill="rgba(224,77,38,0.1)" />
                         <rect x="105" y="120" width="65" height="24" rx="3" fill="rgba(255,255,255,0.04)" />
                         <text x="47" y="136" fontSize="8" fill="var(--vermilion)" fontFamily="monospace">UP</text>
@@ -636,7 +636,7 @@ export default function HomePage() {
                         <circle cx="100" cy="80" r="50" fill="none" stroke="rgba(255,255,255,0.08)" />
                         <circle cx="100" cy="80" r="50" fill="none" stroke="var(--vermilion)" strokeWidth="2" pathLength="100" strokeDasharray="64 36" strokeLinecap="round" style={{ transform: 'rotate(-90deg)', transformOrigin: '100px 80px' }} />
                         <text x="100" y="76" textAnchor="middle" fontSize="18" fontWeight="700" fill="var(--white)" fontFamily="monospace">64%</text>
-                        <text x="100" y="90" textAnchor="middle" fontSize="7" fill="rgba(255,255,255,0.4)" fontFamily="monospace" letterSpacing="0.1em">YES</text>
+                        <text x="100" y="90" textAnchor="middle" fontSize="7" fill="rgba(255,255,255,0.4)" fontFamily="monospace" letterSpacing="0.1em">UP</text>
                         <line x1="30" y1="140" x2="170" y2="140" stroke="rgba(255,255,255,0.06)" />
                         <text x="100" y="155" textAnchor="middle" fontSize="7" fill="rgba(255,255,255,0.3)" fontFamily="monospace">POSITION COMMITTED</text>
                       </g>
@@ -909,8 +909,8 @@ export default function HomePage() {
 
               <div className="lp-market-prob">
                 <div className="lp-market-prob-row">
-                  <span className="yes">{m.yesC}% Yes</span>
-                  <span className="no">{100 - m.yesC}% No</span>
+                  <span className="yes">{m.yesC}% Up</span>
+                  <span className="no">{100 - m.yesC}% Down</span>
                 </div>
                 <div className="lp-market-prob-bar">
                   <div className="fill" style={{ width: `${m.yesC}%` }} />
@@ -1035,19 +1035,19 @@ export default function HomePage() {
         <div className="footer-status">
           <div className="cell">
             <span className="lbl">Network</span>
-            <span className="val"><span className="dot" /> Sui Mainnet</span>
+            <span className="val"><span className="dot" /> Sui Testnet</span>
           </div>
           <div className="cell">
-            <span className="lbl">Block</span>
-            <span className="val">12,847,291</span>
+            <span className="lbl">Protocol</span>
+            <span className="val">DeepBook Predict</span>
           </div>
           <div className="cell">
             <span className="lbl">Latency</span>
-            <span className="val">42ms</span>
+            <span className="val">Sub-second</span>
           </div>
           <div className="cell">
             <span className="lbl">Build</span>
-            <span className="val">v0.1.0-alpha</span>
+            <span className="val">v0.4.1-testnet</span>
           </div>
         </div>
 

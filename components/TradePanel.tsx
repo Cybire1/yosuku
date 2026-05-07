@@ -259,7 +259,7 @@ export default function TradePanel({
           }`}
         >
           <TrendingUp className="w-4 h-4" />
-          Yes
+          Up
         </button>
         <button
           onClick={() => setSide('DOWN')}
@@ -270,7 +270,7 @@ export default function TradePanel({
           }`}
         >
           <TrendingDown className="w-4 h-4" />
-          No
+          Down
         </button>
         <button
           onClick={() => setSide('RANGE')}
@@ -508,7 +508,7 @@ export default function TradePanel({
             <span className={`font-bold ${
               side === 'UP' ? 'text-emerald-400' : side === 'DOWN' ? 'text-rose-400' : 'text-amber-400'
             }`}>
-              {side === 'UP' ? 'YES (Up)' : side === 'DOWN' ? 'NO (Down)' : 'RANGE'}
+              {side === 'UP' ? 'UP' : side === 'DOWN' ? 'DOWN' : 'RANGE'}
             </span>
           </div>
           <div className="flex justify-between text-xs">
@@ -595,7 +595,7 @@ export default function TradePanel({
           ) : side === 'RANGE' ? (
             `Buy Range — ${(amountMicro / DUSDC_MULTIPLIER).toFixed(2)} DUSDC`
           ) : (
-            `Buy ${side === 'UP' ? 'Yes' : 'No'} — ${(amountMicro / DUSDC_MULTIPLIER).toFixed(2)} DUSDC`
+            `Buy ${side === 'UP' ? 'Up' : 'Down'} — ${(amountMicro / DUSDC_MULTIPLIER).toFixed(2)} DUSDC`
           )}
         </button>
 

@@ -19,24 +19,24 @@ export default function HowItWorksPage() {
     },
     {
       number: 2,
-      title: 'Pick a Round',
-      description: 'Each round has a BTC target price and a countdown timer. Will BTC be above or below the target when time runs out?',
+      title: 'Pick a Market',
+      description: 'Each market has a BTC strike price and a fifteen-minute window. Will BTC be above or below the strike when the window closes?',
       icon: Target,
       numClass: 'bg-new-blue/10 text-new-blue',
       iconClass: 'text-new-blue',
     },
     {
       number: 3,
-      title: 'Bet YES or NO',
-      description: 'Bet YES if you think BTC will be at or above the target price. Bet NO if you think it\'ll be below. Choose your amount in DUSDC.',
+      title: 'Trade UP or DOWN',
+      description: 'Go UP if you think BTC will be at or above the strike price. Go DOWN if you think it\'ll be below. Choose your position size in DUSDC.',
       icon: Zap,
       numClass: 'bg-new-mint/10 text-new-mint',
       iconClass: 'text-new-mint',
     },
     {
       number: 4,
-      title: 'Collect Winnings',
-      description: 'When the round resolves, winners split the total pool proportionally. A 10% platform fee is deducted from winnings.',
+      title: 'Collect Payout',
+      description: 'When the market settles, the oracle reports the final price. Winning positions pay out automatically. A 1-2% settlement fee applies.',
       icon: Trophy,
       numClass: 'bg-new-blue/10 text-new-blue',
       iconClass: 'text-new-blue',
@@ -45,44 +45,39 @@ export default function HowItWorksPage() {
 
   const mechanics = [
     {
-      title: 'Parimutuel Pools',
-      description: 'All bets go into a shared pool. Winners split the entire pool based on their share of the winning side. The more you bet relative to others, the bigger your payout.',
+      title: 'SVI Pricing Model',
+      description: 'Positions are priced using a Stochastic Volatility Inspired (SVI) model. A vault provides liquidity, so there are no counterparties — you trade directly against the protocol.',
       icon: Coins,
     },
     {
       title: 'Live BTC Price',
-      description: 'Real-time BTC/USDT price streamed from Binance. The chart shows price movement with the target line so you can track your position.',
+      description: 'Real-time BTC price from Pyth Network oracle feeds on Sui. The chart shows price movement relative to the strike so you can track your position.',
       icon: TrendingUp,
     },
     {
-      title: 'Multiple Durations',
-      description: 'Rounds can be 1 minute, 5 minutes, 15 minutes, 30 minutes, or 1 hour. Pick the timeframe that matches your conviction.',
+      title: 'Fifteen-Minute Windows',
+      description: 'Markets run in fifteen-minute windows — short enough to be engaging, long enough for genuine price discovery. Continuous rounds, always open.',
       icon: Clock,
     },
     {
       title: 'On-Chain Settlement',
-      description: 'Everything runs on Sui smart contracts via DeepBook Predict. Bets, pools, and payouts are all verifiable on-chain. No middleman, full transparency.',
-      icon: Zap,
-    },
-    {
-      title: 'On-Chain Settlement',
-      description: 'Your bets are recorded transparently on Sui. All positions and payouts are settled on-chain through DeepBook Predict smart contracts with instant finality.',
+      description: 'Everything runs on Sui smart contracts via DeepBook Predict. Positions and payouts are all verifiable on-chain with sub-second finality. No middleman, full transparency.',
       icon: Shield,
     },
   ];
 
   const faqs = [
     {
-      question: 'What currency does DART use?',
-      answer: 'DART uses DUSDC — a stablecoin on Sui used by DeepBook Predict. You can get DUSDC from the testnet faucet.',
+      question: 'What currency does YOSUKU use?',
+      answer: 'YOSUKU uses DUSDC — a stablecoin on Sui used by DeepBook Predict. On testnet, you can get DUSDC from the faucet.',
     },
     {
-      question: 'How is the winner decided?',
-      answer: 'At round end, the admin resolves with the actual BTC price. If BTC >= target price, YES wins. If BTC < target, NO wins. It\'s that simple.',
+      question: 'How is the outcome decided?',
+      answer: 'When the window closes, the Pyth oracle reports the final BTC price. If BTC >= strike price, UP positions win. If BTC < strike, DOWN positions win. Settlement is automatic and deterministic.',
     },
     {
       question: 'How much do I win?',
-      answer: 'Your payout = (your bet / winning pool) × total pool × 90%. The 10% fee goes to the platform. For example, if you bet 100 DUSDC on YES, the YES pool is 500, and total pool is 1000 — you\'d get (100/500) × 1000 × 0.9 = 180 DUSDC.',
+      answer: 'Each position pays out $1 per unit if correct, $0 if not. Your cost is the SVI fair price (e.g. 64¢ for a 64% probability UP position). If you win, your profit is $1 minus cost per unit. A 1-2% settlement fee applies.',
     },
     {
       question: 'What wallet do I need?',
@@ -93,12 +88,12 @@ export default function HowItWorksPage() {
       answer: 'On testnet, DUSDC is available from the faucet. This is a demo running on Sui testnet for educational and testing purposes.',
     },
     {
-      question: 'How does DART ensure fair markets?',
-      answer: 'DART runs entirely on Sui smart contracts via DeepBook Predict: (1) On-chain positions — your bet side and amount are recorded transparently on-chain, (2) Verifiable settlement — all payouts are calculated and settled by smart contracts, (3) Instant finality — Sui provides sub-second transaction finality, (4) No middleman — the protocol is fully decentralized with no central authority controlling funds.',
+      question: 'How does YOSUKU ensure fair pricing?',
+      answer: 'Positions are priced by an SVI (Stochastic Volatility Inspired) model — the same family of models used in traditional options markets. A vault provides liquidity, so there are no counterparties to manipulate prices. All positions and payouts are settled on-chain by DeepBook Predict smart contracts.',
     },
     {
-      question: 'Can I create my own rounds?',
-      answer: 'Currently only the admin can create rounds. In the future, anyone will be able to create prediction markets on any topic.',
+      question: 'Can I sell a position before settlement?',
+      answer: 'Yes. Active positions can be sold back to the vault at the current fair price before the window closes. The sell price reflects the latest market conditions.',
     },
   ];
 
@@ -132,7 +127,7 @@ export default function HowItWorksPage() {
               How It Works
             </h1>
             <p className="text-lg text-gray-400 max-w-2xl leading-relaxed">
-              Predict BTC price movements. Bet with DUSDC stablecoin. Win from the pool.
+              Predict BTC price movements. Trade UP or DOWN with DUSDC. Settle on-chain.
             </p>
           </motion.div>
 
@@ -175,28 +170,28 @@ export default function HowItWorksPage() {
             <h2 className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-6">Payout Example</h2>
             <div className="grid grid-cols-3 gap-3 sm:gap-6 mb-6">
               <div className="text-center">
-                <div className="text-xl sm:text-2xl md:text-3xl font-black font-mono text-new-mint">500</div>
-                <div className="text-xs text-gray-500 mt-1">YES Pool (DUSDC)</div>
+                <div className="text-xl sm:text-2xl md:text-3xl font-black font-mono text-new-mint">64%</div>
+                <div className="text-xs text-gray-500 mt-1">UP fair price</div>
               </div>
               <div className="text-center">
-                <div className="text-xl sm:text-2xl md:text-3xl font-black font-mono text-off-red">500</div>
-                <div className="text-xs text-gray-500 mt-1">NO Pool (DUSDC)</div>
+                <div className="text-xl sm:text-2xl md:text-3xl font-black font-mono text-off-red">36%</div>
+                <div className="text-xs text-gray-500 mt-1">DOWN fair price</div>
               </div>
               <div className="text-center">
-                <div className="text-xl sm:text-2xl md:text-3xl font-black font-mono text-white">1,000</div>
-                <div className="text-xs text-gray-500 mt-1">Total Pool (DUSDC)</div>
+                <div className="text-xl sm:text-2xl md:text-3xl font-black font-mono text-white">$1.00</div>
+                <div className="text-xs text-gray-500 mt-1">Max payout / unit</div>
               </div>
             </div>
             <div className="border-t border-white/5 pt-6">
               <div className="flex items-center gap-3 flex-wrap">
-                <span className="text-sm text-gray-400">You bet</span>
-                <span className="px-3 py-1 bg-new-mint/10 text-new-mint font-mono font-bold text-sm rounded-lg">100 DUSDC on YES</span>
+                <span className="text-sm text-gray-400">You buy</span>
+                <span className="px-3 py-1 bg-new-mint/10 text-new-mint font-mono font-bold text-sm rounded-lg">100 UP @ 64¢ each</span>
                 <ArrowRight className="w-4 h-4 text-gray-600" />
-                <span className="text-sm text-gray-400">YES wins</span>
+                <span className="text-sm text-gray-400">BTC above strike</span>
                 <ArrowRight className="w-4 h-4 text-gray-600" />
                 <span className="text-sm text-gray-400">You get</span>
-                <span className="px-3 py-1 bg-new-mint/10 text-new-mint font-mono font-bold text-sm rounded-lg">180 DUSDC</span>
-                <span className="text-xs text-gray-600">(100/500 × 1000 × 90%)</span>
+                <span className="px-3 py-1 bg-new-mint/10 text-new-mint font-mono font-bold text-sm rounded-lg">100 DUSDC</span>
+                <span className="text-xs text-gray-600">(+36 DUSDC profit)</span>
               </div>
             </div>
           </motion.div>
@@ -245,7 +240,7 @@ export default function HowItWorksPage() {
                   <h3 className="text-base font-bold text-white">Transparent Positions</h3>
                 </div>
                 <p className="text-sm text-gray-400 leading-relaxed">
-                  Your bet side (Up/Down) and amount are recorded <span className="text-sky-400 font-medium">transparently on-chain</span> through Sui smart contracts. Every position is verifiable and settled by DeepBook Predict with no intermediaries.
+                  Your position direction (Up/Down) and size are recorded <span className="text-sky-400 font-medium">transparently on-chain</span> through Sui smart contracts. Every position is verifiable and settled by DeepBook Predict with no intermediaries.
                 </p>
               </motion.div>
               <motion.div
@@ -261,7 +256,7 @@ export default function HowItWorksPage() {
                   <h3 className="text-base font-bold text-white">Instant Finality</h3>
                 </div>
                 <p className="text-sm text-gray-400 leading-relaxed">
-                  Sui provides <span className="text-sky-400 font-medium">sub-second transaction finality</span>. Your bets are confirmed almost instantly, and when the round resolves, payouts are settled on-chain without delay.
+                  Sui provides <span className="text-sky-400 font-medium">sub-second transaction finality</span>. Your positions are confirmed almost instantly, and when the market settles, payouts are distributed on-chain without delay.
                 </p>
               </motion.div>
             </div>
@@ -278,7 +273,7 @@ export default function HowItWorksPage() {
                 <h3 className="text-base font-bold text-white">Smart Contract Settlement</h3>
               </div>
               <p className="text-sm text-gray-400 leading-relaxed">
-                When you claim winnings, the <span className="text-sky-400 font-medium">DeepBook Predict smart contract</span> verifies your position on-chain and calculates your payout automatically. All funds are held and distributed by the contract -- no trust required.
+                When a market settles, the <span className="text-sky-400 font-medium">DeepBook Predict smart contract</span> verifies your position on-chain and calculates your payout automatically. All funds are held and distributed by the contract — no trust required.
               </p>
             </motion.div>
           </div>

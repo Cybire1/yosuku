@@ -211,7 +211,7 @@ export default function PortfolioTable() {
                         direction === 'DOWN' ? 'text-rose-400' :
                         'text-amber-400'
                       }`}>
-                        {direction === 'UP' ? 'YES' : direction === 'DOWN' ? 'NO' : 'RANGE'}
+                        {direction === 'UP' ? 'UP' : direction === 'DOWN' ? 'DOWN' : 'RANGE'}
                       </span>
                       <span className="text-sm text-gray-400">
                         {isRange
