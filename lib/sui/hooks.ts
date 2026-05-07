@@ -1,7 +1,42 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useCurrentAccount, useSuiClient } from '@mysten/dapp-kit';
+
+/** Polling that pauses when the tab is hidden and resumes when visible */
+function useVisibilityAwareInterval(callback: () => void, intervalMs: number) {
+  const savedCallback = useRef(callback);
+  savedCallback.current = callback;
+
+  useEffect(() => {
+    let id: ReturnType<typeof setInterval> | null = null;
+
+    const start = () => {
+      if (id) return;
+      id = setInterval(() => savedCallback.current(), intervalMs);
+    };
+    const stop = () => {
+      if (id) { clearInterval(id); id = null; }
+    };
+
+    const onVisibility = () => {
+      if (document.hidden) {
+        stop();
+      } else {
+        savedCallback.current(); // refresh immediately on return
+        start();
+      }
+    };
+
+    // initial fetch + start
+    start();
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      stop();
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [intervalMs]);
+}
 import {
   fetchOracles,
   fetchManagerForAddress,
@@ -38,7 +73,7 @@ export function useWalletAddress(): string | null {
 }
 
 /** Hook: all oracles with polling */
-export function useOracles(pollInterval = 15_000) {
+export function useOracles(pollInterval = 30_000) {
   const [oracles, setOracles] = useState<OracleData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -56,11 +91,8 @@ export function useOracles(pollInterval = 15_000) {
     }
   }, []);
 
-  useEffect(() => {
-    refresh();
-    const interval = setInterval(refresh, pollInterval);
-    return () => clearInterval(interval);
-  }, [refresh, pollInterval]);
+  useEffect(() => { refresh(); }, [refresh]);
+  useVisibilityAwareInterval(refresh, pollInterval);
 
   const active = oracles.filter(o => o.status === 'active');
   const settled = oracles.filter(o => o.status === 'settled');
@@ -99,7 +131,7 @@ export function useManager() {
 }
 
 /** Hook: DUSDC balance in wallet */
-export function useDUSDCBalance(pollInterval = 10_000) {
+export function useDUSDCBalance(pollInterval = 30_000) {
   const address = useWalletAddress();
   const client = useSuiClient();
   const [balance, setBalance] = useState(0);
@@ -126,17 +158,14 @@ export function useDUSDCBalance(pollInterval = 10_000) {
     }
   }, [address, client]);
 
-  useEffect(() => {
-    refresh();
-    const interval = setInterval(refresh, pollInterval);
-    return () => clearInterval(interval);
-  }, [refresh, pollInterval]);
+  useEffect(() => { refresh(); }, [refresh]);
+  useVisibilityAwareInterval(refresh, pollInterval);
 
   return { balance, coins, refresh };
 }
 
 /** Hook: PLP (LP token) balance with coin object IDs */
-export function usePLPBalance(pollInterval = 30_000) {
+export function usePLPBalance(pollInterval = 60_000) {
   const address = useWalletAddress();
   const client = useSuiClient();
   const [balance, setBalance] = useState(0);
@@ -163,17 +192,14 @@ export function usePLPBalance(pollInterval = 30_000) {
     }
   }, [address, client]);
 
-  useEffect(() => {
-    refresh();
-    const interval = setInterval(refresh, pollInterval);
-    return () => clearInterval(interval);
-  }, [refresh, pollInterval]);
+  useEffect(() => { refresh(); }, [refresh]);
+  useVisibilityAwareInterval(refresh, pollInterval);
 
   return { balance, coins, refresh };
 }
 
 /** Hook: prices for a specific oracle */
-export function useOraclePrices(oracleId: string | null, pollInterval = 5_000) {
+export function useOraclePrices(oracleId: string | null, pollInterval = 15_000) {
   const [prices, setPrices] = useState<PriceData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -193,17 +219,14 @@ export function useOraclePrices(oracleId: string | null, pollInterval = 5_000) {
     }
   }, [oracleId]);
 
-  useEffect(() => {
-    refresh();
-    const interval = setInterval(refresh, pollInterval);
-    return () => clearInterval(interval);
-  }, [refresh, pollInterval]);
+  useEffect(() => { refresh(); }, [refresh]);
+  useVisibilityAwareInterval(refresh, pollInterval);
 
   return { prices, loading, refresh };
 }
 
 /** Hook: positions for a manager */
-export function usePositions(managerId: string | null, pollInterval = 15_000) {
+export function usePositions(managerId: string | null, pollInterval = 30_000) {
   const [positions, setPositions] = useState<PositionData[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -223,11 +246,8 @@ export function usePositions(managerId: string | null, pollInterval = 15_000) {
     }
   }, [managerId]);
 
-  useEffect(() => {
-    refresh();
-    const interval = setInterval(refresh, pollInterval);
-    return () => clearInterval(interval);
-  }, [refresh, pollInterval]);
+  useEffect(() => { refresh(); }, [refresh]);
+  useVisibilityAwareInterval(refresh, pollInterval);
 
   return { positions, loading, refresh };
 }
@@ -263,17 +283,14 @@ export function useManagerBalance(managerId: string | null) {
     }
   }, [managerId, client]);
 
-  useEffect(() => {
-    refresh();
-    const interval = setInterval(refresh, 10_000);
-    return () => clearInterval(interval);
-  }, [refresh]);
+  useEffect(() => { refresh(); }, [refresh]);
+  useVisibilityAwareInterval(refresh, 30_000);
 
   return { balance, loading, refresh };
 }
 
 /** Hook: SVI pricing data for an oracle */
-export function useSviPricing(oracleId: string | null, pollInterval = 15_000) {
+export function useSviPricing(oracleId: string | null, pollInterval = 30_000) {
   const [sviData, setSviData] = useState<SviData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -293,11 +310,8 @@ export function useSviPricing(oracleId: string | null, pollInterval = 15_000) {
     }
   }, [oracleId]);
 
-  useEffect(() => {
-    refresh();
-    const interval = setInterval(refresh, pollInterval);
-    return () => clearInterval(interval);
-  }, [refresh, pollInterval]);
+  useEffect(() => { refresh(); }, [refresh]);
+  useVisibilityAwareInterval(refresh, pollInterval);
 
   return { sviData, loading, refresh };
 }
@@ -316,7 +330,7 @@ export interface VaultStats {
 }
 
 /** Hook: read vault stats from on-chain Predict object */
-export function useVaultStats(pollInterval = 30_000) {
+export function useVaultStats(pollInterval = 60_000) {
   const client = useSuiClient();
   const [stats, setStats] = useState<VaultStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -362,11 +376,8 @@ export function useVaultStats(pollInterval = 30_000) {
     }
   }, [client]);
 
-  useEffect(() => {
-    refresh();
-    const interval = setInterval(refresh, pollInterval);
-    return () => clearInterval(interval);
-  }, [refresh, pollInterval]);
+  useEffect(() => { refresh(); }, [refresh]);
+  useVisibilityAwareInterval(refresh, pollInterval);
 
   return { stats, loading, refresh };
 }
@@ -403,7 +414,7 @@ export interface ProtocolStats {
 }
 
 /** Hook: aggregate protocol stats from real API data */
-export function useProtocolStats(pollInterval = 60_000) {
+export function useProtocolStats(pollInterval = 120_000) {
   const [stats, setStats] = useState<ProtocolStats | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -418,10 +429,10 @@ export function useProtocolStats(pollInterval = 60_000) {
       const marketsResolved = settled.length;
       const activeWallets = managers.length;
 
-      // Sum volume from trades on recent oracles (up to 20 most recent)
+      // Sum volume from trades on recent oracles (up to 5 most recent to reduce requests)
       const recentOracles = [...oracles]
         .sort((a, b) => (b.settled_at ?? b.expiry) - (a.settled_at ?? a.expiry))
-        .slice(0, 20);
+        .slice(0, 5);
 
       let volumeSettled = 0;
       const tradeResults = await Promise.allSettled(
@@ -445,11 +456,8 @@ export function useProtocolStats(pollInterval = 60_000) {
     }
   }, []);
 
-  useEffect(() => {
-    refresh();
-    const interval = setInterval(refresh, pollInterval);
-    return () => clearInterval(interval);
-  }, [refresh, pollInterval]);
+  useEffect(() => { refresh(); }, [refresh]);
+  useVisibilityAwareInterval(refresh, pollInterval);
 
   return { stats, loading, refresh };
 }
@@ -457,7 +465,7 @@ export function useProtocolStats(pollInterval = 60_000) {
 // ── Price history with polling ────────────────────────
 
 /** Hook: price history for an oracle with polling */
-export function usePriceHistory(oracleId: string | null, limit = 100, pollInterval = 30_000) {
+export function usePriceHistory(oracleId: string | null, limit = 100, pollInterval = 60_000) {
   const [history, setHistory] = useState<PriceData[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -477,11 +485,8 @@ export function usePriceHistory(oracleId: string | null, limit = 100, pollInterv
     }
   }, [oracleId, limit]);
 
-  useEffect(() => {
-    refresh();
-    const interval = setInterval(refresh, pollInterval);
-    return () => clearInterval(interval);
-  }, [refresh, pollInterval]);
+  useEffect(() => { refresh(); }, [refresh]);
+  useVisibilityAwareInterval(refresh, pollInterval);
 
   return { history, loading, refresh };
 }
@@ -489,7 +494,7 @@ export function usePriceHistory(oracleId: string | null, limit = 100, pollInterv
 // ── New API hooks ─────────────────────────────────────
 
 /** Hook: API health status */
-export function useApiStatus(pollInterval = 30_000) {
+export function useApiStatus(pollInterval = 60_000) {
   const [status, setStatus] = useState<StatusData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -504,17 +509,14 @@ export function useApiStatus(pollInterval = 30_000) {
     }
   }, []);
 
-  useEffect(() => {
-    refresh();
-    const interval = setInterval(refresh, pollInterval);
-    return () => clearInterval(interval);
-  }, [refresh, pollInterval]);
+  useEffect(() => { refresh(); }, [refresh]);
+  useVisibilityAwareInterval(refresh, pollInterval);
 
   return { status, loading, refresh };
 }
 
 /** Hook: vault summary from API */
-export function useVaultSummary(predictId: string | null, pollInterval = 30_000) {
+export function useVaultSummary(predictId: string | null, pollInterval = 60_000) {
   const [summary, setSummary] = useState<VaultSummaryData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -534,17 +536,14 @@ export function useVaultSummary(predictId: string | null, pollInterval = 30_000)
     }
   }, [predictId]);
 
-  useEffect(() => {
-    refresh();
-    const interval = setInterval(refresh, pollInterval);
-    return () => clearInterval(interval);
-  }, [refresh, pollInterval]);
+  useEffect(() => { refresh(); }, [refresh]);
+  useVisibilityAwareInterval(refresh, pollInterval);
 
   return { summary, loading, refresh };
 }
 
 /** Hook: vault performance (share price history) */
-export function useVaultPerformance(predictId: string | null, pollInterval = 60_000) {
+export function useVaultPerformance(predictId: string | null, pollInterval = 120_000) {
   const [performance, setPerformance] = useState<VaultPerformanceData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -564,17 +563,14 @@ export function useVaultPerformance(predictId: string | null, pollInterval = 60_
     }
   }, [predictId]);
 
-  useEffect(() => {
-    refresh();
-    const interval = setInterval(refresh, pollInterval);
-    return () => clearInterval(interval);
-  }, [refresh, pollInterval]);
+  useEffect(() => { refresh(); }, [refresh]);
+  useVisibilityAwareInterval(refresh, pollInterval);
 
   return { performance, loading, refresh };
 }
 
 /** Hook: combined oracle state (oracle + price + SVI) */
-export function useOracleState(oracleId: string | null, pollInterval = 5_000) {
+export function useOracleState(oracleId: string | null, pollInterval = 15_000) {
   const [state, setState] = useState<OracleStateData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -594,17 +590,14 @@ export function useOracleState(oracleId: string | null, pollInterval = 5_000) {
     }
   }, [oracleId]);
 
-  useEffect(() => {
-    refresh();
-    const interval = setInterval(refresh, pollInterval);
-    return () => clearInterval(interval);
-  }, [refresh, pollInterval]);
+  useEffect(() => { refresh(); }, [refresh]);
+  useVisibilityAwareInterval(refresh, pollInterval);
 
   return { state, loading, refresh };
 }
 
 /** Hook: manager summary (balance, P&L, positions) */
-export function useManagerSummary(managerId: string | null, pollInterval = 15_000) {
+export function useManagerSummary(managerId: string | null, pollInterval = 30_000) {
   const [summary, setSummary] = useState<ManagerSummaryData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -624,17 +617,14 @@ export function useManagerSummary(managerId: string | null, pollInterval = 15_00
     }
   }, [managerId]);
 
-  useEffect(() => {
-    refresh();
-    const interval = setInterval(refresh, pollInterval);
-    return () => clearInterval(interval);
-  }, [refresh, pollInterval]);
+  useEffect(() => { refresh(); }, [refresh]);
+  useVisibilityAwareInterval(refresh, pollInterval);
 
   return { summary, loading, refresh };
 }
 
 /** Hook: manager P&L time series */
-export function useManagerPnL(managerId: string | null, pollInterval = 30_000) {
+export function useManagerPnL(managerId: string | null, pollInterval = 60_000) {
   const [pnlData, setPnlData] = useState<ManagerPnLData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -654,11 +644,8 @@ export function useManagerPnL(managerId: string | null, pollInterval = 30_000) {
     }
   }, [managerId]);
 
-  useEffect(() => {
-    refresh();
-    const interval = setInterval(refresh, pollInterval);
-    return () => clearInterval(interval);
-  }, [refresh, pollInterval]);
+  useEffect(() => { refresh(); }, [refresh]);
+  useVisibilityAwareInterval(refresh, pollInterval);
 
   return { pnlData, loading, refresh };
 }
@@ -692,7 +679,7 @@ export interface LeaderboardData {
 }
 
 /** Hook: fetches leaderboard from server-side API route */
-export function useLeaderboard(pollInterval = 60_000) {
+export function useLeaderboard(pollInterval = 120_000) {
   const [data, setData] = useState<LeaderboardData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -709,11 +696,8 @@ export function useLeaderboard(pollInterval = 60_000) {
     }
   }, []);
 
-  useEffect(() => {
-    refresh();
-    const interval = setInterval(refresh, pollInterval);
-    return () => clearInterval(interval);
-  }, [refresh, pollInterval]);
+  useEffect(() => { refresh(); }, [refresh]);
+  useVisibilityAwareInterval(refresh, pollInterval);
 
   return { data, loading, refresh };
 }

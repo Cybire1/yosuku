@@ -30,7 +30,7 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
   const chartCanvasRef = useRef<HTMLCanvasElement>(null);
 
   // Single combined API call: oracle + prices + SVI
-  const { state: oracleState, loading } = useOracleState(oracleId, 5_000);
+  const { state: oracleState, loading } = useOracleState(oracleId);
   const oracle = oracleState?.oracle ?? null;
   const prices = oracleState?.latest_price ?? null;
   const sviData = oracleState?.latest_svi ?? null;

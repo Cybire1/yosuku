@@ -20,7 +20,7 @@ import TheBell from '@/components/TheBell';
 export default function MarketsPage() {
   const account = useCurrentAccount();
   const address = account?.address ?? null;
-  const { active, settled, loading, error } = useOracles(15_000);
+  const { active, settled, loading, error } = useOracles();
   const [prices, setPrices] = useState<Record<string, PriceData>>({});
   const { price: btcPrice } = useBtcPrice();
   const heroCanvasRef = useRef<HTMLCanvasElement>(null);

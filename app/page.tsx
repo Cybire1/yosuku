@@ -129,7 +129,7 @@ function clamp(v: number, lo: number, hi: number): number {
    ═══════════════════════════════════════════════════ */
 export default function HomePage() {
   const { price: btcPrice } = useBtcPrice();
-  const { active: liveOracles, loading: oraclesLoading } = useOracles(15_000);
+  const { active: liveOracles, loading: oraclesLoading } = useOracles();
   const { stats: protocolStats, loading: statsLoading } = useProtocolStats();
   const [oraclePrices, setOraclePrices] = useState<Record<string, PriceData>>({});
 
