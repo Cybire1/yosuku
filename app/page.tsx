@@ -394,7 +394,7 @@ export default function HomePage() {
     { idx: '01', label: 'Volume settled', value: protocolStats ? `$${(protocolStats.volumeSettled).toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '\u2014', spark: STAT_SPARKS[0], meta: 'on-chain total' },
     { idx: '02', label: 'Markets resolved', value: protocolStats ? protocolStats.marketsResolved.toLocaleString() : '\u2014', spark: STAT_SPARKS[1], meta: 'oracle-settled' },
     { idx: '03', label: 'Active wallets', value: protocolStats ? protocolStats.activeWallets.toLocaleString() : '\u2014', spark: STAT_SPARKS[2], meta: 'unique managers' },
-    { idx: '04', label: 'Settlement time', value: '0.42s', spark: STAT_SPARKS[3], meta: 'p99 < 0.8s' },
+    { idx: '04', label: 'Settlement time', value: '< 1s', spark: STAT_SPARKS[3], meta: 'sub-second finality' },
   ];
 
   return (

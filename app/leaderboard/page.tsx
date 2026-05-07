@@ -10,7 +10,7 @@ import SectionHeader from '@/components/SectionHeader';
 import { drawSparkline } from '@/lib/charts/canvasChart';
 import { drawCandles } from '@/lib/charts/canvasChart';
 import { priceHistoryToCandles } from '@/lib/charts/canvasChart';
-import { useLeaderboard, usePriceHistory } from '@/lib/sui/hooks';
+import { useLeaderboard, usePriceHistory, useOracles } from '@/lib/sui/hooks';
 import { formatAddress } from '@/lib/leaderboardStats';
 
 // Japanese number glyphs for rank labels
@@ -45,6 +45,7 @@ export default function LeaderboardPage() {
   const yokoChartRef = useRef<HTMLCanvasElement>(null);
 
   const { data: leaderboard, loading: lbLoading } = useLeaderboard();
+  const { active: liveOracles } = useOracles();
 
   const rankings = leaderboard?.rankings ?? [];
   const meta = leaderboard?.meta ?? { totalWallets: 0, totalVolume: 0 };
@@ -158,12 +159,20 @@ export default function LeaderboardPage() {
     }
   }, [yokoHistory]);
 
-  // Next seal countdown
-  const [sealTime, setSealTime] = useState(4 * 3600 + 38 * 60 + 21);
+  // Next seal countdown — derived from nearest oracle expiry
+  const [sealTime, setSealTime] = useState(0);
   useEffect(() => {
-    const iv = setInterval(() => setSealTime(t => Math.max(0, t - 1)), 1000);
+    const tick = () => {
+      if (liveOracles.length > 0) {
+        const nearest = Math.min(...liveOracles.map(o => o.expiry));
+        const secsLeft = Math.max(0, Math.floor((nearest - Date.now()) / 1000));
+        setSealTime(secsLeft);
+      }
+    };
+    tick();
+    const iv = setInterval(tick, 1000);
     return () => clearInterval(iv);
-  }, []);
+  }, [liveOracles]);
   const sealH = Math.floor(sealTime / 3600);
   const sealM = Math.floor((sealTime % 3600) / 60);
   const sealS = sealTime % 60;
