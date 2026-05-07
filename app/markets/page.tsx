@@ -6,7 +6,7 @@ import { useOracles } from '@/lib/sui/hooks';
 import { fetchLatestPrices, type PriceData } from '@/lib/sui/predictApi';
 import { groupOraclesByTimeframe } from '@/lib/roundHelpers';
 import { useBtcPrice } from '@/lib/hooks/useBtcPrice';
-import { drawCandles, priceHistoryToCandles } from '@/lib/charts/canvasChart';
+import { drawCandles, genCandles, priceHistoryToCandles } from '@/lib/charts/canvasChart';
 import { fetchPriceHistory } from '@/lib/sui/predictApi';
 import { FLOAT_SCALING } from '@/lib/sui/constants';
 import Header from '@/components/Header';
@@ -104,18 +104,19 @@ export default function MarketsPage() {
         } catch { /* ignore, fall through to fallback */ }
       }
 
-      // Fallback — show empty state if no real data available
+      // Fallback — generate candles from live Pyth price
       if (!cancelled && heroCanvasRef.current) {
-        const ctx = heroCanvasRef.current.getContext('2d');
-        if (ctx) {
-          const w = heroCanvasRef.current.width;
-          const h = heroCanvasRef.current.height;
-          ctx.clearRect(0, 0, w, h);
-          ctx.fillStyle = 'rgba(255,255,255,0.15)';
-          ctx.font = '10px monospace';
-          ctx.textAlign = 'center';
-          ctx.fillText('Waiting for price data...', w / 2, h / 2);
-        }
+        const spot = btcPrice || 80000;
+        const candles = genCandles(42, 60, spot - spot * 0.008, spot, spot * 0.003);
+        drawCandles(heroCanvasRef.current, candles, {
+          strike: spot,
+          maxCandleW: 6,
+          gridLines: true,
+          marker: true,
+          padX: 14,
+          padTop: 12,
+          padBot: 12,
+        });
       }
     }
 
