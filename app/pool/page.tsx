@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { Loader2, ArrowDownToLine, ArrowUpFromLine } from 'lucide-react';
 import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from '@mysten/dapp-kit';
 import Header from '@/components/Header';
@@ -9,9 +9,11 @@ import Marquee from '@/components/Marquee';
 import GrainOverlay from '@/components/GrainOverlay';
 import CustomCursor from '@/components/CustomCursor';
 import SectionHeader from '@/components/SectionHeader';
-import { useVaultStats, useDUSDCBalance, usePLPBalance } from '@/lib/sui/hooks';
+import { useVaultStats, useDUSDCBalance, usePLPBalance, useVaultSummary, useVaultPerformance } from '@/lib/sui/hooks';
+import { fetchLpSupplies, fetchLpWithdrawals, type LpSupplyEvent, type LpWithdrawalEvent } from '@/lib/sui/predictApi';
 import { supplyLpTx, withdrawAllPlpTx } from '@/lib/sui/predictClient';
-import { DUSDC_MULTIPLIER, FLOAT_SCALING } from '@/lib/sui/constants';
+import { DUSDC_MULTIPLIER, FLOAT_SCALING, PREDICT_ID } from '@/lib/sui/constants';
+import { drawSparkline } from '@/lib/charts/canvasChart';
 
 type SupplyStep = 'idle' | 'supplying' | 'success' | 'error';
 type WithdrawStep = 'idle' | 'withdrawing' | 'success' | 'error';
@@ -25,6 +27,46 @@ export default function PoolPage() {
   const { stats, loading: statsLoading, refresh: refreshStats } = useVaultStats();
   const { balance: walletBalance, coins: dusdcCoins, refresh: refreshDusdc } = useDUSDCBalance();
   const { balance: plpBalance, coins: plpCoins, refresh: refreshPlp } = usePLPBalance();
+
+  // API-driven vault data
+  const { summary: vaultSummary } = useVaultSummary(PREDICT_ID);
+  const { performance: vaultPerformance } = useVaultPerformance(PREDICT_ID);
+  const sparklineRef = useRef<HTMLCanvasElement>(null);
+  const [lpActivity, setLpActivity] = useState<(LpSupplyEvent | LpWithdrawalEvent & { type: string })[]>([]);
+
+  // Draw vault performance sparkline
+  useEffect(() => {
+    if (!sparklineRef.current || !vaultPerformance?.points?.length) return;
+    const data = vaultPerformance.points.map(p => p.share_price);
+    drawSparkline(sparklineRef.current, data, {
+      color: '#E04D26',
+      fillColor: 'rgba(224, 77, 38, 0.12)',
+      lineWidth: 1.6,
+      dotEnd: true,
+    });
+  }, [vaultPerformance]);
+
+  // Load LP activity feed
+  useEffect(() => {
+    let cancelled = false;
+    async function loadLpActivity() {
+      try {
+        const [supplies, withdrawals] = await Promise.all([
+          fetchLpSupplies(),
+          fetchLpWithdrawals(),
+        ]);
+        if (cancelled) return;
+        const combined = [
+          ...supplies.map(s => ({ ...s, type: 'supply' as const })),
+          ...withdrawals.map(w => ({ ...w, type: 'withdraw' as const })),
+        ].sort((a, b) => b.timestamp - a.timestamp);
+        setLpActivity(combined);
+      } catch { /* ignore */ }
+    }
+    loadLpActivity();
+    const interval = setInterval(loadLpActivity, 60_000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, []);
 
   const [supplyAmount, setSupplyAmount] = useState('100');
   const [supplyStep, setSupplyStep] = useState<SupplyStep>('idle');
@@ -170,12 +212,58 @@ export default function PoolPage() {
                         </div>
                       </div>
                     </div>
+                    {/* Enriched stats from API */}
+                    {vaultSummary && (
+                      <div className="grid grid-cols-4 gap-4 pt-4 mt-4" style={{ borderTop: '1px solid rgba(201,191,166,0.15)' }}>
+                        <div>
+                          <span className="font-mono text-[8px] tracking-[0.14em] uppercase" style={{ color: '#6B6353' }}>Utilization</span>
+                          <div className="font-mono text-sm" style={{ color: '#1A1612' }}>
+                            {(vaultSummary.utilization * 100).toFixed(2)}%
+                          </div>
+                        </div>
+                        <div>
+                          <span className="font-mono text-[8px] tracking-[0.14em] uppercase" style={{ color: '#6B6353' }}>Share Price</span>
+                          <div className="font-mono text-sm" style={{ color: '#1A1612' }}>
+                            {vaultSummary.plp_share_price.toFixed(6)}
+                          </div>
+                        </div>
+                        <div>
+                          <span className="font-mono text-[8px] tracking-[0.14em] uppercase" style={{ color: '#6B6353' }}>Net Deposits</span>
+                          <div className="font-mono text-sm" style={{ color: '#1A1612' }}>
+                            {(vaultSummary.net_deposits / DUSDC_MULTIPLIER).toFixed(2)}
+                          </div>
+                        </div>
+                        <div>
+                          <span className="font-mono text-[8px] tracking-[0.14em] uppercase" style={{ color: '#6B6353' }}>Total Supplied</span>
+                          <div className="font-mono text-sm" style={{ color: '#1A1612' }}>
+                            {(vaultSummary.total_supplied / DUSDC_MULTIPLIER).toFixed(2)}
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </>
                 ) : (
                   <p className="text-center py-4" style={{ color: '#6B6353' }}>Failed to load vault data</p>
                 )}
               </div>
             </section>
+
+            {/* Vault Performance Sparkline */}
+            {vaultPerformance && vaultPerformance.points.length > 0 && (
+              <section>
+                <div className="flex items-center justify-between mb-3">
+                  <span className="font-mono text-[9px] tracking-[0.16em] uppercase text-gray-600">
+                    Share Price History
+                  </span>
+                  <span className="font-mono text-[9px] tracking-[0.16em] uppercase text-gray-600">
+                    {vaultSummary ? vaultSummary.plp_share_price.toFixed(6) : ''}
+                  </span>
+                </div>
+                <div className="border border-white/[0.08] rounded bg-bg p-3" style={{ height: '100px' }}>
+                  <canvas ref={sparklineRef} className="w-full h-full" />
+                </div>
+              </section>
+            )}
 
             {/* 02: Your LP Position */}
             <section>
@@ -311,30 +399,41 @@ export default function PoolPage() {
               )}
             </section>
 
-            {/* 04: Composability */}
+            {/* 04: LP Activity */}
             <section>
-              <SectionHeader number="04" title="Composability" jp="構成可能性" />
-              <div className="border border-white/[0.08] rounded bg-bg p-5 space-y-4">
-                <div>
-                  <h4 className="text-xs font-bold text-white uppercase tracking-wider">DeepBook Spot</h4>
-                  <p className="text-xs text-gray-400 mt-1">
-                    PLP tokens can be traded on DeepBook spot markets, enabling secondary market liquidity for LP positions without needing to withdraw from the vault.
-                  </p>
-                </div>
-                <div>
-                  <h4 className="text-xs font-bold text-white uppercase tracking-wider">DeepBook Margin</h4>
-                  <p className="text-xs text-gray-400 mt-1">
-                    Binary positions could serve as margin collateral in DeepBook perpetuals, allowing hedged strategies across prediction and derivatives markets.
-                  </p>
-                </div>
-                <a
-                  href="https://deepbook.tech"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs text-vermilion hover:text-vermilion/80 transition-colors inline-block"
-                >
-                  Learn more about DeepBook composability ↗
-                </a>
+              <SectionHeader number="04" title="LP Activity" jp="LP活動" />
+              <div className="border border-white/[0.08] rounded bg-bg p-5">
+                {lpActivity.length === 0 ? (
+                  <p className="text-xs text-gray-600 text-center py-8">No LP activity recorded yet</p>
+                ) : (
+                  <div className="space-y-0.5 max-h-[300px] overflow-y-auto scrollbar-hide">
+                    {lpActivity.slice(0, 30).map((event, i) => {
+                      const isSupply = 'amount' in event && 'plp_minted' in event;
+                      return (
+                        <div key={i} className="flex items-center justify-between py-2 px-3 rounded hover:bg-white/[0.02] transition-colors text-xs">
+                          <span className={`font-mono font-semibold ${isSupply ? 'text-emerald-400' : 'text-vermilion'}`}>
+                            {isSupply ? '↓ Supply' : '↑ Withdraw'}
+                          </span>
+                          <span className="font-mono text-gray-400">
+                            {isSupply
+                              ? `${((event as LpSupplyEvent).amount / DUSDC_MULTIPLIER).toFixed(2)} DUSDC`
+                              : `${((event as LpWithdrawalEvent).amount_returned / DUSDC_MULTIPLIER).toFixed(2)} DUSDC`
+                            }
+                          </span>
+                          <span className="font-mono text-gray-600 text-[10px]">
+                            {isSupply
+                              ? `→ ${((event as LpSupplyEvent).plp_minted / DUSDC_MULTIPLIER).toFixed(2)} PLP`
+                              : `← ${((event as LpWithdrawalEvent).plp_burned / DUSDC_MULTIPLIER).toFixed(2)} PLP`
+                            }
+                          </span>
+                          <span className="font-mono text-gray-600">
+                            {new Date(event.timestamp).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </section>
           </div>

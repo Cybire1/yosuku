@@ -461,10 +461,6 @@ export default function HomePage() {
               <span className="live-dot" />
               <span>{protocolStats ? `${protocolStats.activeWallets} wallets` : '\u2014'}</span>
             </span>
-            <span className="hero-pill">
-              <span className="live-dot" />
-              <span>{protocolStats ? `$${protocolStats.volumeSettled.toLocaleString('en-US', { maximumFractionDigits: 0 })} vol` : '\u2014'}</span>
-            </span>
           </div>
         </div>
 

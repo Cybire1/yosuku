@@ -10,8 +10,8 @@ import CustomCursor from '@/components/CustomCursor';
 import TheBell from '@/components/TheBell';
 import TradePanel from '@/components/TradePanel';
 import PriceChart from '@/components/PriceChart';
-import { fetchOracles, fetchTrades, type OracleData, type TradeData } from '@/lib/sui/predictApi';
-import { useOraclePrices, useSviPricing } from '@/lib/sui/hooks';
+import { fetchTrades, type OracleData, type TradeData } from '@/lib/sui/predictApi';
+import { useOracleState } from '@/lib/sui/hooks';
 import { FLOAT_SCALING, DUSDC_MULTIPLIER } from '@/lib/sui/constants';
 import { computeSviPrice } from '@/lib/sui/sviPricing';
 import { generateStrikeGrid, getTimeRemaining } from '@/lib/roundHelpers';
@@ -24,35 +24,16 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
   const searchParams = useSearchParams();
   const defaultSide = (searchParams.get('side') as 'UP' | 'DOWN') || 'UP';
 
-  const [oracle, setOracle] = useState<OracleData | null>(null);
-  const [loading, setLoading] = useState(true);
   const [trades, setTrades] = useState<TradeData[]>([]);
   const [selectedStrike, setSelectedStrike] = useState<number | null>(null);
   const [timeLeft, setTimeLeft] = useState({ hours: 0, minutes: 0, seconds: 0, expired: false, totalMs: 0 });
   const chartCanvasRef = useRef<HTMLCanvasElement>(null);
 
-  const { prices } = useOraclePrices(oracleId, 5_000);
-  const { sviData } = useSviPricing(oracleId);
-
-  // Load oracle data
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      try {
-        const all = await fetchOracles();
-        if (cancelled) return;
-        const found = all.find(o => o.oracle_id === oracleId);
-        setOracle(found || null);
-      } catch (err) {
-        console.error('Failed to load oracle:', err);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-    load();
-    const interval = setInterval(load, 15_000);
-    return () => { cancelled = true; clearInterval(interval); };
-  }, [oracleId]);
+  // Single combined API call: oracle + prices + SVI
+  const { state: oracleState, loading } = useOracleState(oracleId, 5_000);
+  const oracle = oracleState?.oracle ?? null;
+  const prices = oracleState?.latest_price ?? null;
+  const sviData = oracleState?.latest_svi ?? null;
 
   // Load trades
   useEffect(() => {

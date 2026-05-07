@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 
 const PREDICT_BASE = 'https://predict-server.testnet.mystenlabs.com';
 const DUSDC_DIVISOR = 1_000_000;
-const FLOAT_SCALING = 1_000_000_000;
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 interface CachedResult {
@@ -18,41 +17,42 @@ async function fetchJson<T>(path: string): Promise<T> {
   return res.json();
 }
 
-interface OracleData {
-  oracle_id: string;
-  status: string;
-  underlying_asset: string;
-  expiry: number;
-  min_strike: number;
-  tick_size: number;
-  settlement_price: number | null;
-  settled_at: number | null;
-}
-
 interface ManagerData {
   manager_id: string;
   owner: string;
 }
 
-interface TradeData {
+interface MintedPosition {
   oracle_id: string;
   manager_id: string;
-  side: 'mint' | 'redeem';
   lower_strike: string;
   higher_strike: string;
   quantity: string;
-  price: number;
+  cost: number;
+  ask_price: number;
+  timestamp: number;
+}
+
+interface RedeemedPosition {
+  oracle_id: string;
+  manager_id: string;
+  lower_strike: string;
+  higher_strike: string;
+  quantity: string;
+  payout: number;
+  bid_price: number;
   timestamp: number;
 }
 
 interface TraderAccum {
   manager_id: string;
   owner: string;
-  pnl: number;
-  wins: number;
-  losses: number;
-  tradeCount: number;
+  totalCost: number;
+  totalPayout: number;
+  mintCount: number;
+  redeemCount: number;
   volume: number;
+  wins: number;
   currentStreak: number;
   bestStreak: number;
 }
@@ -64,10 +64,11 @@ export async function GET() {
   }
 
   try {
-    // Fetch all oracles and managers server-side (no CORS issues)
-    const [oracles, managersRaw] = await Promise.all([
-      fetchJson<OracleData[]>('/oracles'),
+    // Fetch managers, minted positions, and redeemed positions in parallel
+    const [managersRaw, minted, redeemed] = await Promise.all([
       fetchJson<ManagerData[] | { managers: ManagerData[] }>('/managers'),
+      fetchJson<MintedPosition[]>('/positions/minted'),
+      fetchJson<RedeemedPosition[]>('/positions/redeemed'),
     ]);
 
     const managers: ManagerData[] = Array.isArray(managersRaw)
@@ -80,89 +81,64 @@ export async function GET() {
       ownerByManager.set(m.manager_id, m.owner);
     }
 
-    // Fetch trades for recent oracles (limit to 30 most recent to keep response time reasonable)
-    const recentOracles = [...oracles]
-      .sort((a, b) => b.expiry - a.expiry)
-      .slice(0, 30);
-
-    const tradeResults = await Promise.allSettled(
-      recentOracles.map(o => fetchJson<TradeData[]>(`/trades/${o.oracle_id}`))
-    );
-
-    // Flatten all trades
-    const allTrades: TradeData[] = [];
-    for (const r of tradeResults) {
-      if (r.status === 'fulfilled') {
-        allTrades.push(...r.value);
-      }
-    }
-
-    // Build settled oracle set for P&L calc
-    const settledOracles = new Map<string, OracleData>();
-    for (const o of oracles) {
-      if (o.status === 'settled') {
-        settledOracles.set(o.oracle_id, o);
-      }
-    }
-
-    // Aggregate per trader
+    // Aggregate per trader using exact cost/payout data
     const traderMap = new Map<string, TraderAccum>();
 
-    for (const trade of allTrades) {
-      let trader = traderMap.get(trade.manager_id);
+    function getTrader(managerId: string): TraderAccum {
+      let trader = traderMap.get(managerId);
       if (!trader) {
         trader = {
-          manager_id: trade.manager_id,
-          owner: ownerByManager.get(trade.manager_id) || trade.manager_id,
-          pnl: 0,
-          wins: 0,
-          losses: 0,
-          tradeCount: 0,
+          manager_id: managerId,
+          owner: ownerByManager.get(managerId) || managerId,
+          totalCost: 0,
+          totalPayout: 0,
+          mintCount: 0,
+          redeemCount: 0,
           volume: 0,
+          wins: 0,
           currentStreak: 0,
           bestStreak: 0,
         };
-        traderMap.set(trade.manager_id, trader);
+        traderMap.set(managerId, trader);
       }
+      return trader;
+    }
 
-      const qty = Math.abs(Number(trade.quantity)) / DUSDC_DIVISOR;
-      trader.volume += qty;
-      trader.tradeCount++;
+    // Process minted positions (costs)
+    for (const pos of minted) {
+      const trader = getTrader(pos.manager_id);
+      const cost = pos.cost / DUSDC_DIVISOR;
+      trader.totalCost += cost;
+      trader.volume += cost;
+      trader.mintCount++;
+    }
 
-      // Compute realized P&L for settled oracles
-      const oracle = settledOracles.get(trade.oracle_id);
-      if (oracle && oracle.settlement_price !== null) {
-        // Simplified P&L: for mint trades, if price moved favorably, it's a win
-        const midStrike = oracle.min_strike + oracle.tick_size * 25;
-        const settleAbove = (oracle.settlement_price ?? 0) >= midStrike;
+    // Process redeemed positions (payouts) — sorted by timestamp for streak tracking
+    const sortedRedeemed = [...redeemed].sort((a, b) => a.timestamp - b.timestamp);
+    for (const pos of sortedRedeemed) {
+      const trader = getTrader(pos.manager_id);
+      const payout = pos.payout / DUSDC_DIVISOR;
+      const cost = pos.bid_price > 0 ? (Math.abs(Number(pos.quantity)) / DUSDC_DIVISOR) * (pos.bid_price / 1_000_000_000) : 0;
+      trader.totalPayout += payout;
+      trader.redeemCount++;
 
-        // Determine trade direction from strikes
-        const isUp = trade.lower_strike !== '0' && trade.higher_strike === '18446744073709551615';
-        const isDown = trade.lower_strike === '0' && trade.higher_strike !== '18446744073709551615';
-
-        let won = false;
-        if (trade.side === 'mint') {
-          won = (isUp && settleAbove) || (isDown && !settleAbove);
-        } else {
-          won = (isUp && !settleAbove) || (isDown && settleAbove);
-        }
-
-        const pricePaid = trade.price / FLOAT_SCALING;
-        if (won) {
-          trader.pnl += qty * (1 - pricePaid);
-          trader.wins++;
-          trader.currentStreak++;
-          trader.bestStreak = Math.max(trader.bestStreak, trader.currentStreak);
-        } else {
-          trader.pnl -= qty * pricePaid;
-          trader.losses++;
-          trader.currentStreak = 0;
-        }
+      // Track win streaks: a redeem with positive net payout is a win
+      if (payout > cost) {
+        trader.wins++;
+        trader.currentStreak++;
+        trader.bestStreak = Math.max(trader.bestStreak, trader.currentStreak);
+      } else {
+        trader.currentStreak = 0;
       }
     }
 
-    // Sort by P&L descending, take top 50
+    // Compute realized P&L = total payouts - total costs
     const ranked = [...traderMap.values()]
+      .map(t => ({
+        ...t,
+        pnl: t.totalPayout - t.totalCost,
+        tradeCount: t.mintCount + t.redeemCount,
+      }))
       .sort((a, b) => b.pnl - a.pnl)
       .slice(0, 50);
 
@@ -170,7 +146,7 @@ export async function GET() {
       manager_id: t.manager_id,
       owner: t.owner,
       pnl: Math.round(t.pnl * 100) / 100,
-      winRate: t.tradeCount > 0 ? Math.round((t.wins / t.tradeCount) * 100) : 0,
+      winRate: t.redeemCount > 0 ? Math.round((t.wins / t.redeemCount) * 100) : 0,
       tradeCount: t.tradeCount,
       bestStreak: t.bestStreak,
       volume: Math.round(t.volume * 100) / 100,
@@ -188,8 +164,7 @@ export async function GET() {
       if (t.bestStreak > longestStreak.value) {
         longestStreak = { value: t.bestStreak, trader: t.owner, date: 'this season' };
       }
-      // Approximate comeback as traders with negative min but positive final
-      if (t.pnl > 0 && t.losses > 3 && t.pnl > biggestComeback.value) {
+      if (t.pnl > 0 && t.redeemCount > 3 && (t.totalCost > t.totalPayout * 0.5) && t.pnl > biggestComeback.value) {
         biggestComeback = { value: t.pnl, trader: t.owner, date: 'this season' };
       }
     }

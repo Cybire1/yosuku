@@ -11,12 +11,10 @@ import CustomCursor from '@/components/CustomCursor';
 import SectionHeader from '@/components/SectionHeader';
 import PortfolioTable from '@/components/PortfolioTable';
 import TokenBalance from '@/components/TokenBalance';
-import { useManager, useDUSDCBalance, useManagerBalance, usePositions, useSviPricing, useOraclePrices } from '@/lib/sui/hooks';
+import { useManager, useDUSDCBalance, useManagerBalance, usePositions, useManagerSummary, useManagerPnL } from '@/lib/sui/hooks';
 import { DUSDC_MULTIPLIER } from '@/lib/sui/constants';
 import { fetchReputation, type ReputationData } from '@/lib/predictionContract';
-import { fetchTrades } from '@/lib/sui/predictApi';
 import { drawEquityCurve } from '@/lib/charts/canvasChart';
-import { computePositionPnL, computeRealizedPnL } from '@/lib/sui/pnlCalculator';
 
 export default function PortfolioPage() {
   const router = useRouter();
@@ -31,12 +29,9 @@ export default function PortfolioPage() {
   const { balance: managerBalance } = useManagerBalance(manager?.manager_id ?? null);
   const { positions, loading: positionsLoading } = usePositions(manager?.manager_id ?? null);
 
-  // SVI pricing for unrealized P&L
-  const primaryOracleId = positions.length > 0 ? positions[0].oracle_id : null;
-  const { sviData } = useSviPricing(primaryOracleId);
-  const { prices } = useOraclePrices(primaryOracleId);
-
-  const [totalUnrealizedPnL, setTotalUnrealizedPnL] = useState(0);
+  // API-driven manager summary and P&L
+  const { summary: managerSummary } = useManagerSummary(manager?.manager_id ?? null);
+  const { pnlData } = useManagerPnL(manager?.manager_id ?? null);
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -48,56 +43,27 @@ export default function PortfolioPage() {
     }
   }, [address]);
 
-  // Compute unrealized P&L across positions
-  useEffect(() => {
-    if (!sviData?.params || !prices?.forward || positions.length === 0) {
-      setTotalUnrealizedPnL(0);
-      return;
-    }
-    let total = 0;
-    for (const pos of positions) {
-      if (pos.oracle_id === primaryOracleId) {
-        const pnl = computePositionPnL(pos, sviData.params, prices.forward);
-        if (pnl) total += pnl.unrealizedPnL;
-      }
-    }
-    setTotalUnrealizedPnL(total);
-  }, [positions, sviData, prices, primaryOracleId]);
+  // Use API-driven unrealized P&L, fallback to 0
+  const totalUnrealizedPnL = managerSummary?.unrealized_pnl ?? 0;
+  const realizedPnL = managerSummary?.realized_pnl ?? 0;
+  const accountValue = managerSummary?.account_value ?? 0;
 
-  // Draw equity curve from real trade data
+  // Draw equity curve from API P&L time series
   useEffect(() => {
     if (!equityRef.current || !address) return;
 
-    // Gather unique oracle IDs from positions
-    const oracleIds = new Set(positions.map(p => p.oracle_id));
-
-    // Fetch trades for all oracles and build equity curve
-    const loadTradesAndDraw = async () => {
-      const allTrades = [];
-      for (const oid of oracleIds) {
-        try {
-          const trades = await fetchTrades(oid);
-          allTrades.push(...trades);
-        } catch { /* ignore */ }
-      }
-
-      const realized = computeRealizedPnL(allTrades);
-
-      if (realized.length > 0) {
-        // Build cumulative equity curve from realized trades
-        const curveData = [0, ...realized.map(r => r.cumPnl)];
-        // Add current unrealized P&L to the last point
-        curveData.push(curveData[curveData.length - 1] + totalUnrealizedPnL);
-        drawEquityCurve(equityRef.current!, curveData);
-      } else {
-        // Fallback: flat line at current total
-        const total = (walletBalance + managerBalance) / DUSDC_MULTIPLIER;
-        drawEquityCurve(equityRef.current!, [total, total]);
-      }
-    };
-
-    loadTradesAndDraw();
-  }, [walletBalance, managerBalance, address, positions, totalUnrealizedPnL]);
+    if (pnlData && pnlData.points.length > 0) {
+      // Build equity curve from API time series
+      const curveData = pnlData.points.map(p => p.cumulative_pnl);
+      // Append current unrealized P&L
+      curveData.push(curveData[curveData.length - 1] + pnlData.current_unrealized_pnl);
+      drawEquityCurve(equityRef.current!, curveData);
+    } else {
+      // Fallback: flat line at current total
+      const total = (walletBalance + managerBalance) / DUSDC_MULTIPLIER;
+      drawEquityCurve(equityRef.current!, [total, total]);
+    }
+  }, [walletBalance, managerBalance, address, pnlData]);
 
   const totalPositions = positions.length;
 
@@ -148,7 +114,10 @@ export default function PortfolioPage() {
                     Account Overview
                   </span>
                   <div className="font-mono text-3xl font-semibold mt-1" style={{ color: '#1A1612' }}>
-                    {((walletBalance + managerBalance) / DUSDC_MULTIPLIER).toFixed(2)}
+                    {managerSummary
+                      ? (managerSummary.account_value / DUSDC_MULTIPLIER).toFixed(2)
+                      : ((walletBalance + managerBalance) / DUSDC_MULTIPLIER).toFixed(2)
+                    }
                     <span className="text-sm ml-2" style={{ color: '#6B6353' }}>DUSDC</span>
                   </div>
                 </div>
@@ -162,23 +131,36 @@ export default function PortfolioPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-5 gap-4 pt-4" style={{ borderTop: '1px solid rgba(201,191,166,0.3)' }}>
+              <div className="grid grid-cols-6 gap-4 pt-4" style={{ borderTop: '1px solid rgba(201,191,166,0.3)' }}>
                 <div>
                   <span className="font-mono text-[8px] tracking-[0.14em] uppercase" style={{ color: '#6B6353' }}>Wallet</span>
                   <div className="font-mono text-sm" style={{ color: '#1A1612' }}>{(walletBalance / DUSDC_MULTIPLIER).toFixed(2)}</div>
                 </div>
                 <div>
-                  <span className="font-mono text-[8px] tracking-[0.14em] uppercase" style={{ color: '#6B6353' }}>Manager</span>
-                  <div className="font-mono text-sm" style={{ color: '#1A1612' }}>{(managerBalance / DUSDC_MULTIPLIER).toFixed(2)}</div>
+                  <span className="font-mono text-[8px] tracking-[0.14em] uppercase" style={{ color: '#6B6353' }}>Trading</span>
+                  <div className="font-mono text-sm" style={{ color: '#1A1612' }}>
+                    {managerSummary
+                      ? (managerSummary.trading_balance / DUSDC_MULTIPLIER).toFixed(2)
+                      : (managerBalance / DUSDC_MULTIPLIER).toFixed(2)
+                    }
+                  </div>
                 </div>
                 <div>
                   <span className="font-mono text-[8px] tracking-[0.14em] uppercase" style={{ color: '#6B6353' }}>Positions</span>
-                  <div className="font-mono text-sm" style={{ color: '#1A1612' }}>{totalPositions}</div>
+                  <div className="font-mono text-sm" style={{ color: '#1A1612' }}>
+                    {managerSummary?.open_positions ?? totalPositions}
+                  </div>
+                </div>
+                <div>
+                  <span className="font-mono text-[8px] tracking-[0.14em] uppercase" style={{ color: '#6B6353' }}>Realized P&L</span>
+                  <div className="font-mono text-sm" style={{ color: realizedPnL >= 0 ? '#34D399' : '#F43F5E' }}>
+                    {realizedPnL >= 0 ? '+' : ''}{(realizedPnL / DUSDC_MULTIPLIER).toFixed(2)}
+                  </div>
                 </div>
                 <div>
                   <span className="font-mono text-[8px] tracking-[0.14em] uppercase" style={{ color: '#6B6353' }}>Unrealized P&L</span>
                   <div className="font-mono text-sm" style={{ color: totalUnrealizedPnL >= 0 ? '#34D399' : '#F43F5E' }}>
-                    {totalUnrealizedPnL >= 0 ? '+' : ''}{totalUnrealizedPnL.toFixed(2)}
+                    {totalUnrealizedPnL >= 0 ? '+' : ''}{(totalUnrealizedPnL / DUSDC_MULTIPLIER).toFixed(2)}
                   </div>
                 </div>
                 <div>

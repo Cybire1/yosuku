@@ -11,11 +11,23 @@ import {
   fetchManagerPositions,
   fetchPriceHistory,
   fetchTrades,
+  fetchStatus,
+  fetchVaultSummary,
+  fetchVaultPerformance,
+  fetchOracleState,
+  fetchManagerSummary,
+  fetchManagerPnL,
   type OracleData,
   type ManagerData,
   type PriceData,
   type SviData,
   type PositionData,
+  type StatusData,
+  type VaultSummaryData,
+  type VaultPerformanceData,
+  type OracleStateData,
+  type ManagerSummaryData,
+  type ManagerPnLData,
 } from './predictApi';
 import { DUSDC_TYPE, PLP_TYPE, PREDICT_ID, FLOAT_SCALING, NEG_INF, POS_INF } from './constants';
 
@@ -472,6 +484,183 @@ export function usePriceHistory(oracleId: string | null, limit = 100, pollInterv
   }, [refresh, pollInterval]);
 
   return { history, loading, refresh };
+}
+
+// ── New API hooks ─────────────────────────────────────
+
+/** Hook: API health status */
+export function useApiStatus(pollInterval = 30_000) {
+  const [status, setStatus] = useState<StatusData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const refresh = useCallback(async () => {
+    try {
+      const data = await fetchStatus();
+      setStatus(data);
+    } catch (err) {
+      console.error('Failed to fetch API status:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    refresh();
+    const interval = setInterval(refresh, pollInterval);
+    return () => clearInterval(interval);
+  }, [refresh, pollInterval]);
+
+  return { status, loading, refresh };
+}
+
+/** Hook: vault summary from API */
+export function useVaultSummary(predictId: string | null, pollInterval = 30_000) {
+  const [summary, setSummary] = useState<VaultSummaryData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const refresh = useCallback(async () => {
+    if (!predictId) {
+      setSummary(null);
+      setLoading(false);
+      return;
+    }
+    try {
+      const data = await fetchVaultSummary(predictId);
+      setSummary(data);
+    } catch (err) {
+      console.error('Failed to fetch vault summary:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [predictId]);
+
+  useEffect(() => {
+    refresh();
+    const interval = setInterval(refresh, pollInterval);
+    return () => clearInterval(interval);
+  }, [refresh, pollInterval]);
+
+  return { summary, loading, refresh };
+}
+
+/** Hook: vault performance (share price history) */
+export function useVaultPerformance(predictId: string | null, pollInterval = 60_000) {
+  const [performance, setPerformance] = useState<VaultPerformanceData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const refresh = useCallback(async () => {
+    if (!predictId) {
+      setPerformance(null);
+      setLoading(false);
+      return;
+    }
+    try {
+      const data = await fetchVaultPerformance(predictId);
+      setPerformance(data);
+    } catch (err) {
+      console.error('Failed to fetch vault performance:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [predictId]);
+
+  useEffect(() => {
+    refresh();
+    const interval = setInterval(refresh, pollInterval);
+    return () => clearInterval(interval);
+  }, [refresh, pollInterval]);
+
+  return { performance, loading, refresh };
+}
+
+/** Hook: combined oracle state (oracle + price + SVI) */
+export function useOracleState(oracleId: string | null, pollInterval = 5_000) {
+  const [state, setState] = useState<OracleStateData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const refresh = useCallback(async () => {
+    if (!oracleId) {
+      setState(null);
+      setLoading(false);
+      return;
+    }
+    try {
+      const data = await fetchOracleState(oracleId);
+      setState(data);
+    } catch (err) {
+      console.error('Failed to fetch oracle state:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [oracleId]);
+
+  useEffect(() => {
+    refresh();
+    const interval = setInterval(refresh, pollInterval);
+    return () => clearInterval(interval);
+  }, [refresh, pollInterval]);
+
+  return { state, loading, refresh };
+}
+
+/** Hook: manager summary (balance, P&L, positions) */
+export function useManagerSummary(managerId: string | null, pollInterval = 15_000) {
+  const [summary, setSummary] = useState<ManagerSummaryData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const refresh = useCallback(async () => {
+    if (!managerId) {
+      setSummary(null);
+      setLoading(false);
+      return;
+    }
+    try {
+      const data = await fetchManagerSummary(managerId);
+      setSummary(data);
+    } catch (err) {
+      console.error('Failed to fetch manager summary:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [managerId]);
+
+  useEffect(() => {
+    refresh();
+    const interval = setInterval(refresh, pollInterval);
+    return () => clearInterval(interval);
+  }, [refresh, pollInterval]);
+
+  return { summary, loading, refresh };
+}
+
+/** Hook: manager P&L time series */
+export function useManagerPnL(managerId: string | null, pollInterval = 30_000) {
+  const [pnlData, setPnlData] = useState<ManagerPnLData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const refresh = useCallback(async () => {
+    if (!managerId) {
+      setPnlData(null);
+      setLoading(false);
+      return;
+    }
+    try {
+      const data = await fetchManagerPnL(managerId);
+      setPnlData(data);
+    } catch (err) {
+      console.error('Failed to fetch manager P&L:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [managerId]);
+
+  useEffect(() => {
+    refresh();
+    const interval = setInterval(refresh, pollInterval);
+    return () => clearInterval(interval);
+  }, [refresh, pollInterval]);
+
+  return { pnlData, loading, refresh };
 }
 
 // ── Leaderboard from API route ────────────────────────
