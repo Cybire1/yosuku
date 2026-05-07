@@ -190,6 +190,56 @@ body.urgent::before {
 }
 .wallet-pill .addr-dot::after { content: ''; position: absolute; inset: 7px; border-radius: 50%; background: var(--vermilion); }
 
+/* ── Sui dapp-kit ConnectButton override ── */
+[data-dapp-kit] {
+  --dapp-kit-backgroundColors-primaryButton: var(--vermilion) !important;
+  --dapp-kit-backgroundColors-primaryButtonHover: var(--vermilion-d) !important;
+  --dapp-kit-colors-primaryButton: var(--white) !important;
+  --dapp-kit-colors-body: var(--white) !important;
+  --dapp-kit-colors-bodyMuted: var(--gray-400) !important;
+  --dapp-kit-backgroundColors-modalPrimary: #111 !important;
+  --dapp-kit-backgroundColors-modalSecondary: #0a0a0a !important;
+  --dapp-kit-backgroundColors-modalOverlay: rgba(0,0,0,0.8) !important;
+  --dapp-kit-backgroundColors-dropdownMenu: #111 !important;
+  --dapp-kit-backgroundColors-dropdownMenuSeparator: rgba(255,255,255,0.08) !important;
+  --dapp-kit-backgroundColors-walletItemHover: rgba(255,255,255,0.06) !important;
+  --dapp-kit-backgroundColors-walletItemSelected: rgba(224,77,38,0.12) !important;
+  --dapp-kit-backgroundColors-iconButton: rgba(255,255,255,0.06) !important;
+  --dapp-kit-backgroundColors-iconButtonHover: rgba(255,255,255,0.12) !important;
+  --dapp-kit-colors-iconButton: var(--white) !important;
+  --dapp-kit-borderColors-outlineButton: rgba(255,255,255,0.15) !important;
+  --dapp-kit-colors-outlineButton: var(--white) !important;
+  --dapp-kit-backgroundColors-outlineButtonHover: rgba(255,255,255,0.06) !important;
+  --dapp-kit-typography-fontFamily: var(--font-body), 'Inter', sans-serif !important;
+  --dapp-kit-fontWeights-normal: 400 !important;
+  --dapp-kit-fontWeights-medium: 500 !important;
+  --dapp-kit-fontWeights-bold: 700 !important;
+  --dapp-kit-fontSizes-small: 12px !important;
+  --dapp-kit-fontSizes-medium: 14px !important;
+  --dapp-kit-fontSizes-large: 18px !important;
+  --dapp-kit-fontSizes-xlarge: 24px !important;
+  --dapp-kit-radii-small: 6px !important;
+  --dapp-kit-radii-medium: 8px !important;
+  --dapp-kit-radii-large: 12px !important;
+  --dapp-kit-radii-xlarge: 16px !important;
+  --dapp-kit-shadows-primaryButton: none !important;
+  --dapp-kit-blurs-modalOverlay: blur(12px) !important;
+}
+[data-dapp-kit] .Button_buttonVariants_variant_primary__x1s81q1,
+[data-dapp-kit].Button_buttonVariants_variant_primary__x1s81q1 {
+  border-radius: 999px !important;
+  padding: 9px 20px !important;
+  font-family: var(--font-body), 'Inter', sans-serif !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.02em !important;
+  transition: background-color 180ms var(--ease), transform 180ms var(--ease) !important;
+}
+[data-dapp-kit] .Button_buttonVariants_variant_primary__x1s81q1:hover,
+[data-dapp-kit].Button_buttonVariants_variant_primary__x1s81q1:hover {
+  transform: scale(1.02) !important;
+}
+
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   border: 0; cursor: pointer;
