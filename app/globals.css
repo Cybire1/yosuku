@@ -3338,11 +3338,50 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
     padding-right: 32px;
   }
 }
+/* ── Floating pill bottom nav (mobile) ── */
+.mobile-bottom-nav {
+  display: none;
+  position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+  z-index: 900;
+  background: rgba(12,12,12,0.72);
+  backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 999px;
+  padding: 6px 8px;
+  gap: 2px;
+}
+.mobile-bottom-nav a {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 2px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  color: var(--gray-500);
+  font-family: var(--font-body); font-size: 10px; font-weight: 500;
+  letter-spacing: 0.02em;
+  transition: color 200ms var(--ease), background 200ms var(--ease);
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.mobile-bottom-nav a svg {
+  width: 20px; height: 20px;
+  stroke: currentColor; fill: none;
+  stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+}
+.mobile-bottom-nav a:hover,
+.mobile-bottom-nav a.active {
+  color: var(--white);
+  background: rgba(255,255,255,0.08);
+}
+.mobile-bottom-nav a.active svg {
+  stroke: var(--vermilion);
+}
+
 @media (max-width: 720px) {
   .nav-links { display: none; }
   .header { padding: 0 18px; }
   .header-right { display: none; }
-  .mobile-menu-toggle { display: flex; }
+  .mobile-menu-toggle { display: none; }
+  .mobile-bottom-nav { display: flex; }
   .container { padding-inline: 18px; }
   .page-hero { padding: 140px 0 48px; }
   .markets-grid { grid-template-columns: 1fr; }

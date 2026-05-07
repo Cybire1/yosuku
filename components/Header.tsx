@@ -1,7 +1,7 @@
 'use client';
 
 import { useCurrentAccount, ConnectButton } from '@mysten/dapp-kit';
-import { useRouter, usePathname } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
 
 const NAV_LINKS = [
@@ -12,13 +12,38 @@ const NAV_LINKS = [
   { name: 'Docs', href: '#' },
 ];
 
+const MOBILE_NAV = [
+  {
+    name: 'Markets', href: '/markets',
+    icon: (
+      <svg viewBox="0 0 24 24"><path d="M3 3v18h18" /><path d="M7 16l4-8 4 4 5-9" /></svg>
+    ),
+  },
+  {
+    name: 'Pool', href: '/pool',
+    icon: (
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M12 3c-3 4-3 14 0 18" /><path d="M12 3c3 4 3 14 0 18" /><path d="M3 12h18" /></svg>
+    ),
+  },
+  {
+    name: 'Portfolio', href: '/portfolio',
+    icon: (
+      <svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2" /><path d="M16 7V5a4 4 0 0 0-8 0v2" /></svg>
+    ),
+  },
+  {
+    name: 'Ranks', href: '/leaderboard',
+    icon: (
+      <svg viewBox="0 0 24 24"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 16.8l-6.2 4.5 2.4-7.4L2 9.4h7.6z" /></svg>
+    ),
+  },
+];
+
 export default function Header() {
   const account = useCurrentAccount();
   const address = account?.address ?? null;
-  const router = useRouter();
   const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
-  const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -81,67 +106,20 @@ export default function Header() {
           </div>
         </nav>
 
-        {/* Mobile toggle */}
-        <button
-          onClick={() => setMobileOpen(!mobileOpen)}
-          className="mobile-menu-toggle"
-          aria-label="Menu"
-          data-cursor="hover"
-        >
-          <span className="burger-line" />
-          <span className="burger-line" />
-        </button>
       </header>
 
-      {/* Mobile overlay */}
-      {mobileOpen && (
-        <div className="fixed inset-0 z-[900] bg-black/95 backdrop-blur-xl flex flex-col p-8">
-          <div className="flex justify-between items-center mb-16">
-            <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '20px', letterSpacing: '0.18em' }}>YOSUKU</span>
-            <button
-              onClick={() => setMobileOpen(false)}
-              className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-white"
-            >
-              ✕
-            </button>
-          </div>
-          <nav className="flex flex-col gap-8 flex-1 justify-center">
-            {NAV_LINKS.map((link, i) => (
-              <a
-                key={link.name}
-                href={link.href}
-                onClick={() => setMobileOpen(false)}
-                className="flex items-center gap-6 group"
-              >
-                <span className="text-sm font-mono" style={{ color: 'rgba(224,77,38,0.4)', width: '32px' }}>
-                  0{i + 1}
-                </span>
-                <span className="text-3xl" style={{ fontFamily: 'var(--font-display)', fontWeight: 800, color: 'rgba(255,255,255,0.5)', letterSpacing: '-0.02em', transition: 'color 200ms, letter-spacing 200ms' }}>
-                  {link.name}
-                </span>
-              </a>
-            ))}
-          </nav>
-          <div className="pt-6 border-t border-white/10">
-            {mounted && (
-              <div className="flex justify-center">
-                {address ? (
-                  <a
-                    href="/portfolio"
-                    onClick={() => setMobileOpen(false)}
-                    className="flex items-center gap-2 px-4 py-2 border border-white/10 rounded-full text-sm"
-                  >
-                    <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                    <span>{shortAddr}</span>
-                  </a>
-                ) : (
-                  <ConnectButton />
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      {/* Mobile floating pill bottom nav */}
+      <nav className="mobile-bottom-nav">
+        {MOBILE_NAV.map(link => {
+          const isActive = pathname === link.href || pathname?.startsWith(link.href + '/');
+          return (
+            <a key={link.name} href={link.href} className={isActive ? 'active' : ''}>
+              {link.icon}
+              <span>{link.name}</span>
+            </a>
+          );
+        })}
+      </nav>
     </>
   );
 }
