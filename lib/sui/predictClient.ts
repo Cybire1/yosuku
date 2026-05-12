@@ -13,14 +13,13 @@ import {
 } from './constants';
 
 /**
- * Create and share a PredictManager for the connected wallet.
- * entry fun create_and_share_manager(registry: &mut Registry, ctx: &mut TxContext)
+ * Create a PredictManager for the connected wallet.
+ * public fun create_manager(ctx: &mut TxContext): ID
  */
 export function createManagerTx(): Transaction {
   const tx = new Transaction();
   tx.moveCall({
-    target: `${PACKAGE_ID}::registry::create_and_share_manager`,
-    arguments: [tx.object(REGISTRY_ID)],
+    target: `${PACKAGE_ID}::predict::create_manager`,
   });
   return tx;
 }
