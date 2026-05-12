@@ -109,7 +109,7 @@ export function mintPositionTx(
   const tx = new Transaction();
   const rangeKey = rangeKeyArgs(tx, oracleId, expiry, strike, direction);
   tx.moveCall({
-    target: `${PACKAGE_ID}::predict::mint`,
+    target: `${PACKAGE_ID}::predict::mint_range`,
     typeArguments: [DUSDC_TYPE],
     arguments: [
       tx.object(PREDICT_ID),
@@ -125,7 +125,7 @@ export function mintPositionTx(
 
 /**
  * Redeem a position (works for both live and settled).
- * public fun redeem<Quote>(predict, manager, oracle, key, quantity, clock, ctx)
+ * public fun redeem_range<Quote>(predict, manager, oracle, key, quantity, clock, ctx)
  */
 export function redeemPositionTx(
   managerId: string,
@@ -138,7 +138,7 @@ export function redeemPositionTx(
   const tx = new Transaction();
   const rangeKey = rangeKeyArgs(tx, oracleId, expiry, strike, direction);
   tx.moveCall({
-    target: `${PACKAGE_ID}::predict::redeem`,
+    target: `${PACKAGE_ID}::predict::redeem_range`,
     typeArguments: [DUSDC_TYPE],
     arguments: [
       tx.object(PREDICT_ID),
@@ -189,7 +189,7 @@ export function depositAndMintTx(
   // Step 3: Build range key and mint
   const rangeKey = rangeKeyArgs(tx, oracleId, expiry, strike, direction);
   tx.moveCall({
-    target: `${PACKAGE_ID}::predict::mint`,
+    target: `${PACKAGE_ID}::predict::mint_range`,
     typeArguments: [DUSDC_TYPE],
     arguments: [
       tx.object(PREDICT_ID),
@@ -240,7 +240,7 @@ export function mintRangePositionTx(
   const tx = new Transaction();
   const rangeKey = rangeKeyDirect(tx, oracleId, expiry, lowerStrike, higherStrike);
   tx.moveCall({
-    target: `${PACKAGE_ID}::predict::mint`,
+    target: `${PACKAGE_ID}::predict::mint_range`,
     typeArguments: [DUSDC_TYPE],
     arguments: [
       tx.object(PREDICT_ID),
@@ -268,7 +268,7 @@ export function redeemRangePositionTx(
   const tx = new Transaction();
   const rangeKey = rangeKeyDirect(tx, oracleId, expiry, lowerStrike, higherStrike);
   tx.moveCall({
-    target: `${PACKAGE_ID}::predict::redeem`,
+    target: `${PACKAGE_ID}::predict::redeem_range`,
     typeArguments: [DUSDC_TYPE],
     arguments: [
       tx.object(PREDICT_ID),
@@ -319,7 +319,7 @@ export function depositAndMintRangeTx(
   // Step 3: Build range key and mint
   const rangeKey = rangeKeyDirect(tx, oracleId, expiry, lowerStrike, higherStrike);
   tx.moveCall({
-    target: `${PACKAGE_ID}::predict::mint`,
+    target: `${PACKAGE_ID}::predict::mint_range`,
     typeArguments: [DUSDC_TYPE],
     arguments: [
       tx.object(PREDICT_ID),

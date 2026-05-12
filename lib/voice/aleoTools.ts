@@ -29,7 +29,7 @@ export async function getCurrentRound(): Promise<VoiceToolResult> {
     }
 
     const nearest = active.sort((a: any, b: any) => a.expiry - b.expiry)[0];
-    const expiryDate = new Date(nearest.expiry * 1000).toLocaleString();
+    const expiryDate = new Date(nearest.expiry).toLocaleString();
 
     return {
       success: true,

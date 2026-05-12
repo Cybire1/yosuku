@@ -80,7 +80,7 @@ export default function MarketsPage() {
                 if (p) {
                   const fwd = p.forward / FLOAT_SCALING;
                   const diff = (fwd - midDollars) / midDollars;
-                  const secsLeft = Math.max(60, (btcOracle.expiry * 1000 - Date.now()) / 1000);
+                  const secsLeft = Math.max(60, (btcOracle.expiry - Date.now()) / 1000);
                   const sigma = 0.001 * Math.sqrt(secsLeft / 60);
                   const z = diff / (sigma || 0.01);
                   setHeroYesProb(Math.round(Math.max(1, Math.min(99, 100 / (1 + Math.exp(-1.7 * z))))));
