@@ -182,7 +182,7 @@ export default function HomePage() {
     const forward = prices.forward / FLOAT_SCALING;
     if (midStrikeDollars > 0 && forward > 0) {
       const diff = (forward - midStrikeDollars) / midStrikeDollars;
-      const secsLeft = Math.max(60, (firstOracle.expiry * 1000 - Date.now()) / 1000);
+      const secsLeft = Math.max(60, (firstOracle.expiry - Date.now()) / 1000);
       const sigma = 0.001 * Math.sqrt(secsLeft / 60);
       const z = diff / (sigma || 0.01);
       const p = Math.round(Math.max(1, Math.min(99, 100 / (1 + Math.exp(-1.7 * z)))));
@@ -220,7 +220,9 @@ export default function HomePage() {
   const nextExpirySec = useMemo(() => {
     if (liveOracles.length === 0) return 0;
     const nearest = Math.min(...liveOracles.map(o => o.expiry));
-    return Math.max(0, Math.floor(nearest - Date.now() / 1000));
+    // expiry is in ms, convert to seconds for countdown
+    const nearestSec = nearest > 1e12 ? nearest / 1000 : nearest;
+    return Math.max(0, Math.floor(nearestSec - Date.now() / 1000));
   }, [liveOracles]);
 
   const [nextRound, setNextRound] = useState<number>(0);
@@ -238,7 +240,8 @@ export default function HomePage() {
   /* ── Per-oracle dial countdown (first oracle) ── */
   const dialExpiry = useMemo(() => {
     if (liveOracles.length === 0) return 0;
-    return Math.max(0, Math.floor(liveOracles[0].expiry - Date.now() / 1000));
+    const exp = liveOracles[0].expiry > 1e12 ? liveOracles[0].expiry / 1000 : liveOracles[0].expiry;
+    return Math.max(0, Math.floor(exp - Date.now() / 1000));
   }, [liveOracles]);
 
   const [dialCountdown, setDialCountdown] = useState<number>(0);
@@ -268,16 +271,16 @@ export default function HomePage() {
         const forward = prices.forward / FLOAT_SCALING;
         if (midStrikeDollars > 0 && forward > 0) {
           const diff = (forward - midStrikeDollars) / midStrikeDollars;
-          const secsLeft = Math.max(60, (oracle.expiry * 1000 - Date.now()) / 1000);
+          const secsLeft = Math.max(60, (oracle.expiry - Date.now()) / 1000);
           const sigma = 0.001 * Math.sqrt(secsLeft / 60);
           const z = diff / (sigma || 0.01);
           yesC = Math.round(Math.max(1, Math.min(99, 100 / (1 + Math.exp(-1.7 * z)))));
         }
       }
 
-      const secsLeft = Math.max(0, Math.floor(oracle.expiry - Date.now() / 1000));
+      const secsLeft = Math.max(0, Math.floor((oracle.expiry - Date.now()) / 1000));
       const formatStrike = (n: number) => '$' + n.toLocaleString(undefined, { maximumFractionDigits: 0 });
-      const expDate = new Date(oracle.expiry * 1000);
+      const expDate = new Date(oracle.expiry);
       const timeStr = expDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'UTC' });
 
       // Generate a deterministic sparkline from oracle id
