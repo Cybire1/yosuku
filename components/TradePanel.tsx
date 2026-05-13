@@ -66,8 +66,9 @@ export default function TradePanel({
   const [errorMsg, setErrorMsg] = useState('');
   const [txDigest, setTxDigest] = useState('');
 
-  // Generate strike grid
-  const strikes = generateStrikeGrid(oracle.min_strike, oracle.tick_size, 50);
+  // Generate strike grid centered around current price
+  const refPriceForGrid = forwardPrice ?? spotPrice ?? undefined;
+  const strikes = generateStrikeGrid(oracle.min_strike, oracle.tick_size, 50, refPriceForGrid);
 
   // Auto-select nearest strike to spot/forward
   useEffect(() => {

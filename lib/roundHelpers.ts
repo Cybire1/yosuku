@@ -56,10 +56,20 @@ export function generateStrikeGrid(
   minStrike: number,
   tickSize: number,
   numTicks: number = 50,
+  centerPrice?: number,
 ): number[] {
   const strikes: number[] = [];
-  for (let i = 0; i < numTicks; i++) {
-    strikes.push(minStrike + tickSize * i);
+  if (centerPrice && tickSize > 0) {
+    const centerTick = Math.round((centerPrice - minStrike) / tickSize);
+    const halfTicks = Math.floor(numTicks / 2);
+    const startTick = Math.max(0, centerTick - halfTicks);
+    for (let i = 0; i < numTicks; i++) {
+      strikes.push(minStrike + (startTick + i) * tickSize);
+    }
+  } else {
+    for (let i = 0; i < numTicks; i++) {
+      strikes.push(minStrike + tickSize * i);
+    }
   }
   return strikes;
 }

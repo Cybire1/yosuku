@@ -10,6 +10,7 @@ import { useBtcPrice } from '@/lib/hooks/useBtcPrice';
 import { useOracles, useProtocolStats } from '@/lib/sui/hooks';
 import { fetchLatestPrices, type PriceData } from '@/lib/sui/predictApi';
 import { FLOAT_SCALING } from '@/lib/sui/constants';
+import { nearestStrike } from '@/lib/roundHelpers';
 
 /* ───────── Types ───────── */
 interface FaqItem {
@@ -176,8 +177,8 @@ export default function HomePage() {
     const firstOracle = liveOracles[0];
     const prices = oraclePrices[firstOracle.oracle_id];
     if (!prices) return;
-    const numStrikes = 50;
-    const midStrike = firstOracle.min_strike + firstOracle.tick_size * Math.floor(numStrikes / 2);
+    // Use nearest strike to forward price, not hardcoded grid midpoint
+    const midStrike = nearestStrike(prices.forward, firstOracle.min_strike, firstOracle.tick_size);
     const midStrikeDollars = midStrike / FLOAT_SCALING;
     const forward = prices.forward / FLOAT_SCALING;
     if (midStrikeDollars > 0 && forward > 0) {
@@ -262,8 +263,11 @@ export default function HomePage() {
       const asset = oracle.underlying_asset || 'BTC';
       const glyph = ASSET_GLYPH[asset] || asset[0];
       const prices = oraclePrices[oracle.oracle_id];
-      const numStrikes = 50;
-      const midStrike = oracle.min_strike + oracle.tick_size * Math.floor(numStrikes / 2);
+      // Use nearest strike to current price, not hardcoded grid midpoint
+      const refPrice = prices?.forward || prices?.spot;
+      const midStrike = refPrice
+        ? nearestStrike(refPrice, oracle.min_strike, oracle.tick_size)
+        : oracle.min_strike + oracle.tick_size * 25;
       const midStrikeDollars = midStrike / FLOAT_SCALING;
 
       let yesC = 50;
@@ -329,10 +333,14 @@ export default function HomePage() {
     if (liveOracles.length === 0) return 'BTC > $95,000';
     const o = liveOracles[0];
     const asset = o.underlying_asset || 'BTC';
-    const midStrike = o.min_strike + o.tick_size * 25;
+    const prices = oraclePrices[o.oracle_id];
+    const refPrice = prices?.forward || prices?.spot;
+    const midStrike = refPrice
+      ? nearestStrike(refPrice, o.min_strike, o.tick_size)
+      : o.min_strike + o.tick_size * 25;
     const dollars = midStrike / FLOAT_SCALING;
     return `${asset} > $${dollars.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
-  }, [liveOracles]);
+  }, [liveOracles, oraclePrices]);
 
   /* ── IntersectionObserver for .how-steps ── */
   useEffect(() => {
