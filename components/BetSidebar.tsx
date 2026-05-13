@@ -57,15 +57,23 @@ export default function BetSidebar({ round, onSuccess }: BetSidebarProps) {
   const [flashType, setFlashType] = useState<'none' | 'UP' | 'DOWN'>('none');
   const [selectedStrike, setSelectedStrike] = useState<number | null>(null);
 
-  // Generate strike grid from oracle config
-  const strikes = generateStrikeGrid(round.minStrike, round.tickSize);
+  // Generate strike grid centered around current price
+  const centerPrice = price ? price * FLOAT_SCALING : undefined;
+  const strikes = generateStrikeGrid(round.minStrike, round.tickSize, 50, centerPrice);
 
-  // Auto-select middle strike
+  // Auto-select nearest strike to spot price
   useEffect(() => {
     if (selectedStrike === null && strikes.length > 0) {
-      setSelectedStrike(strikes[Math.floor(strikes.length / 2)]);
+      if (centerPrice) {
+        const nearest = strikes.reduce((prev, curr) =>
+          Math.abs(curr - centerPrice) < Math.abs(prev - centerPrice) ? curr : prev
+        );
+        setSelectedStrike(nearest);
+      } else {
+        setSelectedStrike(strikes[Math.floor(strikes.length / 2)]);
+      }
     }
-  }, [strikes, selectedStrike]);
+  }, [strikes, selectedStrike, centerPrice]);
 
   const microAmount = Math.floor(parseFloat(amount || '0') * DUSDC_MULTIPLIER);
 

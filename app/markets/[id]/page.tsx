@@ -14,7 +14,7 @@ import { fetchTrades, type OracleData, type TradeData } from '@/lib/sui/predictA
 import { useOracleState } from '@/lib/sui/hooks';
 import { FLOAT_SCALING, DUSDC_MULTIPLIER } from '@/lib/sui/constants';
 import { computeSviPrice } from '@/lib/sui/sviPricing';
-import { generateStrikeGrid, getTimeRemaining } from '@/lib/roundHelpers';
+import { generateStrikeGrid, getTimeRemaining, nearestStrike } from '@/lib/roundHelpers';
 import { genCandles, drawCandles, priceHistoryToCandles } from '@/lib/charts/canvasChart';
 import { fetchPriceHistory } from '@/lib/sui/predictApi';
 
@@ -134,8 +134,11 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
   const isSettled = oracle.status === 'settled';
   const isActive = oracle.status === 'active';
 
-  const strikes = generateStrikeGrid(oracle.min_strike, oracle.tick_size, 50);
-  const midStrike = oracle.min_strike + oracle.tick_size * Math.floor(strikes.length / 2);
+  const refPriceForGrid = prices?.forward || prices?.spot;
+  const strikes = generateStrikeGrid(oracle.min_strike, oracle.tick_size, 50, refPriceForGrid);
+  const midStrike = refPriceForGrid
+    ? nearestStrike(refPriceForGrid, oracle.min_strike, oracle.tick_size)
+    : oracle.min_strike + oracle.tick_size * 25;
   const midStrikeDollars = midStrike / FLOAT_SCALING;
   const asset = oracle.underlying_asset || 'BTC';
 

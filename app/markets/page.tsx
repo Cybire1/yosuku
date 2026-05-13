@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { useCurrentAccount } from '@mysten/dapp-kit';
 import { useOracles } from '@/lib/sui/hooks';
 import { fetchLatestPrices, type PriceData } from '@/lib/sui/predictApi';
-import { groupOraclesByTimeframe } from '@/lib/roundHelpers';
+import { groupOraclesByTimeframe, nearestStrike } from '@/lib/roundHelpers';
 import { useBtcPrice } from '@/lib/hooks/useBtcPrice';
 import { drawCandles, genCandles, priceHistoryToCandles } from '@/lib/charts/canvasChart';
 import { fetchPriceHistory } from '@/lib/sui/predictApi';
@@ -71,7 +71,12 @@ export default function MarketsPage() {
               const delta = first > 0 ? ((last - first) / first * 100).toFixed(2) : '0.00';
               if (!cancelled) setHeroChartDelta(`${Number(delta) >= 0 ? '+' : ''}${delta}%`);
 
-              const midStrike = btcOracle.min_strike + btcOracle.tick_size * 25;
+              // Use nearest strike to forward price
+              const p0 = prices[btcOracle.oracle_id];
+              const refP = p0?.forward || p0?.spot;
+              const midStrike = refP
+                ? nearestStrike(refP, btcOracle.min_strike, btcOracle.tick_size)
+                : btcOracle.min_strike + btcOracle.tick_size * 25;
               const midDollars = midStrike / FLOAT_SCALING;
 
               if (!cancelled) {

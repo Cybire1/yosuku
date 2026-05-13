@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import type { OracleData } from '@/lib/sui/predictApi';
 import { FLOAT_SCALING } from '@/lib/sui/constants';
-import { getTimeRemaining } from '@/lib/roundHelpers';
+import { getTimeRemaining, nearestStrike } from '@/lib/roundHelpers';
 import { genCandles, drawCandles, priceHistoryToCandles } from '@/lib/charts/canvasChart';
 import { fetchPriceHistory } from '@/lib/sui/predictApi';
 
@@ -30,12 +30,15 @@ export default function MarketCard({ oracle, spotPrice, forwardPrice }: MarketCa
     return () => clearInterval(interval);
   }, [oracle.expiry]);
 
-  const numStrikes = 50;
-  const midStrike = oracle.min_strike + oracle.tick_size * Math.floor(numStrikes / 2);
-  const midStrikeDollars = midStrike / FLOAT_SCALING;
-
   const spot = spotPrice ? spotPrice / FLOAT_SCALING : null;
   const forward = forwardPrice ? forwardPrice / FLOAT_SCALING : null;
+
+  // Use nearest strike to current price (not hardcoded grid mid)
+  const refPrice = forward || spot;
+  const midStrike = refPrice
+    ? nearestStrike(refPrice * FLOAT_SCALING, oracle.min_strike, oracle.tick_size)
+    : oracle.min_strike + oracle.tick_size * 25;
+  const midStrikeDollars = midStrike / FLOAT_SCALING;
 
   let yesProb = 50;
   if (forward && midStrikeDollars > 0) {
