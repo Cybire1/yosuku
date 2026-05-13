@@ -3,13 +3,9 @@
 import { Transaction } from '@mysten/sui/transactions';
 import {
   PACKAGE_ID,
-  REGISTRY_ID,
   PREDICT_ID,
   DUSDC_TYPE,
-  PLP_TYPE,
   CLOCK_ID,
-  NEG_INF,
-  POS_INF,
 } from './constants';
 
 /**
@@ -67,36 +63,35 @@ export function depositFromWalletTx(
 }
 
 /**
- * Build a RangeKey for binary positions.
- * UP = (strike, pos_inf] → lower_strike = strike, higher_strike = POS_INF
- * DOWN = (neg_inf, strike] → lower_strike = NEG_INF, higher_strike = strike
+ * Build a MarketKey for binary positions (UP/DOWN).
+ * market_key::up(oracle_id, expiry, strike) → MarketKey
+ * market_key::down(oracle_id, expiry, strike) → MarketKey
  */
-function rangeKeyArgs(
+function marketKeyArgs(
   tx: Transaction,
   oracleId: string,
   expiry: bigint,
   strike: bigint,
   direction: 'UP' | 'DOWN',
 ) {
-  const lowerStrike = direction === 'DOWN' ? NEG_INF : strike.toString();
-  const higherStrike = direction === 'UP' ? POS_INF : strike.toString();
+  const target = direction === 'UP'
+    ? `${PACKAGE_ID}::market_key::up`
+    : `${PACKAGE_ID}::market_key::down`;
 
-  // RangeKey::new(oracle_id: ID, expiry: u64, lower_strike: u64, higher_strike: u64)
-  const [rangeKey] = tx.moveCall({
-    target: `${PACKAGE_ID}::range_key::new`,
+  const [marketKey] = tx.moveCall({
+    target,
     arguments: [
       tx.pure.id(oracleId),
       tx.pure.u64(expiry),
-      tx.pure.u64(BigInt(lowerStrike)),
-      tx.pure.u64(BigInt(higherStrike)),
+      tx.pure.u64(strike),
     ],
   });
-  return rangeKey;
+  return marketKey;
 }
 
 /**
  * Mint a binary position.
- * public fun mint<Quote>(predict, manager, oracle, key, quantity, clock, ctx)
+ * public fun mint<Quote>(predict, manager, oracle, MarketKey, quantity, clock, ctx)
  */
 export function mintPositionTx(
   managerId: string,
@@ -107,15 +102,15 @@ export function mintPositionTx(
   quantity: bigint,
 ): Transaction {
   const tx = new Transaction();
-  const rangeKey = rangeKeyArgs(tx, oracleId, expiry, strike, direction);
+  const marketKey = marketKeyArgs(tx, oracleId, expiry, strike, direction);
   tx.moveCall({
-    target: `${PACKAGE_ID}::predict::mint_range`,
+    target: `${PACKAGE_ID}::predict::mint`,
     typeArguments: [DUSDC_TYPE],
     arguments: [
       tx.object(PREDICT_ID),
       tx.object(managerId),
       tx.object(oracleId),
-      rangeKey,
+      marketKey,
       tx.pure.u64(quantity),
       tx.object(CLOCK_ID),
     ],
@@ -124,8 +119,8 @@ export function mintPositionTx(
 }
 
 /**
- * Redeem a position (works for both live and settled).
- * public fun redeem_range<Quote>(predict, manager, oracle, key, quantity, clock, ctx)
+ * Redeem a binary position (works for both live and settled).
+ * public fun redeem<Quote>(predict, manager, oracle, MarketKey, quantity, clock, ctx)
  */
 export function redeemPositionTx(
   managerId: string,
@@ -136,15 +131,15 @@ export function redeemPositionTx(
   quantity: bigint,
 ): Transaction {
   const tx = new Transaction();
-  const rangeKey = rangeKeyArgs(tx, oracleId, expiry, strike, direction);
+  const marketKey = marketKeyArgs(tx, oracleId, expiry, strike, direction);
   tx.moveCall({
-    target: `${PACKAGE_ID}::predict::redeem_range`,
+    target: `${PACKAGE_ID}::predict::redeem`,
     typeArguments: [DUSDC_TYPE],
     arguments: [
       tx.object(PREDICT_ID),
       tx.object(managerId),
       tx.object(oracleId),
-      rangeKey,
+      marketKey,
       tx.pure.u64(quantity),
       tx.object(CLOCK_ID),
     ],
@@ -186,16 +181,16 @@ export function depositAndMintTx(
     arguments: [tx.object(managerId), splitCoin],
   });
 
-  // Step 3: Build range key and mint
-  const rangeKey = rangeKeyArgs(tx, oracleId, expiry, strike, direction);
+  // Step 3: Build market key and mint
+  const marketKey = marketKeyArgs(tx, oracleId, expiry, strike, direction);
   tx.moveCall({
-    target: `${PACKAGE_ID}::predict::mint_range`,
+    target: `${PACKAGE_ID}::predict::mint`,
     typeArguments: [DUSDC_TYPE],
     arguments: [
       tx.object(PREDICT_ID),
       tx.object(managerId),
       tx.object(oracleId),
-      rangeKey,
+      marketKey,
       tx.pure.u64(quantity),
       tx.object(CLOCK_ID),
     ],
