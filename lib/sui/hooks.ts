@@ -42,6 +42,7 @@ import {
   fetchManagerForAddress,
   fetchManagers,
   fetchLatestPrices,
+  settledInBatches,
   fetchLatestSvi,
   fetchManagerPositions,
   fetchPriceHistory,
@@ -435,8 +436,9 @@ export function useProtocolStats(pollInterval = 120_000) {
         .slice(0, 5);
 
       let volumeSettled = 0;
-      const tradeResults = await Promise.allSettled(
-        recentOracles.map(o => fetchTrades(o.oracle_id))
+      const tradeResults = await settledInBatches(
+        recentOracles.map(o => () => fetchTrades(o.oracle_id)),
+        3,
       );
       for (const r of tradeResults) {
         if (r.status === 'fulfilled') {

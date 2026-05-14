@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useCurrentAccount } from '@mysten/dapp-kit';
 import { useOracles } from '@/lib/sui/hooks';
-import { fetchLatestPrices, type PriceData } from '@/lib/sui/predictApi';
+import { type PriceData } from '@/lib/sui/predictApi';
 import { groupOraclesByTimeframe, nearestStrike } from '@/lib/roundHelpers';
 import { useBtcPrice } from '@/lib/hooks/useBtcPrice';
 import { drawCandles, genCandles, priceHistoryToCandles } from '@/lib/charts/canvasChart';
@@ -24,29 +24,26 @@ export default function MarketsPage() {
   const [prices, setPrices] = useState<Record<string, PriceData>>({});
   const { price: btcPrice } = useBtcPrice();
   const heroCanvasRef = useRef<HTMLCanvasElement>(null);
+  const heroStrikeRef = useRef<number | null>(null);
   const [filter, setFilter] = useState('all');
 
-  // Fetch prices for active oracles
+  // Fetch prices via combined server route (avoids proxy bottleneck)
   useEffect(() => {
-    if (active.length === 0) return;
     let cancelled = false;
     async function loadPrices() {
-      const results = await Promise.allSettled(
-        active.map(o => fetchLatestPrices(o.oracle_id))
-      );
-      if (cancelled) return;
-      const newPrices: Record<string, PriceData> = {};
-      results.forEach((r, i) => {
-        if (r.status === 'fulfilled' && r.value) {
-          newPrices[active[i].oracle_id] = r.value;
+      try {
+        const res = await fetch('/api/oracles?prices=1');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled && data.prices) {
+          setPrices(data.prices as Record<string, PriceData>);
         }
-      });
-      setPrices(newPrices);
+      } catch { /* ignore */ }
     }
     loadPrices();
-    const interval = setInterval(loadPrices, 5_000);
+    const interval = setInterval(loadPrices, 10_000);
     return () => { cancelled = true; clearInterval(interval); };
-  }, [active]);
+  }, []);
 
   // Hero chart — use real BTC price history from first BTC oracle
   const [heroChartDelta, setHeroChartDelta] = useState<string | null>(null);
@@ -74,9 +71,10 @@ export default function MarketsPage() {
               // Use nearest strike to forward price
               const p0 = prices[btcOracle.oracle_id];
               const refP = p0?.forward || p0?.spot;
-              const midStrike = refP
-                ? nearestStrike(refP, btcOracle.min_strike, btcOracle.tick_size)
-                : btcOracle.min_strike + btcOracle.tick_size * 25;
+              if (refP && heroStrikeRef.current === null) {
+                heroStrikeRef.current = nearestStrike(refP, btcOracle.min_strike, btcOracle.tick_size);
+              }
+              const midStrike = heroStrikeRef.current ?? (btcOracle.min_strike + btcOracle.tick_size * 25);
               const midDollars = midStrike / FLOAT_SCALING;
 
               if (!cancelled) {

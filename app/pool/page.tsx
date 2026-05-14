@@ -59,7 +59,7 @@ export default function PoolPage() {
         const combined = [
           ...supplies.map(s => ({ ...s, type: 'supply' as const })),
           ...withdrawals.map(w => ({ ...w, type: 'withdraw' as const })),
-        ].sort((a, b) => b.timestamp - a.timestamp);
+        ].sort((a, b) => b.checkpoint_timestamp_ms - a.checkpoint_timestamp_ms);
         setLpActivity(combined);
       } catch { /* ignore */ }
     }
@@ -408,7 +408,7 @@ export default function PoolPage() {
                 ) : (
                   <div className="space-y-0.5 max-h-[300px] overflow-y-auto scrollbar-hide">
                     {lpActivity.slice(0, 30).map((event, i) => {
-                      const isSupply = 'amount' in event && 'plp_minted' in event;
+                      const isSupply = 'shares_minted' in event;
                       return (
                         <div key={i} className="flex items-center justify-between py-2 px-3 rounded hover:bg-white/[0.02] transition-colors text-xs">
                           <span className={`font-mono font-semibold ${isSupply ? 'text-emerald-400' : 'text-vermilion'}`}>
@@ -417,17 +417,17 @@ export default function PoolPage() {
                           <span className="font-mono text-gray-400">
                             {isSupply
                               ? `${((event as LpSupplyEvent).amount / DUSDC_MULTIPLIER).toFixed(2)} DUSDC`
-                              : `${((event as LpWithdrawalEvent).amount_returned / DUSDC_MULTIPLIER).toFixed(2)} DUSDC`
+                              : `${((event as LpWithdrawalEvent).amount / DUSDC_MULTIPLIER).toFixed(2)} DUSDC`
                             }
                           </span>
                           <span className="font-mono text-gray-600 text-[10px]">
                             {isSupply
-                              ? `→ ${((event as LpSupplyEvent).plp_minted / DUSDC_MULTIPLIER).toFixed(2)} PLP`
-                              : `← ${((event as LpWithdrawalEvent).plp_burned / DUSDC_MULTIPLIER).toFixed(2)} PLP`
+                              ? `→ ${((event as LpSupplyEvent).shares_minted / DUSDC_MULTIPLIER).toFixed(2)} PLP`
+                              : `← ${((event as LpWithdrawalEvent).shares_burned / DUSDC_MULTIPLIER).toFixed(2)} PLP`
                             }
                           </span>
                           <span className="font-mono text-gray-600">
-                            {new Date(event.timestamp).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                            {new Date(event.checkpoint_timestamp_ms).toLocaleDateString([], { month: 'short', day: 'numeric' })}
                           </span>
                         </div>
                       );

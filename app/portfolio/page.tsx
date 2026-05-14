@@ -54,7 +54,7 @@ export default function PortfolioPage() {
 
     if (pnlData && pnlData.points.length > 0) {
       // Build equity curve from API time series
-      const curveData = pnlData.points.map(p => p.cumulative_pnl);
+      const curveData = pnlData.points.map(p => p.cumulative_realized_pnl);
       // Append current unrealized P&L
       curveData.push(curveData[curveData.length - 1] + pnlData.current_unrealized_pnl);
       drawEquityCurve(equityRef.current!, curveData);

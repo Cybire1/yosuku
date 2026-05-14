@@ -254,14 +254,14 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
                 <div className="space-y-0.5 max-h-[300px] overflow-y-auto scrollbar-hide">
                   {trades.slice(0, 30).map((trade, i) => (
                     <div key={i} className="flex items-center justify-between py-2 px-3 rounded hover:bg-white/[0.02] transition-colors text-xs">
-                      <span className={`font-mono font-semibold ${trade.side === 'mint' ? 'text-vermilion' : 'text-gray-400'}`}>
-                        {trade.side === 'mint' ? '↑ UP' : '↓ DOWN'}
+                      <span className={`font-mono font-semibold ${trade.type === 'mint' ? 'text-vermilion' : 'text-gray-400'}`}>
+                        {trade.type === 'mint' ? '↑ MINT' : '↓ REDEEM'}
                       </span>
                       <span className="font-mono text-gray-400">
-                        {(Number(trade.quantity) / DUSDC_MULTIPLIER).toFixed(2)} DUSDC
+                        {(trade.quantity / DUSDC_MULTIPLIER).toFixed(2)} DUSDC
                       </span>
                       <span className="font-mono text-gray-600">
-                        {new Date(trade.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        {new Date(trade.checkpoint_timestamp_ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </span>
                     </div>
                   ))}
