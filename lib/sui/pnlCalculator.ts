@@ -106,32 +106,30 @@ export function computeRealizedPnL(trades: TradeData[]): RealizedTrade[] {
   if (!trades.length) return [];
 
   // Sort by timestamp
-  const sorted = [...trades].sort((a, b) => a.timestamp - b.timestamp);
+  const sorted = [...trades].sort((a, b) => a.checkpoint_timestamp_ms - b.checkpoint_timestamp_ms);
 
   const results: RealizedTrade[] = [];
   let cumPnl = 0;
 
-  // Track mint prices by position key
-  const mintPrices = new Map<string, number[]>();
+  // Track mint costs by position key (oracle + strike + direction)
+  const mintCosts = new Map<string, number[]>();
 
   for (const trade of sorted) {
-    const key = `${trade.oracle_id}-${trade.lower_strike}-${trade.higher_strike}`;
+    const key = `${trade.oracle_id}-${trade.strike}-${trade.is_up}`;
 
-    if (trade.side === 'mint') {
-      const existing = mintPrices.get(key) || [];
-      existing.push(trade.price);
-      mintPrices.set(key, existing);
-    } else if (trade.side === 'redeem') {
-      const mints = mintPrices.get(key);
-      const mintPrice = mints?.shift() ?? 0;
-      const qty = Number(trade.quantity) / DUSDC_MULTIPLIER;
-      const redeemPrice = trade.price / FLOAT_SCALING;
-      const entryP = mintPrice / FLOAT_SCALING;
-      const pnl = (redeemPrice - entryP) * qty;
+    if (trade.type === 'mint') {
+      const existing = mintCosts.get(key) || [];
+      existing.push(trade.cost ?? 0);
+      mintCosts.set(key, existing);
+    } else if (trade.type === 'redeem') {
+      const costs = mintCosts.get(key);
+      const mintCost = costs?.shift() ?? 0;
+      const payout = trade.payout ?? 0;
+      const pnl = (payout - mintCost) / DUSDC_MULTIPLIER;
       cumPnl += pnl;
 
       results.push({
-        timestamp: trade.timestamp,
+        timestamp: trade.checkpoint_timestamp_ms,
         pnl,
         cumPnl,
       });

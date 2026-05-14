@@ -967,6 +967,15 @@ body.urgent::before {
   margin-left: 4px;
   transform: translateY(-3px);
 }
+.mc-question .strike-loading {
+  color: var(--gray-600);
+  letter-spacing: 0.15em;
+  animation: strike-pulse 1.2s ease-in-out infinite;
+}
+@keyframes strike-pulse {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 0.8; }
+}
 
 /* card sparkline / candlestick */
 .mc-spark {

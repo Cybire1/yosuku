@@ -25,23 +25,24 @@ interface ManagerData {
 interface MintedPosition {
   oracle_id: string;
   manager_id: string;
-  lower_strike: string;
-  higher_strike: string;
-  quantity: string;
+  strike: number;
+  is_up: boolean;
+  quantity: number;
   cost: number;
   ask_price: number;
-  timestamp: number;
+  checkpoint_timestamp_ms: number;
 }
 
 interface RedeemedPosition {
   oracle_id: string;
   manager_id: string;
-  lower_strike: string;
-  higher_strike: string;
-  quantity: string;
+  strike: number;
+  is_up: boolean;
+  quantity: number;
   payout: number;
   bid_price: number;
-  timestamp: number;
+  is_settled: boolean;
+  checkpoint_timestamp_ms: number;
 }
 
 interface TraderAccum {
@@ -114,11 +115,11 @@ export async function GET() {
     }
 
     // Process redeemed positions (payouts) — sorted by timestamp for streak tracking
-    const sortedRedeemed = [...redeemed].sort((a, b) => a.timestamp - b.timestamp);
+    const sortedRedeemed = [...redeemed].sort((a, b) => a.checkpoint_timestamp_ms - b.checkpoint_timestamp_ms);
     for (const pos of sortedRedeemed) {
       const trader = getTrader(pos.manager_id);
       const payout = pos.payout / DUSDC_DIVISOR;
-      const cost = pos.bid_price > 0 ? (Math.abs(Number(pos.quantity)) / DUSDC_DIVISOR) * (pos.bid_price / 1_000_000_000) : 0;
+      const cost = pos.bid_price > 0 ? (pos.quantity / DUSDC_DIVISOR) * (pos.bid_price / 1_000_000_000) : 0;
       trader.totalPayout += payout;
       trader.redeemCount++;
 

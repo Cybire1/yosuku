@@ -33,11 +33,17 @@ export default function MarketCard({ oracle, spotPrice, forwardPrice }: MarketCa
   const spot = spotPrice ? spotPrice / FLOAT_SCALING : null;
   const forward = forwardPrice ? forwardPrice / FLOAT_SCALING : null;
 
-  // Use nearest strike to current price (not hardcoded grid mid)
+  // Lock display strike on first price — question text shouldn't fluctuate
+  const lockedStrikeRef = useRef<number | null>(null);
   const refPrice = forward || spot;
-  const midStrike = refPrice
-    ? nearestStrike(refPrice * FLOAT_SCALING, oracle.min_strike, oracle.tick_size)
-    : oracle.min_strike + oracle.tick_size * 25;
+  // For settled oracles, use settlement_price as reference
+  const settledRef = oracle.settlement_price ? oracle.settlement_price / FLOAT_SCALING : null;
+  const priceRef = refPrice || settledRef;
+  if (priceRef && lockedStrikeRef.current === null) {
+    lockedStrikeRef.current = nearestStrike(priceRef * FLOAT_SCALING, oracle.min_strike, oracle.tick_size);
+  }
+  const hasRealStrike = lockedStrikeRef.current !== null;
+  const midStrike = lockedStrikeRef.current ?? (oracle.min_strike + oracle.tick_size * 25);
   const midStrikeDollars = midStrike / FLOAT_SCALING;
 
   let yesProb = 50;
@@ -54,9 +60,22 @@ export default function MarketCard({ oracle, spotPrice, forwardPrice }: MarketCa
   const isSettled = oracle.status === 'settled';
   const isUrgent = !isExpired && timeLeft.totalMs < 5 * 60 * 1000;
 
-  // Sparkline chart — real price history with genCandles fallback
+  // Sparkline chart — defer fetch until spot price is available to avoid connection exhaustion
+  const chartDrawn = useRef(false);
   useEffect(() => {
     if (!canvasRef.current || isSettled) return;
+    // Don't fetch price history until we have actual price data — use generated candles as placeholder
+    if (!spot && !chartDrawn.current) {
+      const strike = midStrikeDollars;
+      const seed = oracle.oracle_id.charCodeAt(4) || 7;
+      const range = strike * 0.012;
+      const start = strike - range * 0.4;
+      const candles = genCandles(seed, 28, start, strike, range * 0.5);
+      drawCandles(canvasRef.current, candles, {
+        strike, maxCandleW: 4, padX: 4, padTop: 6, padBot: 6, marker: true,
+      });
+      return;
+    }
     const strike = midStrikeDollars;
     let cancelled = false;
 
@@ -80,13 +99,9 @@ export default function MarketCard({ oracle, spotPrice, forwardPrice }: MarketCa
       }
 
       if (!cancelled && canvasRef.current) {
+        chartDrawn.current = true;
         drawCandles(canvasRef.current, candles, {
-          strike,
-          maxCandleW: 4,
-          padX: 4,
-          padTop: 6,
-          padBot: 6,
-          marker: true,
+          strike, maxCandleW: 4, padX: 4, padTop: 6, padBot: 6, marker: true,
         });
       }
     }
@@ -133,17 +148,24 @@ export default function MarketCard({ oracle, spotPrice, forwardPrice }: MarketCa
       {/* Body */}
       <div className="mc-body">
         <div className="mc-question">
-          {asset} above {formatPrice(midStrikeDollars)}?
+          {hasRealStrike
+            ? <>{asset} above {formatPrice(midStrikeDollars)}?</>
+            : <>{asset} above <span className="strike-loading">···</span></>
+          }
           <span className="strike-dot" />
         </div>
 
         {!isSettled && (
           <div className="mc-spark">
             <canvas ref={canvasRef} />
-            <div className="strike-line" style={{ top: `${strikeY}%` }} />
-            <span className="strike-tick" style={{ top: `${strikeY}%` }}>
-              {midStrikeDollars.toLocaleString()}
-            </span>
+            {hasRealStrike && (
+              <>
+                <div className="strike-line" style={{ top: `${strikeY}%` }} />
+                <span className="strike-tick" style={{ top: `${strikeY}%` }}>
+                  {midStrikeDollars.toLocaleString()}
+                </span>
+              </>
+            )}
           </div>
         )}
 
@@ -159,7 +181,7 @@ export default function MarketCard({ oracle, spotPrice, forwardPrice }: MarketCa
 
         <div className="mc-stats">
           {spot && <span>Spot <span className="v">{formatPrice(spot)}</span></span>}
-          <span>Strike <span className="v">{formatPrice(midStrikeDollars)}</span></span>
+          {hasRealStrike && <span>Strike <span className="v">{formatPrice(midStrikeDollars)}</span></span>}
         </div>
 
         {isSettled && oracle.settlement_price !== null && (

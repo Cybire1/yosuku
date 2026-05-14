@@ -8,7 +8,7 @@ import GrainOverlay from '@/components/GrainOverlay';
 
 import { useBtcPrice } from '@/lib/hooks/useBtcPrice';
 import { useOracles, useProtocolStats } from '@/lib/sui/hooks';
-import { fetchLatestPrices, type PriceData } from '@/lib/sui/predictApi';
+import { type PriceData } from '@/lib/sui/predictApi';
 import { FLOAT_SCALING } from '@/lib/sui/constants';
 import { nearestStrike } from '@/lib/roundHelpers';
 
@@ -148,28 +148,25 @@ export default function HomePage() {
   const howRef = useRef<HTMLDivElement>(null);
   const featuresRef = useRef<HTMLDivElement>(null);
   const featurePinRef = useRef<HTMLDivElement>(null);
+  const lockedStrikesRef = useRef<Record<string, number>>({});
 
-  /* ── Fetch prices for active oracles ── */
+  /* ── Fetch prices via combined server route ── */
   useEffect(() => {
-    if (liveOracles.length === 0) return;
     let cancelled = false;
     async function loadPrices() {
-      const results = await Promise.allSettled(
-        liveOracles.slice(0, 6).map(o => fetchLatestPrices(o.oracle_id))
-      );
-      if (cancelled) return;
-      const newPrices: Record<string, PriceData> = {};
-      results.forEach((r, i) => {
-        if (r.status === 'fulfilled' && r.value) {
-          newPrices[liveOracles[i].oracle_id] = r.value;
+      try {
+        const res = await fetch('/api/oracles?prices=1');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled && data.prices) {
+          setOraclePrices(data.prices as Record<string, PriceData>);
         }
-      });
-      setOraclePrices(newPrices);
+      } catch { /* ignore */ }
     }
     loadPrices();
-    const interval = setInterval(loadPrices, 10_000);
+    const interval = setInterval(loadPrices, 15_000);
     return () => { cancelled = true; clearInterval(interval); };
-  }, [liveOracles]);
+  }, []);
 
   /* ── Derive probability from first oracle ── */
   useEffect(() => {
@@ -177,8 +174,11 @@ export default function HomePage() {
     const firstOracle = liveOracles[0];
     const prices = oraclePrices[firstOracle.oracle_id];
     if (!prices) return;
-    // Use nearest strike to forward price, not hardcoded grid midpoint
-    const midStrike = nearestStrike(prices.forward, firstOracle.min_strike, firstOracle.tick_size);
+    // Lock strike on first price — display shouldn't fluctuate
+    if (!lockedStrikesRef.current[firstOracle.oracle_id]) {
+      lockedStrikesRef.current[firstOracle.oracle_id] = nearestStrike(prices.forward, firstOracle.min_strike, firstOracle.tick_size);
+    }
+    const midStrike = lockedStrikesRef.current[firstOracle.oracle_id];
     const midStrikeDollars = midStrike / FLOAT_SCALING;
     const forward = prices.forward / FLOAT_SCALING;
     if (midStrikeDollars > 0 && forward > 0) {
@@ -263,11 +263,12 @@ export default function HomePage() {
       const asset = oracle.underlying_asset || 'BTC';
       const glyph = ASSET_GLYPH[asset] || asset[0];
       const prices = oraclePrices[oracle.oracle_id];
-      // Use nearest strike to current price, not hardcoded grid midpoint
+      // Lock strike on first price — question text shouldn't fluctuate
       const refPrice = prices?.forward || prices?.spot;
-      const midStrike = refPrice
-        ? nearestStrike(refPrice, oracle.min_strike, oracle.tick_size)
-        : oracle.min_strike + oracle.tick_size * 25;
+      if (refPrice && !lockedStrikesRef.current[oracle.oracle_id]) {
+        lockedStrikesRef.current[oracle.oracle_id] = nearestStrike(refPrice, oracle.min_strike, oracle.tick_size);
+      }
+      const midStrike = lockedStrikesRef.current[oracle.oracle_id] ?? (oracle.min_strike + oracle.tick_size * 25);
       const midStrikeDollars = midStrike / FLOAT_SCALING;
 
       let yesC = 50;
@@ -335,9 +336,10 @@ export default function HomePage() {
     const asset = o.underlying_asset || 'BTC';
     const prices = oraclePrices[o.oracle_id];
     const refPrice = prices?.forward || prices?.spot;
-    const midStrike = refPrice
-      ? nearestStrike(refPrice, o.min_strike, o.tick_size)
-      : o.min_strike + o.tick_size * 25;
+    if (refPrice && !lockedStrikesRef.current[o.oracle_id]) {
+      lockedStrikesRef.current[o.oracle_id] = nearestStrike(refPrice, o.min_strike, o.tick_size);
+    }
+    const midStrike = lockedStrikesRef.current[o.oracle_id] ?? (o.min_strike + o.tick_size * 25);
     const dollars = midStrike / FLOAT_SCALING;
     return `${asset} > $${dollars.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
   }, [liveOracles, oraclePrices]);
