@@ -18,6 +18,7 @@ interface TradeConfirmationModalProps {
   amount: number; // micro DUSDC
   fairPrice: number | null; // 0-1
   feeBreakdown: FeeBreakdown | null;
+  onChainCost?: number | null; // exact DUSDC from get_trade_amounts (UP/DOWN only)
   expiry: number;
   onConfirm: () => void;
   onCancel: () => void;
@@ -37,6 +38,7 @@ export default function TradeConfirmationModal({
   amount,
   fairPrice,
   feeBreakdown,
+  onChainCost,
   expiry,
   onConfirm,
   onCancel,
@@ -49,12 +51,14 @@ export default function TradeConfirmationModal({
 
   // Max payout for binary: 1 DUSDC per unit
   const maxPayout = amount / DUSDC_MULTIPLIER;
-  const totalCost = feeBreakdown
-    ? feeBreakdown.totalCostPerUnit * maxPayout
-    : parseFloat(amountDisplay);
-  const potentialProfit = feeBreakdown
-    ? (1 - feeBreakdown.totalCostPerUnit) * maxPayout
-    : maxPayout - parseFloat(amountDisplay);
+  // Prefer the exact on-chain cost; fall back to the SVI estimate.
+  const hasExact = typeof onChainCost === 'number' && onChainCost > 0;
+  const totalCost = hasExact
+    ? (onChainCost as number)
+    : feeBreakdown
+      ? feeBreakdown.totalCostPerUnit * maxPayout
+      : parseFloat(amountDisplay);
+  const potentialProfit = maxPayout - totalCost;
 
   // Close on Escape
   useEffect(() => {
@@ -152,8 +156,13 @@ export default function TradeConfirmationModal({
                 <span className="text-white font-mono font-bold">{maxPayout.toFixed(2)} DUSDC</span>
               </div>
               <div className="flex justify-between text-xs">
-                <span className="text-gray-500">Est. Cost</span>
-                <span className="text-white font-mono">{totalCost.toFixed(2)} DUSDC</span>
+                <span className="text-gray-500 inline-flex items-center gap-1.5">
+                  {hasExact ? 'Cost' : 'Est. Cost'}
+                  {hasExact && (
+                    <span className="text-[8px] font-bold uppercase tracking-wider text-vermilion/80 bg-vermilion/10 px-1 py-0.5 rounded">on-chain</span>
+                  )}
+                </span>
+                <span className="text-white font-mono">{totalCost.toFixed(hasExact ? 4 : 2)} DUSDC</span>
               </div>
               <div className="border-t border-white/5 pt-2 flex justify-between text-xs">
                 <span className="text-gray-500">Potential Profit</span>

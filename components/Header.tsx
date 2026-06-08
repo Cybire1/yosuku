@@ -7,6 +7,7 @@ import { Sun, Moon } from 'lucide-react';
 import { initTheme, setStoredTheme, type Theme } from '@/lib/theme';
 
 const NAV_LINKS = [
+  { name: 'Bell', href: '/bell' },
   { name: 'Markets', href: '/markets' },
   { name: 'Pool', href: '/pool' },
   { name: 'Portfolio', href: '/portfolio' },
