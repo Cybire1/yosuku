@@ -27,6 +27,9 @@ import {
 import { generateStrikeGrid, formatStrike, nearestStrike, savePosition } from '@/lib/roundHelpers';
 import { computeSviPrice, computeRangePrice, computeFeeBreakdown, type FeeBreakdown } from '@/lib/sui/sviPricing';
 import Countdown from './Countdown';
+import TradeConfirmationModal from './TradeConfirmationModal';
+import Tooltip from './Tooltip';
+import { useToast } from './Toast';
 
 interface TradePanelProps {
   oracle: OracleData;
@@ -55,6 +58,7 @@ export default function TradePanel({
   const { balance: managerBalance, refresh: refreshManagerBalance } = useManagerBalance(manager?.manager_id ?? null);
   const { sviData } = useSviPricing(oracle.oracle_id);
   const { stats: vaultStats } = useVaultStats();
+  const { toast } = useToast();
 
   const [side, setSide] = useState<Side>(defaultSide);
   const [amount, setAmount] = useState('10');
@@ -65,6 +69,7 @@ export default function TradePanel({
   const [step, setStep] = useState<Step>('idle');
   const [errorMsg, setErrorMsg] = useState('');
   const [txDigest, setTxDigest] = useState('');
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
 
   // Generate strike grid centered around current price
   const refPriceForGrid = forwardPrice ?? spotPrice ?? undefined;
@@ -217,6 +222,8 @@ export default function TradePanel({
       refreshBalance();
       refreshManagerBalance();
       onSuccess?.();
+      const strikeLabel = selectedStrike ? `$${(selectedStrike / FLOAT_SCALING).toLocaleString()}` : '';
+      toast(`Position opened: ${(amountMicro / DUSDC_MULTIPLIER).toFixed(2)} DUSDC on ${oracle.underlying_asset || 'BTC'} ${side} ${strikeLabel}`, 'success');
 
       setTimeout(() => {
         setStep('idle');
@@ -225,7 +232,9 @@ export default function TradePanel({
     } catch (err: unknown) {
       console.error('Trade error:', err);
       setStep('error');
-      setErrorMsg(err instanceof Error ? err.message : 'Transaction failed');
+      const msg = err instanceof Error ? err.message : 'Transaction failed';
+      setErrorMsg(msg);
+      toast(`Transaction failed: ${msg.slice(0, 100)}`, 'error');
     }
   }, [
     address, selectedStrike, rangeUpperStrike, isValidAmount, isRangeValid, manager, managerBalance,
@@ -540,11 +549,11 @@ export default function TradePanel({
           {feeBreakdown && (
             <div className="space-y-1.5 py-2 border-t border-white/5">
               <div className="flex justify-between text-xs">
-                <span className="text-gray-500">Fair Price (est.)</span>
+                <span className="text-gray-500 inline-flex items-center gap-1">Fair Price (est.) <Tooltip text="SVI-derived probability of settlement above strike, based on implied volatility surface." position="bottom" /></span>
                 <span className="text-white font-mono">{(feeBreakdown.fairPrice * 100).toFixed(2)}%</span>
               </div>
               <div className="flex justify-between text-xs">
-                <span className="text-gray-500">Fee (est.)</span>
+                <span className="text-gray-500 inline-flex items-center gap-1">Fee (est.) <Tooltip text="Bernoulli + utilization fee from the vault. Scales with vault utilization." position="bottom" /></span>
                 <span className="text-gray-400 font-mono">{(feeBreakdown.totalFee * 100).toFixed(2)}%</span>
               </div>
               <div className="flex justify-between text-xs">
@@ -557,7 +566,7 @@ export default function TradePanel({
 
         {/* Execute button */}
         <button
-          onClick={handleTrade}
+          onClick={() => setShowConfirmModal(true)}
           disabled={!isValidAmount || !selectedStrike || step !== 'idle' || !hasEnoughBalance || !isRangeValid}
           className={`w-full py-4 rounded-xl text-sm font-bold uppercase tracking-wider transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
             side === 'UP'
@@ -651,6 +660,25 @@ export default function TradePanel({
           </p>
         )}
       </div>
+
+      {/* Confirmation modal */}
+      {showConfirmModal && selectedStrike && (
+        <TradeConfirmationModal
+          side={side}
+          asset={oracle.underlying_asset || 'BTC'}
+          strike={selectedStrike}
+          upperStrike={side === 'RANGE' ? rangeUpperStrike : null}
+          amount={amountMicro}
+          fairPrice={fairPrice}
+          feeBreakdown={feeBreakdown}
+          expiry={oracle.expiry}
+          onConfirm={() => {
+            setShowConfirmModal(false);
+            handleTrade();
+          }}
+          onCancel={() => setShowConfirmModal(false)}
+        />
+      )}
     </div>
   );
 }

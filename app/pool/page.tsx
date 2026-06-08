@@ -14,6 +14,8 @@ import { fetchLpSupplies, fetchLpWithdrawals, type LpSupplyEvent, type LpWithdra
 import { supplyLpTx, withdrawAllPlpTx } from '@/lib/sui/predictClient';
 import { DUSDC_MULTIPLIER, FLOAT_SCALING, PREDICT_ID } from '@/lib/sui/constants';
 import { drawSparkline } from '@/lib/charts/canvasChart';
+import { useToast } from '@/components/Toast';
+import Tooltip from '@/components/Tooltip';
 
 type SupplyStep = 'idle' | 'supplying' | 'success' | 'error';
 type WithdrawStep = 'idle' | 'withdrawing' | 'success' | 'error';
@@ -72,6 +74,7 @@ export default function PoolPage() {
   const [supplyStep, setSupplyStep] = useState<SupplyStep>('idle');
   const [withdrawStep, setWithdrawStep] = useState<WithdrawStep>('idle');
   const [errorMsg, setErrorMsg] = useState('');
+  const { toast } = useToast();
 
   const supplyAmountMicro = Math.floor(parseFloat(supplyAmount || '0') * DUSDC_MULTIPLIER);
 
@@ -85,6 +88,7 @@ export default function PoolPage() {
       const result = await signAndExecute({ transaction: tx });
       await client.waitForTransaction({ digest: result.digest });
       setSupplyStep('success');
+      toast(`Supplied ${supplyAmount} DUSDC to vault`, 'success');
       refreshDusdc();
       refreshPlp();
       refreshStats();
@@ -92,9 +96,11 @@ export default function PoolPage() {
     } catch (err) {
       console.error('Supply error:', err);
       setSupplyStep('error');
-      setErrorMsg(err instanceof Error ? err.message : 'Supply failed');
+      const msg = err instanceof Error ? err.message : 'Supply failed';
+      setErrorMsg(msg);
+      toast(`Supply failed: ${msg.slice(0, 100)}`, 'error');
     }
-  }, [address, supplyAmountMicro, dusdcCoins, signAndExecute, client, refreshDusdc, refreshPlp, refreshStats]);
+  }, [address, supplyAmount, supplyAmountMicro, dusdcCoins, signAndExecute, client, refreshDusdc, refreshPlp, refreshStats, toast]);
 
   const handleWithdraw = useCallback(async () => {
     if (!address || plpCoins.length === 0) return;
@@ -106,6 +112,7 @@ export default function PoolPage() {
       const result = await signAndExecute({ transaction: tx });
       await client.waitForTransaction({ digest: result.digest });
       setWithdrawStep('success');
+      toast('Withdrew all PLP from vault', 'success');
       refreshDusdc();
       refreshPlp();
       refreshStats();
@@ -113,9 +120,11 @@ export default function PoolPage() {
     } catch (err) {
       console.error('Withdraw error:', err);
       setWithdrawStep('error');
-      setErrorMsg(err instanceof Error ? err.message : 'Withdraw failed');
+      const msg = err instanceof Error ? err.message : 'Withdraw failed';
+      setErrorMsg(msg);
+      toast(`Withdraw failed: ${msg.slice(0, 100)}`, 'error');
     }
-  }, [address, plpCoins, signAndExecute, client, refreshDusdc, refreshPlp, refreshStats]);
+  }, [address, plpCoins, signAndExecute, client, refreshDusdc, refreshPlp, refreshStats, toast]);
 
   const quickAmounts = [50, 100, 250, 500, 1000];
   const plpDisplay = plpBalance / DUSDC_MULTIPLIER;
@@ -216,13 +225,13 @@ export default function PoolPage() {
                     {vaultSummary && (
                       <div className="grid grid-cols-4 gap-4 pt-4 mt-4" style={{ borderTop: '1px solid rgba(201,191,166,0.15)' }}>
                         <div>
-                          <span className="font-mono text-[8px] tracking-[0.14em] uppercase" style={{ color: '#6B6353' }}>Utilization</span>
+                          <span className="font-mono text-[8px] tracking-[0.14em] uppercase inline-flex items-center gap-1" style={{ color: '#6B6353' }}>Utilization <Tooltip text="Vault liability / balance ratio. Higher utilization means more capital is at risk." position="bottom" /></span>
                           <div className="font-mono text-sm" style={{ color: '#1A1612' }}>
                             {(vaultSummary.utilization * 100).toFixed(2)}%
                           </div>
                         </div>
                         <div>
-                          <span className="font-mono text-[8px] tracking-[0.14em] uppercase" style={{ color: '#6B6353' }}>Share Price</span>
+                          <span className="font-mono text-[8px] tracking-[0.14em] uppercase inline-flex items-center gap-1" style={{ color: '#6B6353' }}>Share Price <Tooltip text="Current value of 1 PLP token in DUSDC." position="bottom" /></span>
                           <div className="font-mono text-sm" style={{ color: '#1A1612' }}>
                             {vaultSummary.plp_share_price.toFixed(6)}
                           </div>

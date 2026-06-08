@@ -7,18 +7,21 @@ import { FLOAT_SCALING } from '@/lib/sui/constants';
 import { getTimeRemaining, nearestStrike } from '@/lib/roundHelpers';
 import { genCandles, drawCandles, priceHistoryToCandles } from '@/lib/charts/canvasChart';
 import { fetchPriceHistory } from '@/lib/sui/predictApi';
+import { Star } from 'lucide-react';
 
 interface MarketCardProps {
   oracle: OracleData;
   spotPrice?: number | null;
   forwardPrice?: number | null;
+  isFavorite?: boolean;
+  onToggleFavorite?: (oracleId: string) => void;
 }
 
 const ASSET_GLYPH: Record<string, string> = {
   BTC: '₿', ETH: 'Ξ', SOL: '◎', SUI: 'S',
 };
 
-export default function MarketCard({ oracle, spotPrice, forwardPrice }: MarketCardProps) {
+export default function MarketCard({ oracle, spotPrice, forwardPrice, isFavorite, onToggleFavorite }: MarketCardProps) {
   const router = useRouter();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [timeLeft, setTimeLeft] = useState(getTimeRemaining(oracle.expiry));
@@ -139,10 +142,31 @@ export default function MarketCard({ oracle, spotPrice, forwardPrice }: MarketCa
           <span className="glyph">{glyph}</span>
           {asset} · 15-min
         </span>
-        <span className={`mc-countdown ${isUrgent ? 'urgent' : ''}`}>
-          <span className="clock-dot" />
-          {countdownStr}
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {onToggleFavorite && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onToggleFavorite(oracle.oracle_id); }}
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer', padding: '2px',
+                display: 'flex', alignItems: 'center', transition: 'transform 150ms',
+              }}
+              title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+            >
+              <Star
+                style={{
+                  width: 14, height: 14,
+                  color: isFavorite ? 'var(--vermilion)' : 'var(--gray-600)',
+                  fill: isFavorite ? 'var(--vermilion)' : 'none',
+                  transition: 'color 150ms, fill 150ms',
+                }}
+              />
+            </button>
+          )}
+          <span className={`mc-countdown ${isUrgent ? 'urgent' : ''}`}>
+            <span className="clock-dot" />
+            {countdownStr}
+          </span>
+        </div>
       </div>
 
       {/* Body */}

@@ -1,0 +1,16 @@
+{
+  "name": "Yosuku — Prediction Markets on Sui",
+  "short_name": "Yosuku",
+  "start_url": "/markets",
+  "display": "standalone",
+  "background_color": "#050505",
+  "theme_color": "#E04D26",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

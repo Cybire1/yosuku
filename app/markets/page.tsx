@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useCurrentAccount } from '@mysten/dapp-kit';
 import { useOracles } from '@/lib/sui/hooks';
 import { type PriceData } from '@/lib/sui/predictApi';
@@ -9,6 +9,9 @@ import { useBtcPrice } from '@/lib/hooks/useBtcPrice';
 import { drawCandles, genCandles, priceHistoryToCandles } from '@/lib/charts/canvasChart';
 import { fetchPriceHistory } from '@/lib/sui/predictApi';
 import { FLOAT_SCALING } from '@/lib/sui/constants';
+import { Search, X, ChevronDown } from 'lucide-react';
+import { useKeyboardShortcuts } from '@/lib/hooks/useKeyboardShortcuts';
+import { loadFavorites, toggleFavorite } from '@/lib/favorites';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import Marquee from '@/components/Marquee';
@@ -16,6 +19,18 @@ import GrainOverlay from '@/components/GrainOverlay';
 import MarketCard from '@/components/MarketCard';
 import SectionHeader from '@/components/SectionHeader';
 import TheBell from '@/components/TheBell';
+import Tutorial from '@/components/Tutorial';
+
+// Quick probability estimate from forward vs nearest strike
+function computeQuickProb(p: PriceData, oracle: { min_strike: number; tick_size: number; expiry: number }) {
+  const fwd = p.forward / FLOAT_SCALING;
+  const strike = nearestStrike(p.forward || p.spot, oracle.min_strike, oracle.tick_size) / FLOAT_SCALING;
+  const diff = (fwd - strike) / (strike || 1);
+  const secsLeft = Math.max(60, (oracle.expiry - Date.now()) / 1000);
+  const sigma = 0.001 * Math.sqrt(secsLeft / 60);
+  const z = diff / (sigma || 0.01);
+  return Math.max(1, Math.min(99, 100 / (1 + Math.exp(-1.7 * z))));
+}
 
 export default function MarketsPage() {
   const account = useCurrentAccount();
@@ -26,6 +41,26 @@ export default function MarketsPage() {
   const heroCanvasRef = useRef<HTMLCanvasElement>(null);
   const heroStrikeRef = useRef<number | null>(null);
   const [filter, setFilter] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState<'closing' | 'probability'>('closing');
+  const [sortOpen, setSortOpen] = useState(false);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const [favorites, setFavorites] = useState<Set<string>>(new Set());
+
+  // Keyboard shortcuts
+  useKeyboardShortcuts(useMemo(() => ({
+    '/': () => searchRef.current?.focus(),
+  }), []));
+
+  // Load favorites from localStorage on mount
+  useEffect(() => {
+    setFavorites(loadFavorites());
+  }, []);
+
+  const handleToggleFavorite = useCallback((oracleId: string) => {
+    const updated = toggleFavorite(oracleId);
+    setFavorites(new Set(updated));
+  }, []);
 
   // Fetch prices via combined server route (avoids proxy bottleneck)
   useEffect(() => {
@@ -137,13 +172,47 @@ export default function MarketsPage() {
     return sorted[0]?.expiry;
   }, [active]);
 
-  // Filter
-  const filterOracles = (oracles: typeof active) => {
-    if (filter === 'all') return oracles;
-    return oracles.filter(o => o.underlying_asset === filter);
-  };
+  // Filter + search + sort
+  const filterOracles = useCallback((oracles: typeof active) => {
+    let result = oracles;
+    if (filter === 'FAV') {
+      result = result.filter(o => favorites.has(o.oracle_id));
+    } else if (filter !== 'all') {
+      result = result.filter(o => o.underlying_asset === filter);
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      result = result.filter(o =>
+        (o.underlying_asset || '').toLowerCase().includes(q) ||
+        o.oracle_id.toLowerCase().includes(q)
+      );
+    }
+    if (sortBy === 'closing') {
+      result = [...result].sort((a, b) => a.expiry - b.expiry);
+    } else if (sortBy === 'probability') {
+      // Sort by forward-based logistic probability (descending)
+      result = [...result].sort((a, b) => {
+        const pA = prices[a.oracle_id];
+        const pB = prices[b.oracle_id];
+        const probA = pA ? computeQuickProb(pA, a) : 50;
+        const probB = pB ? computeQuickProb(pB, b) : 50;
+        // Sort by distance from 50% (most decisive first)
+        return Math.abs(probB - 50) - Math.abs(probA - 50);
+      });
+    }
+    return result;
+  }, [filter, searchQuery, sortBy, prices, favorites]);
 
-  const FILTERS = ['all', 'BTC', 'ETH', 'SOL', 'SUI'];
+  // Close sort dropdown on outside click
+  useEffect(() => {
+    if (!sortOpen) return;
+    const handler = () => setSortOpen(false);
+    document.addEventListener('click', handler);
+    return () => document.removeEventListener('click', handler);
+  }, [sortOpen]);
+
+  const FILTERS = ['all', 'FAV', 'BTC', 'ETH', 'SOL', 'SUI'];
+  const favCount = active.filter(o => favorites.has(o.oracle_id)).length;
 
   return (
     <div className="min-h-screen relative">
@@ -268,15 +337,78 @@ export default function MarketsPage() {
                   className={`filter-tab ${filter === f ? 'active' : ''}`}
                   onClick={() => setFilter(f)}
                 >
-                  {f === 'all' ? 'All' : f}
+                  {f === 'all' ? 'All' : f === 'FAV' ? '★' : f}
                   <span className="ct">
                     {f === 'all'
                       ? String(active.length).padStart(2, '0')
-                      : String(active.filter(o => o.underlying_asset === f).length).padStart(2, '0')
+                      : f === 'FAV'
+                        ? String(favCount).padStart(2, '0')
+                        : String(active.filter(o => o.underlying_asset === f).length).padStart(2, '0')
                     }
                   </span>
                 </button>
               ))}
+            </div>
+
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              {/* Search */}
+              <div className="search-box">
+                <Search />
+                <input
+                  ref={searchRef}
+                  type="text"
+                  placeholder="Search markets…"
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                />
+                {searchQuery ? (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex' }}
+                  >
+                    <X style={{ width: 12, height: 12, color: 'var(--gray-500)' }} />
+                  </button>
+                ) : (
+                  <span className="kbd">/</span>
+                )}
+              </div>
+
+              {/* Sort */}
+              <div
+                className="sort-select"
+                onClick={() => setSortOpen(!sortOpen)}
+                style={{ position: 'relative', userSelect: 'none' }}
+              >
+                <span className="lbl">Sort</span>
+                <span className="val">{sortBy === 'closing' ? 'Closing Soon' : 'Top Probability'}</span>
+                <ChevronDown />
+                {sortOpen && (
+                  <div
+                    style={{
+                      position: 'absolute', top: 'calc(100% + 6px)', right: 0,
+                      background: 'rgba(20,20,20,0.96)', border: '1px solid rgba(255,255,255,0.08)',
+                      borderRadius: '12px', padding: '4px', zIndex: 900, minWidth: '160px',
+                      backdropFilter: 'blur(12px)',
+                    }}
+                  >
+                    {([['closing', 'Closing Soon'], ['probability', 'Top Probability']] as const).map(([key, label]) => (
+                      <button
+                        key={key}
+                        onClick={(e) => { e.stopPropagation(); setSortBy(key); setSortOpen(false); }}
+                        style={{
+                          display: 'block', width: '100%', textAlign: 'left',
+                          padding: '8px 12px', background: sortBy === key ? 'rgba(255,255,255,0.06)' : 'transparent',
+                          border: 'none', color: sortBy === key ? 'var(--white)' : 'var(--gray-400)',
+                          fontSize: '12px', fontFamily: 'var(--font-body)', cursor: 'pointer',
+                          borderRadius: '8px', transition: 'background 150ms',
+                        }}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -330,6 +462,8 @@ export default function MarketsPage() {
                     oracle={oracle}
                     spotPrice={prices[oracle.oracle_id]?.spot}
                     forwardPrice={prices[oracle.oracle_id]?.forward}
+                    isFavorite={favorites.has(oracle.oracle_id)}
+                    onToggleFavorite={handleToggleFavorite}
                   />
                 ))}
               </div>
@@ -353,6 +487,8 @@ export default function MarketsPage() {
                     oracle={oracle}
                     spotPrice={prices[oracle.oracle_id]?.spot}
                     forwardPrice={prices[oracle.oracle_id]?.forward}
+                    isFavorite={favorites.has(oracle.oracle_id)}
+                    onToggleFavorite={handleToggleFavorite}
                   />
                 ))}
               </div>
@@ -376,6 +512,8 @@ export default function MarketsPage() {
                     oracle={oracle}
                     spotPrice={prices[oracle.oracle_id]?.spot}
                     forwardPrice={prices[oracle.oracle_id]?.forward}
+                    isFavorite={favorites.has(oracle.oracle_id)}
+                    onToggleFavorite={handleToggleFavorite}
                   />
                 ))}
               </div>
@@ -401,6 +539,8 @@ export default function MarketsPage() {
                     oracle={oracle}
                     spotPrice={prices[oracle.oracle_id]?.spot}
                     forwardPrice={prices[oracle.oracle_id]?.forward}
+                    isFavorite={favorites.has(oracle.oracle_id)}
+                    onToggleFavorite={handleToggleFavorite}
                   />
                 ))}
               </div>
@@ -422,6 +562,8 @@ export default function MarketsPage() {
                   <MarketCard
                     key={oracle.oracle_id}
                     oracle={oracle}
+                    isFavorite={favorites.has(oracle.oracle_id)}
+                    onToggleFavorite={handleToggleFavorite}
                   />
                 ))}
               </div>
@@ -435,6 +577,9 @@ export default function MarketsPage() {
 
       {/* The Bell */}
       {nextExpiry && <TheBell targetTime={nextExpiry} />}
+
+      {/* First-visit tutorial */}
+      <Tutorial />
     </div>
   );
 }

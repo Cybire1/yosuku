@@ -11,10 +11,16 @@ import CustomCursor from '@/components/CustomCursor';
 import SectionHeader from '@/components/SectionHeader';
 import PortfolioTable from '@/components/PortfolioTable';
 import TokenBalance from '@/components/TokenBalance';
-import { useManager, useDUSDCBalance, useManagerBalance, usePositions, useManagerSummary, useManagerPnL } from '@/lib/sui/hooks';
+import { useManager, useDUSDCBalance, useManagerBalance, usePositions, useManagerSummary, useManagerPnL, usePLPBalance } from '@/lib/sui/hooks';
 import { DUSDC_MULTIPLIER } from '@/lib/sui/constants';
 import { fetchReputation, type ReputationData } from '@/lib/predictionContract';
 import { drawEquityCurve } from '@/lib/charts/canvasChart';
+import Tooltip from '@/components/Tooltip';
+import { Download } from 'lucide-react';
+import { fetchManagerPositionsSummary } from '@/lib/sui/predictApi';
+import { positionsToCSV, downloadCSV } from '@/lib/csvExport';
+import { computeBadges } from '@/lib/badges';
+import BadgeDisplay from '@/components/BadgeDisplay';
 
 export default function PortfolioPage() {
   const router = useRouter();
@@ -32,6 +38,7 @@ export default function PortfolioPage() {
   // API-driven manager summary and P&L
   const { summary: managerSummary } = useManagerSummary(manager?.manager_id ?? null);
   const { pnlData } = useManagerPnL(manager?.manager_id ?? null);
+  const { balance: plpBalance } = usePLPBalance();
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -66,6 +73,19 @@ export default function PortfolioPage() {
   }, [walletBalance, managerBalance, address, pnlData]);
 
   const totalPositions = positions.length;
+
+  // Badges from position summaries
+  const [positionSummaries, setPositionSummaries] = useState<import('@/lib/sui/predictApi').ManagerPositionSummary[]>([]);
+  useEffect(() => {
+    if (!manager?.manager_id) return;
+    let cancelled = false;
+    fetchManagerPositionsSummary(manager.manager_id).then(ps => {
+      if (!cancelled) setPositionSummaries(ps);
+    });
+    return () => { cancelled = true; };
+  }, [manager?.manager_id]);
+
+  const badges = computeBadges(positionSummaries, plpBalance);
 
   return (
     <div className="min-h-screen relative">
@@ -152,13 +172,13 @@ export default function PortfolioPage() {
                   </div>
                 </div>
                 <div>
-                  <span className="font-mono text-[8px] tracking-[0.14em] uppercase" style={{ color: '#6B6353' }}>Realized P&L</span>
+                  <span className="font-mono text-[8px] tracking-[0.14em] uppercase inline-flex items-center gap-1" style={{ color: '#6B6353' }}>Realized P&L <Tooltip text="Profit or loss from settled positions." position="bottom" /></span>
                   <div className="font-mono text-sm" style={{ color: realizedPnL >= 0 ? '#34D399' : '#F43F5E' }}>
                     {realizedPnL >= 0 ? '+' : ''}{(realizedPnL / DUSDC_MULTIPLIER).toFixed(2)}
                   </div>
                 </div>
                 <div>
-                  <span className="font-mono text-[8px] tracking-[0.14em] uppercase" style={{ color: '#6B6353' }}>Unrealized P&L</span>
+                  <span className="font-mono text-[8px] tracking-[0.14em] uppercase inline-flex items-center gap-1" style={{ color: '#6B6353' }}>Unrealized P&L <Tooltip text="Estimated P&L on open positions based on current prices." position="bottom" /></span>
                   <div className="font-mono text-sm" style={{ color: totalUnrealizedPnL >= 0 ? '#34D399' : '#F43F5E' }}>
                     {totalUnrealizedPnL >= 0 ? '+' : ''}{(totalUnrealizedPnL / DUSDC_MULTIPLIER).toFixed(2)}
                   </div>
@@ -206,11 +226,37 @@ export default function PortfolioPage() {
 
             {/* Positions */}
             <section>
-              <SectionHeader number="02" title="Open Positions" jp="ポジション" count={totalPositions} />
+              <div className="flex items-center justify-between">
+                <SectionHeader number="02" title="Open Positions" jp="ポジション" count={totalPositions} />
+                {manager?.manager_id && (
+                  <button
+                    onClick={async () => {
+                      const positions = await fetchManagerPositionsSummary(manager.manager_id);
+                      if (positions.length === 0) return;
+                      const csv = positionsToCSV(positions);
+                      downloadCSV(csv, `yosuku-positions-${new Date().toISOString().slice(0, 10)}.csv`);
+                    }}
+                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-white/10 bg-white/[0.03] text-gray-400 hover:text-white hover:border-white/20 transition-all text-xs font-medium"
+                  >
+                    <Download style={{ width: 12, height: 12 }} />
+                    Export CSV
+                  </button>
+                )}
+              </div>
               <div className="border border-white/[0.08] rounded bg-bg p-5">
                 <PortfolioTable />
               </div>
             </section>
+
+            {/* Badges */}
+            {address && (
+              <section>
+                <SectionHeader number="03" title="Achievements" jp="実績" />
+                <div className="border border-white/[0.08] rounded bg-bg p-5">
+                  <BadgeDisplay badges={badges} />
+                </div>
+              </section>
+            )}
 
             {/* CTA */}
             {totalPositions === 0 && (

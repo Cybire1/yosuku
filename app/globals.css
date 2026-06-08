@@ -3305,6 +3305,95 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
 }
 .arrow-link:hover { gap: 12px; }
 
+/* ───────── Tooltips ───────── */
+.tooltip-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  cursor: help;
+}
+.tooltip-icon {
+  width: 12px; height: 12px;
+  color: var(--gray-600);
+  flex-shrink: 0;
+  transition: color 150ms;
+}
+.tooltip-wrap:hover .tooltip-icon { color: var(--gray-400); }
+.tooltip-bubble {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 12px;
+  background: rgba(20, 20, 20, 0.96);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px;
+  color: var(--gray-300);
+  font-family: var(--font-body);
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: normal;
+  width: max-content;
+  max-width: 260px;
+  z-index: 9100;
+  pointer-events: none;
+  animation: tooltipFade 150ms var(--ease);
+  backdrop-filter: blur(12px);
+}
+.tooltip-bubble.top { bottom: calc(100% + 8px); }
+.tooltip-bubble.bottom { top: calc(100% + 8px); }
+.tooltip-arrow {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%) rotate(45deg);
+  width: 6px; height: 6px;
+  background: rgba(20, 20, 20, 0.96);
+  border: 1px solid rgba(255,255,255,0.1);
+}
+.tooltip-bubble.top .tooltip-arrow {
+  bottom: -4px;
+  border-top: 0; border-left: 0;
+}
+.tooltip-bubble.bottom .tooltip-arrow {
+  top: -4px;
+  border-bottom: 0; border-right: 0;
+}
+@keyframes tooltipFade {
+  from { opacity: 0; transform: translateX(-50%) translateY(4px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* ───────── Light Mode (beta) ───────── */
+[data-theme="light"] {
+  --bg: #FAFAF9;
+  --white: #1A1612;
+  --black: #FAFAF9;
+  --gray-400: #6B6B6B;
+  --gray-500: #888;
+  --gray-600: #999;
+  --gray-700: #BBB;
+}
+[data-theme="light"] body {
+  background: #FAFAF9;
+  color: #1A1612;
+}
+[data-theme="light"] .market-card,
+[data-theme="light"] .bg-bg {
+  background: #F5F5F0;
+}
+[data-theme="light"] .bg-neutral-900\/95,
+[data-theme="light"] .bg-neutral-900\/90,
+[data-theme="light"] .bg-neutral-900\/50 {
+  background: rgba(255, 255, 255, 0.95);
+}
+[data-theme="light"] .text-white {
+  color: #1A1612;
+}
+[data-theme="light"] .border-white\/10,
+[data-theme="light"] .border-white\/5,
+[data-theme="light"] .border-white\/\[0\.08\] {
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
 /* responsive */
 @media (max-width: 1100px) {
   .markets-grid { grid-template-columns: repeat(2, 1fr); }
