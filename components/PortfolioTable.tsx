@@ -12,7 +12,7 @@ import {
 import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from '@mysten/dapp-kit';
 import { useManager, usePositions, useManagerBalance, getPositionDirection, getPositionStrike, useSviPricing, useVaultStats } from '@/lib/sui/hooks';
 import { useOracles, useOraclePrices } from '@/lib/sui/hooks';
-import { redeemPositionTx, redeemRangePositionTx } from '@/lib/sui/predictClient';
+import { redeemPositionTx, redeemRangePositionTx, redeemPermissionlessTx, redeemAllPermissionlessTx, type ClaimablePosition } from '@/lib/sui/predictClient';
 import { FLOAT_SCALING, DUSDC_MULTIPLIER } from '@/lib/sui/constants';
 import { computeSviPrice, computeRangePrice, computeFeeBreakdown } from '@/lib/sui/sviPricing';
 import { computePositionPnL } from '@/lib/sui/pnlCalculator';
@@ -31,6 +31,7 @@ export default function PortfolioTable() {
   const [redeemingKey, setRedeemingKey] = useState<string | null>(null);
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const [partialQty, setPartialQty] = useState<Record<string, string>>({});
+  const [claimingAll, setClaimingAll] = useState(false);
 
   // Get unique oracle IDs from positions for SVI data
   const uniqueOracleIds = useMemo(() => {
@@ -42,6 +43,46 @@ export default function PortfolioTable() {
   const primaryOracleId = uniqueOracleIds[0] ?? null;
   const { sviData } = useSviPricing(primaryOracleId);
   const { prices } = useOraclePrices(primaryOracleId);
+
+  // Settled binary winners still open → claimable via the gas-negative crank.
+  const claimableWinners = useMemo<ClaimablePosition[]>(() => {
+    if (!manager) return [];
+    const out: ClaimablePosition[] = [];
+    for (const pos of positions) {
+      const oracle = oracles.find(o => o.oracle_id === pos.oracle_id);
+      if (!oracle || oracle.status !== 'settled' || oracle.settlement_price == null) continue;
+      const direction = getPositionDirection(pos.lower_strike, pos.higher_strike);
+      if (direction === 'RANGE') continue; // range has no permissionless redeem
+      const strike = Number(getPositionStrike(pos.lower_strike, pos.higher_strike));
+      const won = direction === 'UP' ? oracle.settlement_price >= strike : oracle.settlement_price < strike;
+      if (!won) continue;
+      out.push({
+        managerId: manager.manager_id,
+        oracleId: pos.oracle_id,
+        expiry: BigInt(pos.expiry),
+        strike: BigInt(getPositionStrike(pos.lower_strike, pos.higher_strike)),
+        direction,
+        quantity: BigInt(pos.quantity),
+      });
+    }
+    return out;
+  }, [positions, oracles, manager]);
+
+  const handleClaimAll = async () => {
+    if (claimableWinners.length === 0) return;
+    setClaimingAll(true);
+    try {
+      const tx = redeemAllPermissionlessTx(claimableWinners);
+      const result = await signAndExecute({ transaction: tx });
+      await client.waitForTransaction({ digest: result.digest });
+      refreshPositions();
+      refreshManagerBalance();
+    } catch (err) {
+      console.error('Claim all error:', err);
+    } finally {
+      setClaimingAll(false);
+    }
+  };
 
   if (!address) {
     return (
@@ -60,7 +101,7 @@ export default function PortfolioTable() {
     );
   }
 
-  const handleRedeem = async (pos: typeof positions[0], quantity?: bigint) => {
+  const handleRedeem = async (pos: typeof positions[0], quantity?: bigint, settled = false) => {
     if (!manager) return;
     const direction = getPositionDirection(pos.lower_strike, pos.higher_strike);
     const key = `${pos.oracle_id}-${pos.lower_strike}-${pos.higher_strike}`;
@@ -82,14 +123,24 @@ export default function PortfolioTable() {
         await client.waitForTransaction({ digest: result.digest });
       } else {
         const strike = BigInt(getPositionStrike(pos.lower_strike, pos.higher_strike));
-        const tx = redeemPositionTx(
-          manager.manager_id,
-          pos.oracle_id,
-          BigInt(pos.expiry),
-          strike,
-          direction,
-          redeemQty,
-        );
+        // Settled → gas-negative permissionless redeem; live → owner redeem (early close).
+        const tx = settled
+          ? redeemPermissionlessTx({
+              managerId: manager.manager_id,
+              oracleId: pos.oracle_id,
+              expiry: BigInt(pos.expiry),
+              strike,
+              direction,
+              quantity: redeemQty,
+            })
+          : redeemPositionTx(
+              manager.manager_id,
+              pos.oracle_id,
+              BigInt(pos.expiry),
+              strike,
+              direction,
+              redeemQty,
+            );
         const result = await signAndExecute({ transaction: tx });
         await client.waitForTransaction({ digest: result.digest });
       }
@@ -124,6 +175,23 @@ export default function PortfolioTable() {
           {(managerBalance / DUSDC_MULTIPLIER).toFixed(2)} DUSDC
         </span>
       </div>
+
+      {/* Claim all settled winners — one gas-negative PTB */}
+      {claimableWinners.length > 0 && (
+        <button
+          onClick={handleClaimAll}
+          disabled={claimingAll}
+          className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/15 border border-emerald-500/30 transition-all disabled:opacity-50"
+        >
+          <span className="flex items-center gap-2 text-sm font-bold text-emerald-400">
+            {claimingAll ? <Loader2 className="w-4 h-4 animate-spin" /> : '🏆'}
+            Claim all winners ({claimableWinners.length})
+          </span>
+          <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400/70">
+            ⚡ gas-negative
+          </span>
+        </button>
+      )}
 
       {/* Positions list */}
       <div className="space-y-2">
@@ -264,7 +332,7 @@ export default function PortfolioTable() {
                         if (isActive && !isExpanded) {
                           setExpandedKey(key);
                         } else {
-                          handleRedeem(pos);
+                          handleRedeem(pos, undefined, isSettled);
                         }
                       }}
                       disabled={redeemingKey === key}

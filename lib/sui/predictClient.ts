@@ -147,6 +147,50 @@ export function redeemPositionTx(
   return tx;
 }
 
+export interface ClaimablePosition {
+  managerId: string;
+  oracleId: string;
+  expiry: bigint;
+  strike: bigint;
+  direction: 'UP' | 'DOWN';
+  quantity: bigint;
+}
+
+/** Add one redeem_permissionless call to a tx (settled binary winner → its manager). */
+function addRedeemPermissionless(tx: Transaction, p: ClaimablePosition) {
+  const marketKey = marketKeyArgs(tx, p.oracleId, p.expiry, p.strike, p.direction);
+  tx.moveCall({
+    target: `${PACKAGE_ID}::predict::redeem_permissionless`,
+    typeArguments: [DUSDC_TYPE],
+    arguments: [
+      tx.object(PREDICT_ID),
+      tx.object(p.managerId),
+      tx.object(p.oracleId),
+      marketKey,
+      tx.pure.u64(p.quantity),
+      tx.object(CLOCK_ID),
+    ],
+  });
+}
+
+/**
+ * Redeem a SETTLED binary winner via the permissionless crank.
+ * public fun redeem_permissionless<Quote>(predict, manager, oracle, MarketKey, quantity, clock, ctx)
+ * No owner check — anyone (incl. a keeper) can settle any winner; gas-negative on full close.
+ */
+export function redeemPermissionlessTx(p: ClaimablePosition): Transaction {
+  const tx = new Transaction();
+  addRedeemPermissionless(tx, p);
+  return tx;
+}
+
+/** Claim many settled winners in a single PTB — the gas-negative "claim all" crank. */
+export function redeemAllPermissionlessTx(positions: ClaimablePosition[]): Transaction {
+  const tx = new Transaction();
+  for (const p of positions) addRedeemPermissionless(tx, p);
+  return tx;
+}
+
 /**
  * Atomic: deposit DUSDC from wallet + mint position in one PTB.
  */

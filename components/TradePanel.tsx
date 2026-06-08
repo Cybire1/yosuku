@@ -26,6 +26,7 @@ import {
 } from '@/lib/sui/predictClient';
 import { generateStrikeGrid, formatStrike, nearestStrike, savePosition } from '@/lib/roundHelpers';
 import { computeSviPrice, computeRangePrice, computeFeeBreakdown, type FeeBreakdown } from '@/lib/sui/sviPricing';
+import { fetchOnChainQuote, type OnChainQuote } from '@/lib/sui/onchainQuote';
 import Countdown from './Countdown';
 import TradeConfirmationModal from './TradeConfirmationModal';
 import Tooltip from './Tooltip';
@@ -70,6 +71,8 @@ export default function TradePanel({
   const [errorMsg, setErrorMsg] = useState('');
   const [txDigest, setTxDigest] = useState('');
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [onChainQuote, setOnChainQuote] = useState<OnChainQuote | null>(null);
+  const [quoteLoading, setQuoteLoading] = useState(false);
 
   // Generate strike grid centered around current price
   const refPriceForGrid = forwardPrice ?? spotPrice ?? undefined;
@@ -118,6 +121,37 @@ export default function TradePanel({
       vaultStats.balance,
     );
   }, [fairPrice, vaultStats]);
+
+  // Exact on-chain cost (UP/DOWN only) — devInspect get_trade_amounts via the SDK.
+  // Debounced; gives the user the contract's real cost, not the SVI estimate.
+  useEffect(() => {
+    if (side === 'RANGE' || !selectedStrike || !isValidAmount) {
+      setOnChainQuote(null);
+      return;
+    }
+    let cancelled = false;
+    setQuoteLoading(true);
+    const t = setTimeout(async () => {
+      try {
+        const q = await fetchOnChainQuote({
+          oracleId: oracle.oracle_id,
+          expiry: oracle.expiry,
+          strike: selectedStrike,
+          isUp: side === 'UP',
+          quantity: amountMicro,
+        });
+        if (!cancelled) setOnChainQuote(q);
+      } catch {
+        if (!cancelled) setOnChainQuote(null);
+      } finally {
+        if (!cancelled) setQuoteLoading(false);
+      }
+    }, 350);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [oracle.oracle_id, oracle.expiry, selectedStrike, side, amountMicro, isValidAmount]);
 
   const handleTrade = useCallback(async () => {
     if (!address || !selectedStrike || !isValidAmount || !isRangeValid) return;
@@ -533,11 +567,32 @@ export default function TradePanel({
             </span>
           </div>
           <div className="flex justify-between text-xs">
-            <span className="text-gray-500">Cost</span>
+            <span className="text-gray-500 inline-flex items-center gap-1">
+              Deposit <Tooltip text="DUSDC moved into your PredictManager. Anything above the trade cost stays as reusable manager balance." position="bottom" />
+            </span>
             <span className="text-white font-mono font-bold">
               {isValidAmount ? `${(amountMicro / DUSDC_MULTIPLIER).toFixed(2)} DUSDC` : '—'}
             </span>
           </div>
+          {side !== 'RANGE' && (
+            <>
+              <div className="flex justify-between text-xs">
+                <span className="text-gray-500 inline-flex items-center gap-1">
+                  Trade cost <span className="text-[8px] font-bold uppercase tracking-wider text-vermilion/80 bg-vermilion/10 px-1 py-0.5 rounded">on-chain</span>
+                  <Tooltip text="Read live from the contract via get_trade_amounts (devInspect) — the exact DUSDC this trade costs right now, not an estimate." position="bottom" />
+                </span>
+                <span className="text-white font-mono font-bold">
+                  {quoteLoading ? '…' : onChainQuote ? `${onChainQuote.mintCost.toFixed(4)} DUSDC` : '—'}
+                </span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-gray-500">Max payout</span>
+                <span className="text-emerald-400/90 font-mono">
+                  {isValidAmount ? `${(amountMicro / DUSDC_MULTIPLIER).toFixed(2)} DUSDC` : '—'}
+                </span>
+              </div>
+            </>
+          )}
           <div className="flex justify-between text-xs">
             <span className="text-gray-500">Expires</span>
             <span className="text-white">
@@ -671,6 +726,7 @@ export default function TradePanel({
           amount={amountMicro}
           fairPrice={fairPrice}
           feeBreakdown={feeBreakdown}
+          onChainCost={onChainQuote?.mintCost ?? null}
           expiry={oracle.expiry}
           onConfirm={() => {
             setShowConfirmModal(false);

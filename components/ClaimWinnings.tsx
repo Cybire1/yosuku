@@ -4,7 +4,7 @@
 import { useState } from 'react';
 import { Trophy, Loader, XCircle } from 'lucide-react';
 import { useCurrentAccount, useSignAndExecuteTransaction } from '@mysten/dapp-kit';
-import { redeemPositionTx } from '@/lib/sui/predictClient';
+import { redeemPermissionlessTx } from '@/lib/sui/predictClient';
 import { useDUSDCBalance, useManager } from '@/lib/sui/hooks';
 import {
   formatPred,
@@ -61,14 +61,15 @@ export default function ClaimWinnings({
     setError('');
 
     try {
-      const tx = redeemPositionTx(
-        manager.manager_id,
-        round.oracleId,
-        BigInt(round.expiry),
-        BigInt(strike),
-        userDirection,
-        BigInt(userDeposit),
-      );
+      // Settled position → gas-negative permissionless redeem (no owner check needed).
+      const tx = redeemPermissionlessTx({
+        managerId: manager.manager_id,
+        oracleId: round.oracleId,
+        expiry: BigInt(round.expiry),
+        strike: BigInt(strike),
+        direction: userDirection,
+        quantity: BigInt(userDeposit),
+      });
 
       await signAndExecute({ transaction: tx });
 
@@ -184,6 +185,9 @@ export default function ClaimWinnings({
             'Claim Winnings'
           )}
         </button>
+        <p className="text-[10px] text-gray-500 text-center mt-2">
+          ⚡ gas-negative · <span className="text-off-green/80">redeem_permissionless</span> — the claim pays its own gas
+        </p>
       </div>
     </div>
   );
