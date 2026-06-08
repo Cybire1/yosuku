@@ -1,0 +1,5 @@
+dart/
+deepbookv3/
+.playwright-mcp/
+node_modules/
+.next/

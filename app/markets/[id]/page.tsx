@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, use } from 'react';
+import { useState, useEffect, useRef, use, useCallback, useMemo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
@@ -13,10 +13,15 @@ import PriceChart from '@/components/PriceChart';
 import { fetchTrades, type OracleData, type TradeData } from '@/lib/sui/predictApi';
 import { useOracleState } from '@/lib/sui/hooks';
 import { FLOAT_SCALING, DUSDC_MULTIPLIER } from '@/lib/sui/constants';
+import { Share2, Link2, Check, TrendingUp, TrendingDown } from 'lucide-react';
+import PriceAlertsButton from '@/components/PriceAlerts';
+import { useKeyboardShortcuts } from '@/lib/hooks/useKeyboardShortcuts';
+import { checkAlerts, sendNotification } from '@/lib/priceAlerts';
+import Tooltip from '@/components/Tooltip';
 import { computeSviPrice } from '@/lib/sui/sviPricing';
 import { generateStrikeGrid, getTimeRemaining, nearestStrike } from '@/lib/roundHelpers';
-import { genCandles, drawCandles, priceHistoryToCandles } from '@/lib/charts/canvasChart';
-import { fetchPriceHistory } from '@/lib/sui/predictApi';
+import { genCandles, drawCandles, priceHistoryToCandles, drawProbabilityChart } from '@/lib/charts/canvasChart';
+import { fetchPriceHistory, fetchSviHistory } from '@/lib/sui/predictApi';
 
 export default function MarketDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: oracleId } = use(params);
@@ -28,6 +33,16 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
   const [selectedStrike, setSelectedStrike] = useState<number | null>(null);
   const [timeLeft, setTimeLeft] = useState({ hours: 0, minutes: 0, seconds: 0, expired: false, totalMs: 0 });
   const chartCanvasRef = useRef<HTMLCanvasElement>(null);
+  const probChartRef = useRef<HTMLCanvasElement>(null);
+  const [copied, setCopied] = useState(false);
+  const [activeSide, setActiveSide] = useState<'UP' | 'DOWN'>(defaultSide);
+
+  // Keyboard shortcuts: u → UP, d → DOWN, Escape → go back
+  useKeyboardShortcuts(useMemo(() => ({
+    'u': () => setActiveSide('UP'),
+    'd': () => setActiveSide('DOWN'),
+    'Escape': () => router.push('/markets'),
+  }), [router]));
 
   // Single combined API call: oracle + prices + SVI
   const { state: oracleState, loading } = useOracleState(oracleId);
@@ -142,6 +157,43 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
   const midStrikeDollars = midStrike / FLOAT_SCALING;
   const asset = oracle.underlying_asset || 'BTC';
 
+  // Check price alerts
+  useEffect(() => {
+    if (!spot || !asset) return;
+    const triggered = checkAlerts({ [asset]: spot });
+    triggered.forEach(a => {
+      sendNotification(
+        `${a.asset} Price Alert`,
+        `${a.asset} is now ${a.direction === 'above' ? 'above' : 'below'} $${a.targetPrice.toLocaleString()}`
+      );
+    });
+  }, [spot, asset]);
+
+  // Probability history chart from SVI data
+  useEffect(() => {
+    if (!probChartRef.current || !oracle || !midStrike) return;
+    const oracleExpiry = oracle.expiry;
+    let cancelled = false;
+    async function loadProbHistory() {
+      try {
+        const sviHistory = await fetchSviHistory(oracleId);
+        if (cancelled || sviHistory.length < 2) return;
+        const fwd = prices?.forward || prices?.spot || midStrike;
+        const fwdScaled = fwd / FLOAT_SCALING;
+        const strikeScaled = midStrike / FLOAT_SCALING;
+        const probData = sviHistory.map(entry => {
+          const prob = computeSviPrice(entry.params, strikeScaled, fwdScaled);
+          return { timestamp: entry.timestamp, probability: Math.max(1, Math.min(99, prob * 100)) };
+        });
+        if (!cancelled && probChartRef.current) {
+          drawProbabilityChart(probChartRef.current, probData);
+        }
+      } catch { /* ignore */ }
+    }
+    loadProbHistory();
+    return () => { cancelled = true; };
+  }, [oracleId, oracle, midStrike, prices]);
+
   const formatPrice = (n: number) =>
     '$' + n.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
@@ -207,21 +259,107 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
           )}
         </div>
 
+        {/* Share buttons */}
+        <div className="flex items-center gap-2 mb-6">
+          <button
+            onClick={() => {
+              const url = `https://yosuku.xyz/markets/${oracleId}`;
+              const text = `${asset} above ${formatPrice(midStrikeDollars)}? Trade on @yosuku_xyz`;
+              window.open(`https://x.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`, '_blank');
+            }}
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-white/10 bg-white/[0.03] text-gray-400 hover:text-white hover:border-white/20 transition-all text-xs font-medium"
+          >
+            <Share2 style={{ width: 12, height: 12 }} />
+            Share
+          </button>
+          <button
+            onClick={() => {
+              navigator.clipboard.writeText(`https://yosuku.xyz/markets/${oracleId}`);
+              setCopied(true);
+              setTimeout(() => setCopied(false), 2000);
+            }}
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-white/10 bg-white/[0.03] text-gray-400 hover:text-white hover:border-white/20 transition-all text-xs font-medium"
+          >
+            {copied ? <Check style={{ width: 12, height: 12, color: '#34D399' }} /> : <Link2 style={{ width: 12, height: 12 }} />}
+            {copied ? 'Copied!' : 'Copy Link'}
+          </button>
+          <PriceAlertsButton asset={asset} currentPrice={spot} />
+        </div>
+
+        {/* Settlement result card */}
+        {isSettled && oracle.settlement_price !== null && (() => {
+          const settlementDollars = oracle.settlement_price / FLOAT_SCALING;
+          const upWins = settlementDollars >= midStrikeDollars;
+          return (
+            <div className={`flex items-center gap-4 p-4 rounded-xl border mb-8 ${
+              upWins
+                ? 'border-emerald-500/20 bg-emerald-500/[0.06]'
+                : 'border-rose-500/20 bg-rose-500/[0.06]'
+            }`}>
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                upWins ? 'bg-emerald-500/20' : 'bg-rose-500/20'
+              }`}>
+                {upWins
+                  ? <TrendingUp style={{ width: 20, height: 20, color: '#34D399' }} />
+                  : <TrendingDown style={{ width: 20, height: 20, color: '#F43F5E' }} />
+                }
+              </div>
+              <div className="flex-1">
+                <div className={`text-sm font-bold ${upWins ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  {upWins ? 'UP Wins' : 'DOWN Wins'}
+                </div>
+                <div className="text-xs text-gray-400">
+                  {asset} settled at {formatPrice(settlementDollars)} — {upWins ? 'above' : 'below'} strike {formatPrice(midStrikeDollars)}
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="font-mono text-xs text-gray-500">Settlement</div>
+                <div className="font-mono text-sm font-semibold text-white">{formatPrice(settlementDollars)}</div>
+              </div>
+            </div>
+          );
+        })()}
+
         {/* Live prices */}
         {(spot || forward) && (
           <div className="flex items-center gap-8 mb-8">
             {spot && (
               <div className="border-l border-white/[0.12] pl-3.5">
-                <span className="font-mono text-[9px] tracking-[0.16em] uppercase text-gray-600 block">Spot</span>
+                <span className="font-mono text-[9px] tracking-[0.16em] uppercase text-gray-600 flex items-center gap-1">Spot <Tooltip text="Current Pyth oracle price for this asset." position="bottom" /></span>
                 <span className="font-mono text-lg font-semibold text-white">{formatPrice(spot)}</span>
               </div>
             )}
             {forward && (
               <div className="border-l border-white/[0.12] pl-3.5">
-                <span className="font-mono text-[9px] tracking-[0.16em] uppercase text-gray-600 block">Forward</span>
+                <span className="font-mono text-[9px] tracking-[0.16em] uppercase text-gray-600 flex items-center gap-1">Forward <Tooltip text="Time-weighted forward price used for settlement reference." position="bottom" /></span>
                 <span className="font-mono text-lg font-semibold text-vermilion">{formatPrice(forward)}</span>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Volume & Open Interest */}
+        {trades.length > 0 && (
+          <div className="flex items-center gap-8 mb-8">
+            <div className="border-l border-white/[0.12] pl-3.5">
+              <span className="font-mono text-[9px] tracking-[0.16em] uppercase text-gray-600 flex items-center gap-1">
+                Volume <Tooltip text="Total minted volume for this oracle." position="bottom" />
+              </span>
+              <span className="font-mono text-lg font-semibold text-white">
+                {(trades.filter(t => t.type === 'mint').reduce((sum, t) => sum + t.quantity, 0) / DUSDC_MULTIPLIER).toFixed(0)} DUSDC
+              </span>
+            </div>
+            <div className="border-l border-white/[0.12] pl-3.5">
+              <span className="font-mono text-[9px] tracking-[0.16em] uppercase text-gray-600 flex items-center gap-1">
+                Open Interest <Tooltip text="Net minted minus redeemed positions." position="bottom" />
+              </span>
+              <span className="font-mono text-lg font-semibold text-white">
+                {Math.max(0, (
+                  trades.filter(t => t.type === 'mint').reduce((s, t) => s + t.quantity, 0) -
+                  trades.filter(t => t.type === 'redeem').reduce((s, t) => s + t.quantity, 0)
+                ) / DUSDC_MULTIPLIER).toFixed(0)} DUSDC
+              </span>
+            </div>
           </div>
         )}
 
@@ -241,6 +379,14 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
             {/* Recharts fallback */}
             <div className="border border-white/[0.08] rounded bg-bg p-4">
               <PriceChart oracleId={oracleId} strikePrice={selectedStrike || midStrike} />
+            </div>
+
+            {/* Probability History */}
+            <div className="border border-white/[0.08] rounded bg-bg p-4">
+              <h3 className="font-mono text-[9px] tracking-[0.16em] uppercase text-gray-600 mb-3">
+                Probability History
+              </h3>
+              <canvas ref={probChartRef} className="w-full" style={{ height: '180px' }} />
             </div>
 
             {/* Recent Trades */}
@@ -313,10 +459,11 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
             <div className="w-full lg:w-[380px] flex-shrink-0">
               <div className="lg:sticky lg:top-[120px]">
                 <TradePanel
+                  key={activeSide}
                   oracle={oracle}
                   spotPrice={prices?.spot}
                   forwardPrice={prices?.forward}
-                  defaultSide={defaultSide}
+                  defaultSide={activeSide}
                 />
               </div>
             </div>

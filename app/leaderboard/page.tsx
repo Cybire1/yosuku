@@ -7,9 +7,7 @@ import Footer from '@/components/Footer';
 import Marquee from '@/components/Marquee';
 import GrainOverlay from '@/components/GrainOverlay';
 import SectionHeader from '@/components/SectionHeader';
-import { drawSparkline } from '@/lib/charts/canvasChart';
-import { drawCandles } from '@/lib/charts/canvasChart';
-import { priceHistoryToCandles } from '@/lib/charts/canvasChart';
+import { drawCandles, priceHistoryToCandles } from '@/lib/charts/canvasChart';
 import { useLeaderboard, usePriceHistory, useOracles } from '@/lib/sui/hooks';
 import { formatAddress } from '@/lib/leaderboardStats';
 
@@ -97,33 +95,6 @@ export default function LeaderboardPage() {
     return rows;
   }, [rankings]);
 
-  // Podium sparklines (deterministic from PnL)
-  const sparkRefs = useRef<Record<number, HTMLCanvasElement | null>>({});
-
-  useEffect(() => {
-    podiumData.forEach(p => {
-      const cv = sparkRefs.current[p.r];
-      if (!cv) return;
-      // Generate sparkline from trader stats
-      const data: number[] = [];
-      let v = 0;
-      let seed = p.owner.charCodeAt(2) || 7;
-      for (let i = 0; i < 16; i++) {
-        seed = (seed * 9301 + 49297) % 233280;
-        v += (seed / 233280 - 0.4) * (p.pnl > 0 ? 2 : 1);
-        data.push(v);
-      }
-      // Normalize
-      const max = Math.max(...data.map(Math.abs)) || 1;
-      const norm = data.map(d => d / max);
-      drawSparkline(cv, norm, {
-        color: p.r === 1 ? '#E04D26' : '#fff',
-        fillColor: p.r === 1 ? 'rgba(224,77,38,0.32)' : 'rgba(255,255,255,0.10)',
-        lineWidth: 1.4,
-        dotEnd: true,
-      });
-    });
-  }, [podiumData]);
 
   // Yokozuna chart — use real price history if top trader exists
   const topTrader = rankings[0];
@@ -315,14 +286,6 @@ export default function LeaderboardPage() {
                     <div className="podium-jp">{glyphFromAddress(p.owner)}</div>
                     <div className="podium-pnl">
                       <span className="sign">{p.pnl >= 0 ? '+' : ''}</span>{fmtPnl(p.pnl)}<span className="cur">DUSDC</span>
-                    </div>
-                    <div className="podium-stats">
-                      <div className="item"><div className="lbl">Win</div><div className="val">{p.winRate}%</div></div>
-                      <div className="item"><div className="lbl">Streak</div><div className="val">{String(p.bestStreak).padStart(2, '0')}</div></div>
-                      <div className="item"><div className="lbl">Rounds</div><div className="val">{p.tradeCount}</div></div>
-                    </div>
-                    <div className="podium-spark">
-                      <canvas ref={el => { sparkRefs.current[p.r] = el; }} />
                     </div>
                   </div>
                 ))}

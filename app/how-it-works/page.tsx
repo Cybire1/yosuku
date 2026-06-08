@@ -1,12 +1,14 @@
 'use client';
 
-import { motion } from 'framer-motion';
-import { ArrowLeft, Target, Zap, TrendingUp, Clock, Coins, Trophy, HelpCircle, ArrowRight, Shield, EyeOff, Lock } from 'lucide-react';
+import { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ArrowLeft, Target, Zap, TrendingUp, Clock, Coins, Trophy, HelpCircle, ArrowRight, Shield, EyeOff, Lock, ChevronDown } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import Header from '@/components/Header';
 
 export default function HowItWorksPage() {
   const router = useRouter();
+  const [openFaq, setOpenFaq] = useState<number | null>(null);
 
   const steps = [
     {
@@ -220,6 +222,100 @@ export default function HowItWorksPage() {
             </div>
           </div>
 
+          {/* SVI Pricing Model */}
+          <div className="mb-20">
+            <h2 className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-8">SVI Pricing Model</h2>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.45 }}
+              className="bg-neutral-900/50 border border-white/5 rounded-2xl p-6 md:p-8"
+            >
+              <p className="text-sm text-gray-400 leading-relaxed mb-6">
+                Positions are priced using the <span className="text-white font-medium">Stochastic Volatility Inspired (SVI)</span> parameterization,
+                the same family of models used in traditional options markets. The implied variance surface is defined as:
+              </p>
+              <div className="bg-black/40 border border-white/5 rounded-xl p-4 mb-6 font-mono text-sm text-vermilion overflow-x-auto">
+                w(k) = a + b * ( ρ * (k - m) + √((k - m)² + σ²) )
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs text-gray-400">
+                <div><span className="text-white font-mono">a</span> — overall variance level</div>
+                <div><span className="text-white font-mono">b</span> — slope of the wings</div>
+                <div><span className="text-white font-mono">ρ</span> — skew / rotation</div>
+                <div><span className="text-white font-mono">m</span> — horizontal shift (at-the-money)</div>
+                <div><span className="text-white font-mono">σ</span> — smoothing (curvature at ATM)</div>
+                <div><span className="text-white font-mono">k</span> — log-moneyness ln(K/F)</div>
+              </div>
+              <p className="text-sm text-gray-500 mt-6 leading-relaxed">
+                The SVI parameters are calibrated on-chain and updated continuously.
+                Fair price is derived from the implied volatility, which determines the probability of settlement above/below the strike.
+              </p>
+            </motion.div>
+          </div>
+
+          {/* Fee Structure */}
+          <div className="mb-20">
+            <h2 className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-8">Fee Structure</h2>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.5 }}
+              className="bg-neutral-900/50 border border-white/5 rounded-2xl p-6 md:p-8 space-y-6"
+            >
+              <div>
+                <h3 className="text-sm font-bold text-white mb-2">Bernoulli Fee</h3>
+                <p className="text-sm text-gray-400 leading-relaxed">
+                  A base fee applied to every position, calculated as <span className="font-mono text-white">baseFee * p * (1 - p)</span> where p is the fair price.
+                  This fee is maximized at 50/50 probability and approaches zero at extremes.
+                </p>
+              </div>
+              <div className="border-t border-white/5 pt-6">
+                <h3 className="text-sm font-bold text-white mb-2">Utilization Fee</h3>
+                <p className="text-sm text-gray-400 leading-relaxed">
+                  Scales with vault utilization — as more of the vault&apos;s balance is at risk,
+                  the fee increases to protect LPs. Low utilization = low fees, high utilization = higher fees.
+                </p>
+              </div>
+              <div className="border-t border-white/5 pt-6">
+                <h3 className="text-sm font-bold text-white mb-2">Total Cost</h3>
+                <p className="text-sm text-gray-400 leading-relaxed">
+                  Your total cost per unit = <span className="font-mono text-white">Fair Price + Bernoulli Fee + Utilization Fee</span>.
+                  This is capped below 1 so you can always profit if your position is correct.
+                </p>
+              </div>
+            </motion.div>
+          </div>
+
+          {/* Settlement Process */}
+          <div className="mb-20">
+            <h2 className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-8">Settlement Process</h2>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.55 }}
+              className="bg-neutral-900/50 border border-white/5 rounded-2xl p-6 md:p-8"
+            >
+              <div className="flex flex-col gap-4">
+                {[
+                  { step: '1', label: 'Window Closes', desc: 'The 15-minute market window expires.' },
+                  { step: '2', label: 'Oracle Reports', desc: 'Pyth Network reports the final BTC price to the Sui smart contract.' },
+                  { step: '3', label: 'Settlement', desc: 'The DeepBook Predict contract compares settlement price vs strike. Winners are determined automatically.' },
+                  { step: '4', label: 'Payout', desc: 'Winning positions receive 1 DUSDC per unit. Losing positions receive 0. Payouts are claimable immediately.' },
+                ].map((item) => (
+                  <div key={item.step} className="flex items-start gap-4">
+                    <div className="w-8 h-8 rounded-lg bg-vermilion/10 text-vermilion flex items-center justify-center flex-shrink-0 font-bold text-xs">
+                      {item.step}
+                    </div>
+                    <div>
+                      <div className="text-sm font-bold text-white">{item.label}</div>
+                      <div className="text-sm text-gray-400">{item.desc}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          </div>
+
           {/* Privacy Architecture */}
           <div className="mb-20">
             <h2 className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-8 flex items-center gap-2">
@@ -284,17 +380,37 @@ export default function HowItWorksPage() {
               <HelpCircle className="w-4 h-4" />
               FAQ
             </h2>
-            <div className="space-y-3">
+            <div className="space-y-2">
               {faqs.map((faq, index) => (
                 <motion.div
                   key={index}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.5 + index * 0.05 }}
-                  className="bg-neutral-900/50 border border-white/5 rounded-xl p-5"
+                  className="bg-neutral-900/50 border border-white/5 rounded-xl overflow-hidden"
                 >
-                  <h3 className="text-sm font-bold text-white mb-2">{faq.question}</h3>
-                  <p className="text-sm text-gray-500 leading-relaxed">{faq.answer}</p>
+                  <button
+                    onClick={() => setOpenFaq(openFaq === index ? null : index)}
+                    className="w-full flex items-center justify-between p-5 text-left"
+                  >
+                    <h3 className="text-sm font-bold text-white">{faq.question}</h3>
+                    <ChevronDown
+                      className={`w-4 h-4 text-gray-500 flex-shrink-0 ml-4 transition-transform ${openFaq === index ? 'rotate-180' : ''}`}
+                    />
+                  </button>
+                  <AnimatePresence>
+                    {openFaq === index && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="overflow-hidden"
+                      >
+                        <p className="text-sm text-gray-500 leading-relaxed px-5 pb-5">{faq.answer}</p>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </motion.div>
               ))}
             </div>

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Sora, Inter, JetBrains_Mono, Noto_Serif_JP } from "next/font/google";
 import "./globals.css";
 import WalletProvider from "@/components/WalletProvider";
+import { ToastProvider } from "@/components/Toast";
 
 const sora = Sora({
   variable: "--font-sora",
@@ -31,8 +32,30 @@ const notoSerifJP = Noto_Serif_JP({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://yosuku.xyz'),
   title: "Yosuku — Prediction Markets on Sui",
   description: "Trade binary positions on BTC price direction. Oracle-based settlement, DUSDC stablecoins, 15-minute rounds.",
+  openGraph: {
+    title: "Yosuku — Prediction Markets on Sui",
+    description: "Trade binary positions on BTC price direction. Oracle-based settlement, DUSDC stablecoins, 15-minute rounds.",
+    siteName: "Yosuku",
+    locale: "en_US",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Yosuku — Prediction Markets on Sui",
+    description: "Trade binary positions on BTC price direction. Oracle-based settlement, DUSDC stablecoins, 15-minute rounds.",
+  },
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'Yosuku',
+  },
+  other: {
+    'mobile-web-app-capable': 'yes',
+  },
 };
 
 export default function RootLayout({
@@ -47,7 +70,9 @@ export default function RootLayout({
         suppressHydrationWarning
       >
         <WalletProvider>
-          {children}
+          <ToastProvider>
+            {children}
+          </ToastProvider>
         </WalletProvider>
       </body>
     </html>

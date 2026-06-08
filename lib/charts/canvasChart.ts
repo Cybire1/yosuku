@@ -357,3 +357,94 @@ export function drawEquityCurve(
     ctx.fillText(lbl, x, h - 4);
   });
 }
+
+// ─── Draw probability history chart (0-100%) ───
+export function drawProbabilityChart(
+  canvas: HTMLCanvasElement | null,
+  data: { timestamp: number; probability: number }[]
+): void {
+  if (!canvas || data.length < 2) return;
+  const { ctx, w, h } = setupCanvas(canvas);
+  ctx.clearRect(0, 0, w, h);
+
+  const padX = 10;
+  const padTop = 14;
+  const padBot = 14;
+  const chartW = w - padX * 2;
+  const chartH = h - padTop - padBot;
+
+  const tMin = data[0].timestamp;
+  const tMax = data[data.length - 1].timestamp;
+  const tRange = tMax - tMin || 1;
+
+  const xFor = (t: number) => padX + ((t - tMin) / tRange) * chartW;
+  const yFor = (p: number) => padTop + (1 - p / 100) * chartH;
+
+  // Horizontal grid at 0%, 25%, 50%, 75%, 100%
+  ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+  ctx.lineWidth = 1;
+  for (const pct of [0, 25, 50, 75, 100]) {
+    const y = yFor(pct);
+    ctx.beginPath();
+    ctx.moveTo(padX, y);
+    ctx.lineTo(w - padX, y);
+    ctx.stroke();
+  }
+
+  // 50% reference line (dashed vermilion)
+  ctx.strokeStyle = 'rgba(224, 77, 38, 0.35)';
+  ctx.setLineDash([4, 4]);
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(padX, yFor(50));
+  ctx.lineTo(w - padX, yFor(50));
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Y-axis labels
+  ctx.fillStyle = 'rgba(255,255,255,0.3)';
+  ctx.font = '9px JetBrains Mono, monospace';
+  ctx.textAlign = 'right';
+  for (const pct of [0, 50, 100]) {
+    ctx.fillText(`${pct}%`, w - padX + 1, yFor(pct) + 3);
+  }
+
+  // Area fill gradient
+  const grd = ctx.createLinearGradient(0, padTop, 0, h - padBot);
+  grd.addColorStop(0, 'rgba(224, 77, 38, 0.18)');
+  grd.addColorStop(1, 'rgba(224, 77, 38, 0.00)');
+  ctx.fillStyle = grd;
+  ctx.beginPath();
+  ctx.moveTo(xFor(data[0].timestamp), yFor(0));
+  data.forEach(d => ctx.lineTo(xFor(d.timestamp), yFor(d.probability)));
+  ctx.lineTo(xFor(data[data.length - 1].timestamp), yFor(0));
+  ctx.closePath();
+  ctx.fill();
+
+  // Main line
+  ctx.strokeStyle = '#E04D26';
+  ctx.lineWidth = 1.8;
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  data.forEach((d, i) => {
+    const x = xFor(d.timestamp);
+    const y = yFor(d.probability);
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+
+  // End dot
+  const last = data[data.length - 1];
+  const lx = xFor(last.timestamp);
+  const ly = yFor(last.probability);
+  ctx.fillStyle = '#E04D26';
+  ctx.beginPath();
+  ctx.arc(lx, ly, 3.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = 'rgba(224, 77, 38, 0.2)';
+  ctx.beginPath();
+  ctx.arc(lx, ly, 8, 0, Math.PI * 2);
+  ctx.fill();
+}
