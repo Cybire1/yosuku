@@ -238,7 +238,7 @@ export default function BellPage() {
 
               <div className="mt-10 font-mono text-[10px] text-[var(--gray-700)]">
                 no settle() — the oracle settles you · powered by{' '}
-                <a href="https://www.npmjs.com/package/@yosuku/predict" target="_blank" rel="noreferrer" className="text-[var(--gray-500)] hover:text-[var(--vermilion)]">@yosuku/predict</a>
+                <a href="https://www.npmjs.com/package/@yosuku/deepbook-predict" target="_blank" rel="noreferrer" className="text-[var(--gray-500)] hover:text-[var(--vermilion)]">@yosuku/deepbook-predict</a>
                 <span className="mx-2">·</span>
                 <Link href="/markets" className="text-[var(--gray-500)] hover:text-white">all markets →</Link>
               </div>
