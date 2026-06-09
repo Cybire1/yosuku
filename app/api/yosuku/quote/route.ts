@@ -1,9 +1,9 @@
-// Exact on-chain quote — runs @yosuku/predict's get_trade_amounts devInspect in Node
+// Exact on-chain quote — runs @yosuku/deepbook-predict's get_trade_amounts devInspect in Node
 // (Buffer + SDK stay server-side). Read-only: no funds, no signing. Path is /api/yosuku/*
 // to avoid the next.config rewrite that shadows /api/predict/*.
 import { NextResponse } from 'next/server';
 import { SuiClient, getFullnodeUrl } from '@mysten/sui/client';
-import { getTradeAmountsOnChain, TESTNET } from '@yosuku/predict';
+import { getTradeAmountsOnChain, TESTNET } from '@yosuku/deepbook-predict';
 import { DUSDC_MULTIPLIER } from '@/lib/sui/constants';
 
 export const runtime = 'nodejs';

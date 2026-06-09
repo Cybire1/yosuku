@@ -1,5 +1,5 @@
 // Client-safe wrapper around the exact on-chain quote. The actual devInspect runs
-// in the /api/yosuku/quote server route (Node), which keeps the @yosuku/predict SDK
+// in the /api/yosuku/quote server route (Node), which keeps the @yosuku/deepbook-predict SDK
 // — and Node's Buffer — out of the browser bundle.
 
 export interface OnChainQuote {
