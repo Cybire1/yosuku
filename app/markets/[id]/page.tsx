@@ -112,6 +112,48 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
     return () => { cancelled = true; };
   }, [prices, oracle, selectedStrike, oracleId]);
 
+  // Check price alerts — kept above the early returns (Rules of Hooks)
+  useEffect(() => {
+    const spot = prices?.spot ? prices.spot / FLOAT_SCALING : null;
+    const asset = oracle?.underlying_asset || 'BTC';
+    if (!spot || !asset) return;
+    const triggered = checkAlerts({ [asset]: spot });
+    triggered.forEach(a => {
+      sendNotification(
+        `${a.asset} Price Alert`,
+        `${a.asset} is now ${a.direction === 'above' ? 'above' : 'below'} $${a.targetPrice.toLocaleString()}`
+      );
+    });
+  }, [prices, oracle]);
+
+  // Probability history chart from SVI data
+  useEffect(() => {
+    if (!probChartRef.current || !oracle) return;
+    const refPriceForGrid = prices?.forward || prices?.spot;
+    const midStrike = refPriceForGrid
+      ? nearestStrike(refPriceForGrid, oracle.min_strike, oracle.tick_size)
+      : oracle.min_strike + oracle.tick_size * 25;
+    let cancelled = false;
+    async function loadProbHistory() {
+      try {
+        const sviHistory = await fetchSviHistory(oracleId);
+        if (cancelled || sviHistory.length < 2) return;
+        const fwd = prices?.forward || prices?.spot || midStrike;
+        const fwdScaled = fwd / FLOAT_SCALING;
+        const strikeScaled = midStrike / FLOAT_SCALING;
+        const probData = sviHistory.map(entry => {
+          const prob = computeSviPrice(entry.params, strikeScaled, fwdScaled);
+          return { timestamp: entry.timestamp, probability: Math.max(1, Math.min(99, prob * 100)) };
+        });
+        if (!cancelled && probChartRef.current) {
+          drawProbabilityChart(probChartRef.current, probData);
+        }
+      } catch { /* ignore */ }
+    }
+    loadProbHistory();
+    return () => { cancelled = true; };
+  }, [oracleId, oracle, prices]);
+
   if (loading) {
     return (
       <div className="min-h-screen relative">
@@ -156,43 +198,6 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
     : oracle.min_strike + oracle.tick_size * 25;
   const midStrikeDollars = midStrike / FLOAT_SCALING;
   const asset = oracle.underlying_asset || 'BTC';
-
-  // Check price alerts
-  useEffect(() => {
-    if (!spot || !asset) return;
-    const triggered = checkAlerts({ [asset]: spot });
-    triggered.forEach(a => {
-      sendNotification(
-        `${a.asset} Price Alert`,
-        `${a.asset} is now ${a.direction === 'above' ? 'above' : 'below'} $${a.targetPrice.toLocaleString()}`
-      );
-    });
-  }, [spot, asset]);
-
-  // Probability history chart from SVI data
-  useEffect(() => {
-    if (!probChartRef.current || !oracle || !midStrike) return;
-    const oracleExpiry = oracle.expiry;
-    let cancelled = false;
-    async function loadProbHistory() {
-      try {
-        const sviHistory = await fetchSviHistory(oracleId);
-        if (cancelled || sviHistory.length < 2) return;
-        const fwd = prices?.forward || prices?.spot || midStrike;
-        const fwdScaled = fwd / FLOAT_SCALING;
-        const strikeScaled = midStrike / FLOAT_SCALING;
-        const probData = sviHistory.map(entry => {
-          const prob = computeSviPrice(entry.params, strikeScaled, fwdScaled);
-          return { timestamp: entry.timestamp, probability: Math.max(1, Math.min(99, prob * 100)) };
-        });
-        if (!cancelled && probChartRef.current) {
-          drawProbabilityChart(probChartRef.current, probData);
-        }
-      } catch { /* ignore */ }
-    }
-    loadProbHistory();
-    return () => { cancelled = true; };
-  }, [oracleId, oracle, midStrike, prices]);
 
   const formatPrice = (n: number) =>
     '$' + n.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 });

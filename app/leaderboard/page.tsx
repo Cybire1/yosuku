@@ -134,10 +134,10 @@ export default function LeaderboardPage() {
   const [sealTime, setSealTime] = useState(0);
   useEffect(() => {
     const tick = () => {
-      if (liveOracles.length > 0) {
-        const nearest = Math.min(...liveOracles.map(o => o.expiry));
-        const secsLeft = Math.max(0, Math.floor((nearest - Date.now()) / 1000));
-        setSealTime(secsLeft);
+      const upcoming = liveOracles.filter(o => o.expiry > Date.now());
+      if (upcoming.length > 0) {
+        const nearest = Math.min(...upcoming.map(o => o.expiry));
+        setSealTime(Math.max(0, Math.floor((nearest - Date.now()) / 1000)));
       }
     };
     tick();
