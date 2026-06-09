@@ -3504,6 +3504,26 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
   .hero-ticker { gap: 24px; padding: 14px 18px; }
   .ticker-cell { min-width: 96px; }
 
+  /* ── Leaderboard mobile polish ── */
+  /* hero eyebrow: stack the segments so the red "sealed nightly · 16:00 UTC" never clips */
+  .lb-hero-eyebrow { flex-direction: column; align-items: flex-start; gap: 4px; letter-spacing: 0.1em; }
+  .lb-hero-eyebrow .dash { display: none; }
+  /* section headers: shrink the torii + let the right-side meta wrap below (was overflowing) */
+  .section-head { flex-wrap: wrap; gap: 10px 14px; margin-bottom: 24px; }
+  .section-torii { width: 40px; margin-right: 14px; }
+  .section-head-mid { padding-bottom: 12px; }
+  /* secondary meta ("live · re-ranks every cut", market counts) — declutter on phones */
+  .section-head-right { display: none; }
+  .section-title-2 { font-size: 22px; }
+  .section-desc { font-size: 12px; }
+  /* banzuke rows: let long names ellipsis inside their column instead of forcing overflow */
+  .bz-cell { min-width: 0; }
+  .bz-name { max-width: 100%; }
+  /* records: 3-col → single column */
+  .records-grid { grid-template-columns: 1fr; }
+  /* belt-and-suspenders: no horizontal scroll on the leaderboard */
+  .lb-hero { overflow-x: clip; }
+
   /* ── Landing page mobile fixes ── */
 
   /* Reduce section padding on mobile */

@@ -3,8 +3,6 @@
 import { useCurrentAccount, useDisconnectWallet, ConnectButton } from '@mysten/dapp-kit';
 import { usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
-import { Sun, Moon } from 'lucide-react';
-import { initTheme, setStoredTheme, type Theme } from '@/lib/theme';
 
 const NAV_LINKS = [
   { name: 'Bell', href: '/bell' },
@@ -12,6 +10,7 @@ const NAV_LINKS = [
   { name: 'Pool', href: '/pool' },
   { name: 'Portfolio', href: '/portfolio' },
   { name: 'Leaderboard', href: '/leaderboard' },
+  { name: 'Bitcoin News', href: '/news' },
   { name: 'Docs', href: '#' },
 ];
 
@@ -49,18 +48,10 @@ export default function Header() {
   const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
-  const [theme, setTheme] = useState<Theme>('dark');
 
   useEffect(() => {
     setMounted(true);
-    setTheme(initTheme());
   }, []);
-
-  const toggleTheme = () => {
-    const next = theme === 'dark' ? 'light' : 'dark';
-    setTheme(next);
-    setStoredTheme(next);
-  };
 
   const shortAddr = address
     ? `${address.slice(0, 6)}…${address.slice(-4)}`
@@ -100,16 +91,6 @@ export default function Header() {
           </div>
 
           <div className="header-right">
-            {mounted && (
-              <button
-                onClick={toggleTheme}
-                className="p-2 rounded-lg border border-white/10 bg-white/[0.03] text-gray-400 hover:text-white hover:border-white/20 transition-all"
-                title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
-              >
-                {theme === 'dark' ? <Sun style={{ width: 14, height: 14 }} /> : <Moon style={{ width: 14, height: 14 }} />}
-              </button>
-            )}
-
             {mounted && address && (
               <a className="btn btn-ghost" href="#" data-cursor="hover">
                 Faucet ↗
