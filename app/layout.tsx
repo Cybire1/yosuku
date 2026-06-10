@@ -3,6 +3,7 @@ import { Sora, Inter, JetBrains_Mono, Noto_Serif_JP } from "next/font/google";
 import "./globals.css";
 import WalletProvider from "@/components/WalletProvider";
 import { ToastProvider } from "@/components/Toast";
+import { Analytics } from "@vercel/analytics/next";
 
 const sora = Sora({
   variable: "--font-sora",
@@ -74,6 +75,7 @@ export default function RootLayout({
             {children}
           </ToastProvider>
         </WalletProvider>
+        <Analytics />
       </body>
     </html>
   );
