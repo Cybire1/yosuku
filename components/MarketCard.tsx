@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import type { OracleData } from '@/lib/sui/predictApi';
 import { FLOAT_SCALING } from '@/lib/sui/constants';
-import { getTimeRemaining, nearestStrike } from '@/lib/roundHelpers';
+import { getTimeRemaining, nearestStrike, formatCountdown } from '@/lib/roundHelpers';
 import { genCandles, drawCandles, priceHistoryToCandles } from '@/lib/charts/canvasChart';
 import { fetchPriceHistory } from '@/lib/sui/predictApi';
 import { Star } from 'lucide-react';
@@ -115,14 +115,7 @@ export default function MarketCard({ oracle, spotPrice, forwardPrice, isFavorite
   const formatPrice = (n: number) =>
     '$' + n.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
-  const pad = (n: number) => String(n).padStart(2, '0');
-  const countdownStr = isSettled
-    ? 'Settled'
-    : isExpired
-      ? 'Expired'
-      : timeLeft.hours > 0
-        ? `${pad(timeLeft.hours)}:${pad(timeLeft.minutes)}:${pad(timeLeft.seconds)}`
-        : `${pad(timeLeft.minutes)}:${pad(timeLeft.seconds)}`;
+  const countdownStr = isSettled ? 'Settled' : formatCountdown(timeLeft);
 
   const asset = oracle.underlying_asset || 'BTC';
   const glyph = ASSET_GLYPH[asset] || asset[0];

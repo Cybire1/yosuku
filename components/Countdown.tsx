@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { getTimeRemaining } from '@/lib/roundHelpers';
+import { getTimeRemaining, formatCountdown } from '@/lib/roundHelpers';
 
 interface CountdownProps {
   expiryMs: number;
@@ -32,6 +32,15 @@ export default function Countdown({ expiryMs, className = '', onExpire }: Countd
 
   const isUrgent = time.totalMs < 5 * 60 * 1000;
   const urgentClass = isUrgent ? 'text-orange-400' : '';
+
+  // Multi-day markets: render "23d 00h 42m" instead of a raw "552:42:41".
+  if (time.hours >= 24) {
+    return (
+      <span className={`font-mono tabular-nums ${urgentClass} ${className}`}>
+        <span className="text-white">{formatCountdown(time)}</span>
+      </span>
+    );
+  }
 
   return (
     <span className={`font-mono tabular-nums ${urgentClass} ${className}`}>
