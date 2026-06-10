@@ -112,9 +112,28 @@ export function getTimeRemaining(expiryMs: number): {
 export function formatTimeRemaining(expiryMs: number): string {
   const { hours, minutes, seconds, expired } = getTimeRemaining(expiryMs);
   if (expired) return 'Expired';
+  if (hours >= 24) return `${Math.floor(hours / 24)}d ${hours % 24}h`;
   if (hours > 0) return `${hours}h ${minutes}m`;
   if (minutes > 0) return `${minutes}m ${seconds}s`;
   return `${seconds}s`;
+}
+
+/**
+ * Day-aware ticker for the "EXPIRES IN" displays. `hours` here is the TOTAL
+ * hours remaining (as returned by getTimeRemaining), so a 23-day market is
+ * `hours === 552` — without this it renders as "552:42:41".
+ *   ≥ 1 day  → "23d 00h 42m"   (seconds are noise at multi-day range)
+ *   < 1 day  → "HH:MM:SS"
+ *   < 1 hour → "MM:SS"
+ */
+export function formatCountdown(t: { hours: number; minutes: number; seconds: number; expired: boolean }): string {
+  if (t.expired) return 'Expired';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  if (t.hours >= 24) {
+    return `${Math.floor(t.hours / 24)}d ${pad(t.hours % 24)}h ${pad(t.minutes)}m`;
+  }
+  if (t.hours > 0) return `${pad(t.hours)}:${pad(t.minutes)}:${pad(t.seconds)}`;
+  return `${pad(t.minutes)}:${pad(t.seconds)}`;
 }
 
 /** Stub: get saved payout (for legacy PnLChart/PredictionStats) */

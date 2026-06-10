@@ -19,7 +19,7 @@ import { useKeyboardShortcuts } from '@/lib/hooks/useKeyboardShortcuts';
 import { checkAlerts, sendNotification } from '@/lib/priceAlerts';
 import Tooltip from '@/components/Tooltip';
 import { computeSviPrice } from '@/lib/sui/sviPricing';
-import { generateStrikeGrid, getTimeRemaining, nearestStrike } from '@/lib/roundHelpers';
+import { generateStrikeGrid, getTimeRemaining, nearestStrike, formatCountdown } from '@/lib/roundHelpers';
 import { genCandles, drawCandles, priceHistoryToCandles, drawProbabilityChart } from '@/lib/charts/canvasChart';
 import { fetchPriceHistory, fetchSviHistory } from '@/lib/sui/predictApi';
 
@@ -202,8 +202,6 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
   const formatPrice = (n: number) =>
     '$' + n.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
-  const pad = (n: number) => String(n).padStart(2, '0');
-
   return (
     <div className="min-h-screen relative">
       <Marquee />
@@ -247,7 +245,7 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
                 Expires in
               </span>
               <span className="font-mono text-2xl font-semibold text-white">
-                {timeLeft.expired ? 'Expired' : `${pad(timeLeft.hours)}:${pad(timeLeft.minutes)}:${pad(timeLeft.seconds)}`}
+                {formatCountdown(timeLeft)}
               </span>
             </div>
           )}
