@@ -20,9 +20,12 @@ export default function RegisterEnoki() {
     const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
     if (!apiKey || !googleClientId) return;
 
+    // Pin the redirect to the bare origin so it's identical on every page and
+    // matches the whitelisted Google redirect URI (Enoki otherwise defaults to
+    // the full current URL → trailing slash → redirect_uri_mismatch).
     const { unregister } = registerEnokiWallets({
       apiKey,
-      providers: { google: { clientId: googleClientId } },
+      providers: { google: { clientId: googleClientId, redirectUrl: window.location.origin } },
       client,
       network: 'testnet',
     });

@@ -12,7 +12,7 @@ const NAV_LINKS = [
   { name: 'Leaderboard', href: '/leaderboard' },
   { name: 'Strategies', href: '/market' },
   { name: 'Bitcoin News', href: '/news' },
-  { name: 'Docs', href: '#' },
+  { name: 'Docs', href: '/docs' },
 ];
 
 const MOBILE_NAV = [

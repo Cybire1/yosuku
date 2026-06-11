@@ -8,41 +8,78 @@ interface Article {
   sentiment: 'positive' | 'negative' | 'neutral';
 }
 
-const FALLBACK_ARTICLES: Article[] = [
-  { title: 'Bitcoin Holds Above $72K as Institutional Demand Grows', source: 'CoinDesk', url: 'https://coindesk.com', publishedAt: new Date().toISOString(), sentiment: 'positive' },
-  { title: 'Aleo Mainnet Sees Record ZK Proof Generation', source: 'The Block', url: 'https://theblock.co', publishedAt: new Date().toISOString(), sentiment: 'positive' },
-  { title: 'Prediction Markets Surge in Volume Amid Crypto Rally', source: 'Decrypt', url: 'https://decrypt.co', publishedAt: new Date().toISOString(), sentiment: 'positive' },
-  { title: 'Privacy Coins and ZK Protocols Lead Weekly Gains', source: 'CryptoSlate', url: 'https://cryptoslate.com', publishedAt: new Date().toISOString(), sentiment: 'positive' },
-  { title: 'BTC Options Open Interest Hits All-Time High', source: 'Cointelegraph', url: 'https://cointelegraph.com', publishedAt: new Date().toISOString(), sentiment: 'neutral' },
-  { title: 'DeFi TVL Crosses $200B as Stablecoin Adoption Accelerates', source: 'DeFi Llama', url: 'https://defillama.com', publishedAt: new Date().toISOString(), sentiment: 'positive' },
+const FEEDS: { url: string; source: string }[] = [
+  { url: 'https://cointelegraph.com/rss', source: 'Cointelegraph' },
+  { url: 'https://decrypt.co/feed', source: 'Decrypt' },
 ];
+
+const POS = /\b(surge|surges|surged|rally|rallies|gain|gains|soar|soars|record|high|highs|bull|bullish|jump|jumps|climb|climbs|rise|rises|adoption|approve|approved|inflows?)\b/i;
+const NEG = /\b(crash|crashes|plunge|plunges|drop|drops|fall|falls|hack|hacked|exploit|bear|bearish|loss|losses|sell-?off|liquidat|down|slump|outflows?|ban|lawsuit)\b/i;
+
+function sentiment(t: string): Article['sentiment'] {
+  if (NEG.test(t)) return 'negative';
+  if (POS.test(t)) return 'positive';
+  return 'neutral';
+}
+
+function strip(s: string): string {
+  return s
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&amp;/g, '&').replace(/&#39;|&apos;/g, "'").replace(/&quot;/g, '"')
+    .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ')
+    .trim();
+}
+
+function parseFeed(xml: string, source: string): Article[] {
+  const items = xml.split('<item>').slice(1);
+  const out: Article[] = [];
+  for (const block of items.slice(0, 12)) {
+    const title = strip(block.match(/<title>([\s\S]*?)<\/title>/)?.[1] ?? '');
+    const link = strip(block.match(/<link>([\s\S]*?)<\/link>/)?.[1] ?? '');
+    const pub = block.match(/<pubDate>([\s\S]*?)<\/pubDate>/)?.[1]?.trim() ?? '';
+    if (!title || !link) continue;
+    out.push({
+      title,
+      source,
+      url: link,
+      publishedAt: pub ? new Date(pub).toISOString() : new Date().toISOString(),
+      sentiment: sentiment(title),
+    });
+  }
+  return out;
+}
 
 export async function GET() {
   try {
-    // CoinGecko status updates (free, no key)
-    const res = await fetch(
-      'https://api.coingecko.com/api/v3/news',
-      { next: { revalidate: 120 } }
+    const results = await Promise.all(
+      FEEDS.map(async ({ url, source }) => {
+        try {
+          const res = await fetch(url, {
+            headers: { 'User-Agent': 'YosukuNewsBot/1.0' },
+            next: { revalidate: 300 },
+          });
+          if (!res.ok) return [];
+          return parseFeed(await res.text(), source);
+        } catch {
+          return [];
+        }
+      }),
     );
 
-    if (res.ok) {
-      const data = await res.json();
-      const items = (data.data || data || []).slice(0, 6);
-      if (items.length > 0) {
-        const articles: Article[] = items.map((item: any) => ({
-          title: item.title || item.description?.slice(0, 80) || 'Crypto News',
-          source: item.author || item.news_site || 'CoinGecko',
-          url: item.url || 'https://coingecko.com',
-          publishedAt: item.updated_at || item.created_at || new Date().toISOString(),
-          sentiment: 'neutral' as const,
-        }));
-        return NextResponse.json({ articles });
-      }
-    }
+    // newest first, dedupe by title
+    const seen = new Set<string>();
+    const articles = results
+      .flat()
+      .filter((a) => (seen.has(a.title) ? false : (seen.add(a.title), true)))
+      .sort((a, b) => +new Date(b.publishedAt) - +new Date(a.publishedAt))
+      .slice(0, 8);
 
-    // Fallback: static curated articles
-    return NextResponse.json({ articles: FALLBACK_ARTICLES });
+    if (articles.length === 0) {
+      return NextResponse.json({ articles: [], error: 'no live headlines' });
+    }
+    return NextResponse.json({ articles });
   } catch {
-    return NextResponse.json({ articles: FALLBACK_ARTICLES });
+    return NextResponse.json({ articles: [], error: 'news unavailable' });
   }
 }
