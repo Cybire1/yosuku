@@ -66,6 +66,7 @@ import {
   type ManagerPnLData,
 } from './predictApi';
 import { DUSDC_TYPE, PLP_TYPE, PREDICT_ID, FLOAT_SCALING, NEG_INF, POS_INF } from './constants';
+import { getCachedOracleState, cacheOracleState } from './oracleCache';
 
 /** Hook: connected wallet address */
 export function useWalletAddress(): string | null {
@@ -573,8 +574,11 @@ export function useVaultPerformance(predictId: string | null, pollInterval = 120
 
 /** Hook: combined oracle state (oracle + price + SVI) */
 export function useOracleState(oracleId: string | null, pollInterval = 15_000) {
-  const [state, setState] = useState<OracleStateData | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Paint instantly from whatever the markets list already cached, then refresh
+  // live in the background. Only show the full-page spinner on a cold open
+  // (direct link / hard reload) where there's nothing to seed from.
+  const [state, setState] = useState<OracleStateData | null>(() => getCachedOracleState(oracleId));
+  const [loading, setLoading] = useState(() => !getCachedOracleState(oracleId));
 
   const refresh = useCallback(async () => {
     if (!oracleId) {
@@ -584,7 +588,10 @@ export function useOracleState(oracleId: string | null, pollInterval = 15_000) {
     }
     try {
       const data = await fetchOracleState(oracleId);
-      setState(data);
+      if (data) {
+        setState(data);
+        cacheOracleState(data);
+      }
     } catch (err) {
       console.error('Failed to fetch oracle state:', err);
     } finally {

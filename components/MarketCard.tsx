@@ -7,6 +7,7 @@ import { FLOAT_SCALING } from '@/lib/sui/constants';
 import { getTimeRemaining, nearestStrike, formatCountdown } from '@/lib/roundHelpers';
 import { genCandles, drawCandles, priceHistoryToCandles } from '@/lib/charts/canvasChart';
 import { fetchPriceHistory } from '@/lib/sui/predictApi';
+import { seedOracle } from '@/lib/sui/oracleCache';
 import { Star } from 'lucide-react';
 
 interface MarketCardProps {
@@ -32,6 +33,21 @@ export default function MarketCard({ oracle, spotPrice, forwardPrice, isFavorite
     }, 1000);
     return () => clearInterval(interval);
   }, [oracle.expiry]);
+
+  // Keep the detail-page cache warm with what we already know about this oracle,
+  // so opening it paints instantly instead of waiting on a /state round-trip.
+  useEffect(() => {
+    seedOracle(oracle, spotPrice, forwardPrice);
+  }, [oracle, spotPrice, forwardPrice]);
+
+  // On hover/touch, warm the route's JS chunk so the click is instant too.
+  const warmed = useRef(false);
+  const warm = () => {
+    if (warmed.current) return;
+    warmed.current = true;
+    seedOracle(oracle, spotPrice, forwardPrice);
+    router.prefetch(`/markets/${oracle.oracle_id}`);
+  };
 
   const spot = spotPrice ? spotPrice / FLOAT_SCALING : null;
   const forward = forwardPrice ? forwardPrice / FLOAT_SCALING : null;
@@ -124,6 +140,8 @@ export default function MarketCard({ oracle, spotPrice, forwardPrice, isFavorite
     <article
       className={`market-card ${isUrgent ? 'urgent' : ''}`}
       onClick={() => router.push(`/markets/${oracle.oracle_id}`)}
+      onMouseEnter={warm}
+      onPointerDown={warm}
       data-cursor="hover"
     >
       {/* Head */}
