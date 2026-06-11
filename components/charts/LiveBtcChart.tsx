@@ -153,7 +153,7 @@ export default function LiveBtcChart({ targetPrice, height }: LiveBtcChartProps)
   const first = data[0].price;
   const last = data[data.length - 1].price;
   const isUp = last >= first;
-  const strokeColor = isUp ? '#34D399' : '#F43F5E';
+  const strokeColor = isUp ? '#34D399' : '#FB7185';
 
   return (
     <div className="relative h-full" style={height ? { height } : undefined}>
@@ -181,8 +181,8 @@ export default function LiveBtcChart({ targetPrice, height }: LiveBtcChartProps)
               <stop offset="100%" stopColor="#34D399" stopOpacity={0} />
             </linearGradient>
             <linearGradient id="btc-gradient-down" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#F43F5E" stopOpacity={0.12} />
-              <stop offset="100%" stopColor="#F43F5E" stopOpacity={0} />
+              <stop offset="0%" stopColor="#FB7185" stopOpacity={0.12} />
+              <stop offset="100%" stopColor="#FB7185" stopOpacity={0} />
             </linearGradient>
           </defs>
 

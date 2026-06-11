@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Newspaper, ExternalLink } from 'lucide-react';
 
 interface Article {
   title: string;
@@ -21,16 +20,30 @@ function timeAgo(dateStr: string): string {
   return `${Math.floor(hrs / 24)}d`;
 }
 
-const SENTIMENT: Record<string, { dot: string; bg: string }> = {
-  positive: { dot: 'bg-new-mint shadow-new-mint/40', bg: 'hover:bg-new-mint/[0.03]' },
-  negative: { dot: 'bg-off-red shadow-off-red/40', bg: 'hover:bg-off-red/[0.03]' },
-  neutral:  { dot: 'bg-gray-500', bg: 'hover:bg-white/[0.02]' },
+const SENTIMENT: Record<Article['sentiment'], { label: string; cls: string }> = {
+  positive: { label: 'bullish', cls: 'text-profit border-profit/25' },
+  negative: { label: 'bearish', cls: 'text-loss border-loss/25' },
+  neutral: { label: 'neutral', cls: 'text-gray-500 border-white/10' },
+};
+
+const tag = (s: Article['sentiment']) => {
+  const t = SENTIMENT[s] ?? SENTIMENT.neutral;
+  return (
+    <span className={`inline-flex px-2 py-0.5 rounded-full border font-mono text-[9px] uppercase tracking-[0.14em] ${t.cls}`}>
+      {t.label}
+    </span>
+  );
 };
 
 interface NewsFeedProps {
   className?: string;
 }
 
+/**
+ * Editorial front page, not a widget: one lead story at display size, then
+ * numbered ruled rows. Sentiment is a labeled tag; metadata is mono;
+ * whitespace and hairlines do the layout.
+ */
 export default function NewsFeed({ className = '' }: NewsFeedProps) {
   const [articles, setArticles] = useState<Article[]>([]);
   const [loading, setLoading] = useState(true);
@@ -53,74 +66,89 @@ export default function NewsFeed({ className = '' }: NewsFeedProps) {
     return () => clearInterval(id);
   }, []);
 
+  if (loading) {
+    return (
+      <div className={`mt-12 space-y-12 ${className}`}>
+        <div className="space-y-4">
+          <div className="h-3 w-28 bg-white/[0.05] rounded animate-pulse" />
+          <div className="h-12 w-4/5 bg-white/[0.06] rounded animate-pulse" />
+          <div className="h-12 w-3/5 bg-white/[0.06] rounded animate-pulse" />
+        </div>
+        <div className="space-y-7">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="h-5 bg-white/[0.04] rounded animate-pulse" style={{ width: `${85 - i * 9}%` }} />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (articles.length === 0) {
+    return (
+      <p className={`mt-16 font-mono text-xs text-gray-600 ${className}`}>
+        The wire is quiet. Headlines return shortly.
+      </p>
+    );
+  }
+
+  const [lead, ...rest] = articles;
+
   return (
-    <div className={`mt-5 sm:mt-8 bg-neutral-900/50 border border-white/[0.06] rounded-2xl overflow-hidden backdrop-blur-sm ${className}`}>
-      {/* Header */}
-      <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-white/[0.06]">
-        <Newspaper className="w-4 h-4 text-gray-400" />
-        <span className="text-xs font-bold uppercase tracking-widest text-gray-400">
-          BTC News
-        </span>
-        {!loading && (
-          <span className="ml-auto flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-new-mint animate-pulse shadow-sm shadow-new-mint/50" />
-            <span className="text-[10px] text-gray-500 font-medium">Live</span>
+    <div className={`mt-12 ${className}`}>
+      {/* Lead story */}
+      <a
+        href={lead.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        data-cursor="hover"
+        className="group block"
+      >
+        <div className="flex items-center gap-3 mb-4">
+          <span className="font-mono text-[10px] text-vermilion">01</span>
+          {tag(lead.sentiment)}
+          <span className="font-mono text-[10px] text-gray-600">
+            {timeAgo(lead.publishedAt)} · {lead.source}
           </span>
-        )}
+        </div>
+        <h2 className="font-display font-[800] text-3xl sm:text-5xl leading-[1.08] tracking-[-0.02em] text-white max-w-4xl group-hover:text-gray-200 transition-colors">
+          {lead.title}
+          <span className="inline-block ml-3 text-gray-600 text-2xl sm:text-3xl align-middle group-hover:text-vermilion group-hover:translate-x-1 transition-all">↗</span>
+        </h2>
+      </a>
+
+      {/* Rule — square endpoint, hairline */}
+      <div className="flex items-center mt-14 mb-2">
+        <div className="w-2.5 h-2.5 bg-vermilion" />
+        <div className="flex-1 h-px bg-white/[0.12]" />
       </div>
 
-      {/* Articles */}
-      <div>
-        {loading ? (
-          <div className="p-5 space-y-4">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="flex items-start gap-3">
-                <div className="w-2 h-2 rounded-full bg-white/[0.06] animate-pulse mt-1.5" />
-                <div className="flex-1 space-y-2">
-                  <div className="h-3.5 bg-white/[0.06] rounded-md animate-pulse" style={{ width: `${75 - i * 12}%` }} />
-                  <div className="h-2.5 bg-white/[0.04] rounded-md animate-pulse w-2/5" />
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : articles.length === 0 ? (
-          <div className="px-5 py-8 text-center text-xs text-gray-600">
-            No news available
-          </div>
-        ) : (
-          articles.map((article, i) => {
-            const s = SENTIMENT[article.sentiment] || SENTIMENT.neutral;
-            return (
-              <a
-                key={i}
-                href={article.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={`flex items-start gap-3 px-5 py-3.5 transition-colors group border-b border-white/[0.03] last:border-b-0 ${s.bg}`}
-              >
-                <span
-                  className={`w-2 h-2 rounded-full mt-[5px] flex-shrink-0 shadow-sm ${s.dot}`}
-                />
-                <div className="flex-1 min-w-0">
-                  <p className="text-[13px] text-gray-300 leading-relaxed line-clamp-2 group-hover:text-white transition-colors">
-                    {article.title}
-                  </p>
-                  <div className="flex items-center gap-2 mt-1.5">
-                    <span className="text-[10px] text-gray-600 font-mono font-medium">
-                      {timeAgo(article.publishedAt)}
-                    </span>
-                    <span className="w-0.5 h-0.5 rounded-full bg-gray-700" />
-                    <span className="text-[10px] text-gray-500 font-medium truncate">
-                      {article.source}
-                    </span>
-                    <ExternalLink className="w-2.5 h-2.5 text-gray-700 group-hover:text-gray-500 transition-colors ml-auto flex-shrink-0" />
-                  </div>
-                </div>
-              </a>
-            );
-          })
-        )}
-      </div>
+      {/* The wire */}
+      {rest.map((a, i) => (
+        <a
+          key={a.url}
+          href={a.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          data-cursor="hover"
+          className="group flex items-baseline gap-5 py-5 border-b border-white/[0.06] hover:bg-white/[0.02] hover:translate-x-0.5 transition-all"
+        >
+          <span className="font-mono text-[10px] text-gray-600 w-6 flex-shrink-0">
+            {String(i + 2).padStart(2, '0')}
+          </span>
+          <span className="flex-1 min-w-0">
+            <span className="block text-base sm:text-lg font-semibold text-gray-200 leading-snug group-hover:text-white transition-colors">
+              {a.title}
+            </span>
+            <span className="flex items-center gap-3 mt-1.5">
+              {tag(a.sentiment)}
+              <span className="font-mono text-[10px] text-gray-600">
+                {timeAgo(a.publishedAt)} · {a.source}
+              </span>
+            </span>
+          </span>
+          <span className="font-mono text-xs text-gray-700 group-hover:text-vermilion transition-colors flex-shrink-0">↗</span>
+        </a>
+      ))}
     </div>
   );
 }

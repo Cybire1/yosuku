@@ -87,12 +87,12 @@ export default function PriceChart({ oracleId, strikePrice, className = '' }: Pr
         <AreaChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
           <defs>
             <linearGradient id="spotGradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#34D399" stopOpacity={0.2} />
-              <stop offset="95%" stopColor="#34D399" stopOpacity={0} />
+              <stop offset="5%" stopColor="#FFFFFF" stopOpacity={0.14} />
+              <stop offset="95%" stopColor="#FFFFFF" stopOpacity={0} />
             </linearGradient>
             <linearGradient id="forwardGradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#60A5FA" stopOpacity={0.15} />
-              <stop offset="95%" stopColor="#60A5FA" stopOpacity={0} />
+              <stop offset="5%" stopColor="#A3A3A3" stopOpacity={0.08} />
+              <stop offset="95%" stopColor="#A3A3A3" stopOpacity={0} />
             </linearGradient>
           </defs>
           <XAxis
@@ -125,13 +125,13 @@ export default function PriceChart({ oracleId, strikePrice, className = '' }: Pr
           {strikeDollars && (
             <ReferenceLine
               y={strikeDollars}
-              stroke="#FB923C"
+              stroke="#E04D26"
               strokeDasharray="4 4"
-              strokeOpacity={0.5}
+              strokeOpacity={0.8}
               label={{
                 value: `Strike $${strikeDollars.toLocaleString()}`,
                 position: 'right',
-                fill: '#FB923C',
+                fill: '#E04D26',
                 fontSize: 10,
               }}
             />
@@ -139,7 +139,7 @@ export default function PriceChart({ oracleId, strikePrice, className = '' }: Pr
           <Area
             type="monotone"
             dataKey="spot"
-            stroke="#34D399"
+            stroke="#FFFFFF"
             strokeWidth={2}
             fill="url(#spotGradient)"
             dot={false}
@@ -148,7 +148,7 @@ export default function PriceChart({ oracleId, strikePrice, className = '' }: Pr
           <Area
             type="monotone"
             dataKey="forward"
-            stroke="#60A5FA"
+            stroke="#A3A3A3"
             strokeWidth={1.5}
             fill="url(#forwardGradient)"
             dot={false}
@@ -161,16 +161,16 @@ export default function PriceChart({ oracleId, strikePrice, className = '' }: Pr
       {/* Legend */}
       <div className="flex items-center justify-center gap-6 mt-2">
         <div className="flex items-center gap-1.5">
-          <div className="w-3 h-[2px] bg-emerald-400 rounded" />
+          <div className="w-3 h-[2px] bg-white rounded" />
           <span className="text-[10px] text-gray-500">Spot</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <div className="w-3 h-[2px] bg-blue-400 rounded" style={{ borderTop: '2px dashed' }} />
+          <div className="w-3 h-[2px] bg-gray-400 rounded" style={{ borderTop: '2px dashed' }} />
           <span className="text-[10px] text-gray-500">Forward</span>
         </div>
         {strikeDollars && (
           <div className="flex items-center gap-1.5">
-            <div className="w-3 h-[2px] bg-orange-400 rounded" style={{ borderTop: '2px dashed' }} />
+            <div className="w-3 h-[2px] bg-vermilion rounded" style={{ borderTop: '2px dashed' }} />
             <span className="text-[10px] text-gray-500">Strike</span>
           </div>
         )}

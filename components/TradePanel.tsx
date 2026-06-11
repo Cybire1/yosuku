@@ -27,6 +27,7 @@ import {
 import { generateStrikeGrid, formatStrike, nearestStrike, savePosition } from '@/lib/roundHelpers';
 import { computeSviPrice, computeRangePrice, computeFeeBreakdown, type FeeBreakdown } from '@/lib/sui/sviPricing';
 import { fetchOnChainQuote, type OnChainQuote } from '@/lib/sui/onchainQuote';
+import { useDailyStop } from '@/lib/dailyStop';
 import { humanizeTxError } from '@/lib/errorMessages';
 import Countdown from './Countdown';
 import AccountSetup from './AccountSetup';
@@ -79,6 +80,9 @@ export default function TradePanel({
   const [quoteRetry, setQuoteRetry] = useState(0);
   const [errorDetail, setErrorDetail] = useState('');
   const [isTwoStep, setIsTwoStep] = useState(false);
+  const { limit: dailyStopLimit, setLimit: setDailyStopLimit, todayLoss, stopHit } = useDailyStop();
+  const [editingStop, setEditingStop] = useState(false);
+  const [stopInput, setStopInput] = useState('');
 
   // Generate strike grid centered around current price
   const refPriceForGrid = forwardPrice ?? spotPrice ?? undefined;
@@ -643,7 +647,7 @@ export default function TradePanel({
         {/* Execute button */}
         <button
           onClick={() => setShowConfirmModal(true)}
-          disabled={!isValidAmount || !selectedStrike || step !== 'idle' || !hasEnoughBalance || !isRangeValid}
+          disabled={!isValidAmount || !selectedStrike || step !== 'idle' || !hasEnoughBalance || !isRangeValid || stopHit}
           className={`w-full py-4 rounded-xl text-sm font-bold uppercase tracking-wider transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
             side === 'UP'
               ? 'bg-emerald-500 hover:bg-emerald-400 text-black shadow-[0_0_20px_rgba(16,185,129,0.2)]'
@@ -672,6 +676,8 @@ export default function TradePanel({
               <Check className="w-4 h-4" />
               Trade confirmed!
             </span>
+          ) : stopHit ? (
+            'Daily stop hit — back tomorrow'
           ) : !isValidAmount ? (
             'Enter amount'
           ) : !hasEnoughBalance ? (
@@ -738,6 +744,48 @@ export default function TradePanel({
         {!managerLoading && !manager && address && (
           <AccountSetup onReady={() => { refreshManager(); }} />
         )}
+
+        {/* Daily loss stop — honest brakes on a 15-minute market */}
+        <div className="flex items-center justify-between text-[11px] px-1">
+          <span className="text-gray-600">
+            Daily stop{dailyStopLimit !== null && (
+              <span className={stopHit ? 'text-loss font-semibold' : 'text-gray-500'}>
+                {' '}· lost {todayLoss.toFixed(2)} / {dailyStopLimit.toFixed(0)} DUSDC
+              </span>
+            )}
+          </span>
+          {editingStop ? (
+            <span className="flex items-center gap-1.5">
+              <input
+                type="number"
+                value={stopInput}
+                onChange={(e) => setStopInput(e.target.value)}
+                placeholder="25"
+                min="1"
+                autoFocus
+                className="w-16 px-1.5 py-0.5 rounded bg-white/[0.05] border border-white/10 text-white font-mono text-[11px] outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              />
+              <button
+                onClick={() => { const v = parseFloat(stopInput); setDailyStopLimit(Number.isFinite(v) && v > 0 ? v : null); setEditingStop(false); }}
+                className="text-gray-400 hover:text-white"
+              >
+                set
+              </button>
+            </span>
+          ) : (
+            <span className="flex items-center gap-2">
+              {dailyStopLimit !== null && (
+                <button onClick={() => setDailyStopLimit(null)} className="text-gray-600 hover:text-gray-400">off</button>
+              )}
+              <button
+                onClick={() => { setStopInput(dailyStopLimit !== null ? String(dailyStopLimit) : ''); setEditingStop(true); }}
+                className="text-gray-500 hover:text-white underline underline-offset-2"
+              >
+                {dailyStopLimit === null ? 'set a limit' : 'edit'}
+              </button>
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Confirmation modal */}

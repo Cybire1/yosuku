@@ -9,7 +9,8 @@ import GrainOverlay from '@/components/GrainOverlay';
 import CustomCursor from '@/components/CustomCursor';
 import TheBell from '@/components/TheBell';
 import TradePanel from '@/components/TradePanel';
-import PriceChart from '@/components/PriceChart';
+import CashOut from '@/components/CashOut';
+import Verdict from '@/components/Verdict';
 import { fetchTrades, type OracleData, type TradeData } from '@/lib/sui/predictApi';
 import { useOracleState } from '@/lib/sui/hooks';
 import { FLOAT_SCALING, DUSDC_MULTIPLIER } from '@/lib/sui/constants';
@@ -18,10 +19,9 @@ import PriceAlertsButton from '@/components/PriceAlerts';
 import { useKeyboardShortcuts } from '@/lib/hooks/useKeyboardShortcuts';
 import { checkAlerts, sendNotification } from '@/lib/priceAlerts';
 import Tooltip from '@/components/Tooltip';
-import { computeSviPrice } from '@/lib/sui/sviPricing';
-import { generateStrikeGrid, getTimeRemaining, nearestStrike, formatCountdown } from '@/lib/roundHelpers';
-import { genCandles, drawCandles, priceHistoryToCandles, drawProbabilityChart } from '@/lib/charts/canvasChart';
-import { fetchPriceHistory, fetchSviHistory } from '@/lib/sui/predictApi';
+import { getTimeRemaining, nearestStrike, formatCountdown } from '@/lib/roundHelpers';
+import { genCandles, drawCandles, priceHistoryToCandles } from '@/lib/charts/canvasChart';
+import { fetchPriceHistory } from '@/lib/sui/predictApi';
 
 export default function MarketDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: oracleId } = use(params);
@@ -31,9 +31,13 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
 
   const [trades, setTrades] = useState<TradeData[]>([]);
   const [selectedStrike, setSelectedStrike] = useState<number | null>(null);
+  // Headline strike, pinned from the FIRST price sample. The oracle is a strike
+  // grid with no single "market" strike — re-deriving nearest-to-forward on every
+  // poll made the question itself drift with the price. Pin it; only an explicit
+  // user strike selection changes the question.
+  const [pinnedStrike, setPinnedStrike] = useState<number | null>(null);
   const [timeLeft, setTimeLeft] = useState({ hours: 0, minutes: 0, seconds: 0, expired: false, totalMs: 0 });
   const chartCanvasRef = useRef<HTMLCanvasElement>(null);
-  const probChartRef = useRef<HTMLCanvasElement>(null);
   const [copied, setCopied] = useState(false);
   const [activeSide, setActiveSide] = useState<'UP' | 'DOWN'>(defaultSide);
 
@@ -77,29 +81,36 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
   useEffect(() => {
     if (!chartCanvasRef.current || !oracle) return;
     let cancelled = false;
-    const midStrike = oracle.min_strike + oracle.tick_size * 25;
-    const strikeD = (selectedStrike || midStrike) / FLOAT_SCALING;
+    // Same strike the rest of the page shows — NOT the raw grid midpoint, which
+    // can sit far from spot and squash the candles against the chart edge.
+    const ref = prices?.forward || prices?.spot;
+    const fallbackMid = ref
+      ? nearestStrike(ref, oracle.min_strike, oracle.tick_size)
+      : oracle.min_strike + oracle.tick_size * 25;
+    const strikeD = (selectedStrike ?? pinnedStrike ?? fallbackMid) / FLOAT_SCALING;
 
     async function renderChart() {
       let candles;
       try {
-        const history = await fetchPriceHistory(oracleId, 100);
+        // ~8 samples per bucket — enough spread for real bodies and wicks.
+        // 100 points / 60 buckets starved every candle into a doji.
+        const history = await fetchPriceHistory(oracleId, 240);
         if (!cancelled && history.length > 5) {
           const scaled = history.map(h => ({ spot: h.spot / FLOAT_SCALING, timestamp: h.timestamp }));
-          candles = priceHistoryToCandles(scaled, 60);
+          candles = priceHistoryToCandles(scaled, Math.min(40, Math.max(16, Math.floor(history.length / 6))));
         }
       } catch { /* ignore */ }
 
       // Fallback
       if (!candles || candles.length === 0) {
         const spot = prices?.spot ? prices.spot / FLOAT_SCALING : strikeD;
-        candles = genCandles(oracleId.charCodeAt(2) || 5, 60, spot - spot * 0.01, spot, spot * 0.005);
+        candles = genCandles(oracleId.charCodeAt(2) || 5, 30, spot - spot * 0.01, spot, spot * 0.005);
       }
 
       if (!cancelled && chartCanvasRef.current) {
         drawCandles(chartCanvasRef.current, candles, {
           strike: strikeD,
-          maxCandleW: 6,
+          maxCandleW: 34,
           gridLines: true,
           marker: true,
           padX: 14,
@@ -110,7 +121,7 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
     }
     renderChart();
     return () => { cancelled = true; };
-  }, [prices, oracle, selectedStrike, oracleId]);
+  }, [prices, oracle, selectedStrike, pinnedStrike, oracleId]);
 
   // Check price alerts — kept above the early returns (Rules of Hooks)
   useEffect(() => {
@@ -126,33 +137,12 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
     });
   }, [prices, oracle]);
 
-  // Probability history chart from SVI data
+  // Pin the headline strike once, from the first price sample
   useEffect(() => {
-    if (!probChartRef.current || !oracle) return;
-    const refPriceForGrid = prices?.forward || prices?.spot;
-    const midStrike = refPriceForGrid
-      ? nearestStrike(refPriceForGrid, oracle.min_strike, oracle.tick_size)
-      : oracle.min_strike + oracle.tick_size * 25;
-    let cancelled = false;
-    async function loadProbHistory() {
-      try {
-        const sviHistory = await fetchSviHistory(oracleId);
-        if (cancelled || sviHistory.length < 2) return;
-        const fwd = prices?.forward || prices?.spot || midStrike;
-        const fwdScaled = fwd / FLOAT_SCALING;
-        const strikeScaled = midStrike / FLOAT_SCALING;
-        const probData = sviHistory.map(entry => {
-          const prob = computeSviPrice(entry.params, strikeScaled, fwdScaled);
-          return { timestamp: entry.timestamp, probability: Math.max(1, Math.min(99, prob * 100)) };
-        });
-        if (!cancelled && probChartRef.current) {
-          drawProbabilityChart(probChartRef.current, probData);
-        }
-      } catch { /* ignore */ }
-    }
-    loadProbHistory();
-    return () => { cancelled = true; };
-  }, [oracleId, oracle, prices]);
+    if (pinnedStrike !== null || !oracle) return;
+    const ref = prices?.forward || prices?.spot;
+    if (ref) setPinnedStrike(nearestStrike(ref, oracle.min_strike, oracle.tick_size));
+  }, [prices, oracle, pinnedStrike]);
 
   if (loading) {
     return (
@@ -190,13 +180,17 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
   const forward = prices?.forward ? prices.forward / FLOAT_SCALING : null;
   const isSettled = oracle.status === 'settled';
   const isActive = oracle.status === 'active';
+  // Dead zone: trading is over but the oracle's settlement print hasn't landed
+  // yet. Without an explicit state the page looks frozen exactly when the user
+  // is most anxious.
+  const inDeadZone = !isSettled && (oracle.status === 'pending_settlement' || (isActive && timeLeft.expired));
+  const isTradable = isActive && !timeLeft.expired;
 
   const refPriceForGrid = prices?.forward || prices?.spot;
-  const strikes = generateStrikeGrid(oracle.min_strike, oracle.tick_size, 50, refPriceForGrid);
-  const midStrike = refPriceForGrid
+  const midStrike = pinnedStrike ?? (refPriceForGrid
     ? nearestStrike(refPriceForGrid, oracle.min_strike, oracle.tick_size)
-    : oracle.min_strike + oracle.tick_size * 25;
-  const midStrikeDollars = midStrike / FLOAT_SCALING;
+    : oracle.min_strike + oracle.tick_size * 25);
+  const midStrikeDollars = (selectedStrike ?? midStrike) / FLOAT_SCALING;
   const asset = oracle.underlying_asset || 'BTC';
 
   const formatPrice = (n: number) =>
@@ -237,15 +231,52 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
             <h1 className="font-display font-[800] text-3xl sm:text-4xl text-white tracking-tight leading-tight">
               {asset} above <span className="text-vermilion">{formatPrice(midStrikeDollars)}</span>?
             </h1>
+            {/* Price to beat — the heartbeat of a 15-min market: distance to the bar + time left */}
+            {isTradable && spot !== null && (
+              <div className="flex items-center gap-2 mt-3 font-mono text-base">
+                <span className={spot >= midStrikeDollars ? 'text-profit font-semibold' : 'text-loss font-semibold'}>
+                  {spot >= midStrikeDollars
+                    ? `$${Math.round(spot - midStrikeDollars).toLocaleString()} above the bar`
+                    : `needs +$${Math.round(midStrikeDollars - spot).toLocaleString()}`}
+                </span>
+                <span className="text-gray-600">·</span>
+                <span className={timeLeft.totalMs < 120_000 ? 'text-vermilion' : 'text-gray-400'}>
+                  {formatCountdown(timeLeft)} left
+                </span>
+              </div>
+            )}
+            {/* Photo finish — dead zone between expiry and the settlement print */}
+            {inDeadZone && spot !== null && (
+              <div className="flex items-center gap-2 mt-3 font-mono text-base">
+                <span className="text-gray-400">photo finish —</span>
+                <span className={spot > midStrikeDollars ? 'text-profit font-semibold' : 'text-loss font-semibold'}>
+                  last spot {formatPrice(spot)} {spot > midStrikeDollars ? 'above' : 'at/below'} the bar
+                </span>
+              </div>
+            )}
           </div>
 
-          {isActive && (
+          {isTradable && (
             <div className="text-right">
               <span className="font-mono text-[9px] tracking-[0.16em] uppercase text-gray-600 block mb-1">
                 Expires in
               </span>
               <span className="font-mono text-2xl font-semibold text-white">
                 {formatCountdown(timeLeft)}
+              </span>
+            </div>
+          )}
+
+          {inDeadZone && (
+            <div className="text-right">
+              <span className="font-mono text-[9px] tracking-[0.16em] uppercase text-gray-600 block mb-1">
+                Settling
+              </span>
+              <span className="font-mono text-2xl font-semibold text-vermilion animate-pulse">
+                ● ● ●
+              </span>
+              <span className="font-mono text-[10px] text-gray-500 block mt-1">
+                waiting for the oracle&apos;s print — usually under 2 min
               </span>
             </div>
           )}
@@ -323,6 +354,9 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
           );
         })()}
 
+        {/* Personal verdict + next-round loop */}
+        {isSettled && <Verdict oracle={oracle} />}
+
         {/* Live prices */}
         {(spot || forward) && (
           <div className="flex items-center gap-8 mb-8">
@@ -334,8 +368,8 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
             )}
             {forward && (
               <div className="border-l border-white/[0.12] pl-3.5">
-                <span className="font-mono text-[9px] tracking-[0.16em] uppercase text-gray-600 flex items-center gap-1">Forward <Tooltip text="Time-weighted forward price used for settlement reference." position="bottom" /></span>
-                <span className="font-mono text-lg font-semibold text-vermilion">{formatPrice(forward)}</span>
+                <span className="font-mono text-[9px] tracking-[0.16em] uppercase text-gray-600 flex items-center gap-1">Forward <Tooltip text="Where the market expects the price to be at expiry — what your odds are priced against." position="bottom" /></span>
+                <span className="font-mono text-lg font-semibold text-gray-300">{formatPrice(forward)}</span>
               </div>
             )}
           </div>
@@ -379,18 +413,6 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
               <canvas ref={chartCanvasRef} className="absolute inset-x-0 top-10 bottom-0 w-full h-[calc(100%-40px)]" />
             </div>
 
-            {/* Recharts fallback */}
-            <div className="border border-white/[0.08] rounded bg-bg p-4">
-              <PriceChart oracleId={oracleId} strikePrice={selectedStrike || midStrike} />
-            </div>
-
-            {/* Probability History */}
-            <div className="border border-white/[0.08] rounded bg-bg p-4">
-              <h3 className="font-mono text-[9px] tracking-[0.16em] uppercase text-gray-600 mb-3">
-                Probability History
-              </h3>
-              <canvas ref={probChartRef} className="w-full" style={{ height: '180px' }} />
-            </div>
 
             {/* Recent Trades */}
             <div className="border border-white/[0.08] rounded bg-bg p-4">
@@ -418,49 +440,23 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
               )}
             </div>
 
-            {/* Strike grid */}
-            <div className="border border-white/[0.08] rounded bg-bg p-4">
-              <h3 className="font-mono text-[9px] tracking-[0.16em] uppercase text-gray-600 mb-3">
-                Strike Grid
-              </h3>
-              <div className="flex flex-wrap gap-1.5">
-                {strikes.map((strike) => {
-                  const dollars = strike / FLOAT_SCALING;
-                  const isSelected = strike === (selectedStrike || midStrike);
-                  const isNearSpot = spot && Math.abs(dollars - spot) < (oracle.tick_size / FLOAT_SCALING) * 1.5;
-                  // SVI fair price
-                  let sviFairPrice: number | null = null;
-                  if (sviData?.params && prices?.forward) {
-                    sviFairPrice = computeSviPrice(sviData.params, strike, prices.forward);
-                  }
-                  return (
-                    <button
-                      key={strike}
-                      onClick={() => setSelectedStrike(strike)}
-                      data-cursor="hover"
-                      className={`px-2.5 py-1 rounded text-[11px] font-mono transition-all border flex flex-col items-center ${
-                        isSelected
-                          ? 'bg-white/15 text-white border-white/20'
-                          : isNearSpot
-                            ? 'bg-vermilion/5 text-vermilion/70 border-vermilion/10 hover:bg-vermilion/10'
-                            : 'bg-white/[0.02] text-gray-500 border-white/5 hover:text-gray-300'
-                      }`}
-                    >
-                      <span>${dollars.toLocaleString()}</span>
-                      {sviFairPrice !== null && (
-                        <span className="text-[9px] font-mono text-vermilion/70">{(sviFairPrice * 100).toFixed(1)}%</span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
           </div>
 
           {/* Right: trade panel */}
-          {isActive && (
+          {inDeadZone && (
             <div className="w-full lg:w-[380px] flex-shrink-0">
-              <div className="lg:sticky lg:top-[120px]">
+              <div className="lg:sticky lg:top-[120px] rounded-2xl border border-white/[0.08] bg-neutral-900/60 p-6 text-center">
+                <p className="font-mono text-[10px] tracking-[0.16em] uppercase text-gray-500 mb-2">Trading closed</p>
+                <p className="text-sm text-gray-400 leading-relaxed">
+                  The bell has rung. The oracle posts the settlement print shortly — winners can claim from their portfolio right after.
+                </p>
+              </div>
+            </div>
+          )}
+          {isTradable && (
+            <div className="w-full lg:w-[380px] flex-shrink-0">
+              <div className="lg:sticky lg:top-[120px] space-y-4">
+                <CashOut oracleId={oracleId} expiry={oracle.expiry} isActive={isTradable} />
                 <TradePanel
                   key={activeSide}
                   oracle={oracle}

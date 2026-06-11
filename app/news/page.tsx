@@ -13,11 +13,11 @@ export default function BitcoinNewsPage() {
       <Header />
       <CustomCursor />
       <GrainOverlay />
-      <main className="container pt-[140px] pb-20">
-        <div className="max-w-2xl mx-auto">
+      <main className="container pt-[140px] pb-24">
+        <div className="max-w-5xl mx-auto">
           <div className="flex items-center gap-2 mb-3">
             <span
-              className="w-1.5 h-1.5 rounded-full bg-vermilion"
+              className="w-1.5 h-1.5 rounded-full bg-vermilion animate-pulse"
               style={{ boxShadow: '0 0 12px var(--vermilion)' }}
             />
             <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-gray-500">
@@ -27,8 +27,9 @@ export default function BitcoinNewsPage() {
           <h1 className="font-display text-4xl md:text-5xl font-extrabold tracking-tight mb-2">
             Bitcoin <span className="vermilion">News</span>
           </h1>
-          <p className="text-sm text-gray-400 mb-8">
-            Headlines moving the market — sentiment-tagged and refreshed live. Read the room before you ring the bell.
+          <div className="page-title-jp mb-2">市場を動かす見出し。</div>
+          <p className="text-sm text-gray-400 max-w-xl">
+            Sentiment-tagged and refreshed live. Read the room before you ring the bell.
           </p>
           <NewsFeed />
         </div>

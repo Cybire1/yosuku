@@ -37,6 +37,13 @@ export function savePosition(position: LocalPosition) {
   localStorage.setItem(POSITIONS_KEY, JSON.stringify(positions));
 }
 
+export function removePosition(oracleId: string, timestamp: number) {
+  const positions = loadPositions().filter(
+    p => !(p.oracleId === oracleId && p.timestamp === timestamp),
+  );
+  localStorage.setItem(POSITIONS_KEY, JSON.stringify(positions));
+}
+
 export function markClaimed(oracleId: string) {
   const claimed: string[] = JSON.parse(localStorage.getItem(CLAIMED_KEY) || '[]');
   if (!claimed.includes(oracleId)) {

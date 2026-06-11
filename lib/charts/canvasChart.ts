@@ -138,7 +138,9 @@ export function drawCandles(
   const range = (hi - lo) || 1;
   const yScale = (h - padTop - padBot) / range;
   const innerW = w - padX * 2;
-  const candleW = Math.max(2, Math.min(opts.maxCandleW || 8, innerW / candles.length * 0.65));
+  // Bodies fill ~3/4 of their slot so candles read as a contiguous tape,
+  // not confetti — terminal convention.
+  const candleW = Math.max(2, Math.min(opts.maxCandleW || 8, innerW / candles.length * 0.75));
   const stride = innerW / candles.length;
   const yFor = (price: number) => padTop + (hi - price) * yScale;
 
@@ -173,12 +175,14 @@ export function drawCandles(
   candles.forEach((c, i) => {
     const x = padX + i * stride + stride / 2;
     const isUp = c.close >= c.open;
-    const color = isUp ? 'rgba(224, 77, 38, 0.95)' : 'rgba(255, 255, 255, 0.42)';
-    const fillC = isUp ? 'rgba(224, 77, 38, 1)' : 'rgba(115, 115, 115, 0.7)';
+    // Direction pair (founder call): light green/red — trader convention.
+    // Vermilion stays reserved for the strike line.
+    const color = isUp ? 'rgba(52, 211, 153, 0.95)' : 'rgba(251, 113, 133, 0.95)';
+    const fillC = isUp ? 'rgba(52, 211, 153, 0.9)' : 'rgba(251, 113, 133, 0.85)';
 
     // Wick
     ctx.strokeStyle = color;
-    ctx.lineWidth = 1;
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.moveTo(x, yFor(c.high));
     ctx.lineTo(x, yFor(c.low));
