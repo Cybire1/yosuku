@@ -15,8 +15,8 @@ import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
 import { DUSDC_TYPE } from '@/lib/sui/constants';
 
-const DRIP = BigInt(1_000_000);     // 1 DUSDC
-const FUNDED_AT = BigInt(1_000_000); // skip if they already hold >= this
+const DRIP = BigInt(2_000_000);     // 2 DUSDC
+const FUNDED_AT = BigInt(2_000_000); // skip if they already hold >= this
 const DAY_MS = 24 * 60 * 60 * 1000;
 const FAUCET_ADDR = '0x7c89c67ca62eca789d2247d4168edc3dded1d93ec2706119e861f128ef212fab';
 const OFFICIAL_FAUCET = 'https://tally.so/r/Xx102L';
