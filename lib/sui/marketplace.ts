@@ -36,7 +36,7 @@ export interface Listing {
 }
 
 /** u256 (decimal string) -> base64url Walrus blob id. */
-function u256ToBlobId(dec: string): string {
+export function u256ToBlobId(dec: string): string {
   let hex = BigInt(dec).toString(16).padStart(64, '0');
   const bytes = new Uint8Array(32);
   for (let i = 0; i < 32; i++) bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
