@@ -6,7 +6,7 @@ import { useOracles } from '@/lib/sui/hooks';
 import { type PriceData } from '@/lib/sui/predictApi';
 import { groupOraclesByTimeframe, nearestStrike } from '@/lib/roundHelpers';
 import { useBtcPrice } from '@/lib/hooks/useBtcPrice';
-import { drawCandles, genCandles, priceHistoryToCandles, type Candle } from '@/lib/charts/canvasChart';
+import { drawPriceLine, genCandles } from '@/lib/charts/canvasChart';
 import { fetchPriceHistory } from '@/lib/sui/predictApi';
 import { FLOAT_SCALING } from '@/lib/sui/constants';
 import { Search, X, ChevronDown } from 'lucide-react';
@@ -40,9 +40,9 @@ export default function MarketsPage() {
   const { price: btcPrice } = useBtcPrice();
   const heroCanvasRef = useRef<HTMLCanvasElement>(null);
   const heroStrikeRef = useRef<number | null>(null);
-  // Cache hero candles per oracle so live price ticks redraw without re-fetching
-  // /prices — this effect runs on every btcPrice/prices change.
-  const heroCandlesRef = useRef<{ id: string; candles: Candle[] } | null>(null);
+  // Cache the hero price series per oracle so live ticks redraw without
+  // re-fetching /prices — this effect runs on every btcPrice/prices change.
+  const heroSeriesRef = useRef<{ id: string; series: number[] } | null>(null);
   const [filter, setFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'closing' | 'probability'>('closing');
@@ -96,73 +96,71 @@ export default function MarketsPage() {
       const btcOracle = active.find(o => o.underlying_asset === 'BTC');
       if (btcOracle) {
         try {
-          // Fetch history once per oracle; live ticks reuse the cached candles.
-          let candles = heroCandlesRef.current?.id === btcOracle.oracle_id
-            ? heroCandlesRef.current.candles
+          // Fetch history once per oracle; live ticks reuse the cached series.
+          let series = heroSeriesRef.current?.id === btcOracle.oracle_id
+            ? heroSeriesRef.current.series
             : null;
-          if (!candles) {
+          if (!series) {
             const history = await fetchPriceHistory(btcOracle.oracle_id, 100);
             if (!cancelled && history.length > 5) {
-              const scaled = history.map(h => ({ spot: h.spot / FLOAT_SCALING, timestamp: h.timestamp }));
-              candles = priceHistoryToCandles(scaled, 60);
-              heroCandlesRef.current = { id: btcOracle.oracle_id, candles };
+              series = history
+                .slice()
+                .sort((a, b) => a.timestamp - b.timestamp)
+                .map(h => h.spot / FLOAT_SCALING);
+              heroSeriesRef.current = { id: btcOracle.oracle_id, series };
             }
           }
-          if (candles) {
-            if (candles.length > 0) {
-              const first = candles[0].open;
-              const last = candles[candles.length - 1].close;
-              const delta = first > 0 ? ((last - first) / first * 100).toFixed(2) : '0.00';
-              if (!cancelled) setHeroChartDelta(`${Number(delta) >= 0 ? '+' : ''}${delta}%`);
+          if (series && series.length > 1) {
+            const first = series[0];
+            const last = series[series.length - 1];
+            const delta = first > 0 ? ((last - first) / first * 100).toFixed(2) : '0.00';
+            if (!cancelled) setHeroChartDelta(`${Number(delta) >= 0 ? '+' : ''}${delta}%`);
 
-              // Use nearest strike to forward price
-              const p0 = prices[btcOracle.oracle_id];
-              const refP = p0?.forward || p0?.spot;
-              if (refP && heroStrikeRef.current === null) {
-                heroStrikeRef.current = nearestStrike(refP, btcOracle.min_strike, btcOracle.tick_size);
-              }
-              const midStrike = heroStrikeRef.current ?? (btcOracle.min_strike + btcOracle.tick_size * 25);
-              const midDollars = midStrike / FLOAT_SCALING;
+            // Nearest strike to forward price = the dashed "Target" line.
+            const p0 = prices[btcOracle.oracle_id];
+            const refP = p0?.forward || p0?.spot;
+            if (refP && heroStrikeRef.current === null) {
+              heroStrikeRef.current = nearestStrike(refP, btcOracle.min_strike, btcOracle.tick_size);
+            }
+            const midStrike = heroStrikeRef.current ?? (btcOracle.min_strike + btcOracle.tick_size * 25);
+            const midDollars = midStrike / FLOAT_SCALING;
 
-              if (!cancelled) {
-                // Compute yes probability from forward
-                const p = prices[btcOracle.oracle_id];
-                if (p) {
-                  const fwd = p.forward / FLOAT_SCALING;
-                  const diff = (fwd - midDollars) / midDollars;
-                  const secsLeft = Math.max(60, (btcOracle.expiry - Date.now()) / 1000);
-                  const sigma = 0.001 * Math.sqrt(secsLeft / 60);
-                  const z = diff / (sigma || 0.01);
-                  setHeroYesProb(Math.round(Math.max(1, Math.min(99, 100 / (1 + Math.exp(-1.7 * z))))));
-                }
+            if (!cancelled) {
+              // Compute yes probability from forward
+              const p = prices[btcOracle.oracle_id];
+              if (p) {
+                const fwd = p.forward / FLOAT_SCALING;
+                const diff = (fwd - midDollars) / midDollars;
+                const secsLeft = Math.max(60, (btcOracle.expiry - Date.now()) / 1000);
+                const sigma = 0.001 * Math.sqrt(secsLeft / 60);
+                const z = diff / (sigma || 0.01);
+                setHeroYesProb(Math.round(Math.max(1, Math.min(99, 100 / (1 + Math.exp(-1.7 * z))))));
               }
+            }
 
-              if (!cancelled && heroCanvasRef.current) {
-                drawCandles(heroCanvasRef.current, candles, {
-                  strike: midDollars,
-                  maxCandleW: 6,
-                  gridLines: true,
-                  marker: true,
-                  padX: 14,
-                  padTop: 12,
-                  padBot: 12,
-                });
-                return;
-              }
+            if (!cancelled && heroCanvasRef.current) {
+              drawPriceLine(heroCanvasRef.current, series, {
+                target: midDollars,
+                targetLabel: 'Target',
+                gridLines: true,
+                padX: 14,
+                padTop: 12,
+                padBot: 12,
+              });
+              return;
             }
           }
         } catch { /* ignore, fall through to fallback */ }
       }
 
-      // Fallback — generate candles from live Pyth price
+      // Fallback — generate a series from live Pyth price
       if (!cancelled && heroCanvasRef.current) {
         const spot = btcPrice || 80000;
-        const candles = genCandles(42, 60, spot - spot * 0.008, spot, spot * 0.003);
-        drawCandles(heroCanvasRef.current, candles, {
-          strike: spot,
-          maxCandleW: 6,
+        const series = genCandles(42, 60, spot - spot * 0.008, spot, spot * 0.003).map(c => c.close);
+        drawPriceLine(heroCanvasRef.current, series, {
+          target: spot,
+          targetLabel: 'Target',
           gridLines: true,
-          marker: true,
           padX: 14,
           padTop: 12,
           padBot: 12,

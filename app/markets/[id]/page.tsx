@@ -20,7 +20,7 @@ import { useKeyboardShortcuts } from '@/lib/hooks/useKeyboardShortcuts';
 import { checkAlerts, sendNotification } from '@/lib/priceAlerts';
 import Tooltip from '@/components/Tooltip';
 import { getTimeRemaining, nearestStrike, formatCountdown } from '@/lib/roundHelpers';
-import { genCandles, drawCandles, priceHistoryToCandles } from '@/lib/charts/canvasChart';
+import { genCandles, drawPriceLine } from '@/lib/charts/canvasChart';
 import { fetchPriceHistory } from '@/lib/sui/predictApi';
 
 export default function MarketDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -38,6 +38,9 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
   const [pinnedStrike, setPinnedStrike] = useState<number | null>(null);
   const [timeLeft, setTimeLeft] = useState({ hours: 0, minutes: 0, seconds: 0, expired: false, totalMs: 0 });
   const chartCanvasRef = useRef<HTMLCanvasElement>(null);
+  // Price series cached per oracle so strike/price changes redraw the chart
+  // without re-fetching /prices every poll.
+  const chartSeriesRef = useRef<{ id: string; series: number[]; times: number[] } | null>(null);
   const [copied, setCopied] = useState(false);
   const [activeSide, setActiveSide] = useState<'UP' | 'DOWN'>(defaultSide);
 
@@ -89,33 +92,51 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
       : oracle.min_strike + oracle.tick_size * 25;
     const strikeD = (selectedStrike ?? pinnedStrike ?? fallbackMid) / FLOAT_SCALING;
 
-    async function renderChart() {
-      let candles;
-      try {
-        // ~8 samples per bucket — enough spread for real bodies and wicks.
-        // 100 points / 60 buckets starved every candle into a doji.
-        const history = await fetchPriceHistory(oracleId, 240);
-        if (!cancelled && history.length > 5) {
-          const scaled = history.map(h => ({ spot: h.spot / FLOAT_SCALING, timestamp: h.timestamp }));
-          candles = priceHistoryToCandles(scaled, Math.min(40, Math.max(16, Math.floor(history.length / 6))));
-        }
-      } catch { /* ignore */ }
+    const fmtTime = (ms: number) =>
+      new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-      // Fallback
-      if (!candles || candles.length === 0) {
+    async function renderChart() {
+      // Fetch the series once per oracle; redraw on strike/price changes reuse it.
+      let cached = chartSeriesRef.current?.id === oracleId ? chartSeriesRef.current : null;
+      if (!cached) {
+        try {
+          const history = await fetchPriceHistory(oracleId, 240);
+          if (!cancelled && history.length > 5) {
+            const sorted = history.slice().sort((a, b) => a.timestamp - b.timestamp);
+            cached = {
+              id: oracleId,
+              series: sorted.map(h => h.spot / FLOAT_SCALING),
+              times: sorted.map(h => h.timestamp),
+            };
+            chartSeriesRef.current = cached;
+          }
+        } catch { /* ignore */ }
+      }
+
+      // Fallback — generate a plausible series around spot.
+      if (!cached || cached.series.length < 2) {
         const spot = prices?.spot ? prices.spot / FLOAT_SCALING : strikeD;
-        candles = genCandles(oracleId.charCodeAt(2) || 5, 30, spot - spot * 0.01, spot, spot * 0.005);
+        cached = {
+          id: oracleId,
+          series: genCandles(oracleId.charCodeAt(2) || 5, 40, spot - spot * 0.01, spot, spot * 0.005).map(c => c.close),
+          times: [],
+        };
       }
 
       if (!cancelled && chartCanvasRef.current) {
-        drawCandles(chartCanvasRef.current, candles, {
-          strike: strikeD,
-          maxCandleW: 34,
+        const t = cached.times;
+        const xLabels = t.length > 2
+          ? [fmtTime(t[0]), fmtTime(t[Math.floor(t.length / 2)]), fmtTime(t[t.length - 1])]
+          : undefined;
+        drawPriceLine(chartCanvasRef.current, cached.series, {
+          target: strikeD,
+          targetLabel: 'Target',
           gridLines: true,
-          marker: true,
-          padX: 14,
-          padTop: 12,
-          padBot: 12,
+          axisRight: 58,
+          xLabels,
+          padX: 16,
+          padTop: 14,
+          padBot: 24,
         });
       }
     }
