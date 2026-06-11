@@ -12,10 +12,14 @@ const UPSTREAM = 'https://predict-server.testnet.mystenlabs.com';
 /** Edge cache window per path family, or null = never cache (always fresh). */
 function cachePolicy(path: string): { sMaxAge: number; swr: number } | null {
   if (path.startsWith('managers/')) return null;            // user-specific → always fresh
+  // Live "latest" reads feed trade pricing — keep them short.
+  if (path.endsWith('/prices/latest') || path.endsWith('/svi/latest')) return { sMaxAge: 8, swr: 30 };
+  // Price history powers sparklines/charts — slow-moving, cache hard.
+  if (path.includes('/prices')) return { sMaxAge: 30, swr: 300 };
   if (path.startsWith('predicts/')) return { sMaxAge: 15, swr: 120 }; // vault stats move slowly
-  if (path.startsWith('oracles/')) return { sMaxAge: 5, swr: 30 };    // state / prices / svi
-  if (path.startsWith('trades/')) return { sMaxAge: 5, swr: 30 };
-  if (path.startsWith('positions/')) return { sMaxAge: 5, swr: 30 };
+  if (path.startsWith('oracles/')) return { sMaxAge: 5, swr: 30 };    // state / svi
+  if (path.startsWith('trades/')) return { sMaxAge: 10, swr: 60 };
+  if (path.startsWith('positions/')) return { sMaxAge: 10, swr: 60 };
   return { sMaxAge: 5, swr: 30 };                            // default for other shared reads
 }
 

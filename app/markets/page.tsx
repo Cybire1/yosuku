@@ -6,7 +6,7 @@ import { useOracles } from '@/lib/sui/hooks';
 import { type PriceData } from '@/lib/sui/predictApi';
 import { groupOraclesByTimeframe, nearestStrike } from '@/lib/roundHelpers';
 import { useBtcPrice } from '@/lib/hooks/useBtcPrice';
-import { drawCandles, genCandles, priceHistoryToCandles } from '@/lib/charts/canvasChart';
+import { drawCandles, genCandles, priceHistoryToCandles, type Candle } from '@/lib/charts/canvasChart';
 import { fetchPriceHistory } from '@/lib/sui/predictApi';
 import { FLOAT_SCALING } from '@/lib/sui/constants';
 import { Search, X, ChevronDown } from 'lucide-react';
@@ -40,6 +40,9 @@ export default function MarketsPage() {
   const { price: btcPrice } = useBtcPrice();
   const heroCanvasRef = useRef<HTMLCanvasElement>(null);
   const heroStrikeRef = useRef<number | null>(null);
+  // Cache hero candles per oracle so live price ticks redraw without re-fetching
+  // /prices — this effect runs on every btcPrice/prices change.
+  const heroCandlesRef = useRef<{ id: string; candles: Candle[] } | null>(null);
   const [filter, setFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'closing' | 'probability'>('closing');
@@ -93,10 +96,19 @@ export default function MarketsPage() {
       const btcOracle = active.find(o => o.underlying_asset === 'BTC');
       if (btcOracle) {
         try {
-          const history = await fetchPriceHistory(btcOracle.oracle_id, 100);
-          if (!cancelled && history.length > 5) {
-            const scaled = history.map(h => ({ spot: h.spot / FLOAT_SCALING, timestamp: h.timestamp }));
-            const candles = priceHistoryToCandles(scaled, 60);
+          // Fetch history once per oracle; live ticks reuse the cached candles.
+          let candles = heroCandlesRef.current?.id === btcOracle.oracle_id
+            ? heroCandlesRef.current.candles
+            : null;
+          if (!candles) {
+            const history = await fetchPriceHistory(btcOracle.oracle_id, 100);
+            if (!cancelled && history.length > 5) {
+              const scaled = history.map(h => ({ spot: h.spot / FLOAT_SCALING, timestamp: h.timestamp }));
+              candles = priceHistoryToCandles(scaled, 60);
+              heroCandlesRef.current = { id: btcOracle.oracle_id, candles };
+            }
+          }
+          if (candles) {
             if (candles.length > 0) {
               const first = candles[0].open;
               const last = candles[candles.length - 1].close;
