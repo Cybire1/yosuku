@@ -9,8 +9,16 @@
   --color-bg: #050505;
   --color-vermilion: #E04D26;
   --color-vermilion-d: #B83A1B;
-  --color-profit: #FFFFFF;
-  --color-loss: #525252;
+  /* Direction pair (founder call 2026-06-11): light green/red — the trader
+     convention, soft enough for the black canvas. Used ONLY for direction:
+     candles, P&L, UP/DOWN. Vermilion stays the sole brand accent. */
+  --color-profit: #34D399;
+  --color-loss: #FB7185;
+  /* Aliases used throughout components (new-mint/off-green/off-red) —
+     previously undefined, so these utilities silently rendered unstyled. */
+  --color-new-mint: #34D399;
+  --color-off-green: #34D399;
+  --color-off-red: #FB7185;
   --color-gray-50: #FAFAFA;
   --color-gray-100: #F5F5F5;
   --color-gray-200: #E5E5E5;
@@ -51,8 +59,8 @@
 
   --vermilion:    #E04D26;
   --vermilion-d:  #B83A1B;
-  --profit: #FFFFFF;
-  --loss:   #525252;
+  --profit: #34D399;
+  --loss:   #FB7185;
 
   --font-display: 'Sora', system-ui, sans-serif;
   --font-body:    'Inter', system-ui, sans-serif;

@@ -51,7 +51,7 @@ export default function PnLChart({ rounds, positions, address }: PnLChartProps) 
   }
 
   const isPositive = data[data.length - 1].pnl >= 0;
-  const color = isPositive ? '#34D399' : '#F43F5E';
+  const color = isPositive ? '#34D399' : '#FB7185';
 
   return (
     <div className="bg-neutral-900/40 border border-white/5 rounded-xl p-3 pt-2">

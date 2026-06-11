@@ -29,12 +29,23 @@ function filterRelevant(all: OracleEntry[]): OracleEntry[] {
 }
 
 async function fetchOraclesFromUpstream(): Promise<OracleEntry[]> {
-  const res = await fetch(`${PREDICT_BASE}/oracles`);
-  if (!res.ok) throw new Error(`Upstream oracles: ${res.status}`);
-  const all: OracleEntry[] = await res.json();
-  const relevant = filterRelevant(all);
-  oracleCache = { data: relevant, ts: Date.now() };
-  return relevant;
+  // Cold-cache failures surface straight to the browser as 502s, so absorb
+  // transient upstream blips here: bounded timeout + two retries with backoff.
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const res = await fetch(`${PREDICT_BASE}/oracles`, { signal: AbortSignal.timeout(8000) });
+      if (!res.ok) throw new Error(`Upstream oracles: ${res.status}`);
+      const all: OracleEntry[] = await res.json();
+      const relevant = filterRelevant(all);
+      oracleCache = { data: relevant, ts: Date.now() };
+      return relevant;
+    } catch (err) {
+      lastErr = err;
+      if (attempt < 2) await new Promise((r) => setTimeout(r, 600 * (attempt + 1)));
+    }
+  }
+  throw lastErr;
 }
 
 /** Stale-while-revalidate: return stale data instantly, refresh in background */
@@ -60,7 +71,7 @@ async function getOracles(now: number): Promise<OracleEntry[]> {
 
 async function fetchPrice(oracleId: string): Promise<unknown | null> {
   try {
-    const res = await fetch(`${PREDICT_BASE}/oracles/${oracleId}/prices/latest`);
+    const res = await fetch(`${PREDICT_BASE}/oracles/${oracleId}/prices/latest`, { signal: AbortSignal.timeout(6000) });
     if (!res.ok) return null;
     return await res.json();
   } catch { return null; }

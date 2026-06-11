@@ -120,9 +120,6 @@ export default function MarketCard({ oracle, spotPrice, forwardPrice, isFavorite
   const asset = oracle.underlying_asset || 'BTC';
   const glyph = ASSET_GLYPH[asset] || asset[0];
 
-  // Strike position for spark overlay (percentage from top)
-  const strikeY = 50;
-
   return (
     <article
       className={`market-card ${isUrgent ? 'urgent' : ''}`}
@@ -174,15 +171,9 @@ export default function MarketCard({ oracle, spotPrice, forwardPrice, isFavorite
 
         {!isSettled && (
           <div className="mc-spark">
+            {/* the canvas draws its own (data-accurate) strike line — the old
+                HTML overlay sat at a hardcoded 50% and lied about the level */}
             <canvas ref={canvasRef} />
-            {hasRealStrike && (
-              <>
-                <div className="strike-line" style={{ top: `${strikeY}%` }} />
-                <span className="strike-tick" style={{ top: `${strikeY}%` }}>
-                  {midStrikeDollars.toLocaleString()}
-                </span>
-              </>
-            )}
           </div>
         )}
 
