@@ -31,7 +31,7 @@ export default function AddFunds({ open, onClose, onFunded }: { open: boolean; o
       const d = await r.json();
       if (!r.ok || d.error) throw new Error(d.error || 'Faucet error');
       setState('done');
-      setMsg(d.alreadyFunded ? 'You already have test USDC — ready to trade.' : `${d.amount} test USDC added.`);
+      setMsg(d.alreadyFunded ? 'You already have test USDC — ready to trade.' : `${d.amount} test USDC added — ready to trade.`);
       onFunded?.();
     } catch (e) {
       setState('error'); setMsg(String(e instanceof Error ? e.message : e));
@@ -51,7 +51,7 @@ export default function AddFunds({ open, onClose, onFunded }: { open: boolean; o
         </div>
         <h2 className="font-display text-2xl font-extrabold tracking-tight mb-1">Get test USDC</h2>
         <p className="text-gray-400 text-sm leading-relaxed mb-6">
-          Yosuku runs on testnet — these are play chips, not real money. Tap once and they land in your account.
+          Yosuku runs on testnet — these are play chips, not real money. Tap once and they land in your account. One claim per day.
         </p>
 
         {!address ? (
@@ -74,7 +74,7 @@ export default function AddFunds({ open, onClose, onFunded }: { open: boolean; o
               disabled={state === 'loading' || state === 'done'}
               className="w-full bg-white text-black font-semibold rounded-full py-3 hover:scale-[1.02] active:scale-[0.97] transition-transform disabled:opacity-60"
             >
-              {state === 'loading' ? 'Adding…' : state === 'done' ? 'Done ✓' : 'Get 0.5 test USDC'}
+              {state === 'loading' ? 'Adding…' : state === 'done' ? 'Done ✓' : 'Get 1 test USDC'}
             </button>
 
             {msg && (
