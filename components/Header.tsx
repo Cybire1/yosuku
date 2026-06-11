@@ -10,6 +10,7 @@ const NAV_LINKS = [
   { name: 'Pool', href: '/pool' },
   { name: 'Portfolio', href: '/portfolio' },
   { name: 'Leaderboard', href: '/leaderboard' },
+  { name: 'Strategies', href: '/market' },
   { name: 'Bitcoin News', href: '/news' },
   { name: 'Docs', href: '#' },
 ];
