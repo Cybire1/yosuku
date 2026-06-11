@@ -3,6 +3,7 @@
 import { useCurrentAccount, useDisconnectWallet, ConnectButton } from '@mysten/dapp-kit';
 import { usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
+import AddFunds from './AddFunds';
 
 const NAV_LINKS = [
   { name: 'Bell', href: '/bell' },
@@ -49,6 +50,7 @@ export default function Header() {
   const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
+  const [showFunds, setShowFunds] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -93,15 +95,9 @@ export default function Header() {
 
           <div className="header-right">
             {mounted && address && (
-              <a
-                className="btn btn-ghost"
-                href="https://tally.so/r/Xx102L"
-                target="_blank"
-                rel="noopener noreferrer"
-                data-cursor="hover"
-              >
-                Faucet ↗
-              </a>
+              <button className="btn btn-ghost" onClick={() => setShowFunds(true)} data-cursor="hover">
+                Add funds
+              </button>
             )}
 
             {mounted && (
@@ -155,6 +151,8 @@ export default function Header() {
           );
         })}
       </nav>
+
+      <AddFunds open={showFunds} onClose={() => setShowFunds(false)} />
     </>
   );
 }

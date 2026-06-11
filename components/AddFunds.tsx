@@ -1,0 +1,94 @@
+'use client';
+
+import { useState } from 'react';
+import { useCurrentAccount } from '@mysten/dapp-kit';
+
+const OFFICIAL_FAUCET = 'https://tally.so/r/Xx102L';
+const short = (a: string) => `${a.slice(0, 8)}…${a.slice(-6)}`;
+
+/**
+ * In-app "onramp" for testnet. A connected user taps once and gets test USDC
+ * dripped to their account — no leaving the site, no wallet juggling. Falls
+ * back to the official DeepBook faucet when the instant drip is empty.
+ */
+export default function AddFunds({ open, onClose, onFunded }: { open: boolean; onClose: () => void; onFunded?: () => void }) {
+  const account = useCurrentAccount();
+  const address = account?.address ?? null;
+  const [state, setState] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
+  const [msg, setMsg] = useState<string>('');
+  const [copied, setCopied] = useState(false);
+
+  if (!open) return null;
+
+  async function getFunds() {
+    if (!address) return;
+    setState('loading'); setMsg('');
+    try {
+      const r = await fetch('/api/faucet', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address }),
+      });
+      const d = await r.json();
+      if (!r.ok || d.error) throw new Error(d.error || 'Faucet error');
+      setState('done');
+      setMsg(d.alreadyFunded ? 'You already have test USDC — ready to trade.' : `${d.amount} test USDC added.`);
+      onFunded?.();
+    } catch (e) {
+      setState('error'); setMsg(String(e instanceof Error ? e.message : e));
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+      <div
+        className="relative w-full max-w-md border border-white/10 rounded-2xl bg-[#0d0d10] p-7 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-2 mb-1">
+          <span className="w-1.5 h-1.5 rounded-full bg-vermilion" style={{ boxShadow: '0 0 12px var(--vermilion)' }} />
+          <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-gray-500">Add funds · testnet</span>
+        </div>
+        <h2 className="font-display text-2xl font-extrabold tracking-tight mb-1">Get test USDC</h2>
+        <p className="text-gray-400 text-sm leading-relaxed mb-6">
+          Yosuku runs on testnet — these are play chips, not real money. Tap once and they land in your account.
+        </p>
+
+        {!address ? (
+          <div className="font-mono text-xs text-gray-500 text-center py-6">Connect a wallet first.</div>
+        ) : (
+          <>
+            {/* account row */}
+            <div className="flex items-center justify-between border border-white/[0.06] rounded-xl px-4 py-3 mb-4">
+              <span className="font-mono text-[11px] text-gray-500">Your account</span>
+              <button
+                className="font-mono text-xs text-gray-300 hover:text-white transition-colors"
+                onClick={() => { navigator.clipboard.writeText(address); setCopied(true); setTimeout(() => setCopied(false), 1500); }}
+              >
+                {copied ? 'copied ✓' : `${short(address)} ⧉`}
+              </button>
+            </div>
+
+            <button
+              onClick={getFunds}
+              disabled={state === 'loading' || state === 'done'}
+              className="w-full bg-white text-black font-semibold rounded-full py-3 hover:scale-[1.02] active:scale-[0.97] transition-transform disabled:opacity-60"
+            >
+              {state === 'loading' ? 'Adding…' : state === 'done' ? 'Done ✓' : 'Get 0.5 test USDC'}
+            </button>
+
+            {msg && (
+              <p className={`text-[12px] mt-3 text-center ${state === 'error' ? 'text-rose-400' : 'text-emerald-400'}`}>{msg}</p>
+            )}
+
+            <div className="mt-5 pt-4 border-t border-white/[0.06] text-center">
+              <a href={OFFICIAL_FAUCET} target="_blank" rel="noreferrer" className="font-mono text-[11px] text-gray-500 hover:text-vermilion transition-colors">
+                Need more? Get test USDC from the DeepBook faucet ↗
+              </a>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
