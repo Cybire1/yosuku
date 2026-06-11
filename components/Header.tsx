@@ -4,6 +4,7 @@ import { useCurrentAccount, useDisconnectWallet, ConnectButton } from '@mysten/d
 import { usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import AddFunds from './AddFunds';
+import { useDUSDCBalance } from '@/lib/sui/hooks';
 
 const NAV_LINKS = [
   { name: 'Bell', href: '/bell' },
@@ -51,6 +52,7 @@ export default function Header() {
   const [mounted, setMounted] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [showFunds, setShowFunds] = useState(false);
+  const { balance: dusdcRaw, refresh: refreshDusdc } = useDUSDCBalance();
 
   useEffect(() => {
     setMounted(true);
@@ -95,8 +97,15 @@ export default function Header() {
 
           <div className="header-right">
             {mounted && address && (
-              <button className="btn btn-ghost" onClick={() => setShowFunds(true)} data-cursor="hover">
-                Add funds
+              <button
+                onClick={() => setShowFunds(true)}
+                data-cursor="hover"
+                title="Add test USDC"
+                className="flex items-center gap-1.5 font-mono text-[12px] px-3 py-1.5 rounded-full border border-white/10 hover:border-white/25 hover:bg-white/[0.03] text-gray-300 hover:text-white transition-colors"
+              >
+                <span className="text-white font-semibold tabular-nums">{(dusdcRaw / 1e6).toFixed(2)}</span>
+                <span className="text-gray-500">DUSDC</span>
+                <span className="text-vermilion font-bold ml-0.5 text-[15px] leading-none">+</span>
               </button>
             )}
 

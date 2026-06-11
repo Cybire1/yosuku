@@ -74,7 +74,7 @@ export default function AddFunds({ open, onClose, onFunded }: { open: boolean; o
               disabled={state === 'loading' || state === 'done'}
               className="w-full bg-white text-black font-semibold rounded-full py-3 hover:scale-[1.02] active:scale-[0.97] transition-transform disabled:opacity-60"
             >
-              {state === 'loading' ? 'Adding…' : state === 'done' ? 'Done ✓' : 'Get 1 test USDC'}
+              {state === 'loading' ? 'Adding…' : state === 'done' ? 'Done ✓' : 'Get 2 test USDC'}
             </button>
 
             {msg && (
