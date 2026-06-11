@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import type { OracleData } from '@/lib/sui/predictApi';
 import { FLOAT_SCALING } from '@/lib/sui/constants';
 import { getTimeRemaining, nearestStrike, formatCountdown } from '@/lib/roundHelpers';
-import { genCandles, drawCandles, priceHistoryToCandles } from '@/lib/charts/canvasChart';
+import { genCandles, drawCandles, priceHistoryToCandles, type Candle } from '@/lib/charts/canvasChart';
 import { fetchPriceHistory } from '@/lib/sui/predictApi';
 import { seedOracle } from '@/lib/sui/oracleCache';
 import { Star } from 'lucide-react';
@@ -79,27 +79,40 @@ export default function MarketCard({ oracle, spotPrice, forwardPrice, isFavorite
   const isSettled = oracle.status === 'settled';
   const isUrgent = !isExpired && timeLeft.totalMs < 5 * 60 * 1000;
 
-  // Sparkline chart — defer fetch until spot price is available to avoid connection exhaustion
-  const chartDrawn = useRef(false);
+  // Sparkline chart. Price history barely changes over a card's lifetime, so we
+  // fetch it ONCE per oracle and cache the candles — redraws (on spot/strike
+  // ticks) reuse them instead of re-hitting /prices every 10s. That alone was
+  // generating thousands of edge requests per oracle.
+  const candlesRef = useRef<{ id: string; candles: Candle[] } | null>(null);
   useEffect(() => {
     if (!canvasRef.current || isSettled) return;
-    // Don't fetch price history until we have actual price data — use generated candles as placeholder
-    if (!spot && !chartDrawn.current) {
-      const strike = midStrikeDollars;
-      const seed = oracle.oracle_id.charCodeAt(4) || 7;
-      const range = strike * 0.012;
-      const start = strike - range * 0.4;
-      const candles = genCandles(seed, 28, start, strike, range * 0.5);
-      drawCandles(canvasRef.current, candles, {
-        strike, maxCandleW: 4, padX: 4, padTop: 6, padBot: 6, marker: true,
-      });
-      return;
-    }
     const strike = midStrikeDollars;
     let cancelled = false;
 
-    async function render() {
-      let candles;
+    const draw = (candles: Candle[]) => {
+      if (cancelled || !canvasRef.current) return;
+      drawCandles(canvasRef.current, candles, {
+        strike, maxCandleW: 4, padX: 4, padTop: 6, padBot: 6, marker: true,
+      });
+    };
+
+    // Already have real candles for this oracle → just redraw, no network.
+    if (candlesRef.current?.id === oracle.oracle_id) {
+      draw(candlesRef.current.candles);
+      return;
+    }
+
+    // No price yet → cheap placeholder, don't fetch.
+    if (!spot) {
+      const seed = oracle.oracle_id.charCodeAt(4) || 7;
+      const range = strike * 0.012;
+      draw(genCandles(seed, 28, strike - range * 0.4, strike, range * 0.5));
+      return;
+    }
+
+    // First time we have a price for this oracle → fetch history once, cache it.
+    (async () => {
+      let candles: Candle[] | undefined;
       try {
         const history = await fetchPriceHistory(oracle.oracle_id, 60);
         if (!cancelled && history.length > 5) {
@@ -108,23 +121,16 @@ export default function MarketCard({ oracle, spotPrice, forwardPrice, isFavorite
         }
       } catch { /* ignore */ }
 
-      // Fallback to generated candles
       if (!candles || candles.length === 0) {
         const seed = oracle.oracle_id.charCodeAt(4) || 7;
-        const spotVal = spot || strike;
         const range = strike * 0.012;
-        const start = strike - range * 0.4;
-        candles = genCandles(seed, 28, start, spotVal, range * 0.5);
+        candles = genCandles(seed, 28, strike - range * 0.4, spot || strike, range * 0.5);
       }
-
-      if (!cancelled && canvasRef.current) {
-        chartDrawn.current = true;
-        drawCandles(canvasRef.current, candles, {
-          strike, maxCandleW: 4, padX: 4, padTop: 6, padBot: 6, marker: true,
-        });
+      if (!cancelled) {
+        candlesRef.current = { id: oracle.oracle_id, candles };
+        draw(candles);
       }
-    }
-    render();
+    })();
     return () => { cancelled = true; };
   }, [spot, midStrikeDollars, isSettled, oracle.oracle_id]);
 
