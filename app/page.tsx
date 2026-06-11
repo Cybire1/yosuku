@@ -491,13 +491,16 @@ export default function HomePage() {
                 const rOuter = 140;
                 const rInner = major ? 130 : 134;
                 const a = (angle - 90) * Math.PI / 180;
+                // Round to 3dp: Math.cos/sin aren't bit-identical across Node (SSR)
+                // and the browser, so full-precision coords cause a hydration mismatch.
+                const r3 = (n: number) => Math.round(n * 1000) / 1000;
                 return (
                   <line
                     key={i}
-                    x1={150 + Math.cos(a) * rOuter}
-                    y1={150 + Math.sin(a) * rOuter}
-                    x2={150 + Math.cos(a) * rInner}
-                    y2={150 + Math.sin(a) * rInner}
+                    x1={r3(150 + Math.cos(a) * rOuter)}
+                    y1={r3(150 + Math.sin(a) * rOuter)}
+                    x2={r3(150 + Math.cos(a) * rInner)}
+                    y2={r3(150 + Math.sin(a) * rInner)}
                     className={`dial-tick ${major ? 'major' : ''}`}
                   />
                 );
