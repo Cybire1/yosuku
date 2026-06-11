@@ -7,12 +7,14 @@ import {
   useCurrentAccount,
   useSignAndExecuteTransaction,
   useSignPersonalMessage,
+  useSuiClient,
 } from '@mysten/dapp-kit';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import Marquee from '@/components/Marquee';
 import GrainOverlay from '@/components/GrainOverlay';
 import { getListing, hasAccess, buildPurchaseTx, type Listing } from '@/lib/sui/marketplace';
+import { decryptPlaybook } from '@/lib/sui/marketplaceDecrypt';
 
 const short = (a: string) => `${a.slice(0, 8)}…${a.slice(-6)}`;
 type Step = 'idle' | 'buying' | 'bought' | 'unlocking' | 'unlocked' | 'error';
@@ -23,6 +25,7 @@ export default function ListingDetail() {
   const address = account?.address ?? null;
   const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
   const { mutateAsync: signPersonalMessage } = useSignPersonalMessage();
+  const suiClient = useSuiClient();
 
   const [listing, setListing] = useState<Listing | null>(null);
   const [owns, setOwns] = useState(false);
@@ -56,28 +59,14 @@ export default function ListingDetail() {
     if (!listing || !address) return;
     setStep('unlocking'); setError(null);
     try {
-      // 1. server mints a session-key challenge bound to this buyer + package
-      const ch = await fetch('/api/market/unlock', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phase: 'challenge', listingId: id, address }),
-      }).then((r) => r.json());
-      if (ch.error) throw new Error(ch.error);
-
-      // 2. buyer signs the session-key personal message with their wallet
-      const { signature } = await signPersonalMessage({
-        message: Uint8Array.from(atob(ch.personalMessage), (c) => c.charCodeAt(0)),
+      // Native client-side Seal decrypt: your wallet authorizes a session key,
+      // the key servers enforce the on-chain seal_approve gate, the playbook
+      // decrypts in your browser. No server holds the strategy.
+      const out = await decryptPlaybook({
+        listing, address, suiClient,
+        signPersonalMessage: (message) => signPersonalMessage({ message }),
       });
-
-      // 3. server completes the session key, runs seal_approve + decrypts
-      const out = await fetch('/api/market/unlock', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phase: 'decrypt', session: ch.session, signature }),
-      }).then((r) => r.json());
-      if (out.error) throw new Error(out.error);
-
-      setLessons(out.lessons);
+      setLessons(out);
       setStep('unlocked');
     } catch (e) {
       setError(String(e instanceof Error ? e.message : e)); setStep('error');
