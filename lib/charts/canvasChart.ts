@@ -8,6 +8,8 @@ export interface Candle {
   high: number;
   low: number;
   close: number;
+  /** No price pushed in this bucket — value carried forward from the previous candle. */
+  flat?: boolean;
 }
 
 export interface DrawOptions {
@@ -42,7 +44,7 @@ export function priceHistoryToCandles(
       // carry forward from previous candle
       if (candles.length > 0) {
         const prev = candles[candles.length - 1];
-        candles.push({ open: prev.close, high: prev.close, low: prev.close, close: prev.close });
+        candles.push({ open: prev.close, high: prev.close, low: prev.close, close: prev.close, flat: true });
       }
       continue;
     }
@@ -174,6 +176,15 @@ export function drawCandles(
   // Candle bodies and wicks
   candles.forEach((c, i) => {
     const x = padX + i * stride + stride / 2;
+
+    // Quiet bucket (no push, or a single sample): a neutral doji dash — the
+    // price held here, it didn't go green and it didn't vanish.
+    if (c.flat || c.high === c.low) {
+      ctx.fillStyle = 'rgba(163, 163, 163, 0.55)';
+      ctx.fillRect(x - candleW / 2, yFor(c.close) - 1, candleW, 2);
+      return;
+    }
+
     const isUp = c.close >= c.open;
     // Direction pair (founder call): light green/red — trader convention.
     // Vermilion stays reserved for the strike line.
@@ -212,6 +223,164 @@ export function drawCandles(
     ctx.beginPath();
     ctx.arc(x, y, 5, 0, Math.PI * 2);
     ctx.stroke();
+  }
+}
+
+// ─── helpers for the price-line renderer ───
+function hexA(hex: string, a: number): string {
+  const m = hex.replace('#', '');
+  const r = parseInt(m.slice(0, 2), 16);
+  const g = parseInt(m.slice(2, 4), 16);
+  const b = parseInt(m.slice(4, 6), 16);
+  return `rgba(${r},${g},${b},${a})`;
+}
+function roundRectPath(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+// ─── Draw a smooth price line + area against a dashed target line ───
+// The right metaphor for an "up or down vs a target" market: one line, the
+// price-to-beat as a dashed Target, a soft gradient fill, and a glowing
+// current-price dot. (Polymarket-style.)
+export function drawPriceLine(
+  canvas: HTMLCanvasElement | null,
+  series: number[],
+  opts: {
+    target?: number | null;
+    color?: string;
+    padX?: number;
+    padTop?: number;
+    padBot?: number;
+    axisRight?: number;     // px reserved on the right for price labels (0 = none)
+    targetLabel?: string;   // pill text on the target line
+    gridLines?: boolean;
+    xLabels?: string[];     // evenly spaced labels along the bottom
+  } = {},
+): void {
+  if (!canvas || series.length < 2) return;
+  const { ctx, w, h } = setupCanvas(canvas);
+  ctx.clearRect(0, 0, w, h);
+
+  const color = opts.color ?? '#F5A623';
+  const padX = opts.padX ?? 12;
+  const padTop = opts.padTop ?? 14;
+  const padBot = opts.padBot ?? (opts.xLabels ? 22 : 12);
+  const axisR = opts.axisRight ?? 0;
+
+  // Value range with headroom; include the target so its dashed line is on-canvas.
+  let lo = Math.min(...series);
+  let hi = Math.max(...series);
+  if (opts.target != null) { lo = Math.min(lo, opts.target); hi = Math.max(hi, opts.target); }
+  const headroom = (hi - lo) * 0.12 || Math.max(1, hi * 0.0005);
+  lo -= headroom; hi += headroom;
+  const range = (hi - lo) || 1;
+
+  const rightEdge = w - axisR;
+  const xFor = (i: number) => padX + (i / (series.length - 1)) * (rightEdge - padX * 2);
+  const yFor = (v: number) => padTop + (hi - v) * (h - padTop - padBot) / range;
+  const pts = series.map((v, i) => ({ x: xFor(i), y: yFor(v) }));
+
+  // Faint gridlines + right-edge price labels
+  if (opts.gridLines) {
+    ctx.font = '10px JetBrains Mono, monospace';
+    const rows = 4;
+    for (let i = 0; i <= rows; i++) {
+      const y = padTop + (i / rows) * (h - padTop - padBot);
+      ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(padX, y); ctx.lineTo(rightEdge, y); ctx.stroke();
+      if (axisR > 0) {
+        ctx.fillStyle = 'rgba(255,255,255,0.3)';
+        ctx.textAlign = 'left';
+        const v = hi - (i / rows) * range;
+        ctx.fillText('$' + Math.round(v).toLocaleString(), rightEdge + 6, y + 3);
+      }
+    }
+  }
+
+  // smoothed path (quadratic midpoints) — shared by fill + stroke
+  const tracePath = () => {
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length - 1; i++) {
+      const xc = (pts[i].x + pts[i + 1].x) / 2;
+      const yc = (pts[i].y + pts[i + 1].y) / 2;
+      ctx.quadraticCurveTo(pts[i].x, pts[i].y, xc, yc);
+    }
+    ctx.lineTo(pts[pts.length - 1].x, pts[pts.length - 1].y);
+  };
+
+  // Area fill
+  const grd = ctx.createLinearGradient(0, padTop, 0, h - padBot);
+  grd.addColorStop(0, hexA(color, 0.22));
+  grd.addColorStop(1, hexA(color, 0));
+  ctx.fillStyle = grd;
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, h - padBot);
+  ctx.lineTo(pts[0].x, pts[0].y);
+  for (let i = 1; i < pts.length - 1; i++) {
+    const xc = (pts[i].x + pts[i + 1].x) / 2;
+    const yc = (pts[i].y + pts[i + 1].y) / 2;
+    ctx.quadraticCurveTo(pts[i].x, pts[i].y, xc, yc);
+  }
+  ctx.lineTo(pts[pts.length - 1].x, pts[pts.length - 1].y);
+  ctx.lineTo(pts[pts.length - 1].x, h - padBot);
+  ctx.closePath();
+  ctx.fill();
+
+  // Target (strike) dashed line + pill
+  if (opts.target != null) {
+    const y = yFor(opts.target);
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,255,255,0.32)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(padX, y); ctx.lineTo(rightEdge, y); ctx.stroke();
+    ctx.restore();
+
+    const label = opts.targetLabel ?? 'Target';
+    ctx.font = '10px JetBrains Mono, monospace';
+    const tw = ctx.measureText(label).width;
+    const pw = tw + 14, ph = 16;
+    const px = rightEdge - pw - 2, py = y - ph / 2;
+    ctx.fillStyle = 'rgba(38,38,44,0.95)';
+    roundRectPath(ctx, px, py, pw, ph, 8); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.textAlign = 'left';
+    ctx.fillText(label, px + 7, y + 3.5);
+  }
+
+  // Line
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  tracePath();
+  ctx.stroke();
+
+  // Current-price dot + glow
+  const last = pts[pts.length - 1];
+  ctx.fillStyle = hexA(color, 0.18);
+  ctx.beginPath(); ctx.arc(last.x, last.y, 9, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = color;
+  ctx.beginPath(); ctx.arc(last.x, last.y, 3.5, 0, Math.PI * 2); ctx.fill();
+
+  // X-axis labels
+  if (opts.xLabels && opts.xLabels.length > 1) {
+    ctx.fillStyle = 'rgba(255,255,255,0.28)';
+    ctx.font = '9px JetBrains Mono, monospace';
+    ctx.textAlign = 'center';
+    const n = opts.xLabels.length;
+    opts.xLabels.forEach((lbl, k) => {
+      const x = padX + (k / (n - 1)) * (rightEdge - padX * 2);
+      ctx.fillText(lbl, Math.min(Math.max(x, 18), rightEdge - 18), h - 5);
+    });
   }
 }
 
