@@ -12,6 +12,7 @@ import {
   type ReputationData,
 } from '@/lib/predictionContract';
 import { markClaimed } from '@/lib/roundHelpers';
+import { humanizeTxError } from '@/lib/errorMessages';
 
 interface ClaimWinningsProps {
   round: RoundState;
@@ -78,9 +79,8 @@ export default function ClaimWinnings({
       await refreshBalance();
       onClaimed?.();
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to redeem position';
       console.error('Redeem error:', err);
-      setError(msg.length > 80 ? msg.slice(0, 80) + '...' : msg);
+      setError(humanizeTxError(err).title);
     } finally {
       setLoading(false);
     }
@@ -116,7 +116,7 @@ export default function ClaimWinnings({
             <p className="text-off-red font-bold text-sm uppercase tracking-widest">Position Lost</p>
             <p className="text-gray-400 text-xs">Redeem to clear your position.</p>
             {error && (
-              <p className="text-off-red text-xs font-bold animate-pulse">{error}</p>
+              <p className="text-off-red text-xs font-medium break-words">{error}</p>
             )}
             <button
               onClick={handleRedeem}
@@ -166,7 +166,7 @@ export default function ClaimWinnings({
         </div>
 
         {error && (
-          <p className="text-off-red text-xs font-bold text-center mb-3 animate-pulse">
+          <p className="text-off-red text-xs font-medium text-center mb-3 break-words">
             {error}
           </p>
         )}

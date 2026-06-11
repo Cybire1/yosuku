@@ -4,14 +4,14 @@
 // browser side (reads + the purchase transaction); decryption runs server-side
 // (it needs @mysten/seal) via /api/market/unlock.
 import { Transaction } from '@mysten/sui/transactions';
-import { SuiClient, getFullnodeUrl } from '@mysten/sui/client';
+import { SuiJsonRpcClient, getJsonRpcFullnodeUrl } from '@mysten/sui/jsonRpc';
 import { DUSDC_TYPE, CLOCK_ID } from './constants';
 
 export const MARKET_PKG = '0x8b2f0931f0bf1b55385bb2d2322c14fc61ba7d9e8f43ff20f7bd37794fc8ca9e';
 export const MARKET_ID = '0x5bde72a992105011e851abd8f96026c27fc97440ac4db0a1f1356252b58be7dc';
 export const WALRUS_AGGREGATOR = 'https://aggregator.walrus-testnet.walrus.space';
 
-const client = new SuiClient({ url: getFullnodeUrl('testnet') });
+const client = new SuiJsonRpcClient({ url: getJsonRpcFullnodeUrl('testnet'), network: 'testnet' });
 
 export interface ProvenanceManifest {
   strategist: string;
