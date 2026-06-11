@@ -2,15 +2,15 @@
 // (Buffer + SDK stay server-side). Read-only: no funds, no signing. Path is /api/yosuku/*
 // to avoid the next.config rewrite that shadows /api/predict/*.
 import { NextResponse } from 'next/server';
-import { SuiClient, getFullnodeUrl } from '@mysten/sui/client';
+import { SuiJsonRpcClient, getJsonRpcFullnodeUrl } from '@mysten/sui/jsonRpc';
 import { getTradeAmountsOnChain, TESTNET } from '@yosuku/deepbook-predict';
 import { DUSDC_MULTIPLIER } from '@/lib/sui/constants';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const RPC = getFullnodeUrl('testnet');
-const client = new SuiClient({ url: RPC });
+const RPC = getJsonRpcFullnodeUrl('testnet');
+const client = new SuiJsonRpcClient({ url: RPC, network: 'testnet' });
 
 export async function GET(req: Request) {
   const u = new URL(req.url).searchParams;

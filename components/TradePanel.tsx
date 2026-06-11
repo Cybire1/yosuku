@@ -27,7 +27,9 @@ import {
 import { generateStrikeGrid, formatStrike, nearestStrike, savePosition } from '@/lib/roundHelpers';
 import { computeSviPrice, computeRangePrice, computeFeeBreakdown, type FeeBreakdown } from '@/lib/sui/sviPricing';
 import { fetchOnChainQuote, type OnChainQuote } from '@/lib/sui/onchainQuote';
+import { humanizeTxError } from '@/lib/errorMessages';
 import Countdown from './Countdown';
+import AccountSetup from './AccountSetup';
 import TradeConfirmationModal from './TradeConfirmationModal';
 import Tooltip from './Tooltip';
 import { useToast } from './Toast';
@@ -73,6 +75,10 @@ export default function TradePanel({
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [onChainQuote, setOnChainQuote] = useState<OnChainQuote | null>(null);
   const [quoteLoading, setQuoteLoading] = useState(false);
+  const [quoteError, setQuoteError] = useState(false);
+  const [quoteRetry, setQuoteRetry] = useState(0);
+  const [errorDetail, setErrorDetail] = useState('');
+  const [isTwoStep, setIsTwoStep] = useState(false);
 
   // Generate strike grid centered around current price
   const refPriceForGrid = forwardPrice ?? spotPrice ?? undefined;
@@ -140,9 +146,15 @@ export default function TradePanel({
           isUp: side === 'UP',
           quantity: amountMicro,
         });
-        if (!cancelled) setOnChainQuote(q);
+        if (!cancelled) {
+          setOnChainQuote(q);
+          setQuoteError(false);
+        }
       } catch {
-        if (!cancelled) setOnChainQuote(null);
+        if (!cancelled) {
+          setOnChainQuote(null);
+          setQuoteError(true);
+        }
       } finally {
         if (!cancelled) setQuoteLoading(false);
       }
@@ -151,13 +163,14 @@ export default function TradePanel({
       cancelled = true;
       clearTimeout(t);
     };
-  }, [oracle.oracle_id, oracle.expiry, selectedStrike, side, amountMicro, isValidAmount]);
+  }, [oracle.oracle_id, oracle.expiry, selectedStrike, side, amountMicro, isValidAmount, quoteRetry]);
 
   const handleTrade = useCallback(async () => {
     if (!address || !selectedStrike || !isValidAmount || !isRangeValid) return;
 
     setErrorMsg('');
     setTxDigest('');
+    setIsTwoStep(!manager?.manager_id);
 
     try {
       let managerId = manager?.manager_id;
@@ -266,9 +279,10 @@ export default function TradePanel({
     } catch (err: unknown) {
       console.error('Trade error:', err);
       setStep('error');
-      const msg = err instanceof Error ? err.message : 'Transaction failed';
-      setErrorMsg(msg);
-      toast(`Transaction failed: ${msg.slice(0, 100)}`, 'error');
+      const friendly = humanizeTxError(err);
+      setErrorMsg(friendly.title);
+      setErrorDetail(friendly.detail);
+      toast(friendly.title, 'error');
     }
   }, [
     address, selectedStrike, rangeUpperStrike, isValidAmount, isRangeValid, manager, managerBalance,
@@ -582,7 +596,14 @@ export default function TradePanel({
                   <Tooltip text="Read live from the contract via get_trade_amounts (devInspect) — the exact DUSDC this trade costs right now, not an estimate." position="bottom" />
                 </span>
                 <span className="text-white font-mono font-bold">
-                  {quoteLoading ? '…' : onChainQuote ? `${onChainQuote.mintCost.toFixed(4)} DUSDC` : '—'}
+                  {quoteLoading ? '…' : onChainQuote ? `${onChainQuote.mintCost.toFixed(4)} DUSDC` : quoteError ? (
+                    <button
+                      onClick={() => setQuoteRetry((k) => k + 1)}
+                      className="text-rose-400/90 font-sans font-medium text-[11px] underline underline-offset-2 hover:text-rose-300"
+                    >
+                      quote unavailable — retry
+                    </button>
+                  ) : '—'}
                 </span>
               </div>
               <div className="flex justify-between text-xs">
@@ -634,7 +655,7 @@ export default function TradePanel({
           {step === 'creating-manager' ? (
             <span className="flex items-center justify-center gap-2">
               <Loader2 className="w-4 h-4 animate-spin" />
-              Creating account...
+              Setting up your account (1 of 2)...
             </span>
           ) : step === 'depositing' ? (
             <span className="flex items-center justify-center gap-2">
@@ -644,7 +665,7 @@ export default function TradePanel({
           ) : step === 'minting' ? (
             <span className="flex items-center justify-center gap-2">
               <Loader2 className="w-4 h-4 animate-spin" />
-              Confirming trade...
+              {isTwoStep ? 'Placing your trade (2 of 2)...' : 'Confirming trade...'}
             </span>
           ) : step === 'success' ? (
             <span className="flex items-center justify-center gap-2">
@@ -674,11 +695,16 @@ export default function TradePanel({
               className="flex items-start gap-2 p-3 rounded-xl bg-rose-500/10 border border-rose-500/20"
             >
               <AlertCircle className="w-4 h-4 text-rose-400 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-xs text-rose-400 font-bold">Transaction failed</p>
-                <p className="text-[11px] text-rose-400/60 mt-0.5 break-all">{errorMsg.slice(0, 200)}</p>
+              <div className="min-w-0">
+                <p className="text-xs text-rose-400 font-bold">{errorMsg || 'Transaction failed'}</p>
+                {errorDetail && errorDetail !== errorMsg && (
+                  <details className="mt-1">
+                    <summary className="text-[10px] text-rose-400/50 cursor-pointer select-none">technical details</summary>
+                    <p className="text-[11px] text-rose-400/60 mt-1 break-all max-h-24 overflow-y-auto">{errorDetail}</p>
+                  </details>
+                )}
                 <button
-                  onClick={() => { setStep('idle'); setErrorMsg(''); }}
+                  onClick={() => { setStep('idle'); setErrorMsg(''); setErrorDetail(''); }}
                   className="text-[10px] text-rose-400 underline mt-1"
                 >
                   Try again
@@ -708,11 +734,9 @@ export default function TradePanel({
           )}
         </AnimatePresence>
 
-        {/* Manager info */}
+        {/* One-time account setup (sponsored when a gas station is configured) */}
         {!managerLoading && !manager && address && (
-          <p className="text-[10px] text-gray-600 text-center">
-            First trade will create your PredictManager account
-          </p>
+          <AccountSetup onReady={() => { refreshManager(); }} />
         )}
       </div>
 
