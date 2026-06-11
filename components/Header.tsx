@@ -93,7 +93,13 @@ export default function Header() {
 
           <div className="header-right">
             {mounted && address && (
-              <a className="btn btn-ghost" href="#" data-cursor="hover">
+              <a
+                className="btn btn-ghost"
+                href="https://tally.so/r/Xx102L"
+                target="_blank"
+                rel="noopener noreferrer"
+                data-cursor="hover"
+              >
                 Faucet ↗
               </a>
             )}
