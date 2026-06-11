@@ -3477,7 +3477,9 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
 @media (max-width: 720px) {
   .nav-links { display: none; }
   .header { padding: 0 18px; }
-  .header-right { display: none; }
+  /* Keep the wallet entry point reachable on mobile — header is logo + connect.
+     Secondary actions (faucet link) yield the space. */
+  .header-right .btn-ghost { display: none; }
   .mobile-menu-toggle { display: none; }
   .mobile-bottom-nav { display: flex; }
   .container { padding-inline: 18px; }
