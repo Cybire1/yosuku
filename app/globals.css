@@ -3729,3 +3729,11 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
 .hero-bet-btn.up:hover { border-color: var(--profit); background: rgba(52,211,153,0.08); }
 .hero-bet-btn.down { color: var(--loss); }
 .hero-bet-btn.down:hover { border-color: var(--loss); background: rgba(251,113,133,0.08); }
+
+/* cache-bust 1781263542 */
+@media (max-width: 480px) {
+  /* keep the bet buttons roomy on small phones — the label yields */
+  .hero-chart-foot > span:first-child { display: none; }
+  .hero-bet { width: 100%; }
+  .hero-bet-btn { flex: 1; justify-content: center; }
+}

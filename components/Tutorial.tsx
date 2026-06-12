@@ -67,13 +67,25 @@ export default function Tutorial() {
     try { localStorage.setItem(STORAGE_KEY, '1'); } catch { /* ignore */ }
   };
 
+  // Never trap the user: Escape closes, and so does clicking the backdrop.
+  useEffect(() => {
+    if (!visible) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') dismiss(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible]);
+
   if (!visible) return null;
 
   const isLast = step === steps.length - 1;
   const current = steps[step];
 
   return (
-    <div className="fixed inset-0 z-[9500] flex items-end justify-center p-4 sm:items-center bg-black/70 backdrop-blur-sm">
+    <div
+      className="fixed inset-0 z-[9500] flex items-end justify-center p-4 sm:items-center bg-black/70 backdrop-blur-sm"
+      onClick={(e) => { if (e.target === e.currentTarget) dismiss(); }}
+    >
       <AnimatePresence mode="wait">
         <motion.div
           key={step}

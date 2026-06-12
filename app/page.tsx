@@ -82,10 +82,11 @@ const HOW_STEPS: HowStep[] = [
 ];
 
 const FEATURES: FeatureItem[] = [
-  { act: '01', idx: 'I', title: 'Strike. Window. ', em: 'Settle.', desc: 'Every market has a strike price, a fifteen-minute window, and an oracle. When the bell rings, the chain decides. No ambiguity, no appeals.', keys: ['15-min rounds', 'Pyth oracle', 'Auto-settle'], jp: '\u89E3\u50CF' },
-  { act: '02', idx: 'II', title: 'Two sides. ', em: 'One press.', desc: 'Pick above or below. Your position is committed instantly to Sui. No order books, no slippage, no counterparty risk.', keys: ['Binary positions', 'Instant commit', 'No slippage'], jp: '\u53D6\u5F15' },
-  { act: '03', idx: 'III', title: 'The block ', em: 'decides.', desc: 'Settlement is deterministic. The oracle reports, the contract executes, payouts flow. Every step verifiable on-chain.', keys: ['Deterministic', 'Verifiable', 'Trustless'], jp: '\u6C7A\u6E08' },
-  { act: '04', idx: 'IV', title: 'Accuracy ', em: 'compounds.', desc: 'The leaderboard is your track record. Consistent edge surfaces. Reputation is earned in fifteen-minute increments.', keys: ['Leaderboard', 'Track record', 'Reputation'], jp: '\u540D\u58F0' },
+  { act: '01', idx: 'I', title: 'Two sides. ', em: 'One press.', desc: 'Pick above or below. The bell rings in fifteen minutes, the oracle reports, the chain decides. No order books, no appeals.', keys: ['One-tap UP/DOWN', '15-min rounds', 'Oracle-settled'], jp: '\u53D6\u5F15' },
+  { act: '02', idx: 'II', title: 'Leave when ', em: 'you like.', desc: 'Exit at the live bid before the bell \u2014 no lock-ins. Every quote is computed on-chain, and you can re-derive it in your browser to the cent.', keys: ['Cash out anytime', 'On-chain quotes', 'Checkable pricing'], jp: '\u81EA\u7531' },
+  { act: '03', idx: 'III', title: 'A side, or ', em: 'a range.', desc: 'Call any strike, or bracket a band between two. The whole volatility surface is tradable \u2014 not one question, every question.', keys: ['Any strike', 'Range positions', 'Live vol surface'], jp: '\u7BC4\u56F2' },
+  { act: '04', idx: 'IV', title: 'Be the ', em: 'house.', desc: 'Supply the pool that quotes every market and earn the spread on every round. The house is not a company \u2014 it is a vault you can join.', keys: ['PLP pool', 'Earn the spread', 'On-chain vault'], jp: '\u80F4\u5143' },
+  { act: '05', idx: 'V', title: 'A keeper with ', em: 'rules.', desc: 'Our agent trades through a vault whose limits live in Move. The chain checks its math on every action \u2014 caps, allowlists, a daily stop. Verifiable, not configurable.', keys: ['Attested agent', 'On-chain caps', 'Audit trail'], jp: '\u756A\u4EBA' },
 ];
 
 const FAQ_DATA: FaqItem[] = [
@@ -389,7 +390,7 @@ export default function HomePage() {
       const scrolled = -rect.top;
       const progress = clamp(scrolled / (sectionH - window.innerHeight), 0, 1);
       setFeatureProgress(progress);
-      const idx = Math.min(3, Math.floor(progress * 4));
+      const idx = Math.min(FEATURES.length - 1, Math.floor(progress * FEATURES.length));
       setActiveFeature(idx);
     }
     window.addEventListener('scroll', onScroll, { passive: true });

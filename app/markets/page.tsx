@@ -133,9 +133,17 @@ export default function MarketsPage() {
     let cancelled = false;
 
     async function renderHeroChart() {
-      // Find a BTC oracle to get real price history
-      const btcOracle = active.find(o => o.underlying_asset === 'BTC');
+      // Soonest BTC round that is still TRADABLE — skip expired-but-unsettled
+      // rounds so the hero rotates at the bell instead of going stale.
+      const btcOracle = active
+        .filter(o => o.underlying_asset === 'BTC' && o.expiry > Date.now())
+        .sort((a, b) => a.expiry - b.expiry)[0];
       if (btcOracle) {
+        // New round → forget the previous round's pinned strike and series.
+        if (heroSeriesRef.current && heroSeriesRef.current.id !== btcOracle.oracle_id) {
+          heroSeriesRef.current = null;
+          heroStrikeRef.current = null;
+        }
         try {
           // Fetch history once per oracle; live ticks reuse the cached series.
           let series = heroSeriesRef.current?.id === btcOracle.oracle_id
@@ -165,7 +173,16 @@ export default function MarketsPage() {
             }
             const midStrike = heroStrikeRef.current ?? (btcOracle.min_strike + btcOracle.tick_size * 25);
             const midDollars = midStrike / FLOAT_SCALING;
-            if (!cancelled) setHeroOracle({ id: btcOracle.oracle_id, expiry: btcOracle.expiry, strikeDollars: midDollars });
+            if (!cancelled) {
+              // Functional update with identity bail-out — returning a fresh
+              // object unconditionally here loops the render cycle to death
+              // (effect deps get new identities every render).
+              setHeroOracle(prev =>
+                prev && prev.id === btcOracle.oracle_id && prev.expiry === btcOracle.expiry && prev.strikeDollars === midDollars
+                  ? prev
+                  : { id: btcOracle.oracle_id, expiry: btcOracle.expiry, strikeDollars: midDollars },
+              );
+            }
 
             if (!cancelled) {
               // Compute yes probability from forward
@@ -269,16 +286,17 @@ export default function MarketsPage() {
     for (const list of m.values()) list.sort((a, b) => a.expiry - b.expiry);
     return m;
   }, [filteredActive]);
-  const nextBell = useMemo(
-    () => Array.from(byAsset.values()).map(l => l[0]).filter(Boolean).sort((a, b) => a.expiry - b.expiry),
-    [byAsset],
-  );
-  const laterBells = useMemo(
-    () => Array.from(byAsset.entries())
-      .map(([asset, list]) => [asset, list.slice(1)] as const)
-      .filter(([, list]) => list.length > 0),
-    [byAsset],
-  );
+  // Computed per render (the 1s clock tick re-renders) so the live card
+  // rotates to the next round the moment one expires — never stuck on
+  // "Expired" while the oracle waits for its settlement print.
+  const nowMs = Date.now();
+  const nextBell = Array.from(byAsset.values())
+    .map(list => list.find(o => o.expiry > nowMs))
+    .filter((o): o is NonNullable<typeof o> => Boolean(o))
+    .sort((a, b) => a.expiry - b.expiry);
+  const laterBells = Array.from(byAsset.entries())
+    .map(([asset, list]) => [asset, list.filter(o => o.expiry > nowMs).slice(1)] as const)
+    .filter(([, list]) => list.length > 0);
 
   // Close sort dropdown on outside click
   useEffect(() => {
@@ -343,25 +361,6 @@ export default function MarketsPage() {
                 open.
               </h1>
 
-              <div className="hero-status">
-                <div className="item">
-                  <div className="lbl">Open markets</div>
-                  <div className="val">{active.length}</div>
-                  <div className="meta">{nextBell.length} live now</div>
-                </div>
-                <div className="item">
-                  <div className="lbl">BTC Spot</div>
-                  <div className="val">{btcPrice ? `$${btcPrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '—'}</div>
-                  <div className="meta">Pyth · live</div>
-                </div>
-                {address && (
-                  <div className="item">
-                    <div className="lbl">Wallet</div>
-                    <div className="val">{address.slice(0, 6)}…{address.slice(-4)}</div>
-                    <div className="meta">Connected</div>
-                  </div>
-                )}
-              </div>
             </div>
 
             {/* Hero chart */}
