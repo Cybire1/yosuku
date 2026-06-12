@@ -221,7 +221,7 @@ export default function MarketCard({ oracle, spotPrice, forwardPrice, isFavorite
           </div>
         )}
 
-        {!isSettled && (
+        {!isSettled && !isExpired && (
           <div className="mc-strip">
             <span>LIVE · PYTH ORACLE</span>
             <span className="ramp">
@@ -229,6 +229,11 @@ export default function MarketCard({ oracle, spotPrice, forwardPrice, isFavorite
               <span className="bar"><span className="fill" style={{ width: `${yesProb}%` }} /></span>
               <span className="pct">{yesProb}¢</span>
             </span>
+          </div>
+        )}
+        {!isSettled && isExpired && (
+          <div className="mc-strip">
+            <span>SETTLING · AWAITING THE ORACLE&apos;S PRINT</span>
           </div>
         )}
 
@@ -240,8 +245,8 @@ export default function MarketCard({ oracle, spotPrice, forwardPrice, isFavorite
         )}
       </div>
 
-      {/* Foot */}
-      {!isSettled && (
+      {/* Foot — bet buttons only while the round is actually tradable */}
+      {!isSettled && !isExpired && (
         <div className="mc-foot">
           <button
             className="mc-side up"
