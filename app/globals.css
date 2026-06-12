@@ -875,14 +875,14 @@ body.urgent::before {
   display: inline-flex; align-items: center; gap: 8px;
   padding: 4px 10px;
   border-radius: 999px;
-  border: 1px solid var(--vermilion);
-  background: rgba(224,77,38,0.08);
+  border: 1px solid var(--loss);
+  background: rgba(251,113,133,0.08);
   font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.14em;
-  color: var(--vermilion);
+  color: var(--loss);
   font-family: var(--font-body);
 }
 .live-pill .dot {
-  width: 5px; height: 5px; border-radius: 50%; background: var(--vermilion);
+  width: 5px; height: 5px; border-radius: 50%; background: var(--loss);
   animation: pulseDot 1.4s var(--ease) infinite;
 }
 @keyframes pulseDot { 0%,100%{opacity:0.3} 50%{opacity:1} }
@@ -988,7 +988,7 @@ body.urgent::before {
 /* card sparkline / candlestick */
 .mc-spark {
   position: relative;
-  height: 60px;
+  height: 110px;
   border-radius: 3px;
   overflow: hidden;
   background:
@@ -3649,3 +3649,83 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
+
+/* ───────── Later bells (collapsed rounds as time chips) ───────── */
+.later-bells { display: flex; flex-direction: column; }
+.later-bells-row {
+  display: flex; align-items: center; gap: 20px;
+  padding: 16px 0; border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.later-bells-asset {
+  font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.12em;
+  color: var(--gray-400); width: 52px; flex-shrink: 0;
+}
+.later-bells-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.bell-chip {
+  font-family: var(--font-mono); font-size: 12px; color: var(--gray-300);
+  border: 1px solid rgba(255,255,255,0.10); border-radius: 999px;
+  padding: 6px 14px; background: rgba(255,255,255,0.02);
+  transition: all 200ms var(--ease);
+}
+.bell-chip:hover { color: #fff; border-color: rgba(255,255,255,0.28); background: rgba(255,255,255,0.05); }
+.bell-chip.more { color: var(--gray-600); border-style: dashed; pointer-events: none; }
+
+
+/* ───────── Market card · hero-chart language ───────── */
+.mc-pricebar {
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin: 10px 0 8px;
+}
+.mc-pricebar .px { display: flex; align-items: baseline; gap: 8px; }
+.mc-pricebar .big {
+  font-family: var(--font-mono); font-size: 18px; font-weight: 600;
+  color: var(--white); letter-spacing: -0.02em;
+}
+.mc-pricebar .chg { font-family: var(--font-mono); font-size: 11px; }
+.mc-pricebar .chg.up { color: var(--profit); }
+.mc-pricebar .chg.down { color: var(--loss); }
+.mc-pricebar .strike-meta {
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.12em;
+  color: var(--gray-500);
+}
+.mc-strip {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-top: 10px; padding-top: 10px;
+  border-top: 1px solid rgba(255,255,255,0.05);
+  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.08em;
+  color: var(--gray-600);
+}
+.mc-strip .ramp { display: flex; align-items: center; gap: 8px; }
+.mc-strip .ramp .bar {
+  width: 72px; height: 3px; background: rgba(255,255,255,0.08);
+  border-radius: 999px; position: relative; overflow: hidden;
+}
+.mc-strip .ramp .fill {
+  position: absolute; inset: 0 auto 0 0;
+  background: linear-gradient(90deg, var(--vermilion), var(--white));
+  transition: width 600ms var(--ease);
+}
+.mc-strip .ramp .pct { color: var(--vermilion); font-size: 11px; }
+
+/* Mobile: drop the editorial coordinates/edition ornament + breadcrumb on markets */
+@media (max-width: 720px) {
+  .markets-hero .hero-meta,
+  .markets-hero .breadcrumb { display: none; }
+}
+
+/* Hero chart = tradable live market: bet buttons in the foot strip */
+.hero-bet { display: flex; gap: 8px; }
+.hero-bet-btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 7px 16px; border-radius: 999px;
+  font-family: var(--font-mono); font-size: 11px; font-weight: 700;
+  letter-spacing: 0.1em;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.02);
+  transition: all 200ms var(--ease);
+}
+.hero-bet-btn .c { font-weight: 500; }
+.hero-bet-btn.up { color: var(--profit); }
+.hero-bet-btn.up:hover { border-color: var(--profit); background: rgba(52,211,153,0.08); }
+.hero-bet-btn.down { color: var(--loss); }
+.hero-bet-btn.down:hover { border-color: var(--loss); background: rgba(251,113,133,0.08); }

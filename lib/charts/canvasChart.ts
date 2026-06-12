@@ -254,6 +254,9 @@ export function drawPriceLine(
   opts: {
     target?: number | null;
     color?: string;
+    /** Verdict mode: line paints green above the target, red below — the
+     *  chart answers "who's winning right now" at a glance. */
+    verdict?: boolean;
     padX?: number;
     padTop?: number;
     padBot?: number;
@@ -315,29 +318,58 @@ export function drawPriceLine(
     ctx.lineTo(pts[pts.length - 1].x, pts[pts.length - 1].y);
   };
 
-  // Area fill
-  const grd = ctx.createLinearGradient(0, padTop, 0, h - padBot);
-  grd.addColorStop(0, hexA(color, 0.22));
-  grd.addColorStop(1, hexA(color, 0));
-  ctx.fillStyle = grd;
-  ctx.beginPath();
-  ctx.moveTo(pts[0].x, h - padBot);
-  ctx.lineTo(pts[0].x, pts[0].y);
-  for (let i = 1; i < pts.length - 1; i++) {
-    const xc = (pts[i].x + pts[i + 1].x) / 2;
-    const yc = (pts[i].y + pts[i + 1].y) / 2;
-    ctx.quadraticCurveTo(pts[i].x, pts[i].y, xc, yc);
-  }
-  ctx.lineTo(pts[pts.length - 1].x, pts[pts.length - 1].y);
-  ctx.lineTo(pts[pts.length - 1].x, h - padBot);
-  ctx.closePath();
-  ctx.fill();
+  // Area path (line down to the baseline), shared by all painters
+  const traceArea = () => {
+    ctx.moveTo(pts[0].x, h - padBot);
+    ctx.lineTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length - 1; i++) {
+      const xc = (pts[i].x + pts[i + 1].x) / 2;
+      const yc = (pts[i].y + pts[i + 1].y) / 2;
+      ctx.quadraticCurveTo(pts[i].x, pts[i].y, xc, yc);
+    }
+    ctx.lineTo(pts[pts.length - 1].x, pts[pts.length - 1].y);
+    ctx.lineTo(pts[pts.length - 1].x, h - padBot);
+    ctx.closePath();
+  };
 
-  // Target (strike) dashed line + pill
+  // Paint fill + line in one color
+  const paint = (col: string) => {
+    const grd = ctx.createLinearGradient(0, padTop, 0, h - padBot);
+    grd.addColorStop(0, hexA(col, 0.2));
+    grd.addColorStop(1, hexA(col, 0));
+    ctx.fillStyle = grd;
+    ctx.beginPath(); traceArea(); ctx.fill();
+    ctx.strokeStyle = col;
+    ctx.lineWidth = 2;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.beginPath(); tracePath(); ctx.stroke();
+  };
+
+  const verdict = !!opts.verdict && opts.target != null;
+  const UP = '#34D399', DOWN = '#FB7185';
+
+  if (verdict) {
+    // Verdict mode: green where the price is above the bar, red below —
+    // two clipped passes of the same smooth path, switching at the crossing.
+    const yT = yFor(opts.target as number);
+    ctx.save();
+    ctx.beginPath(); ctx.rect(0, 0, w, Math.max(0, yT)); ctx.clip();
+    paint(UP);
+    ctx.restore();
+    ctx.save();
+    ctx.beginPath(); ctx.rect(0, yT, w, Math.max(0, h - yT)); ctx.clip();
+    paint(DOWN);
+    ctx.restore();
+  } else {
+    paint(color);
+  }
+
+  // Target (strike) dashed line + pill — vermilion in verdict mode: the decision line
   if (opts.target != null) {
     const y = yFor(opts.target);
     ctx.save();
-    ctx.strokeStyle = 'rgba(255,255,255,0.32)';
+    ctx.strokeStyle = verdict ? 'rgba(224, 77, 38, 0.75)' : 'rgba(255,255,255,0.32)';
     ctx.lineWidth = 1;
     ctx.setLineDash([5, 4]);
     ctx.beginPath(); ctx.moveTo(padX, y); ctx.lineTo(rightEdge, y); ctx.stroke();
@@ -355,20 +387,14 @@ export function drawPriceLine(
     ctx.fillText(label, px + 7, y + 3.5);
   }
 
-  // Line
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 2;
-  ctx.lineJoin = 'round';
-  ctx.lineCap = 'round';
-  ctx.beginPath();
-  tracePath();
-  ctx.stroke();
-
-  // Current-price dot + glow
+  // Current-price dot + glow — in verdict mode it wears the current verdict
   const last = pts[pts.length - 1];
-  ctx.fillStyle = hexA(color, 0.18);
+  const dotCol = verdict
+    ? (series[series.length - 1] >= (opts.target as number) ? UP : DOWN)
+    : color;
+  ctx.fillStyle = hexA(dotCol, 0.18);
   ctx.beginPath(); ctx.arc(last.x, last.y, 9, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = color;
+  ctx.fillStyle = dotCol;
   ctx.beginPath(); ctx.arc(last.x, last.y, 3.5, 0, Math.PI * 2); ctx.fill();
 
   // X-axis labels

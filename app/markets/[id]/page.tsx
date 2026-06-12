@@ -131,6 +131,7 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
         drawPriceLine(chartCanvasRef.current, cached.series, {
           target: strikeD,
           targetLabel: 'Target',
+          verdict: true,
           gridLines: true,
           axisRight: 58,
           xLabels,
@@ -428,8 +429,8 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
             {/* Canvas chart */}
             <div className="relative border border-white/[0.08] rounded bg-bg overflow-hidden" style={{ height: '320px' }}>
               <div className="absolute top-0 left-0 right-0 flex justify-between items-center px-5 py-3 border-b border-white/5 z-[2] bg-bg/50 font-mono text-[10px] text-gray-500">
-                <span>{asset} / USD · Candlestick</span>
-                <span>Strike {formatPrice(midStrikeDollars)}</span>
+                <span>{asset} / USD · Live</span>
+                <span>Price to beat {formatPrice(midStrikeDollars)}</span>
               </div>
               <canvas ref={chartCanvasRef} className="absolute inset-x-0 top-10 bottom-0 w-full h-[calc(100%-40px)]" />
             </div>

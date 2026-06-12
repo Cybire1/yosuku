@@ -347,7 +347,7 @@ export default function LeaderboardPage() {
                 title="Ranking sheet"
                 jp="番付表"
                 desc="Top traders of the season ranked by net realized P&L."
-                meta="east 上 · west 下"
+                meta="east 東 · west 西"
               />
 
               <div className="banzuke-wrap">
