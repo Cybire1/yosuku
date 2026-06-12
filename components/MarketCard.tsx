@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import type { OracleData } from '@/lib/sui/predictApi';
 import { FLOAT_SCALING } from '@/lib/sui/constants';
 import { getTimeRemaining, nearestStrike, formatCountdown } from '@/lib/roundHelpers';
-import { genCandles, drawCandles, priceHistoryToCandles, type Candle } from '@/lib/charts/canvasChart';
+import { genCandles, drawPriceLine, priceHistoryToCandles, type Candle } from '@/lib/charts/canvasChart';
 import { fetchPriceHistory } from '@/lib/sui/predictApi';
 import { seedOracle } from '@/lib/sui/oracleCache';
 import { Star } from 'lucide-react';
@@ -26,6 +26,7 @@ export default function MarketCard({ oracle, spotPrice, forwardPrice, isFavorite
   const router = useRouter();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [timeLeft, setTimeLeft] = useState(getTimeRemaining(oracle.expiry));
+  const [deltaPct, setDeltaPct] = useState<number | null>(null);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -91,8 +92,12 @@ export default function MarketCard({ oracle, spotPrice, forwardPrice, isFavorite
 
     const draw = (candles: Candle[]) => {
       if (cancelled || !canvasRef.current) return;
-      drawCandles(canvasRef.current, candles, {
-        strike, maxCandleW: 4, padX: 4, padTop: 6, padBot: 6, marker: true,
+      const series = candles.map(c => c.close);
+      const first = series[0], last = series[series.length - 1];
+      if (first > 0) setDeltaPct(((last - first) / first) * 100);
+      // Same metaphor as the detail page: one line vs the price-to-beat.
+      drawPriceLine(canvasRef.current, series, {
+        target: strike, verdict: true, padX: 4, padTop: 6, padBot: 6,
       });
     };
 
@@ -193,28 +198,39 @@ export default function MarketCard({ oracle, spotPrice, forwardPrice, isFavorite
           <span className="strike-dot" />
         </div>
 
+        {/* Hero-chart language: big live price + change, chart, LIVE strip */}
+        {!isSettled && (
+          <div className="mc-pricebar">
+            <div className="px">
+              <span className="big">{spot ? formatPrice(spot) : '—'}</span>
+              {deltaPct !== null && (
+                <span className={`chg ${deltaPct >= 0 ? 'up' : 'down'}`}>
+                  {deltaPct >= 0 ? '+' : ''}{deltaPct.toFixed(2)}%
+                </span>
+              )}
+            </div>
+            <span className="strike-meta">
+              STRIKE {hasRealStrike ? formatPrice(midStrikeDollars) : '···'}
+            </span>
+          </div>
+        )}
+
         {!isSettled && (
           <div className="mc-spark">
-            {/* the canvas draws its own (data-accurate) strike line — the old
-                HTML overlay sat at a hardcoded 50% and lied about the level */}
             <canvas ref={canvasRef} />
           </div>
         )}
 
         {!isSettled && (
-          <div
-            className="mc-weight"
-            style={{ '--up-w': yesProb, '--down-w': noProb } as React.CSSProperties}
-          >
-            <span className="up-w" data-cursor="up">↑ {yesProb}¢</span>
-            <span className="down-w" data-cursor="hover">↓ {noProb}¢</span>
+          <div className="mc-strip">
+            <span>LIVE · PYTH ORACLE</span>
+            <span className="ramp">
+              <span>UP</span>
+              <span className="bar"><span className="fill" style={{ width: `${yesProb}%` }} /></span>
+              <span className="pct">{yesProb}¢</span>
+            </span>
           </div>
         )}
-
-        <div className="mc-stats">
-          {spot && <span>Spot <span className="v">{formatPrice(spot)}</span></span>}
-          {hasRealStrike && <span>Strike <span className="v">{formatPrice(midStrikeDollars)}</span></span>}
-        </div>
 
         {isSettled && oracle.settlement_price !== null && (
           <div className="settled-result up">

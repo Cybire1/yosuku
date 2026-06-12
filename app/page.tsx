@@ -101,7 +101,7 @@ const SPEC_ROWS: SpecRow[] = [
   { label: 'Settlement', value: 'Pyth oracle, deterministic' },
   { label: 'Oracle', value: 'Pyth Network price feeds' },
   { label: 'Round cadence', value: '15 minutes, continuous' },
-  { label: 'Asset', value: 'DUSDC (testnet stable)' },
+  { label: 'Asset', value: 'DUSDC' },
   { label: 'Latency', value: 'Sub-second finality' },
   { label: 'Audits', value: 'In progress' },
 ];
@@ -450,11 +450,6 @@ export default function HomePage() {
             <span className="l1">Read the room &amp;</span>
             <span className="l2">before the room reads itself.</span>
           </h1>
-
-          <p className="hero-sub">
-            Binary prediction markets on Sui. Oracle-settled, fifteen-minute windows,
-            sub-second finality. The floor is always open.
-          </p>
 
           <div className="hero-cta-row">
             <Link href="/markets" className="btn btn-primary" data-cursor="hover">
@@ -1047,7 +1042,7 @@ export default function HomePage() {
         <div className="footer-status">
           <div className="cell">
             <span className="lbl">Network</span>
-            <span className="val"><span className="dot" /> Sui Testnet</span>
+            <span className="val"><span className="dot" /> Sui</span>
           </div>
           <div className="cell">
             <span className="lbl">Protocol</span>
@@ -1059,7 +1054,7 @@ export default function HomePage() {
           </div>
           <div className="cell">
             <span className="lbl">Build</span>
-            <span className="val">v0.4.1-testnet</span>
+            <span className="val">v0.4.1</span>
           </div>
         </div>
 

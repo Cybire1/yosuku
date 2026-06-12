@@ -1,10 +1,11 @@
 'use client';
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import Link from 'next/link';
 import { useCurrentAccount } from '@mysten/dapp-kit';
 import { useOracles } from '@/lib/sui/hooks';
 import { type PriceData } from '@/lib/sui/predictApi';
-import { groupOraclesByTimeframe, nearestStrike } from '@/lib/roundHelpers';
+import { nearestStrike, getTimeRemaining, formatCountdown } from '@/lib/roundHelpers';
 import { useBtcPrice } from '@/lib/hooks/useBtcPrice';
 import { drawPriceLine, genCandles } from '@/lib/charts/canvasChart';
 import { fetchPriceHistory } from '@/lib/sui/predictApi';
@@ -30,6 +31,39 @@ function computeQuickProb(p: PriceData, oracle: { min_strike: number; tick_size:
   const sigma = 0.001 * Math.sqrt(secsLeft / 60);
   const z = diff / (sigma || 0.01);
   return Math.max(1, Math.min(99, 100 / (1 + Math.exp(-1.7 * z))));
+}
+
+// Later rounds per asset, as live countdown chips. One shared 1s ticker.
+function BellChips({ rows }: { rows: ReadonlyArray<readonly [string, { oracle_id: string; expiry: number }[]]> }) {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const iv = setInterval(() => setTick(t => t + 1), 1000);
+    return () => clearInterval(iv);
+  }, []);
+  const fmt = (ms: number) => {
+    const s = Math.max(0, Math.floor(ms / 1000));
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), ss = s % 60;
+    return h > 0
+      ? `${h}:${String(m).padStart(2, '0')}:${String(ss).padStart(2, '0')}`
+      : `${String(m).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
+  };
+  return (
+    <div className="later-bells">
+      {rows.map(([asset, list]) => (
+        <div key={asset} className="later-bells-row">
+          <span className="later-bells-asset">{asset}</span>
+          <div className="later-bells-chips">
+            {list.slice(0, 8).map(o => (
+              <Link key={o.oracle_id} href={`/markets/${o.oracle_id}`} className="bell-chip" data-cursor="hover">
+                {fmt(o.expiry - Date.now())}
+              </Link>
+            ))}
+            {list.length > 8 && <span className="bell-chip more">+{list.length - 8}</span>}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 export default function MarketsPage() {
@@ -86,6 +120,13 @@ export default function MarketsPage() {
   // Hero chart — use real BTC price history from first BTC oracle
   const [heroChartDelta, setHeroChartDelta] = useState<string | null>(null);
   const [heroYesProb, setHeroYesProb] = useState<number | null>(null);
+  // The hero chart IS the headline live market — tradable, not decoration.
+  const [heroOracle, setHeroOracle] = useState<{ id: string; expiry: number; strikeDollars: number } | null>(null);
+  const [, setClockTick] = useState(0);
+  useEffect(() => {
+    const iv = setInterval(() => setClockTick(t => t + 1), 1000);
+    return () => clearInterval(iv);
+  }, []);
 
   useEffect(() => {
     if (!heroCanvasRef.current) return;
@@ -124,6 +165,7 @@ export default function MarketsPage() {
             }
             const midStrike = heroStrikeRef.current ?? (btcOracle.min_strike + btcOracle.tick_size * 25);
             const midDollars = midStrike / FLOAT_SCALING;
+            if (!cancelled) setHeroOracle({ id: btcOracle.oracle_id, expiry: btcOracle.expiry, strikeDollars: midDollars });
 
             if (!cancelled) {
               // Compute yes probability from forward
@@ -142,6 +184,7 @@ export default function MarketsPage() {
               drawPriceLine(heroCanvasRef.current, series, {
                 target: midDollars,
                 targetLabel: 'Target',
+                verdict: true,
                 gridLines: true,
                 padX: 14,
                 padTop: 12,
@@ -172,7 +215,6 @@ export default function MarketsPage() {
     return () => { cancelled = true; };
   }, [btcPrice, active, prices]);
 
-  const groups = groupOraclesByTimeframe(active);
   const recentSettled = settled.slice(0, 6);
 
   // Determine next expiry for TheBell
@@ -213,6 +255,31 @@ export default function MarketsPage() {
     return result;
   }, [filter, searchQuery, sortBy, prices, favorites]);
 
+  // One card per asset — the next bell. The oracle operator ladders rounds
+  // every 15 minutes, so rendering every oracle is a wall of near-identical
+  // questions; later expiries collapse into time chips instead.
+  const filteredActive = useMemo(() => filterOracles(active), [filterOracles, active]);
+  const byAsset = useMemo(() => {
+    const m = new Map<string, typeof active>();
+    for (const o of filteredActive) {
+      const a = o.underlying_asset || 'BTC';
+      if (!m.has(a)) m.set(a, []);
+      m.get(a)!.push(o);
+    }
+    for (const list of m.values()) list.sort((a, b) => a.expiry - b.expiry);
+    return m;
+  }, [filteredActive]);
+  const nextBell = useMemo(
+    () => Array.from(byAsset.values()).map(l => l[0]).filter(Boolean).sort((a, b) => a.expiry - b.expiry),
+    [byAsset],
+  );
+  const laterBells = useMemo(
+    () => Array.from(byAsset.entries())
+      .map(([asset, list]) => [asset, list.slice(1)] as const)
+      .filter(([, list]) => list.length > 0),
+    [byAsset],
+  );
+
   // Close sort dropdown on outside click
   useEffect(() => {
     if (!sortOpen) return;
@@ -231,7 +298,7 @@ export default function MarketsPage() {
       <GrainOverlay />
 
       {/* Page Hero */}
-      <section className="page-hero">
+      <section className="page-hero markets-hero">
         <span className="crop tl" />
         <span className="crop tr" />
         <span className="crop bl" />
@@ -275,17 +342,12 @@ export default function MarketsPage() {
                 <span className="accent">floor</span> is<br />
                 open.
               </h1>
-              <div className="page-title-jp">予測の場が、開いています。</div>
-              <p className="page-subtitle">
-                Binary rounds across BTC, ETH, SOL and SUI. Strike, window
-                and oracle are deterministic. Take a side before the bell.
-              </p>
 
               <div className="hero-status">
                 <div className="item">
                   <div className="lbl">Open markets</div>
                   <div className="val">{active.length}</div>
-                  <div className="meta">{filterOracles(groups.expiringSoon).length} closing &lt; 10:00</div>
+                  <div className="meta">{nextBell.length} live now</div>
                 </div>
                 <div className="item">
                   <div className="lbl">BTC Spot</div>
@@ -308,8 +370,14 @@ export default function MarketsPage() {
                 <div className="left">
                   <span className="glyph">₿</span>
                   <div>
-                    <div className="pair">BTC · USD</div>
-                    <div className="pair-meta">spot · pyth · 1m candles</div>
+                    <div className="pair">
+                      {heroOracle ? `BTC above $${heroOracle.strikeDollars.toLocaleString(undefined, { maximumFractionDigits: 0 })}?` : 'BTC · USD'}
+                    </div>
+                    <div className="pair-meta">
+                      {heroOracle
+                        ? `closes in ${formatCountdown(getTimeRemaining(heroOracle.expiry))} · pyth · live`
+                        : 'spot · pyth · 1m candles'}
+                    </div>
                   </div>
                 </div>
                 <div className="left" style={{ textAlign: 'right', flexDirection: 'column', alignItems: 'flex-end', gap: 0 }}>
@@ -325,11 +393,22 @@ export default function MarketsPage() {
               <canvas ref={heroCanvasRef} />
               <div className="hero-chart-foot">
                 <span>LIVE · PYTH ORACLE</span>
-                <span className="ramp">
-                  <span>YES</span>
-                  <span className="bar"><span className="fill" /></span>
-                  <span style={{ color: 'var(--vermilion)' }}>{heroYesProb ? `${heroYesProb}¢` : '\u2014'}</span>
-                </span>
+                {heroOracle ? (
+                  <span className="hero-bet">
+                    <Link href={`/markets/${heroOracle.id}?side=UP`} className="hero-bet-btn up" data-cursor="up">
+                      UP <span className="c">{heroYesProb ?? '\u2014'}¢</span>
+                    </Link>
+                    <Link href={`/markets/${heroOracle.id}?side=DOWN`} className="hero-bet-btn down" data-cursor="hover">
+                      DOWN <span className="c">{heroYesProb !== null ? 100 - heroYesProb : '\u2014'}¢</span>
+                    </Link>
+                  </span>
+                ) : (
+                  <span className="ramp">
+                    <span>YES</span>
+                    <span className="bar"><span className="fill" /></span>
+                    <span style={{ color: 'var(--vermilion)' }}>{heroYesProb ? `${heroYesProb}¢` : '\u2014'}</span>
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -454,19 +533,18 @@ export default function MarketsPage() {
             </div>
           )}
 
-          {/* Closing soon */}
-          {filterOracles(groups.expiringSoon).length > 0 && (
+          {/* Next bell — one card per asset */}
+          {nextBell.length > 0 && (
             <section className="markets-section" data-section="closing">
               <SectionHeader
                 number="01"
-                title="Closing soon"
-                jp="締切間近"
-                desc="Last call. Strike, side, and stake — the bell does the rest."
+                title="Live now"
+                jp="開催中"
                 live
-                meta={`${filterOracles(groups.expiringSoon).length} markets · < 10:00`}
+                meta={`${nextBell.length} ${nextBell.length === 1 ? 'market' : 'markets'}`}
               />
               <div className="markets-grid">
-                {filterOracles(groups.expiringSoon).map(oracle => (
+                {nextBell.map(oracle => (
                   <MarketCard
                     key={oracle.oracle_id}
                     oracle={oracle}
@@ -480,80 +558,16 @@ export default function MarketsPage() {
             </section>
           )}
 
-          {/* Next hour */}
-          {filterOracles(groups.nextHour).length > 0 && (
-            <section className="markets-section" data-section="hour">
-              <SectionHeader
-                number="02"
-                title="Next hour"
-                jp="次の一時間"
-                desc="Open positions ahead of the next four bells. Liquidity is forming."
-                meta={`${filterOracles(groups.nextHour).length} markets · 15:00 → 60:00`}
-              />
-              <div className="markets-grid">
-                {filterOracles(groups.nextHour).map(oracle => (
-                  <MarketCard
-                    key={oracle.oracle_id}
-                    oracle={oracle}
-                    spotPrice={prices[oracle.oracle_id]?.spot}
-                    forwardPrice={prices[oracle.oracle_id]?.forward}
-                    isFavorite={favorites.has(oracle.oracle_id)}
-                    onToggleFavorite={handleToggleFavorite}
-                  />
-                ))}
-              </div>
-            </section>
-          )}
-
-          {/* Later */}
-          {filterOracles(groups.later).length > 0 && (
+          {/* Later bells — same question, later rounds, as time chips */}
+          {laterBells.length > 0 && (
             <section className="markets-section" data-section="later">
               <SectionHeader
-                number="03"
-                title="Later today"
-                jp="後ほど"
-                desc="Longer horizons. Lower density, higher conviction."
-                meta={`${filterOracles(groups.later).length} markets · 1h → 24h`}
+                number="02"
+                title="Upcoming"
+                jp="今後"
+                meta={`${laterBells.reduce((n, [, l]) => n + l.length, 0)} rounds · tap a time to trade it`}
               />
-              <div className="markets-grid">
-                {filterOracles(groups.later).map(oracle => (
-                  <MarketCard
-                    key={oracle.oracle_id}
-                    oracle={oracle}
-                    spotPrice={prices[oracle.oracle_id]?.spot}
-                    forwardPrice={prices[oracle.oracle_id]?.forward}
-                    isFavorite={favorites.has(oracle.oracle_id)}
-                    onToggleFavorite={handleToggleFavorite}
-                  />
-                ))}
-              </div>
-            </section>
-          )}
-
-          {/* Fallback: show all active */}
-          {!loading && active.length > 0 &&
-            groups.expiringSoon.length === 0 &&
-            groups.nextHour.length === 0 &&
-            groups.later.length === 0 && (
-            <section className="markets-section">
-              <SectionHeader
-                number="01"
-                title="Active Markets"
-                jp="市場"
-                count={filterOracles(active).length}
-              />
-              <div className="markets-grid">
-                {filterOracles(active).map(oracle => (
-                  <MarketCard
-                    key={oracle.oracle_id}
-                    oracle={oracle}
-                    spotPrice={prices[oracle.oracle_id]?.spot}
-                    forwardPrice={prices[oracle.oracle_id]?.forward}
-                    isFavorite={favorites.has(oracle.oracle_id)}
-                    onToggleFavorite={handleToggleFavorite}
-                  />
-                ))}
-              </div>
+              <BellChips rows={laterBells} />
             </section>
           )}
 
