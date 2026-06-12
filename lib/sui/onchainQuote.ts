@@ -25,3 +25,24 @@ export async function fetchOnChainQuote(a: {
   if (!res.ok) throw new Error(`on-chain quote ${res.status}`);
   return res.json();
 }
+
+/** Exact on-chain quote for a RANGE position (settles inside (lower, higher]). */
+export async function fetchOnChainRangeQuote(a: {
+  oracleId: string;
+  expiry: number | string | bigint;
+  lower: number | string | bigint;
+  higher: number | string | bigint;
+  quantity: number | bigint;
+}): Promise<OnChainQuote> {
+  const params = new URLSearchParams({
+    kind: 'range',
+    oracle: a.oracleId,
+    expiry: String(a.expiry),
+    lower: String(a.lower),
+    higher: String(a.higher),
+    quantity: String(a.quantity),
+  });
+  const res = await fetch(`/api/yosuku/quote?${params.toString()}`);
+  if (!res.ok) throw new Error(`on-chain range quote ${res.status}`);
+  return res.json();
+}

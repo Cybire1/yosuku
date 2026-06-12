@@ -12,7 +12,8 @@ import {
   ChevronDown,
   Wallet,
 } from 'lucide-react';
-import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from '@mysten/dapp-kit';
+import { useCurrentAccount, useSignAndExecuteTransaction, useSignTransaction, useSuiClient } from '@mysten/dapp-kit';
+import { Transaction } from '@mysten/sui/transactions';
 import type { OracleData } from '@/lib/sui/predictApi';
 import { FLOAT_SCALING, DUSDC_MULTIPLIER } from '@/lib/sui/constants';
 import { useManager, useDUSDCBalance, useManagerBalance, useSviPricing, useVaultStats } from '@/lib/sui/hooks';
@@ -26,8 +27,9 @@ import {
 } from '@/lib/sui/predictClient';
 import { generateStrikeGrid, formatStrike, nearestStrike, savePosition } from '@/lib/roundHelpers';
 import { computeSviPrice, computeRangePrice, computeFeeBreakdown, type FeeBreakdown } from '@/lib/sui/sviPricing';
-import { fetchOnChainQuote, type OnChainQuote } from '@/lib/sui/onchainQuote';
+import { fetchOnChainQuote, fetchOnChainRangeQuote, type OnChainQuote } from '@/lib/sui/onchainQuote';
 import { useDailyStop } from '@/lib/dailyStop';
+import { getSponsorStatus, submitSponsored, type SponsorStatus } from '@/lib/sponsor';
 import { humanizeTxError } from '@/lib/errorMessages';
 import Countdown from './Countdown';
 import AccountSetup from './AccountSetup';
@@ -57,6 +59,7 @@ export default function TradePanel({
   const address = account?.address ?? null;
   const client = useSuiClient();
   const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
+  const { mutateAsync: signTransaction } = useSignTransaction();
   const { manager, loading: managerLoading, refresh: refreshManager } = useManager();
   const { balance: walletBalance, coins, refresh: refreshBalance } = useDUSDCBalance();
   const { balance: managerBalance, refresh: refreshManagerBalance } = useManagerBalance(manager?.manager_id ?? null);
@@ -80,6 +83,44 @@ export default function TradePanel({
   const [quoteRetry, setQuoteRetry] = useState(0);
   const [errorDetail, setErrorDetail] = useState('');
   const [isTwoStep, setIsTwoStep] = useState(false);
+  // Gas sponsorship (Onara): zkLogin users hold zero SUI — when the gas
+  // station is up and the wallet can't cover gas, the sponsor pays it.
+  const [sponsor, setSponsor] = useState<SponsorStatus | null>(null);
+  const [suiLow, setSuiLow] = useState(false);
+  useEffect(() => { getSponsorStatus().then(setSponsor); }, []);
+  useEffect(() => {
+    if (!address) { setSuiLow(false); return; }
+    let cancelled = false;
+    const check = async () => {
+      try {
+        const b = await client.getBalance({ owner: address });
+        if (!cancelled) setSuiLow(Number(b.totalBalance) < 50_000_000); // < 0.05 SUI
+      } catch { /* keep last */ }
+    };
+    check();
+    const iv = setInterval(check, 30_000);
+    return () => { cancelled = true; clearInterval(iv); };
+  }, [address, client]);
+
+  // Execute a tx: sponsored (sponsor pays gas) when needed, normal otherwise.
+  const execTx = useCallback(async (tx: Transaction): Promise<string> => {
+    if (sponsor && suiLow && address) {
+      tx.setSender(address);
+      tx.setGasOwner(sponsor.address);
+      const bytes = await tx.build({ client });
+      const signed = await signTransaction({ transaction: Transaction.from(bytes) });
+      const res = await submitSponsored({ sender: address, txBytes: signed.bytes, txSignature: signed.signature });
+      const digest = typeof res.digest === 'string'
+        ? res.digest
+        : (res as { effects?: { transactionDigest?: string } }).effects?.transactionDigest;
+      if (!digest) throw new Error('Sponsor did not return a transaction digest');
+      await client.waitForTransaction({ digest });
+      return digest;
+    }
+    const result = await signAndExecute({ transaction: tx });
+    await client.waitForTransaction({ digest: result.digest });
+    return result.digest;
+  }, [sponsor, suiLow, address, client, signTransaction, signAndExecute]);
   const { limit: dailyStopLimit, setLimit: setDailyStopLimit, todayLoss, stopHit } = useDailyStop();
   const [editingStop, setEditingStop] = useState(false);
   const [stopInput, setStopInput] = useState('');
@@ -132,10 +173,15 @@ export default function TradePanel({
     );
   }, [fairPrice, vaultStats]);
 
-  // Exact on-chain cost (UP/DOWN only) — devInspect get_trade_amounts via the SDK.
-  // Debounced; gives the user the contract's real cost, not the SVI estimate.
+  // Exact on-chain cost (UP / DOWN / RANGE) — devInspect get_trade_amounts or
+  // get_range_trade_amounts. Debounced; gives the contract's real cost, not the SVI estimate.
   useEffect(() => {
-    if (side === 'RANGE' || !selectedStrike || !isValidAmount) {
+    const isRange = side === 'RANGE';
+    const ready =
+      isValidAmount &&
+      selectedStrike !== null &&
+      (isRange ? rangeUpperStrike !== null && selectedStrike < rangeUpperStrike : true);
+    if (!ready) {
       setOnChainQuote(null);
       return;
     }
@@ -143,13 +189,21 @@ export default function TradePanel({
     setQuoteLoading(true);
     const t = setTimeout(async () => {
       try {
-        const q = await fetchOnChainQuote({
-          oracleId: oracle.oracle_id,
-          expiry: oracle.expiry,
-          strike: selectedStrike,
-          isUp: side === 'UP',
-          quantity: amountMicro,
-        });
+        const q = isRange
+          ? await fetchOnChainRangeQuote({
+              oracleId: oracle.oracle_id,
+              expiry: oracle.expiry,
+              lower: selectedStrike!,
+              higher: rangeUpperStrike!,
+              quantity: amountMicro,
+            })
+          : await fetchOnChainQuote({
+              oracleId: oracle.oracle_id,
+              expiry: oracle.expiry,
+              strike: selectedStrike!,
+              isUp: side === 'UP',
+              quantity: amountMicro,
+            });
         if (!cancelled) {
           setOnChainQuote(q);
           setQuoteError(false);
@@ -167,7 +221,7 @@ export default function TradePanel({
       cancelled = true;
       clearTimeout(t);
     };
-  }, [oracle.oracle_id, oracle.expiry, selectedStrike, side, amountMicro, isValidAmount, quoteRetry]);
+  }, [oracle.oracle_id, oracle.expiry, selectedStrike, rangeUpperStrike, side, amountMicro, isValidAmount, quoteRetry]);
 
   const handleTrade = useCallback(async () => {
     if (!address || !selectedStrike || !isValidAmount || !isRangeValid) return;
@@ -183,10 +237,7 @@ export default function TradePanel({
       if (!managerId) {
         setStep('creating-manager');
         const tx = createManagerTx();
-        const result = await signAndExecute({
-          transaction: tx,
-        });
-        await client.waitForTransaction({ digest: result.digest });
+        await execTx(tx);
         await refreshManager();
         const { fetchManagerForAddress } = await import('@/lib/sui/predictApi');
         const m = await fetchManagerForAddress(address);
@@ -211,9 +262,7 @@ export default function TradePanel({
             BigInt(rangeUpperStrike),
             BigInt(amountMicro),
           );
-          const result = await signAndExecute({ transaction: tx });
-          await client.waitForTransaction({ digest: result.digest });
-          setTxDigest(result.digest);
+          setTxDigest(await execTx(tx));
         } else {
           const tx = mintRangePositionTx(
             managerId,
@@ -223,9 +272,7 @@ export default function TradePanel({
             BigInt(rangeUpperStrike),
             BigInt(amountMicro),
           );
-          const result = await signAndExecute({ transaction: tx });
-          await client.waitForTransaction({ digest: result.digest });
-          setTxDigest(result.digest);
+          setTxDigest(await execTx(tx));
         }
       } else if (needsDeposit && coins.length > 0) {
         setStep('minting');
@@ -240,9 +287,7 @@ export default function TradePanel({
           side as 'UP' | 'DOWN',
           BigInt(amountMicro),
         );
-        const result = await signAndExecute({ transaction: tx });
-        await client.waitForTransaction({ digest: result.digest });
-        setTxDigest(result.digest);
+        setTxDigest(await execTx(tx));
       } else {
         setStep('minting');
         const tx = mintPositionTx(
@@ -253,9 +298,7 @@ export default function TradePanel({
           side as 'UP' | 'DOWN',
           BigInt(amountMicro),
         );
-        const result = await signAndExecute({ transaction: tx });
-        await client.waitForTransaction({ digest: result.digest });
-        setTxDigest(result.digest);
+        setTxDigest(await execTx(tx));
       }
 
       savePosition({
@@ -290,7 +333,7 @@ export default function TradePanel({
     }
   }, [
     address, selectedStrike, rangeUpperStrike, isValidAmount, isRangeValid, manager, managerBalance,
-    amountMicro, coins, oracle, side, signAndExecute, client,
+    amountMicro, coins, oracle, side, execTx,
     refreshManager, refreshBalance, refreshManagerBalance, onSuccess, txDigest,
   ]);
 
@@ -592,12 +635,13 @@ export default function TradePanel({
               {isValidAmount ? `${(amountMicro / DUSDC_MULTIPLIER).toFixed(2)} DUSDC` : '—'}
             </span>
           </div>
-          {side !== 'RANGE' && (
+          {/* on-chain cost now available for UP / DOWN / RANGE */}
+          {(
             <>
               <div className="flex justify-between text-xs">
                 <span className="text-gray-500 inline-flex items-center gap-1">
                   Trade cost <span className="text-[8px] font-bold uppercase tracking-wider text-vermilion/80 bg-vermilion/10 px-1 py-0.5 rounded">on-chain</span>
-                  <Tooltip text="Read live from the contract via get_trade_amounts (devInspect) — the exact DUSDC this trade costs right now, not an estimate." position="bottom" />
+                  <Tooltip text={side === 'RANGE' ? 'Read live from the contract via get_range_trade_amounts (devInspect) — the exact DUSDC this range costs now.' : 'Read live from the contract via get_trade_amounts (devInspect) — the exact DUSDC this trade costs right now, not an estimate.'} position="bottom" />
                 </span>
                 <span className="text-white font-mono font-bold">
                   {quoteLoading ? '…' : onChainQuote ? `${onChainQuote.mintCost.toFixed(4)} DUSDC` : quoteError ? (
