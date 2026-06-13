@@ -25,23 +25,52 @@ export async function getSponsorStatus(): Promise<SponsorStatus | null> {
 }
 
 export interface SponsorResult {
-  digest?: string;
-  [key: string]: unknown;
+  digest: string;
 }
 
-/** Submit a user-signed transaction (gas owner = sponsor) for co-signing + execution. */
+/**
+ * Submit a user-signed transaction (gas owner = sponsor) for co-signing +
+ * execution. On success Onara returns the raw Sui gRPC execution result:
+ * `{ $kind: 'Transaction' | 'FailedTransaction', Transaction?: { digest, … } }`
+ * — we normalize that to a digest and surface on-chain failures as errors.
+ */
 export async function submitSponsored(args: {
   sender: string;
   txBytes: string;
   txSignature: string;
 }): Promise<SponsorResult> {
-  const r = await fetch(`${ONARA_URL}/sponsor?waitForExecution=true`, {
+  // waitForExecution=false: the worker returns as soon as the tx executes
+  // (digest in hand) instead of also waiting for indexing — which can exceed
+  // the worker's clock and surface as a 504 even though the tx landed.
+  // Callers confirm with client.waitForTransaction themselves.
+  const r = await fetch(`${ONARA_URL}/sponsor?waitForExecution=false`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(args),
   });
+  const json = (await r.json().catch(() => ({}))) as {
+    $kind?: string;
+    Transaction?: { digest?: string };
+    FailedTransaction?: { digest?: string; effects?: { status?: { error?: unknown } } };
+    digest?: string;
+    status?: string;
+    error?: string;
+  };
   if (!r.ok) {
-    throw new Error(`Sponsor declined: ${(await r.text()).slice(0, 300)}`);
+    // "unconfirmed" still carries a digest — the tx was submitted; recover it
+    // rather than erroring (a retry here could double-execute).
+    if (json.digest) return { digest: json.digest };
+    throw new Error(`Sponsor declined: ${(json.error ?? JSON.stringify(json)).slice(0, 300)}`);
   }
-  return (await r.json()) as SponsorResult;
+  if (json.FailedTransaction) {
+    const err = json.FailedTransaction.effects?.status?.error;
+    throw new Error(
+      typeof err === 'string' ? err : `Transaction failed on-chain${err ? ': ' + JSON.stringify(err).slice(0, 200) : ''}`,
+    );
+  }
+  const digest = json.Transaction?.digest ?? json.digest;
+  if (!digest) {
+    throw new Error(`Sponsor response had no digest: ${JSON.stringify(json).slice(0, 200)}`);
+  }
+  return { digest };
 }

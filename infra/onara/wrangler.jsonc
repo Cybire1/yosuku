@@ -1,0 +1,10 @@
+{
+  "name": "yosuku-gas",
+  "main": "src/workers.ts",
+  "compatibility_date": "2026-02-26",
+  "workers_dev": true,
+  "vars": {
+    "SUI_NETWORK": "testnet",
+    "SUI_GRPC_URL": "https://fullnode.testnet.sui.io:443"
+  }
+}

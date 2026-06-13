@@ -58,7 +58,7 @@ export default function AccountSetup({ onReady }: AccountSetupProps) {
           txBytes: signed.bytes,
           txSignature: signed.signature,
         });
-        digest = typeof result.digest === 'string' ? result.digest : undefined;
+        digest = result.digest;
       } else {
         // Fallback: user pays gas.
         const result = await signAndExecute({ transaction: createManagerTx() });
