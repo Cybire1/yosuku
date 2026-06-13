@@ -29,6 +29,7 @@ import { generateStrikeGrid, formatStrike, nearestStrike, savePosition } from '@
 import { computeSviPrice, computeRangePrice, computeFeeBreakdown, type FeeBreakdown } from '@/lib/sui/sviPricing';
 import { fetchOnChainQuote, fetchOnChainRangeQuote, type OnChainQuote } from '@/lib/sui/onchainQuote';
 import { openLeveragedRangeTx, openLeveragedBinaryTx } from '@/lib/sui/leverageClient';
+import { useReserveStats } from '@/lib/sui/leverageHooks';
 import { useDailyStop } from '@/lib/dailyStop';
 import { getSponsorStatus, submitSponsored, type SponsorStatus } from '@/lib/sponsor';
 import { humanizeTxError } from '@/lib/errorMessages';
@@ -69,7 +70,8 @@ export default function TradePanel({
   const { toast } = useToast();
 
   const [side, setSide] = useState<Side>(defaultSide);
-  const [leverage, setLeverage] = useState(1); // 1× = no leverage; 2×/3× borrow from yolev pool
+  const [leverage, setLeverage] = useState(1); // 1× = no leverage; 2×/3× underwritten by the yolev reserve
+  const { stats: reserveStats } = useReserveStats();
   const [amount, setAmount] = useState('10');
   const [selectedStrike, setSelectedStrike] = useState<number | null>(null);
   const [rangeUpperStrike, setRangeUpperStrike] = useState<number | null>(null);
@@ -226,13 +228,23 @@ export default function TradePanel({
   // minting `amountMicro` units would only spend ~half the deposit and leave the rest
   // idle in the manager — which made cash-outs look tiny. Instead solve
   // quantity = deposit / price. `pricePerUnit` is the on-chain probability (0–1):
-  // mintCost(DUSDC) ÷ units(amountMicro/1e6). The 0.98 buffer absorbs fee/slippage
-  // convexity at the larger size so the real cost never exceeds the deposit.
+  // mintCost(DUSDC) ÷ units(amountMicro/1e6). The SIZE_BUFFER is the real
+  // headroom between the position's quoted cost and the deposit: near the money
+  // the per-contract price swings fast, so the quote (seconds old) can drift up
+  // before execution. 0.92 → the deposit covers the mint even after an ~8% cost
+  // drift; the unused remainder stays in the user's balance, reusable.
+  const SIZE_BUFFER = 0.92;
+  // When leveraged, the reserve fronts (L-1)× the margin and skims a premium, so the
+  // capital actually deployed into the position is margin×L − premium, not margin×L.
+  const premiumBps = reserveStats?.premiumBps ?? 800;
+  const frontedMicro = Math.floor(amountMicro * (leverage - 1));
+  const premiumMicro = Math.floor((frontedMicro * premiumBps) / 10_000);
+  const notionalMicro = amountMicro * leverage - premiumMicro;
   const pricePerUnit = onChainQuote && amountMicro > 0
     ? (onChainQuote.mintCost * DUSDC_MULTIPLIER) / amountMicro
     : 0;
   const positionQty = pricePerUnit > 0
-    ? Math.max(1, Math.floor((amountMicro * leverage * 0.98) / pricePerUnit))
+    ? Math.max(1, Math.floor((notionalMicro * SIZE_BUFFER) / pricePerUnit))
     : amountMicro;
   // Estimated cost of the sized position (per-unit price read on-chain × our quantity).
   const estTradeCost = pricePerUnit > 0
@@ -265,20 +277,21 @@ export default function TradePanel({
       const needsDeposit = managerBalance < amountMicro;
 
       if (leverage > 1) {
-        // Leveraged: borrow (L-1)× from the yolev pool, mint an L× position.
+        // Leveraged: the reserve fronts (L-1)× the margin, charges a premium, and
+        // we mint an L× position. No debt — max loss is the margin.
         setStep('minting');
         const coinIds = coins.map(c => c.coinObjectId);
         const margin = BigInt(amountMicro);
-        const borrow = BigInt(Math.floor(amountMicro * (leverage - 1)));
+        const leverageBps = leverage * 10_000;
         const qty = BigInt(positionQty);
         const tx = side === 'RANGE' && rangeUpperStrike
           ? openLeveragedRangeTx({
-              managerId, coinIds, marginAmount: margin, borrowAmount: borrow,
+              managerId, coinIds, marginAmount: margin, leverageBps,
               oracleId: oracle.oracle_id, expiry: BigInt(oracle.expiry),
               lower: BigInt(selectedStrike), higher: BigInt(rangeUpperStrike), quantity: qty, owner: address,
             })
           : openLeveragedBinaryTx({
-              managerId, coinIds, marginAmount: margin, borrowAmount: borrow,
+              managerId, coinIds, marginAmount: margin, leverageBps,
               oracleId: oracle.oracle_id, expiry: BigInt(oracle.expiry),
               strike: BigInt(selectedStrike), isUp: side === 'UP', quantity: qty, owner: address,
             });
@@ -336,16 +349,21 @@ export default function TradePanel({
         setTxDigest(await execTx(tx));
       }
 
-      savePosition({
-        oracleId: oracle.oracle_id,
-        expiry: oracle.expiry,
-        strike: selectedStrike,
-        direction: side === 'RANGE' ? 'UP' : side,
-        quantity: positionQty,
-        cost: amountMicro,
-        timestamp: Date.now(),
-        txDigest: txDigest,
-      });
+      // Leveraged positions are settled via /earn (which repays the reserve its
+      // fronted capital). Don't record them in the normal local store, or they'd
+      // also surface a plain Portfolio "Claim" that would bypass that repayment.
+      if (leverage === 1) {
+        savePosition({
+          oracleId: oracle.oracle_id,
+          expiry: oracle.expiry,
+          strike: selectedStrike,
+          direction: side === 'RANGE' ? 'UP' : side,
+          quantity: positionQty,
+          cost: amountMicro,
+          timestamp: Date.now(),
+          txDigest: txDigest,
+        });
+      }
 
       setStep('success');
       refreshBalance();
@@ -641,12 +659,12 @@ export default function TradePanel({
           </div>
         </div>
 
-        {/* Leverage (yolev lending pool) */}
+        {/* Leverage (yolev underwriting reserve) */}
         <div className="mt-1">
           <div className="flex items-center justify-between mb-2">
             <span className="text-gray-500 text-xs inline-flex items-center gap-1">
               Leverage <span className="text-[8px] font-bold uppercase tracking-wider text-vermilion/80 bg-vermilion/10 px-1 py-0.5 rounded">yolev</span>
-              <Tooltip text="Borrow DUSDC from the yosuku lending pool to open a larger position. Higher leverage = higher liquidation risk." position="bottom" />
+              <Tooltip text="The yolev reserve fronts the extra notional and charges a premium — you take a bigger position with no debt. Your max loss is always your margin; there's nothing to liquidate. Settle from your Portfolio when the round ends." position="bottom" />
             </span>
             <span className="font-mono text-xs text-white">{leverage}×</span>
           </div>
@@ -665,9 +683,10 @@ export default function TradePanel({
           </div>
           {leverage > 1 && isValidAmount && (
             <div className="mt-2 rounded-lg bg-vermilion/[0.04] border border-vermilion/10 px-3 py-2 space-y-1 text-xs">
-              <div className="flex justify-between"><span className="text-gray-500">Borrowed</span><span className="font-mono text-white">{(amountMicro * (leverage - 1) / DUSDC_MULTIPLIER).toFixed(2)} DUSDC</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">Position size</span><span className="font-mono text-white">{(amountMicro * leverage / DUSDC_MULTIPLIER).toFixed(2)} DUSDC</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">Liquidates if value &lt;</span><span className="font-mono text-amber-400">{(amountMicro * (leverage - 1) * 1.1 / DUSDC_MULTIPLIER).toFixed(2)} DUSDC</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Reserve fronts</span><span className="font-mono text-white">{(frontedMicro / DUSDC_MULTIPLIER).toFixed(2)} DUSDC</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Position size</span><span className="font-mono text-white">{(notionalMicro / DUSDC_MULTIPLIER).toFixed(2)} DUSDC</span></div>
+              <div className="flex justify-between"><span className="text-gray-500 inline-flex items-center gap-1">Premium <Tooltip text="One-time fee paid to the reserve for fronting the leverage." position="bottom" /></span><span className="font-mono text-white">{(premiumMicro / DUSDC_MULTIPLIER).toFixed(2)} DUSDC</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Max loss</span><span className="font-mono text-emerald-400/90">{(amountMicro / DUSDC_MULTIPLIER).toFixed(2)} DUSDC <span className="text-gray-600">· your margin</span></span></div>
             </div>
           )}
         </div>
@@ -693,45 +712,41 @@ export default function TradePanel({
               }
             </span>
           </div>
-          <div className="flex justify-between text-xs">
-            <span className="text-gray-500 inline-flex items-center gap-1">
-              Deposit <Tooltip text="DUSDC moved into your PredictManager. Anything above the trade cost stays as reusable manager balance." position="bottom" />
+          {/* The only two numbers a bettor needs: what you pay, what you win.
+              "You pay" = the amount you chose (what leaves your wallet). The
+              position is sized to use it; any sub-unit remainder stays in your
+              balance, reusable — never a hidden deduction. */}
+          <div className="flex justify-between items-baseline">
+            <span className="text-gray-500 text-xs inline-flex items-center gap-1">
+              You pay
+              <Tooltip text="What leaves your wallet for this bet. Anything your position doesn't use stays in your balance for next time." position="bottom" />
             </span>
-            <span className="text-white font-mono font-bold">
+            <span className="text-white font-mono font-bold text-base">
               {isValidAmount ? `${(amountMicro / DUSDC_MULTIPLIER).toFixed(2)} DUSDC` : '—'}
             </span>
           </div>
-          {/* on-chain cost now available for UP / DOWN / RANGE */}
-          {(
-            <>
-              <div className="flex justify-between text-xs">
-                <span className="text-gray-500 inline-flex items-center gap-1">
-                  Trade cost <span className="text-[8px] font-bold uppercase tracking-wider text-vermilion/80 bg-vermilion/10 px-1 py-0.5 rounded">on-chain</span>
-                  <Tooltip text={side === 'RANGE' ? 'Read live from the contract via get_range_trade_amounts (devInspect) — the exact DUSDC this range costs now.' : 'Read live from the contract via get_trade_amounts (devInspect) — the exact DUSDC this trade costs right now, not an estimate.'} position="bottom" />
-                </span>
-                <span className="text-white font-mono font-bold">
-                  {quoteLoading ? '…' : onChainQuote ? `${estTradeCost.toFixed(4)} DUSDC` : quoteError ? (
-                    <button
-                      onClick={() => setQuoteRetry((k) => k + 1)}
-                      className="text-rose-400/90 font-sans font-medium text-[11px] underline underline-offset-2 hover:text-rose-300"
-                    >
-                      quote unavailable — retry
-                    </button>
-                  ) : '—'}
-                </span>
-              </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-gray-500 inline-flex items-center gap-1">
-                  Max payout <Tooltip text="If you win, every unit pays 1 DUSDC. We size your position so your full deposit buys units — this is the most you can collect." position="bottom" />
-                </span>
-                <span className="text-emerald-400/90 font-mono">
-                  {isValidAmount && onChainQuote ? `${(positionQty / DUSDC_MULTIPLIER).toFixed(2)} DUSDC` : isValidAmount ? `${(amountMicro / DUSDC_MULTIPLIER).toFixed(2)} DUSDC` : '—'}
-                </span>
-              </div>
-            </>
+          <div className="flex justify-between items-baseline">
+            <span className="text-gray-500 text-xs inline-flex items-center gap-1">
+              To win
+              <Tooltip text="If you win, every contract pays 1 DUSDC. This is the most you can collect." position="bottom" />
+            </span>
+            <span className="text-emerald-400 font-mono font-bold text-base">
+              {quoteLoading ? '…' : isValidAmount && onChainQuote ? `${(positionQty / DUSDC_MULTIPLIER).toFixed(2)} DUSDC` : quoteError ? (
+                <button onClick={() => setQuoteRetry((k) => k + 1)} className="text-rose-400/90 font-sans font-medium text-[11px] underline underline-offset-2 hover:text-rose-300">
+                  quote unavailable — retry
+                </button>
+              ) : '—'}
+            </span>
+          </div>
+          {isValidAmount && onChainQuote && positionQty > 0 && (
+            <div className="flex justify-end -mt-1">
+              <span className="font-mono text-[10px] text-gray-600">
+                {(((positionQty / DUSDC_MULTIPLIER) / Math.max(0.0001, amountMicro / DUSDC_MULTIPLIER))).toFixed(2)}× if you&apos;re right
+              </span>
+            </div>
           )}
-          <div className="flex justify-between text-xs">
-            <span className="text-gray-500">Expires</span>
+          <div className="flex justify-between text-xs pt-1">
+            <span className="text-gray-500">Expires in</span>
             <span className="text-white">
               <Countdown expiryMs={oracle.expiry} className="text-xs" />
             </span>
@@ -760,12 +775,16 @@ export default function TradePanel({
         <button
           onClick={() => setShowConfirmModal(true)}
           disabled={!isValidAmount || !selectedStrike || step !== 'idle' || !hasEnoughBalance || !isRangeValid || stopHit}
-          className={`w-full py-4 rounded-xl text-sm font-bold uppercase tracking-wider transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
-            side === 'UP'
-              ? 'bg-emerald-500 hover:bg-emerald-400 text-black shadow-[0_0_20px_rgba(16,185,129,0.2)]'
-              : side === 'DOWN'
-                ? 'bg-rose-500 hover:bg-rose-400 text-white shadow-[0_0_20px_rgba(244,63,94,0.2)]'
-                : 'bg-amber-500 hover:bg-amber-400 text-black shadow-[0_0_20px_rgba(245,158,11,0.2)]'
+          className={`w-full py-4 rounded-xl text-sm font-bold uppercase tracking-wider transition-all disabled:cursor-not-allowed ${
+            // Blocked (no balance / no amount / stop hit) → neutral grey, NOT the
+            // buy-green: an error state must never wear the success colour.
+            (!isValidAmount || !hasEnoughBalance || !isRangeValid || stopHit) && step === 'idle'
+              ? 'bg-white/[0.06] text-gray-400 border border-white/10'
+              : side === 'UP'
+                ? 'bg-emerald-500 hover:bg-emerald-400 text-black shadow-[0_0_20px_rgba(16,185,129,0.2)] disabled:opacity-50'
+                : side === 'DOWN'
+                  ? 'bg-rose-500 hover:bg-rose-400 text-white shadow-[0_0_20px_rgba(244,63,94,0.2)] disabled:opacity-50'
+                  : 'bg-amber-500 hover:bg-amber-400 text-black shadow-[0_0_20px_rgba(245,158,11,0.2)] disabled:opacity-50'
           }`}
         >
           {step === 'creating-manager' ? (
