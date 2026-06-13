@@ -7,8 +7,8 @@ import Footer from '@/components/Footer';
 import Marquee from '@/components/Marquee';
 import GrainOverlay from '@/components/GrainOverlay';
 import { useDUSDCBalance } from '@/lib/sui/hooks';
-import { usePoolStats, useMySupply } from '@/lib/sui/leverageHooks';
-import { supplyTx, withdrawTx } from '@/lib/sui/leverageClient';
+import { usePoolStats, useMySupply, useMyLoans } from '@/lib/sui/leverageHooks';
+import { supplyTx, withdrawTx, closeLeveragedTx, type LoanData } from '@/lib/sui/leverageClient';
 
 const fmt = (n: number, d = 2) => n.toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d });
 const pct = (bps: number) => `${(bps / 100).toFixed(2)}%`;
@@ -19,6 +19,7 @@ export default function EarnPage() {
   const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
   const { stats, refresh: refreshStats } = usePoolStats();
   const { positions, refresh: refreshMine } = useMySupply(stats);
+  const { loans, refresh: refreshLoans } = useMyLoans(stats);
   const { coins, refresh: refreshBal } = useDUSDCBalance();
 
   const [amount, setAmount] = useState('');
@@ -32,7 +33,7 @@ export default function EarnPage() {
     try {
       await fn();
       setMsg('Done ✓');
-      setTimeout(() => { refreshStats(); refreshMine(); refreshBal(); }, 1200);
+      setTimeout(() => { refreshStats(); refreshMine(); refreshBal(); refreshLoans(); }, 1200);
     } catch (e) {
       setMsg(e instanceof Error ? e.message.slice(0, 120) : String(e));
     } finally {
@@ -51,6 +52,11 @@ export default function EarnPage() {
   async function doWithdraw(positionId: string) {
     if (!address) return;
     await run('w:' + positionId, async () => { await signAndExecute({ transaction: withdrawTx(positionId, address) }); });
+  }
+
+  async function doClose(loan: LoanData) {
+    if (!address) return;
+    await run('c:' + loan.id, async () => { await signAndExecute({ transaction: closeLeveragedTx(loan, address) }); });
   }
 
   return (
@@ -140,6 +146,52 @@ export default function EarnPage() {
             )}
           </div>
         </div>
+
+        {/* your leveraged positions */}
+        {address && loans.length > 0 && (
+          <div className="mt-8 border border-white/[0.08] rounded-2xl bg-white/[0.02] p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-display font-bold text-xl">Your leveraged positions</h2>
+              <span className="font-mono text-[10px] uppercase tracking-wider text-vermilion/80 bg-vermilion/10 px-2 py-0.5 rounded">borrowed from pool</span>
+            </div>
+            <div className="space-y-2">
+              {loans.map((l) => {
+                const healthy = l.debt > 0 ? l.notional / l.debt : 99;
+                return (
+                  <div key={l.id} className="flex items-center justify-between gap-3 border border-white/[0.06] rounded-xl px-4 py-3 flex-wrap">
+                    <div className="flex items-center gap-3">
+                      <span className="font-mono text-sm font-bold text-vermilion">{l.leverage.toFixed(0)}×</span>
+                      <div>
+                        <div className="font-mono text-sm text-white">{fmt(l.notional)} DUSDC position</div>
+                        <div className="font-mono text-[11px] text-gray-500">
+                          {fmt(l.margin)} margin · {fmt(l.borrowed)} borrowed · {l.isRange ? 'range' : l.isUp ? 'UP' : 'DOWN'}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div className="text-right">
+                        <div className="font-mono text-[9px] uppercase tracking-wider text-gray-600">debt now</div>
+                        <div className="font-mono text-sm text-white">{fmt(l.debt)} DUSDC</div>
+                      </div>
+                      <button
+                        onClick={() => doClose(l)}
+                        disabled={busy === 'c:' + l.id}
+                        className="font-mono text-xs px-3 py-1.5 rounded-lg border border-white/10 text-gray-300 hover:text-white hover:border-white/25 transition-colors disabled:opacity-50"
+                        title="Redeem the position, repay the loan, collect PnL"
+                      >
+                        {busy === 'c:' + l.id ? 'Closing…' : 'Close'}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <p className="font-mono text-[10px] text-gray-600 mt-3">
+              Close redeems your settled, winning position, repays the loan + interest, and returns your PnL. Losing
+              positions are liquidated.
+            </p>
+          </div>
+        )}
 
         {msg && <p className={`text-center mt-5 text-[12px] font-mono ${msg.includes('✓') ? 'text-emerald-400' : 'text-rose-400'}`}>{msg}</p>}
 
