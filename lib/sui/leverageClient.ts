@@ -63,7 +63,12 @@ export function openLeveragedRangeTx(p: {
   const open = tx.moveCall({
     target: `${YOLEV_PACKAGE}::leverage::open`,
     typeArguments: [DUSDC_TYPE],
-    arguments: [tx.object(LEV_CONFIG_ID), tx.object(LENDING_POOL_ID), margin, tx.pure.u64(p.borrowAmount), tx.object(CLOCK_ID)],
+    arguments: [
+      tx.object(LEV_CONFIG_ID), tx.object(LENDING_POOL_ID), margin, tx.pure.u64(p.borrowAmount),
+      tx.pure.id(p.managerId), tx.pure.id(p.oracleId), tx.pure.u64(p.expiry),
+      tx.pure.bool(true), tx.pure.u64(p.lower), tx.pure.u64(p.higher), tx.pure.bool(false), tx.pure.u64(p.quantity),
+      tx.object(CLOCK_ID),
+    ],
   });
   tx.moveCall({
     target: `${PACKAGE_ID}::predict_manager::deposit`,
@@ -101,7 +106,12 @@ export function openLeveragedBinaryTx(p: {
   const open = tx.moveCall({
     target: `${YOLEV_PACKAGE}::leverage::open`,
     typeArguments: [DUSDC_TYPE],
-    arguments: [tx.object(LEV_CONFIG_ID), tx.object(LENDING_POOL_ID), margin, tx.pure.u64(p.borrowAmount), tx.object(CLOCK_ID)],
+    arguments: [
+      tx.object(LEV_CONFIG_ID), tx.object(LENDING_POOL_ID), margin, tx.pure.u64(p.borrowAmount),
+      tx.pure.id(p.managerId), tx.pure.id(p.oracleId), tx.pure.u64(p.expiry),
+      tx.pure.bool(false), tx.pure.u64(p.strike), tx.pure.u64(BigInt(0)), tx.pure.bool(p.isUp), tx.pure.u64(p.quantity),
+      tx.object(CLOCK_ID),
+    ],
   });
   tx.moveCall({
     target: `${PACKAGE_ID}::predict_manager::deposit`,
@@ -118,6 +128,71 @@ export function openLeveragedBinaryTx(p: {
     arguments: [tx.object(PREDICT_ID), tx.object(p.managerId), tx.object(p.oracleId), mk[0], tx.pure.u64(p.quantity), tx.object(CLOCK_ID)],
   });
   tx.transferObjects([open[0]], tx.pure.address(p.owner));
+  return tx;
+}
+
+/** The position descriptor stored in a Loan (read from on-chain). */
+export interface LoanData {
+  id: string;
+  owner: string;
+  margin: number;        // DUSDC
+  borrowed: number;      // DUSDC
+  notional: number;      // DUSDC
+  debt: number;          // current debt incl. interest (DUSDC)
+  leverage: number;      // notional / margin
+  managerId: string;
+  oracleId: string;
+  expiry: bigint;
+  isRange: boolean;
+  lowerStrike: bigint;
+  higherStrike: bigint;
+  isUp: boolean;
+  quantity: bigint;
+}
+
+/**
+ * Close a settled, winning leveraged position: redeem the exact position the loan
+ * funded → withdraw the payout → repay the loan → return the remainder (PnL). Any
+ * leftover deposit stays as reusable manager balance. Withdrawing the position's
+ * face `quantity` is always safe for a winner (payout == quantity).
+ */
+export function closeLeveragedTx(loan: LoanData, owner: string): Transaction {
+  const tx = new Transaction();
+  // 1. redeem the settled position → payout credited to the manager balance
+  if (loan.isRange) {
+    const rk = tx.moveCall({
+      target: `${PACKAGE_ID}::range_key::new`,
+      arguments: [tx.pure.id(loan.oracleId), tx.pure.u64(loan.expiry), tx.pure.u64(loan.lowerStrike), tx.pure.u64(loan.higherStrike)],
+    });
+    tx.moveCall({
+      target: `${PACKAGE_ID}::predict::redeem_range`,
+      typeArguments: [DUSDC_TYPE],
+      arguments: [tx.object(PREDICT_ID), tx.object(loan.managerId), tx.object(loan.oracleId), rk[0], tx.pure.u64(loan.quantity), tx.object(CLOCK_ID)],
+    });
+  } else {
+    const mk = tx.moveCall({
+      target: `${PACKAGE_ID}::market_key::${loan.isUp ? 'up' : 'down'}`,
+      arguments: [tx.pure.id(loan.oracleId), tx.pure.u64(loan.expiry), tx.pure.u64(loan.lowerStrike)],
+    });
+    tx.moveCall({
+      target: `${PACKAGE_ID}::predict::redeem_permissionless`,
+      typeArguments: [DUSDC_TYPE],
+      arguments: [tx.object(PREDICT_ID), tx.object(loan.managerId), tx.object(loan.oracleId), mk[0], tx.pure.u64(loan.quantity), tx.object(CLOCK_ID)],
+    });
+  }
+  // 2. withdraw the payout (face quantity for a winner)
+  const proceeds = tx.moveCall({
+    target: `${PACKAGE_ID}::predict_manager::withdraw`,
+    typeArguments: [DUSDC_TYPE],
+    arguments: [tx.object(loan.managerId), tx.pure.u64(loan.quantity)],
+  });
+  // 3. repay the loan, return the remainder (margin ± PnL)
+  const remainder = tx.moveCall({
+    target: `${YOLEV_PACKAGE}::leverage::close`,
+    typeArguments: [DUSDC_TYPE],
+    arguments: [tx.object(loan.id), tx.object(LENDING_POOL_ID), proceeds, tx.object(CLOCK_ID)],
+  });
+  tx.transferObjects([remainder], tx.pure.address(owner));
   return tx;
 }
 

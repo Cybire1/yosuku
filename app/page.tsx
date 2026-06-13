@@ -92,7 +92,7 @@ const FEATURES: FeatureItem[] = [
 const FAQ_DATA: FaqItem[] = [
   { q: 'What does YOSUKU settle on?', a: 'Pyth Network price feeds on Sui. Every settlement is deterministic, verifiable on-chain, and independent of YOSUKU as an operator. The oracle reports; the contract executes.', tags: ['Oracle', 'Sui'], cat: 'Protocol' },
   { q: 'How does YOSUKU make money?', a: 'A small settlement fee (1-2%) is taken from the winning side of each market. There are no hidden spreads, no market-making positions, and no proprietary trading.', tags: ['Fees', 'Transparency'], cat: 'Protocol' },
-  { q: 'Can I lose more than I stake?', a: 'No. Your maximum loss is your position size. There is no leverage, no margin, and no liquidation. Binary markets have a fixed downside by definition.', tags: ['Risk', 'Binary'], cat: 'Mechanics' },
+  { q: 'Can I lose more than I stake?', a: 'On an un-leveraged binary, no — your max loss is your position size. If you opt into leverage (the optional yolev pool, up to 3×), your borrowed portion can be liquidated, so a losing leveraged position loses your margin. Plain trades stay fixed-downside.', tags: ['Risk', 'Binary'], cat: 'Mechanics' },
   { q: 'Why fifteen-minute windows?', a: 'Short enough to be engaging and testable, long enough for genuine price discovery. Fifteen minutes is the smallest window where oracle latency is negligible relative to the round duration.', tags: ['Design', 'Cadence'], cat: 'Mechanics' },
   { q: 'Is this available in my country?', a: 'YOSUKU is a decentralised protocol on Sui. There is no geo-blocking at the protocol level. However, you are responsible for compliance with your local regulations.', tags: ['Legal', 'Access'], cat: 'Access' },
 ];
