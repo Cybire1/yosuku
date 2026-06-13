@@ -28,6 +28,7 @@ import {
 import { generateStrikeGrid, formatStrike, nearestStrike, savePosition } from '@/lib/roundHelpers';
 import { computeSviPrice, computeRangePrice, computeFeeBreakdown, type FeeBreakdown } from '@/lib/sui/sviPricing';
 import { fetchOnChainQuote, fetchOnChainRangeQuote, type OnChainQuote } from '@/lib/sui/onchainQuote';
+import { openLeveragedRangeTx, openLeveragedBinaryTx } from '@/lib/sui/leverageClient';
 import { useDailyStop } from '@/lib/dailyStop';
 import { getSponsorStatus, submitSponsored, type SponsorStatus } from '@/lib/sponsor';
 import { humanizeTxError } from '@/lib/errorMessages';
@@ -68,6 +69,7 @@ export default function TradePanel({
   const { toast } = useToast();
 
   const [side, setSide] = useState<Side>(defaultSide);
+  const [leverage, setLeverage] = useState(1); // 1× = no leverage; 2×/3× borrow from yolev pool
   const [amount, setAmount] = useState('10');
   const [selectedStrike, setSelectedStrike] = useState<number | null>(null);
   const [rangeUpperStrike, setRangeUpperStrike] = useState<number | null>(null);
@@ -109,11 +111,7 @@ export default function TradePanel({
       tx.setGasOwner(sponsor.address);
       const bytes = await tx.build({ client });
       const signed = await signTransaction({ transaction: Transaction.from(bytes) });
-      const res = await submitSponsored({ sender: address, txBytes: signed.bytes, txSignature: signed.signature });
-      const digest = typeof res.digest === 'string'
-        ? res.digest
-        : (res as { effects?: { transactionDigest?: string } }).effects?.transactionDigest;
-      if (!digest) throw new Error('Sponsor did not return a transaction digest');
+      const { digest } = await submitSponsored({ sender: address, txBytes: signed.bytes, txSignature: signed.signature });
       await client.waitForTransaction({ digest });
       return digest;
     }
@@ -248,7 +246,26 @@ export default function TradePanel({
       // Step 2: Deposit + Mint
       const needsDeposit = managerBalance < amountMicro;
 
-      if (side === 'RANGE' && rangeUpperStrike) {
+      if (leverage > 1) {
+        // Leveraged: borrow (L-1)× from the yolev pool, mint an L× position.
+        setStep('minting');
+        const coinIds = coins.map(c => c.coinObjectId);
+        const margin = BigInt(amountMicro);
+        const borrow = BigInt(Math.floor(amountMicro * (leverage - 1)));
+        const qty = BigInt(amountMicro * leverage);
+        const tx = side === 'RANGE' && rangeUpperStrike
+          ? openLeveragedRangeTx({
+              managerId, coinIds, marginAmount: margin, borrowAmount: borrow,
+              oracleId: oracle.oracle_id, expiry: BigInt(oracle.expiry),
+              lower: BigInt(selectedStrike), higher: BigInt(rangeUpperStrike), quantity: qty, owner: address,
+            })
+          : openLeveragedBinaryTx({
+              managerId, coinIds, marginAmount: margin, borrowAmount: borrow,
+              oracleId: oracle.oracle_id, expiry: BigInt(oracle.expiry),
+              strike: BigInt(selectedStrike), isUp: side === 'UP', quantity: qty, owner: address,
+            });
+        setTxDigest(await execTx(tx));
+      } else if (side === 'RANGE' && rangeUpperStrike) {
         setStep('minting');
         if (needsDeposit && coins.length > 0) {
           const coinIds = coins.map(c => c.coinObjectId);
@@ -333,7 +350,7 @@ export default function TradePanel({
     }
   }, [
     address, selectedStrike, rangeUpperStrike, isValidAmount, isRangeValid, manager, managerBalance,
-    amountMicro, coins, oracle, side, execTx,
+    amountMicro, coins, oracle, side, execTx, leverage,
     refreshManager, refreshBalance, refreshManagerBalance, onSuccess, txDigest,
   ]);
 
@@ -604,6 +621,37 @@ export default function TradePanel({
               </button>
             ))}
           </div>
+        </div>
+
+        {/* Leverage (yolev lending pool) */}
+        <div className="mt-1">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-gray-500 text-xs inline-flex items-center gap-1">
+              Leverage <span className="text-[8px] font-bold uppercase tracking-wider text-vermilion/80 bg-vermilion/10 px-1 py-0.5 rounded">yolev</span>
+              <Tooltip text="Borrow DUSDC from the yosuku lending pool to open a larger position. Higher leverage = higher liquidation risk." position="bottom" />
+            </span>
+            <span className="font-mono text-xs text-white">{leverage}×</span>
+          </div>
+          <div className="flex gap-2">
+            {[1, 2, 3].map((l) => (
+              <button
+                key={l}
+                onClick={() => setLeverage(l)}
+                className={`flex-1 py-1.5 text-xs font-bold rounded-lg border transition-colors ${
+                  leverage === l ? 'border-vermilion/50 bg-vermilion/10 text-vermilion' : 'border-white/5 bg-white/[0.02] text-gray-500 hover:text-gray-300'
+                }`}
+              >
+                {l}×
+              </button>
+            ))}
+          </div>
+          {leverage > 1 && isValidAmount && (
+            <div className="mt-2 rounded-lg bg-vermilion/[0.04] border border-vermilion/10 px-3 py-2 space-y-1 text-xs">
+              <div className="flex justify-between"><span className="text-gray-500">Borrowed</span><span className="font-mono text-white">{(amountMicro * (leverage - 1) / DUSDC_MULTIPLIER).toFixed(2)} DUSDC</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Position size</span><span className="font-mono text-white">{(amountMicro * leverage / DUSDC_MULTIPLIER).toFixed(2)} DUSDC</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Liquidates if value &lt;</span><span className="font-mono text-amber-400">{(amountMicro * (leverage - 1) * 1.1 / DUSDC_MULTIPLIER).toFixed(2)} DUSDC</span></div>
+            </div>
+          )}
         </div>
 
         {/* Trade summary */}
