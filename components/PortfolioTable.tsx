@@ -326,7 +326,9 @@ export default function PortfolioTable() {
                     )}
                   </div>
 
-                  {(isSettled || isActive) && (
+                  {/* No redeem for settled losers: nothing to claim and
+                      redeem_permissionless aborts on losing positions. */}
+                  {((isSettled && isWinner) || isActive) && (
                     <button
                       onClick={() => {
                         if (isActive && !isExpanded) {

@@ -106,36 +106,18 @@ export default function ClaimWinnings({
     );
   }
 
-  // Loser — can still redeem (gets 0 back, frees the position)
+  // Loser — there's nothing to claim and `redeem_permissionless` is winner-only
+  // (it aborts on losing positions). So no action: just show the settled loss.
   if (!isWinner && round.resolved) {
     return (
       <div className="relative">
-        <div className="absolute inset-0 bg-neutral-900/40 backdrop-blur-2xl border border-off-red/20 rounded-xl" />
-        <div className="relative p-4">
-          <div className="text-center space-y-3">
+        <div className="absolute inset-0 bg-neutral-900/40 backdrop-blur-2xl border border-off-red/15 rounded-xl" />
+        <div className="relative p-4 text-center space-y-1.5">
+          <div className="flex items-center justify-center gap-2">
+            <XCircle className="w-4 h-4 text-off-red/80" />
             <p className="text-off-red font-bold text-sm uppercase tracking-widest">Position Lost</p>
-            <p className="text-gray-400 text-xs">Redeem to clear your position.</p>
-            {error && (
-              <p className="text-off-red text-xs font-medium break-words">{error}</p>
-            )}
-            <button
-              onClick={handleRedeem}
-              disabled={loading}
-              className="w-full py-2.5 bg-white/[0.05] hover:bg-white/[0.08] border border-white/10 text-gray-400 rounded-lg font-bold uppercase tracking-widest text-xs transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            >
-              {loading ? (
-                <>
-                  <Loader className="w-4 h-4 animate-spin" />
-                  Redeeming...
-                </>
-              ) : (
-                <>
-                  <XCircle className="w-3.5 h-3.5" />
-                  Redeem Position
-                </>
-              )}
-            </button>
           </div>
+          <p className="text-gray-500 text-xs">Your {userDirection} position didn&apos;t hit — nothing to redeem.</p>
         </div>
       </div>
     );
