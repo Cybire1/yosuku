@@ -221,6 +221,24 @@ export default function TradePanel({
     };
   }, [oracle.oracle_id, oracle.expiry, selectedStrike, rangeUpperStrike, side, amountMicro, isValidAmount, quoteRetry]);
 
+  // Size the mint so the FULL deposit (× leverage) is actually spent. Each Predict
+  // unit pays $1 if it wins and costs ~its probability now (well under 1 DUSDC), so
+  // minting `amountMicro` units would only spend ~half the deposit and leave the rest
+  // idle in the manager — which made cash-outs look tiny. Instead solve
+  // quantity = deposit / price. `pricePerUnit` is the on-chain probability (0–1):
+  // mintCost(DUSDC) ÷ units(amountMicro/1e6). The 0.98 buffer absorbs fee/slippage
+  // convexity at the larger size so the real cost never exceeds the deposit.
+  const pricePerUnit = onChainQuote && amountMicro > 0
+    ? (onChainQuote.mintCost * DUSDC_MULTIPLIER) / amountMicro
+    : 0;
+  const positionQty = pricePerUnit > 0
+    ? Math.max(1, Math.floor((amountMicro * leverage * 0.98) / pricePerUnit))
+    : amountMicro;
+  // Estimated cost of the sized position (per-unit price read on-chain × our quantity).
+  const estTradeCost = pricePerUnit > 0
+    ? (positionQty * pricePerUnit) / DUSDC_MULTIPLIER
+    : (onChainQuote?.mintCost ?? 0);
+
   const handleTrade = useCallback(async () => {
     if (!address || !selectedStrike || !isValidAmount || !isRangeValid) return;
 
@@ -252,7 +270,7 @@ export default function TradePanel({
         const coinIds = coins.map(c => c.coinObjectId);
         const margin = BigInt(amountMicro);
         const borrow = BigInt(Math.floor(amountMicro * (leverage - 1)));
-        const qty = BigInt(amountMicro * leverage);
+        const qty = BigInt(positionQty);
         const tx = side === 'RANGE' && rangeUpperStrike
           ? openLeveragedRangeTx({
               managerId, coinIds, marginAmount: margin, borrowAmount: borrow,
@@ -277,7 +295,7 @@ export default function TradePanel({
             BigInt(oracle.expiry),
             BigInt(selectedStrike),
             BigInt(rangeUpperStrike),
-            BigInt(amountMicro),
+            BigInt(positionQty),
           );
           setTxDigest(await execTx(tx));
         } else {
@@ -287,7 +305,7 @@ export default function TradePanel({
             BigInt(oracle.expiry),
             BigInt(selectedStrike),
             BigInt(rangeUpperStrike),
-            BigInt(amountMicro),
+            BigInt(positionQty),
           );
           setTxDigest(await execTx(tx));
         }
@@ -302,7 +320,7 @@ export default function TradePanel({
           BigInt(oracle.expiry),
           BigInt(selectedStrike),
           side as 'UP' | 'DOWN',
-          BigInt(amountMicro),
+          BigInt(positionQty),
         );
         setTxDigest(await execTx(tx));
       } else {
@@ -313,7 +331,7 @@ export default function TradePanel({
           BigInt(oracle.expiry),
           BigInt(selectedStrike),
           side as 'UP' | 'DOWN',
-          BigInt(amountMicro),
+          BigInt(positionQty),
         );
         setTxDigest(await execTx(tx));
       }
@@ -323,7 +341,7 @@ export default function TradePanel({
         expiry: oracle.expiry,
         strike: selectedStrike,
         direction: side === 'RANGE' ? 'UP' : side,
-        quantity: amountMicro,
+        quantity: positionQty,
         cost: amountMicro,
         timestamp: Date.now(),
         txDigest: txDigest,
@@ -350,7 +368,7 @@ export default function TradePanel({
     }
   }, [
     address, selectedStrike, rangeUpperStrike, isValidAmount, isRangeValid, manager, managerBalance,
-    amountMicro, coins, oracle, side, execTx, leverage,
+    amountMicro, positionQty, coins, oracle, side, execTx, leverage,
     refreshManager, refreshBalance, refreshManagerBalance, onSuccess, txDigest,
   ]);
 
@@ -692,7 +710,7 @@ export default function TradePanel({
                   <Tooltip text={side === 'RANGE' ? 'Read live from the contract via get_range_trade_amounts (devInspect) — the exact DUSDC this range costs now.' : 'Read live from the contract via get_trade_amounts (devInspect) — the exact DUSDC this trade costs right now, not an estimate.'} position="bottom" />
                 </span>
                 <span className="text-white font-mono font-bold">
-                  {quoteLoading ? '…' : onChainQuote ? `${onChainQuote.mintCost.toFixed(4)} DUSDC` : quoteError ? (
+                  {quoteLoading ? '…' : onChainQuote ? `${estTradeCost.toFixed(4)} DUSDC` : quoteError ? (
                     <button
                       onClick={() => setQuoteRetry((k) => k + 1)}
                       className="text-rose-400/90 font-sans font-medium text-[11px] underline underline-offset-2 hover:text-rose-300"
@@ -703,9 +721,11 @@ export default function TradePanel({
                 </span>
               </div>
               <div className="flex justify-between text-xs">
-                <span className="text-gray-500">Max payout</span>
+                <span className="text-gray-500 inline-flex items-center gap-1">
+                  Max payout <Tooltip text="If you win, every unit pays 1 DUSDC. We size your position so your full deposit buys units — this is the most you can collect." position="bottom" />
+                </span>
                 <span className="text-emerald-400/90 font-mono">
-                  {isValidAmount ? `${(amountMicro / DUSDC_MULTIPLIER).toFixed(2)} DUSDC` : '—'}
+                  {isValidAmount && onChainQuote ? `${(positionQty / DUSDC_MULTIPLIER).toFixed(2)} DUSDC` : isValidAmount ? `${(amountMicro / DUSDC_MULTIPLIER).toFixed(2)} DUSDC` : '—'}
                 </span>
               </div>
             </>
