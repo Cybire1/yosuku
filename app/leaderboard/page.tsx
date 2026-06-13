@@ -11,13 +11,15 @@ import { drawCandles, priceHistoryToCandles } from '@/lib/charts/canvasChart';
 import { useLeaderboard, usePriceHistory, useOracles } from '@/lib/sui/hooks';
 import { formatAddress } from '@/lib/leaderboardStats';
 
-// Deterministic color disc from an address — a clean identity avatar (no text,
-// no hex-dump, no collisions). Two close hues give the disc a little depth.
-function avatarGradient(addr: string): string {
+// Deterministic decorative kanji from an address — a light, semi-transparent
+// identity mark for avatars (texture, not a readable label).
+const KANJI_POOL = '林青霧桜雷雪川石山松森光鳥夜梅藤熊寒銀金空海風波';
+function glyphFromAddress(addr: string): string {
   let hash = 0;
-  for (let i = 0; i < addr.length; i++) hash = ((hash << 5) - hash + addr.charCodeAt(i)) | 0;
-  const h = Math.abs(hash) % 360;
-  return `linear-gradient(140deg, hsl(${h} 40% 22%) 0%, hsl(${(h + 26) % 360} 58% 47%) 100%)`;
+  for (let i = 0; i < addr.length; i++) {
+    hash = ((hash << 5) - hash + addr.charCodeAt(i)) | 0;
+  }
+  return KANJI_POOL[Math.abs(hash) % KANJI_POOL.length];
 }
 
 function fmtPnl(v: number) {
@@ -52,6 +54,41 @@ export default function LeaderboardPage() {
       { ...rankings[0], r: 1 },
       { ...rankings[2], r: 3 },
     ];
+  }, [rankings]);
+
+  // Banzuke rows: pair rankings into east/west
+  const banzukeData = useMemo(() => {
+    const rows = [];
+    for (let i = 0; i < Math.min(rankings.length, 50); i += 2) {
+      const rank = Math.floor(i / 2) + 1;
+      const east = rankings[i];
+      const west = rankings[i + 1];
+      let tier = 1;
+      if (rank <= 3) tier = rank;
+      else if (rank <= 7) tier = 3;
+      else if (rank <= 12) tier = 4;
+      else tier = 5;
+      rows.push({
+        rank,
+        jp: String(rank),
+        tier,
+        east: east ? {
+          glyph: glyphFromAddress(east.owner),
+          name: fmtAddr(east.owner),
+          handle: '',
+          pnl: east.pnl,
+          meta: `${east.tradeCount} rounds · ${east.winRate}%`,
+        } : null,
+        west: west ? {
+          glyph: glyphFromAddress(west.owner),
+          name: fmtAddr(west.owner),
+          handle: '',
+          pnl: west.pnl,
+          meta: `${west.tradeCount} rounds · ${west.winRate}%`,
+        } : null,
+      });
+    }
+    return rows;
   }, [rankings]);
 
 
@@ -237,7 +274,7 @@ export default function LeaderboardPage() {
                       <span className="ord">{p.r === 1 ? '1ST' : p.r === 2 ? '2ND' : '3RD'}</span>
                       <span>{p.r === 1 ? `GRAND CHAMPION · ${p.bestStreak} CUTS` : p.r === 2 ? 'CHALLENGER' : 'CONTENDER'}</span>
                     </div>
-                    <div className="podium-portrait" style={{ background: avatarGradient(p.owner) }} />
+                    <div className="podium-portrait">{glyphFromAddress(p.owner)}</div>
                     <div className="podium-name">{fmtAddr(p.owner)}</div>
                     <div className="podium-handle">{fmtAddr(p.owner)}</div>
                     <div className="podium-pnl">
@@ -293,49 +330,70 @@ export default function LeaderboardPage() {
             </section>
           )}
 
-          {/* Section 3: Ranking sheet */}
-          {rankings.length > 0 && (
+          {/* Section 3: Banzuke */}
+          {banzukeData.length > 0 && (
             <section>
               <SectionHeader
                 number="03"
                 title="Ranking sheet"
-                desc="Every trader this season, ordered by net realized P&L."
-                meta={`${rankings.length} ranked`}
+                desc="Top traders of the season ranked by net realized P&L."
+                meta="east · west"
               />
 
-              <div className="rounded-2xl border border-white/[0.08] bg-white/[0.01] overflow-hidden">
-                {/* column header */}
-                <div className="hidden sm:grid grid-cols-[56px_1fr_150px_140px] gap-4 px-5 py-3 border-b border-white/[0.06] font-mono text-[10px] uppercase tracking-[0.14em] text-gray-600">
-                  <span>Rank</span>
-                  <span>Trader</span>
-                  <span className="text-right">Win · rounds</span>
-                  <span className="text-right">Net P&amp;L</span>
+              <div className="banzuke-wrap">
+                <div className="banzuke-strip">
+                  <span>EAST · UP-side specialists</span>
+                  <span className="center">SEASON №04 · RANKINGS</span>
+                  <span>DOWN-side specialists · WEST</span>
                 </div>
-                {rankings.slice(0, 50).map((t, i) => {
-                  const rank = i + 1;
-                  const me = address ? t.owner === address : false;
-                  return (
-                    <div
-                      key={t.owner}
-                      data-cursor="hover"
-                      className={`grid grid-cols-[40px_1fr_auto] sm:grid-cols-[56px_1fr_150px_140px] gap-4 items-center px-5 py-3 border-b border-white/[0.04] last:border-0 transition-colors ${me ? 'bg-vermilion/[0.07]' : 'hover:bg-white/[0.02]'}`}
-                    >
-                      <span className={`font-mono font-bold tabular-nums ${rank <= 3 ? 'text-vermilion text-base' : 'text-gray-500 text-sm'}`}>{rank}</span>
-                      <div className="flex items-center gap-3 min-w-0">
-                        <span className="w-9 h-9 rounded-full flex-shrink-0 border border-white/10" style={{ background: avatarGradient(t.owner) }} />
-                        <span className="font-mono text-sm text-white truncate">
-                          {fmtAddr(t.owner)}{me && <span className="text-vermilion"> · you</span>}
-                        </span>
+                <div className="banzuke-cols-head">
+                  <div className="east">↑ Long the bell</div>
+                  <div className="center">RANK</div>
+                  <div className="west">Short the bell ↓</div>
+                </div>
+                <div>
+                  {banzukeData.map((row, i) => {
+                    const prevTier = i > 0 ? banzukeData[i - 1].tier : row.tier;
+                    return (
+                      <div key={row.rank}>
+                        {i > 0 && row.tier !== prevTier && row.tier === 4 && (
+                          <div className="bz-divider">RANK &amp; FILE</div>
+                        )}
+                        {i > 0 && row.tier !== prevTier && row.tier === 5 && (
+                          <div className="bz-divider">THE LONG TAIL</div>
+                        )}
+                        <div className={`banzuke-row tier-${row.tier}`}>
+                          {/* East cell */}
+                          {row.east ? (
+                            <div className="bz-cell east" data-cursor="hover">
+                              <span className="bz-meta">{row.east.meta}</span>
+                              <span className="bz-pnl">{row.east.pnl >= 0 ? '+' : ''}{fmtPnl(row.east.pnl)}</span>
+                              <div className="bz-text">
+                                <span className="bz-name">{row.east.name}</span>
+                                {row.east.handle && <span className="bz-handle">{row.east.handle}</span>}
+                              </div>
+                              <div className="bz-portrait">{row.east.glyph}</div>
+                            </div>
+                          ) : <div className="bz-cell east" />}
+                          {/* Center rank */}
+                          <div className="center">{row.jp}</div>
+                          {/* West cell */}
+                          {row.west ? (
+                            <div className="bz-cell west" data-cursor="hover">
+                              <div className="bz-portrait">{row.west.glyph}</div>
+                              <div className="bz-text">
+                                <span className="bz-name">{row.west.name}</span>
+                                {row.west.handle && <span className="bz-handle">{row.west.handle}</span>}
+                              </div>
+                              <span className="bz-pnl">{row.west.pnl >= 0 ? '+' : ''}{fmtPnl(row.west.pnl)}</span>
+                              <span className="bz-meta">{row.west.meta}</span>
+                            </div>
+                          ) : <div className="bz-cell west" />}
+                        </div>
                       </div>
-                      <span className="hidden sm:block font-mono text-xs text-gray-500 text-right tabular-nums">
-                        {t.winRate}% · {t.tradeCount}
-                      </span>
-                      <span className={`font-mono text-sm font-semibold text-right tabular-nums ${t.pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                        {t.pnl >= 0 ? '+' : ''}{fmtPnl(t.pnl)} <span className="text-gray-600 text-[10px]">DUSDC</span>
-                      </span>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
 
               {/* You bar */}
@@ -349,7 +407,7 @@ export default function LeaderboardPage() {
                     </span>
                   </div>
                   <div className="you-info">
-                    <div className="you-portrait" style={{ background: avatarGradient(address) }} />
+                    <div className="you-portrait">{glyphFromAddress(address)}</div>
                     <div className="you-text">
                       <span className="name">You · {formatAddress(address)}</span>
                       <span className="meta">{userRankData ? `top ${Math.round((userRankData.rank / Math.max(1, meta.totalWallets)) * 100)}%` : 'no trades yet'}</span>
@@ -388,7 +446,7 @@ export default function LeaderboardPage() {
                       <div className="num">{rec.value}<span className="unit">{rec.unit}</span></div>
                       <div className="desc">{rec.desc}</div>
                       <div className="by">
-                        <span className="av" style={{ background: avatarGradient(rec.trader) }} />
+                        <span className="av">{glyphFromAddress(rec.trader)}</span>
                         <span>by <span className="name">{fmtAddr(rec.trader)}</span> · {rec.date}</span>
                       </div>
                     </div>
