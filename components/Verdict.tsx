@@ -119,20 +119,35 @@ export default function Verdict({ oracle }: VerdictProps) {
         );
       })}
 
-      {/* The loop: straight into the next round */}
-      {nextRound && (
+      {/* The loop: a clear CTA straight into the next LIVE round */}
+      {nextRound ? (
         <button
           onClick={() => router.push(`/markets/${nextRound.id}`)}
           data-cursor="hover"
-          className="w-full flex items-center justify-between p-4 rounded-xl border border-white/[0.10] bg-white/[0.03] hover:bg-white/[0.06] hover:border-white/20 transition-all group"
+          className="w-full flex items-center justify-between gap-3 p-4 rounded-xl border border-vermilion/40 bg-vermilion/[0.10] hover:bg-vermilion/20 hover:border-vermilion/60 transition-all group"
         >
-          <span className="text-sm font-semibold text-white">
-            Next {oracle.underlying_asset || 'BTC'} round
+          <span className="flex items-center gap-2.5">
+            <span className="relative flex h-2 w-2 flex-shrink-0">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-vermilion opacity-75" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-vermilion" />
+            </span>
+            <span className="text-sm font-bold text-white">
+              Trade the live {oracle.underlying_asset || 'BTC'} market
+            </span>
           </span>
-          <span className="flex items-center gap-2 font-mono text-xs text-gray-400">
+          <span className="flex items-center gap-2 font-mono text-xs text-vermilion">
             closes in {formatCountdown(getTimeRemaining(nextRound.expiry))}
             <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
           </span>
+        </button>
+      ) : (
+        <button
+          onClick={() => router.push('/markets')}
+          data-cursor="hover"
+          className="w-full flex items-center justify-between gap-3 p-4 rounded-xl border border-vermilion/40 bg-vermilion/[0.10] hover:bg-vermilion/20 hover:border-vermilion/60 transition-all group"
+        >
+          <span className="text-sm font-bold text-white">Browse live markets</span>
+          <ArrowRight className="w-4 h-4 text-vermilion group-hover:translate-x-0.5 transition-transform" />
         </button>
       )}
     </div>
