@@ -11,6 +11,12 @@ export const PLP_TYPE = `${PACKAGE_ID}::plp::PLP`;
 export const CLOCK_ID = '0x6';
 export const PREDICT_SERVER = 'https://predict-server.testnet.mystenlabs.com';
 
+// yolev — yosuku's own leverage layer (lending pool + leveraged CDP on Predict).
+// Deployed to testnet 2026-06-13; see project_yosuku_leverage memory.
+export const YOLEV_PACKAGE = '0x69065b863db6beae1566750460db3923928581e1ef449a1eed85117e8fee802c';
+export const LENDING_POOL_ID = '0x4f87afab014ba13e143d123e0113feda02f6752dee40315e954eed49ef3ffb2d';
+export const LEV_CONFIG_ID = '0x83e449cc402fb38059158d30bd8717d0c9e592ae4caf52a46d0167ae13368cac';
+
 // FLOAT_SCALING used in DeepBook Predict (1e9)
 export const FLOAT_SCALING = 1_000_000_000;
 
