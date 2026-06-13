@@ -2,32 +2,31 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useSuiClient, useCurrentAccount } from '@mysten/dapp-kit';
-import { LENDING_POOL_ID, DUSDC_MULTIPLIER } from './constants';
+import { RESERVE_ID, DUSDC_MULTIPLIER } from './constants';
 import {
-  computePoolStats,
+  computeReserveStats,
   supplyPositionValue,
   SUPPLY_POSITION_TYPE,
-  LOAN_TYPE,
-  type PoolStats,
-  type LoanData,
+  POSITION_TYPE,
+  type ReserveStats,
+  type PositionData,
 } from './leverageClient';
 
-const RAY = 1_000_000_000_000; // 1e12 (mirrors lending_pool.move)
 type Fields = Record<string, unknown>;
 const fieldsOf = (content: unknown): Fields | null => {
   const c = content as { fields?: Fields } | null | undefined;
   return c?.fields ?? null;
 };
 
-/** Live lending-pool stats (TVL, utilization, APRs). */
-export function usePoolStats(pollMs = 15_000) {
+/** Live underwriting-reserve stats (TVL, utilization, premium, exposure). */
+export function useReserveStats(pollMs = 15_000) {
   const client = useSuiClient();
-  const [stats, setStats] = useState<PoolStats | null>(null);
+  const [stats, setStats] = useState<ReserveStats | null>(null);
   const refresh = useCallback(async () => {
     try {
-      const o = await client.getObject({ id: LENDING_POOL_ID, options: { showContent: true } });
+      const o = await client.getObject({ id: RESERVE_ID, options: { showContent: true } });
       const f = fieldsOf(o.data?.content);
-      if (f) setStats(computePoolStats(f as never));
+      if (f) setStats(computeReserveStats(f as never));
     } catch { /* ignore */ }
   }, [client]);
   useEffect(() => {
@@ -45,7 +44,7 @@ export interface MySupply {
 }
 
 /** The connected wallet's SupplyPosition objects, valued against `stats`. */
-export function useMySupply(stats: PoolStats | null, pollMs = 15_000) {
+export function useMySupply(stats: ReserveStats | null, pollMs = 15_000) {
   const client = useSuiClient();
   const account = useCurrentAccount();
   const address = account?.address ?? null;
@@ -76,35 +75,34 @@ export function useMySupply(stats: PoolStats | null, pollMs = 15_000) {
   return { positions, refresh, address };
 }
 
-/** The connected wallet's open Loan objects (leveraged positions), with live debt. */
-export function useMyLoans(stats: PoolStats | null, pollMs = 15_000) {
+/** The connected wallet's open underwritten Positions (leveraged trades). */
+export function useMyPositions(pollMs = 15_000) {
   const client = useSuiClient();
   const account = useCurrentAccount();
   const address = account?.address ?? null;
-  const [loans, setLoans] = useState<LoanData[]>([]);
+  const [positions, setPositions] = useState<PositionData[]>([]);
   const refresh = useCallback(async () => {
-    if (!address) { setLoans([]); return; }
+    if (!address) { setPositions([]); return; }
     try {
       const res = await client.getOwnedObjects({
         owner: address,
-        filter: { StructType: LOAN_TYPE },
+        filter: { StructType: POSITION_TYPE },
         options: { showContent: true },
       });
       const ls = res.data
-        .map((d): LoanData | null => {
+        .map((d): PositionData | null => {
           const f = fieldsOf(d.data?.content);
           if (!f || !d.data?.objectId) return null;
           const margin = Number(f.margin) / DUSDC_MULTIPLIER;
-          const notional = Number(f.notional) / DUSDC_MULTIPLIER;
-          const debt = stats ? (Number(f.principal_scaled) * stats.borrowIndex) / RAY / DUSDC_MULTIPLIER : 0;
+          const fronted = Number(f.fronted) / DUSDC_MULTIPLIER;
           return {
             id: d.data.objectId,
             owner: String(f.owner),
             margin,
-            borrowed: Number(f.borrowed) / DUSDC_MULTIPLIER,
-            notional,
-            debt,
-            leverage: margin > 0 ? notional / margin : 0,
+            fronted,
+            premium: Number(f.premium) / DUSDC_MULTIPLIER,
+            notional: Number(f.notional) / DUSDC_MULTIPLIER,
+            leverage: margin > 0 ? (margin + fronted) / margin : 0,
             managerId: String(f.manager_id),
             oracleId: String(f.oracle_id),
             expiry: BigInt(String(f.expiry)),
@@ -115,14 +113,14 @@ export function useMyLoans(stats: PoolStats | null, pollMs = 15_000) {
             quantity: BigInt(String(f.quantity)),
           };
         })
-        .filter((l): l is LoanData => l !== null);
-      setLoans(ls);
+        .filter((l): l is PositionData => l !== null);
+      setPositions(ls);
     } catch { /* ignore */ }
-  }, [client, address, stats]);
+  }, [client, address]);
   useEffect(() => {
     refresh();
     const t = setInterval(refresh, pollMs);
     return () => clearInterval(t);
   }, [refresh, pollMs]);
-  return { loans, refresh, address };
+  return { positions, refresh, address };
 }

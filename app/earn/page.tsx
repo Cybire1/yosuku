@@ -1,39 +1,77 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useCurrentAccount, useSignAndExecuteTransaction } from '@mysten/dapp-kit';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import Marquee from '@/components/Marquee';
 import GrainOverlay from '@/components/GrainOverlay';
+import SectionHeader from '@/components/SectionHeader';
 import { useDUSDCBalance } from '@/lib/sui/hooks';
-import { usePoolStats, useMySupply, useMyLoans } from '@/lib/sui/leverageHooks';
-import { supplyTx, withdrawTx, closeLeveragedTx, type LoanData } from '@/lib/sui/leverageClient';
+import { useReserveStats, useMySupply, useMyPositions } from '@/lib/sui/leverageHooks';
+import { supplyTx, withdrawTx, settleTx, type PositionData } from '@/lib/sui/leverageClient';
+import { fetchOracles, type OracleData } from '@/lib/sui/predictApi';
 
 const fmt = (n: number, d = 2) => n.toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d });
-const pct = (bps: number) => `${(bps / 100).toFixed(2)}%`;
+const pct = (bps: number) => `${(bps / 100).toFixed(1)}%`;
+
+function outcome(p: PositionData, o: OracleData | undefined): 'pending' | 'won' | 'lost' {
+  const settled = o && o.settlement_price !== null && o.settlement_price !== undefined && (o.status === 'settled' || Date.now() > Number(p.expiry));
+  if (!settled || o!.settlement_price == null) return 'pending';
+  const s = o!.settlement_price;
+  if (p.isRange) return (s >= Number(p.lowerStrike) && s <= Number(p.higherStrike)) ? 'won' : 'lost';
+  return (p.isUp ? s > Number(p.lowerStrike) : s <= Number(p.lowerStrike)) ? 'won' : 'lost';
+}
+
+// utilization donut — the reserve's "at risk" share, rendered as an arc
+function Gauge({ bps }: { bps: number }) {
+  const p = Math.min(1, Math.max(0, bps / 10000));
+  const R = 58, C = 2 * Math.PI * R;
+  return (
+    <svg width="148" height="148" viewBox="0 0 148 148" className="block">
+      <circle cx="74" cy="74" r={R} fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth="10" />
+      <circle
+        cx="74" cy="74" r={R} fill="none" stroke="var(--vermilion)" strokeWidth="10" strokeLinecap="round"
+        strokeDasharray={C} strokeDashoffset={C * (1 - p)} transform="rotate(-90 74 74)"
+        style={{ filter: 'drop-shadow(0 0 8px rgba(224,77,38,0.45))' }}
+      />
+      <text x="74" y="68" textAnchor="middle" className="fill-white" style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 30 }}>{(p * 100).toFixed(0)}%</text>
+      <text x="74" y="90" textAnchor="middle" style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: 3, fill: 'var(--gray-500)' }}>AT RISK</text>
+    </svg>
+  );
+}
 
 export default function EarnPage() {
   const account = useCurrentAccount();
   const address = account?.address ?? null;
   const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
-  const { stats, refresh: refreshStats } = usePoolStats();
+  const { stats, refresh: refreshStats } = useReserveStats();
   const { positions, refresh: refreshMine } = useMySupply(stats);
-  const { loans, refresh: refreshLoans } = useMyLoans(stats);
+  const { positions: myPositions, refresh: refreshPos } = useMyPositions();
   const { coins, refresh: refreshBal } = useDUSDCBalance();
 
   const [amount, setAmount] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState('');
+  const [oracles, setOracles] = useState<Record<string, OracleData>>({});
+
+  useEffect(() => {
+    let on = true;
+    const load = () => fetchOracles().then((os) => { if (on) setOracles(Object.fromEntries(os.map((o) => [o.oracle_id, o]))); }).catch(() => {});
+    load();
+    const t = setInterval(load, 20_000);
+    return () => { on = false; clearInterval(t); };
+  }, []);
 
   const supplied = positions.reduce((s, p) => s + p.value, 0);
+  const earned = supplied - 0; // display value already includes accrued premiums
 
   async function run(label: string, fn: () => Promise<void>) {
     setBusy(label); setMsg('');
     try {
       await fn();
       setMsg('Done ✓');
-      setTimeout(() => { refreshStats(); refreshMine(); refreshBal(); refreshLoans(); }, 1200);
+      setTimeout(() => { refreshStats(); refreshMine(); refreshBal(); refreshPos(); }, 1200);
     } catch (e) {
       setMsg(e instanceof Error ? e.message.slice(0, 120) : String(e));
     } finally {
@@ -45,18 +83,15 @@ export default function EarnPage() {
     if (!address) return;
     const micro = BigInt(Math.floor(Number(amount) * 1_000_000));
     if (micro <= BigInt(0)) { setMsg('Enter an amount'); return; }
-    const ids = coins.map((c) => c.coinObjectId);
-    await run('supply', async () => { await signAndExecute({ transaction: supplyTx(ids, micro, address) }); setAmount(''); });
+    await run('supply', async () => { await signAndExecute({ transaction: supplyTx(coins.map((c) => c.coinObjectId), micro, address) }); setAmount(''); });
   }
-
-  async function doWithdraw(positionId: string) {
+  async function doWithdraw(id: string) {
     if (!address) return;
-    await run('w:' + positionId, async () => { await signAndExecute({ transaction: withdrawTx(positionId, address) }); });
+    await run('w:' + id, async () => { await signAndExecute({ transaction: withdrawTx(id, address) }); });
   }
-
-  async function doClose(loan: LoanData) {
+  async function doSettle(p: PositionData, won: boolean) {
     if (!address) return;
-    await run('c:' + loan.id, async () => { await signAndExecute({ transaction: closeLeveragedTx(loan, address) }); });
+    await run('c:' + p.id, async () => { await signAndExecute({ transaction: settleTx(p, won, address) }); });
   }
 
   return (
@@ -64,153 +99,192 @@ export default function EarnPage() {
       <Marquee />
       <Header />
       <GrainOverlay />
-      <main className="container pt-[120px] pb-16 max-w-4xl mx-auto">
-        {/* hero */}
-        <div className="mb-8">
-          <div className="font-mono text-[10px] tracking-[0.2em] uppercase text-vermilion mb-2">● Earn · the lending pool</div>
-          <h1 className="font-display font-extrabold text-4xl tracking-tight">Supply DUSDC, earn the yield from leverage.</h1>
-          <p className="text-gray-400 mt-3 max-w-2xl leading-relaxed">
-            Traders borrow from this pool to open leveraged Predict positions. You supply the liquidity and earn the
-            interest they pay — utilization-based, settled on-chain. Withdraw anytime there&apos;s idle liquidity.
-          </p>
-        </div>
 
-        {/* stats */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
-          <Stat label="Supply APR" value={stats ? pct(stats.supplyAprBps) : '—'} accent />
-          <Stat label="Total value" value={stats ? `${fmt(stats.totalValue)}` : '—'} unit="DUSDC" />
-          <Stat label="Utilization" value={stats ? pct(stats.utilizationBps) : '—'} />
-          <Stat label="Available" value={stats ? `${fmt(stats.liquidity)}` : '—'} unit="DUSDC" />
-        </div>
+      {/* Hero */}
+      <section className="page-hero">
+        <span className="crop tl" /><span className="crop tr" /><span className="crop bl" /><span className="crop br" />
+        <span className="hero-meta tl">RESERVE V-03<span className="ln">UNDERWRITING DESK</span></span>
+        <span className="hero-meta tr">EDITION 04 / 2026<span className="ln">SUI · TESTNET</span></span>
+        <span className="hero-meta bl">PREMIUM {stats ? pct(stats.premiumBps) : '—'}<span className="ln">PAID BY TRADERS</span></span>
+        <span className="hero-meta br">{stats ? `${fmt(stats.totalValue, 0)} DUSDC` : '—'}<span className="ln">RESERVE VALUE</span></span>
 
-        <div className="grid md:grid-cols-2 gap-6">
-          {/* supply */}
-          <div className="border border-white/[0.08] rounded-2xl bg-white/[0.02] p-6">
-            <h2 className="font-display font-bold text-xl mb-4">Supply</h2>
-            {!address ? (
-              <p className="font-mono text-xs text-gray-500 py-6 text-center">Connect a wallet to supply.</p>
-            ) : (
-              <>
-                <div className="flex items-center gap-2 border border-white/10 rounded-xl px-4 py-3 mb-3">
-                  <input
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))}
-                    placeholder="0.00"
-                    inputMode="decimal"
-                    className="bg-transparent flex-1 outline-none font-mono text-lg"
-                  />
-                  <span className="font-mono text-sm text-gray-500">DUSDC</span>
-                </div>
-                <button
-                  onClick={doSupply}
-                  disabled={busy === 'supply'}
-                  className="w-full bg-white text-black font-semibold rounded-full py-3 hover:scale-[1.01] active:scale-[0.98] transition-transform disabled:opacity-60"
-                >
-                  {busy === 'supply' ? 'Supplying…' : 'Supply DUSDC'}
-                </button>
-                <p className="font-mono text-[11px] text-gray-600 mt-3">
-                  Earns {stats ? pct(stats.supplyAprBps) : '—'} APR · interest accrues continuously.
-                </p>
-              </>
-            )}
+        <div className="container">
+          <div className="breadcrumb">
+            <a href="/" data-cursor="hover">Home</a>
+            <span className="sep">/</span>
+            <span style={{ color: 'var(--white)' }}>Earn</span>
           </div>
 
-          {/* your position */}
-          <div className="border border-white/[0.08] rounded-2xl bg-white/[0.02] p-6">
-            <h2 className="font-display font-bold text-xl mb-4">Your supply</h2>
-            {!address ? (
-              <p className="font-mono text-xs text-gray-500 py-6 text-center">—</p>
-            ) : positions.length === 0 ? (
-              <p className="font-mono text-xs text-gray-500 py-6 text-center">No active supply yet.</p>
-            ) : (
-              <>
-                <div className="flex items-baseline justify-between mb-4">
-                  <span className="font-mono text-[11px] uppercase tracking-wider text-gray-500">Total supplied</span>
-                  <span className="font-mono text-2xl font-semibold">{fmt(supplied)} <span className="text-sm text-gray-500">DUSDC</span></span>
-                </div>
-                <div className="space-y-2">
-                  {positions.map((p) => (
-                    <div key={p.id} className="flex items-center justify-between border border-white/[0.06] rounded-xl px-4 py-3">
-                      <span className="font-mono text-sm text-gray-300">{fmt(p.value)} DUSDC</span>
-                      <button
-                        onClick={() => doWithdraw(p.id)}
-                        disabled={busy === 'w:' + p.id}
-                        className="font-mono text-xs text-vermilion hover:text-white transition-colors disabled:opacity-50"
-                      >
-                        {busy === 'w:' + p.id ? 'Withdrawing…' : 'Withdraw'}
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* your leveraged positions */}
-        {address && loans.length > 0 && (
-          <div className="mt-8 border border-white/[0.08] rounded-2xl bg-white/[0.02] p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="font-display font-bold text-xl">Your leveraged positions</h2>
-              <span className="font-mono text-[10px] uppercase tracking-wider text-vermilion/80 bg-vermilion/10 px-2 py-0.5 rounded">borrowed from pool</span>
+          <div className="hero-grid">
+            <div className="hero-left">
+              <div className="eyebrow">
+                <span className="dash" />
+                <span className="live-dot" />
+                <span>The reserve · live</span>
+                <span style={{ color: 'var(--gray-700)' }}>·</span>
+                <span>you are the house</span>
+              </div>
+              <h1 className="page-title">
+                Underwrite<br />
+                the <span className="accent">upside</span>.
+              </h1>
+              <p className="mt-6 max-w-md text-gray-400 leading-relaxed text-[15px]">
+                When a trader levers up, the reserve fronts the extra notional and pockets a premium. Supply DUSDC,
+                take the other side, and earn what they pay. Traders carry no debt — so there&apos;s nothing to liquidate.
+              </p>
             </div>
-            <div className="space-y-2">
-              {loans.map((l) => {
-                const healthy = l.debt > 0 ? l.notional / l.debt : 99;
-                return (
-                  <div key={l.id} className="flex items-center justify-between gap-3 border border-white/[0.06] rounded-xl px-4 py-3 flex-wrap">
-                    <div className="flex items-center gap-3">
-                      <span className="font-mono text-sm font-bold text-vermilion">{l.leverage.toFixed(0)}×</span>
-                      <div>
-                        <div className="font-mono text-sm text-white">{fmt(l.notional)} DUSDC position</div>
-                        <div className="font-mono text-[11px] text-gray-500">
-                          {fmt(l.margin)} margin · {fmt(l.borrowed)} borrowed · {l.isRange ? 'range' : l.isUp ? 'UP' : 'DOWN'}
+
+            {/* live reserve dashboard */}
+            <div className="rounded-2xl border border-white/[0.10] bg-gradient-to-b from-white/[0.04] to-transparent p-7 backdrop-blur-sm">
+              <div className="flex items-center justify-between mb-5">
+                <span className="font-mono text-[10px] tracking-[0.22em] uppercase text-gray-500 flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-vermilion" style={{ boxShadow: '0 0 8px var(--vermilion)' }} /> Live reserve
+                </span>
+                <span className="font-mono text-[10px] tracking-[0.18em] uppercase text-gray-600">{stats ? `${stats.maxLeverageBps / 10000}× max` : '—'}</span>
+              </div>
+              <div className="flex items-center gap-6">
+                <Gauge bps={stats?.utilizationBps ?? 0} />
+                <div className="flex-1 space-y-3.5">
+                  <ReserveRow label="Reserve value" value={stats ? `${fmt(stats.totalValue)}` : '—'} unit="DUSDC" big />
+                  <ReserveRow label="Available now" value={stats ? `${fmt(stats.liquid)}` : '—'} unit="DUSDC" />
+                  <ReserveRow label="Premium spread" value={stats ? pct(stats.premiumBps) : '—'} accent />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <main>
+        <div className="container max-w-5xl mx-auto pt-14 pb-20">
+          {/* Supply */}
+          <SectionHeader number="01" title="Supply the reserve" desc="Deposit DUSDC to back leveraged trades and earn the premiums they pay." meta="withdraw idle liquidity anytime" />
+          <div className="grid md:grid-cols-2 gap-5 mb-16">
+            {/* supply card */}
+            <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-6">
+              {!address ? (
+                <p className="font-mono text-xs text-gray-500 py-10 text-center">Connect a wallet to supply.</p>
+              ) : (
+                <>
+                  <div className="flex items-baseline justify-between mb-3">
+                    <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-gray-600">Amount</span>
+                    <span className="font-mono text-[10px] text-gray-600">wallet {fmt((coins.reduce((s, c) => s + Number(c.balance), 0)) / 1e6)} DUSDC</span>
+                  </div>
+                  <div className="flex items-center gap-2 border border-white/10 rounded-xl px-4 py-3.5 mb-4 focus-within:border-white/25 transition-colors">
+                    <input
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))}
+                      placeholder="0.00"
+                      inputMode="decimal"
+                      className="bg-transparent flex-1 outline-none font-mono text-2xl"
+                    />
+                    <button onClick={() => setAmount(((coins.reduce((s, c) => s + Number(c.balance), 0)) / 1e6).toFixed(2))} className="font-mono text-[10px] uppercase tracking-wider text-vermilion hover:text-white transition-colors">Max</button>
+                    <span className="font-mono text-sm text-gray-500">DUSDC</span>
+                  </div>
+                  <button
+                    onClick={doSupply}
+                    disabled={busy === 'supply'}
+                    className="w-full bg-white text-black font-semibold rounded-full py-3.5 hover:scale-[1.01] active:scale-[0.98] transition-transform disabled:opacity-60"
+                  >
+                    {busy === 'supply' ? 'Supplying…' : 'Supply DUSDC'}
+                  </button>
+                  <p className="font-mono text-[11px] text-gray-600 mt-3.5 leading-relaxed">
+                    Earns the {stats ? pct(stats.premiumBps) : '—'} premium on every leveraged trade · your value grows with premiums, dips when a fronted trade loses.
+                  </p>
+                </>
+              )}
+            </div>
+
+            {/* your supply card */}
+            <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-6">
+              <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-gray-600 mb-4">Your supply</div>
+              {!address ? (
+                <p className="font-mono text-xs text-gray-500 py-10 text-center">—</p>
+              ) : positions.length === 0 ? (
+                <p className="font-mono text-xs text-gray-500 py-10 text-center">No active supply yet.</p>
+              ) : (
+                <>
+                  <div className="font-display text-4xl font-extrabold tracking-tight">{fmt(supplied)} <span className="text-base text-gray-500 font-mono font-normal">DUSDC</span></div>
+                  <div className="font-mono text-[11px] text-gray-500 mt-1 mb-5">across {positions.length} position{positions.length > 1 ? 's' : ''}{earned > 0 ? '' : ''}</div>
+                  <div className="space-y-2">
+                    {positions.map((p) => (
+                      <div key={p.id} className="flex items-center justify-between border border-white/[0.06] rounded-xl px-4 py-3">
+                        <span className="font-mono text-sm text-gray-300">{fmt(p.value)} DUSDC</span>
+                        <button onClick={() => doWithdraw(p.id)} disabled={busy === 'w:' + p.id} className="font-mono text-xs text-vermilion hover:text-white transition-colors disabled:opacity-50">
+                          {busy === 'w:' + p.id ? 'Withdrawing…' : 'Withdraw'}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Your leveraged positions */}
+          {address && myPositions.length > 0 && (
+            <>
+              <SectionHeader number="02" title="Your leveraged positions" desc="Opened with margin + the reserve's fronted capital. Max loss is always your margin." meta="settled by you" />
+              <div className="space-y-2.5">
+                {myPositions.map((p) => {
+                  const oc = outcome(p, oracles[p.oracleId]);
+                  const maxPayout = Number(p.quantity) / 1_000_000;
+                  return (
+                    <div key={p.id} className="flex items-center justify-between gap-3 rounded-2xl border border-white/[0.08] bg-white/[0.02] px-5 py-4 flex-wrap hover:border-white/[0.14] transition-colors">
+                      <div className="flex items-center gap-4">
+                        <span className="font-display text-2xl font-extrabold text-vermilion w-12">{p.leverage.toFixed(0)}×</span>
+                        <div>
+                          <div className="font-mono text-sm text-white">{fmt(p.notional)} DUSDC <span className="text-gray-500">· {p.isRange ? 'range' : p.isUp ? 'UP' : 'DOWN'}</span></div>
+                          <div className="font-mono text-[11px] text-gray-600 mt-0.5">{fmt(p.margin)} margin · {fmt(p.fronted)} fronted · {fmt(p.premium)} premium</div>
                         </div>
                       </div>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <div className="text-right">
-                        <div className="font-mono text-[9px] uppercase tracking-wider text-gray-600">debt now</div>
-                        <div className="font-mono text-sm text-white">{fmt(l.debt)} DUSDC</div>
+                      <div className="flex items-center gap-5">
+                        <div className="text-right">
+                          <div className="font-mono text-[9px] uppercase tracking-wider text-gray-600">max payout</div>
+                          <div className="font-mono text-sm text-emerald-400/90">{fmt(maxPayout)} DUSDC</div>
+                        </div>
+                        {oc === 'pending' ? (
+                          <span className="font-mono text-[11px] text-gray-500 px-3 py-2">Awaiting settlement…</span>
+                        ) : oc === 'won' ? (
+                          <button onClick={() => doSettle(p, true)} disabled={busy === 'c:' + p.id} className="font-mono text-xs px-4 py-2 rounded-full border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10 transition-colors disabled:opacity-50">
+                            {busy === 'c:' + p.id ? 'Collecting…' : 'Collect'}
+                          </button>
+                        ) : (
+                          <button onClick={() => doSettle(p, false)} disabled={busy === 'c:' + p.id} className="font-mono text-xs px-4 py-2 rounded-full border border-white/10 text-gray-400 hover:text-white hover:border-white/25 transition-colors disabled:opacity-50">
+                            {busy === 'c:' + p.id ? 'Closing…' : 'Close'}
+                          </button>
+                        )}
                       </div>
-                      <button
-                        onClick={() => doClose(l)}
-                        disabled={busy === 'c:' + l.id}
-                        className="font-mono text-xs px-3 py-1.5 rounded-lg border border-white/10 text-gray-300 hover:text-white hover:border-white/25 transition-colors disabled:opacity-50"
-                        title="Redeem the position, repay the loan, collect PnL"
-                      >
-                        {busy === 'c:' + l.id ? 'Closing…' : 'Close'}
-                      </button>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
-            <p className="font-mono text-[10px] text-gray-600 mt-3">
-              Close redeems your settled, winning position, repays the loan + interest, and returns your PnL. Losing
-              positions are liquidated.
-            </p>
-          </div>
-        )}
+                  );
+                })}
+              </div>
+              <p className="font-mono text-[10px] text-gray-600 mt-4 leading-relaxed max-w-2xl">
+                On a win, <span className="text-emerald-400/80">Collect</span> redeems the position, repays the reserve&apos;s fronted capital, and returns your PnL.
+                On a loss your margin is gone — never more — and the reserve absorbs the fronted amount, paid for by premiums.
+              </p>
+            </>
+          )}
 
-        {msg && <p className={`text-center mt-5 text-[12px] font-mono ${msg.includes('✓') ? 'text-emerald-400' : 'text-rose-400'}`}>{msg}</p>}
+          {msg && <p className={`text-center mt-8 text-[12px] font-mono ${msg.includes('✓') ? 'text-emerald-400' : 'text-rose-400'}`}>{msg}</p>}
 
-        <p className="text-center font-mono text-[10px] text-gray-700 mt-10">
-          yolev lending pool · testnet · interest paid by leveraged traders
-        </p>
+          <p className="text-center font-mono text-[10px] text-gray-700 mt-16 tracking-wider">
+            yolev underwriting reserve · testnet · experimental
+          </p>
+        </div>
         <Footer />
       </main>
     </div>
   );
 }
 
-function Stat({ label, value, unit, accent }: { label: string; value: string; unit?: string; accent?: boolean }) {
+function ReserveRow({ label, value, unit, big, accent }: { label: string; value: string; unit?: string; big?: boolean; accent?: boolean }) {
   return (
-    <div className="border border-white/[0.08] rounded-xl bg-white/[0.02] px-4 py-3">
-      <div className="font-mono text-[9px] tracking-[0.16em] uppercase text-gray-600">{label}</div>
-      <div className={`font-mono text-lg font-semibold mt-1 ${accent ? 'text-vermilion' : 'text-white'}`}>
-        {value} {unit && <span className="text-xs text-gray-500">{unit}</span>}
-      </div>
+    <div className="flex items-baseline justify-between gap-3 border-b border-white/[0.05] pb-2.5 last:border-0 last:pb-0">
+      <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-gray-600">{label}</span>
+      <span className={`font-mono ${big ? 'text-xl font-bold' : 'text-sm'} ${accent ? 'text-vermilion' : 'text-white'}`}>
+        {value} {unit && <span className="text-xs text-gray-600 font-normal">{unit}</span>}
+      </span>
     </div>
   );
 }
