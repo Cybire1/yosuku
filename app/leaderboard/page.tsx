@@ -54,41 +54,6 @@ export default function LeaderboardPage() {
     ];
   }, [rankings]);
 
-  // Banzuke rows: pair rankings into east/west
-  const banzukeData = useMemo(() => {
-    const rows = [];
-    for (let i = 0; i < Math.min(rankings.length, 50); i += 2) {
-      const rank = Math.floor(i / 2) + 1;
-      const east = rankings[i];
-      const west = rankings[i + 1];
-      let tier = 1;
-      if (rank <= 3) tier = rank;
-      else if (rank <= 7) tier = 3;
-      else if (rank <= 12) tier = 4;
-      else tier = 5;
-      rows.push({
-        rank,
-        jp: String(rank),
-        tier,
-        east: east ? {
-          color: avatarGradient(east.owner),
-          name: fmtAddr(east.owner),
-          handle: '',
-          pnl: east.pnl,
-          meta: `${east.tradeCount} rounds · ${east.winRate}%`,
-        } : null,
-        west: west ? {
-          color: avatarGradient(west.owner),
-          name: fmtAddr(west.owner),
-          handle: '',
-          pnl: west.pnl,
-          meta: `${west.tradeCount} rounds · ${west.winRate}%`,
-        } : null,
-      });
-    }
-    return rows;
-  }, [rankings]);
-
 
   // Yokozuna chart — use real price history if top trader exists
   const topTrader = rankings[0];
@@ -328,70 +293,49 @@ export default function LeaderboardPage() {
             </section>
           )}
 
-          {/* Section 3: Banzuke */}
-          {banzukeData.length > 0 && (
+          {/* Section 3: Ranking sheet */}
+          {rankings.length > 0 && (
             <section>
               <SectionHeader
                 number="03"
                 title="Ranking sheet"
-                desc="Top traders of the season ranked by net realized P&L."
-                meta="east · west"
+                desc="Every trader this season, ordered by net realized P&L."
+                meta={`${rankings.length} ranked`}
               />
 
-              <div className="banzuke-wrap">
-                <div className="banzuke-strip">
-                  <span>EAST · UP-side specialists</span>
-                  <span className="center">SEASON №04 · RANKINGS</span>
-                  <span>DOWN-side specialists · WEST</span>
+              <div className="rounded-2xl border border-white/[0.08] bg-white/[0.01] overflow-hidden">
+                {/* column header */}
+                <div className="hidden sm:grid grid-cols-[56px_1fr_150px_140px] gap-4 px-5 py-3 border-b border-white/[0.06] font-mono text-[10px] uppercase tracking-[0.14em] text-gray-600">
+                  <span>Rank</span>
+                  <span>Trader</span>
+                  <span className="text-right">Win · rounds</span>
+                  <span className="text-right">Net P&amp;L</span>
                 </div>
-                <div className="banzuke-cols-head">
-                  <div className="east">↑ Long the bell</div>
-                  <div className="center">RANK</div>
-                  <div className="west">Short the bell ↓</div>
-                </div>
-                <div>
-                  {banzukeData.map((row, i) => {
-                    const prevTier = i > 0 ? banzukeData[i - 1].tier : row.tier;
-                    return (
-                      <div key={row.rank}>
-                        {i > 0 && row.tier !== prevTier && row.tier === 4 && (
-                          <div className="bz-divider">RANK &amp; FILE</div>
-                        )}
-                        {i > 0 && row.tier !== prevTier && row.tier === 5 && (
-                          <div className="bz-divider">THE LONG TAIL</div>
-                        )}
-                        <div className={`banzuke-row tier-${row.tier}`}>
-                          {/* East cell */}
-                          {row.east ? (
-                            <div className="bz-cell east" data-cursor="hover">
-                              <span className="bz-meta">{row.east.meta}</span>
-                              <span className="bz-pnl">{row.east.pnl >= 0 ? '+' : ''}{fmtPnl(row.east.pnl)}</span>
-                              <div className="bz-text">
-                                <span className="bz-name">{row.east.name}</span>
-                                {row.east.handle && <span className="bz-handle">{row.east.handle}</span>}
-                              </div>
-                              <div className="bz-portrait" style={{ background: row.east.color }} />
-                            </div>
-                          ) : <div className="bz-cell east" />}
-                          {/* Center rank */}
-                          <div className="center">{row.jp}</div>
-                          {/* West cell */}
-                          {row.west ? (
-                            <div className="bz-cell west" data-cursor="hover">
-                              <div className="bz-portrait" style={{ background: row.west.color }} />
-                              <div className="bz-text">
-                                <span className="bz-name">{row.west.name}</span>
-                                {row.west.handle && <span className="bz-handle">{row.west.handle}</span>}
-                              </div>
-                              <span className="bz-pnl">{row.west.pnl >= 0 ? '+' : ''}{fmtPnl(row.west.pnl)}</span>
-                              <span className="bz-meta">{row.west.meta}</span>
-                            </div>
-                          ) : <div className="bz-cell west" />}
-                        </div>
+                {rankings.slice(0, 50).map((t, i) => {
+                  const rank = i + 1;
+                  const me = address ? t.owner === address : false;
+                  return (
+                    <div
+                      key={t.owner}
+                      data-cursor="hover"
+                      className={`grid grid-cols-[40px_1fr_auto] sm:grid-cols-[56px_1fr_150px_140px] gap-4 items-center px-5 py-3 border-b border-white/[0.04] last:border-0 transition-colors ${me ? 'bg-vermilion/[0.07]' : 'hover:bg-white/[0.02]'}`}
+                    >
+                      <span className={`font-mono font-bold tabular-nums ${rank <= 3 ? 'text-vermilion text-base' : 'text-gray-500 text-sm'}`}>{rank}</span>
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className="w-9 h-9 rounded-full flex-shrink-0 border border-white/10" style={{ background: avatarGradient(t.owner) }} />
+                        <span className="font-mono text-sm text-white truncate">
+                          {fmtAddr(t.owner)}{me && <span className="text-vermilion"> · you</span>}
+                        </span>
                       </div>
-                    );
-                  })}
-                </div>
+                      <span className="hidden sm:block font-mono text-xs text-gray-500 text-right tabular-nums">
+                        {t.winRate}% · {t.tradeCount}
+                      </span>
+                      <span className={`font-mono text-sm font-semibold text-right tabular-nums ${t.pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        {t.pnl >= 0 ? '+' : ''}{fmtPnl(t.pnl)} <span className="text-gray-600 text-[10px]">DUSDC</span>
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
 
               {/* You bar */}
