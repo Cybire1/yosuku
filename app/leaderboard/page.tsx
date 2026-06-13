@@ -11,10 +11,13 @@ import { drawCandles, priceHistoryToCandles } from '@/lib/charts/canvasChart';
 import { useLeaderboard, usePriceHistory, useOracles } from '@/lib/sui/hooks';
 import { formatAddress } from '@/lib/leaderboardStats';
 
-// Deterministic 2-char initial from an address — a clean identity badge for avatars.
-function glyphFromAddress(addr: string): string {
-  const hex = addr.replace(/^0x/, '');
-  return (hex.slice(0, 2) || '··').toUpperCase();
+// Deterministic color disc from an address — a clean identity avatar (no text,
+// no hex-dump, no collisions). Two close hues give the disc a little depth.
+function avatarGradient(addr: string): string {
+  let hash = 0;
+  for (let i = 0; i < addr.length; i++) hash = ((hash << 5) - hash + addr.charCodeAt(i)) | 0;
+  const h = Math.abs(hash) % 360;
+  return `linear-gradient(140deg, hsl(${h} 40% 22%) 0%, hsl(${(h + 26) % 360} 58% 47%) 100%)`;
 }
 
 function fmtPnl(v: number) {
@@ -68,14 +71,14 @@ export default function LeaderboardPage() {
         jp: String(rank),
         tier,
         east: east ? {
-          glyph: glyphFromAddress(east.owner),
+          color: avatarGradient(east.owner),
           name: fmtAddr(east.owner),
           handle: '',
           pnl: east.pnl,
           meta: `${east.tradeCount} rounds · ${east.winRate}%`,
         } : null,
         west: west ? {
-          glyph: glyphFromAddress(west.owner),
+          color: avatarGradient(west.owner),
           name: fmtAddr(west.owner),
           handle: '',
           pnl: west.pnl,
@@ -269,7 +272,7 @@ export default function LeaderboardPage() {
                       <span className="ord">{p.r === 1 ? '1ST' : p.r === 2 ? '2ND' : '3RD'}</span>
                       <span>{p.r === 1 ? `GRAND CHAMPION · ${p.bestStreak} CUTS` : p.r === 2 ? 'CHALLENGER' : 'CONTENDER'}</span>
                     </div>
-                    <div className="podium-portrait">{glyphFromAddress(p.owner)}</div>
+                    <div className="podium-portrait" style={{ background: avatarGradient(p.owner) }} />
                     <div className="podium-name">{fmtAddr(p.owner)}</div>
                     <div className="podium-handle">{fmtAddr(p.owner)}</div>
                     <div className="podium-pnl">
@@ -367,7 +370,7 @@ export default function LeaderboardPage() {
                                 <span className="bz-name">{row.east.name}</span>
                                 {row.east.handle && <span className="bz-handle">{row.east.handle}</span>}
                               </div>
-                              <div className="bz-portrait">{row.east.glyph}</div>
+                              <div className="bz-portrait" style={{ background: row.east.color }} />
                             </div>
                           ) : <div className="bz-cell east" />}
                           {/* Center rank */}
@@ -375,7 +378,7 @@ export default function LeaderboardPage() {
                           {/* West cell */}
                           {row.west ? (
                             <div className="bz-cell west" data-cursor="hover">
-                              <div className="bz-portrait">{row.west.glyph}</div>
+                              <div className="bz-portrait" style={{ background: row.west.color }} />
                               <div className="bz-text">
                                 <span className="bz-name">{row.west.name}</span>
                                 {row.west.handle && <span className="bz-handle">{row.west.handle}</span>}
@@ -402,7 +405,7 @@ export default function LeaderboardPage() {
                     </span>
                   </div>
                   <div className="you-info">
-                    <div className="you-portrait">{glyphFromAddress(address)}</div>
+                    <div className="you-portrait" style={{ background: avatarGradient(address) }} />
                     <div className="you-text">
                       <span className="name">You · {formatAddress(address)}</span>
                       <span className="meta">{userRankData ? `top ${Math.round((userRankData.rank / Math.max(1, meta.totalWallets)) * 100)}%` : 'no trades yet'}</span>
@@ -441,7 +444,7 @@ export default function LeaderboardPage() {
                       <div className="num">{rec.value}<span className="unit">{rec.unit}</span></div>
                       <div className="desc">{rec.desc}</div>
                       <div className="by">
-                        <span className="av">{glyphFromAddress(rec.trader)}</span>
+                        <span className="av" style={{ background: avatarGradient(rec.trader) }} />
                         <span>by <span className="name">{fmtAddr(rec.trader)}</span> · {rec.date}</span>
                       </div>
                     </div>
