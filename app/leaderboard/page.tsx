@@ -11,19 +11,10 @@ import { drawCandles, priceHistoryToCandles } from '@/lib/charts/canvasChart';
 import { useLeaderboard, usePriceHistory, useOracles } from '@/lib/sui/hooks';
 import { formatAddress } from '@/lib/leaderboardStats';
 
-// Japanese number glyphs for rank labels
-const JP_NUMS = ['一','二','三','四','五','六','七','八','九','十',
-  '十一','十二','十三','十四','十五','十六','十七','十八','十九','二十',
-  '二一','二二','二三','二四','二五'];
-
-// Deterministic glyph from address
-const KANJI_POOL = '林青霧桜雷雪川石山松森光鳥夜梅藤熊寒銀金空海風波';
+// Deterministic 2-char initial from an address — a clean identity badge for avatars.
 function glyphFromAddress(addr: string): string {
-  let hash = 0;
-  for (let i = 0; i < addr.length; i++) {
-    hash = ((hash << 5) - hash + addr.charCodeAt(i)) | 0;
-  }
-  return KANJI_POOL[Math.abs(hash) % KANJI_POOL.length];
+  const hex = addr.replace(/^0x/, '');
+  return (hex.slice(0, 2) || '··').toUpperCase();
 }
 
 function fmtPnl(v: number) {
@@ -74,7 +65,7 @@ export default function LeaderboardPage() {
       else tier = 5;
       rows.push({
         rank,
-        jp: JP_NUMS[rank - 1] || String(rank),
+        jp: String(rank),
         tier,
         east: east ? {
           glyph: glyphFromAddress(east.owner),
@@ -184,7 +175,7 @@ export default function LeaderboardPage() {
             <div>
               <div className="lb-hero-eyebrow">
                 <span className="dash" />
-                <span>Banzuke · 番付 · the ranking sheet</span>
+                <span>The ranking sheet</span>
                 <span className="vermilion">— sealed nightly · 16:00 UTC</span>
               </div>
               <h1 className="lb-hero-title">
@@ -192,7 +183,6 @@ export default function LeaderboardPage() {
                 <span className="vermilion">house</span><br />
                 of names.
               </h1>
-              <div className="lb-hero-jp">勝者の番付</div>
               <p className="lb-hero-sub">
                 {meta.totalWallets > 0
                   ? `${meta.totalWallets.toLocaleString()} wallets called the bell this season. These are the ones the bell answered.`
@@ -214,7 +204,7 @@ export default function LeaderboardPage() {
                 <div className="big">{sealStr}</div>
               </div>
               <div className="stamp">
-                SEASON №04<span className="jp">第四場所</span>
+                SEASON №04
                 <div style={{ marginTop: 4, fontSize: '8px' }}>2026 Q2</div>
               </div>
             </div>
@@ -266,7 +256,6 @@ export default function LeaderboardPage() {
               <SectionHeader
                 number="01"
                 title="The podium"
-                jp="表彰台"
                 desc="Top three traders by net realized P&L this season."
                 meta="live · re-ranks every cut"
               />
@@ -275,7 +264,7 @@ export default function LeaderboardPage() {
                 {podiumData.map(p => (
                   <div key={p.r} className={`podium-spot s${p.r}`} data-cursor="hover">
                     <span className="podium-rank">{p.r}</span>
-                    {p.r === 1 && <span className="sash">YOKOZUNA · 横綱</span>}
+                    {p.r === 1 && <span className="sash">GRAND CHAMPION</span>}
                     <div className="podium-eyebrow">
                       <span className="ord">{p.r === 1 ? '1ST' : p.r === 2 ? '2ND' : '3RD'}</span>
                       <span>{p.r === 1 ? `GRAND CHAMPION · ${p.bestStreak} CUTS` : p.r === 2 ? 'CHALLENGER' : 'CONTENDER'}</span>
@@ -283,7 +272,6 @@ export default function LeaderboardPage() {
                     <div className="podium-portrait">{glyphFromAddress(p.owner)}</div>
                     <div className="podium-name">{fmtAddr(p.owner)}</div>
                     <div className="podium-handle">{fmtAddr(p.owner)}</div>
-                    <div className="podium-jp">{glyphFromAddress(p.owner)}</div>
                     <div className="podium-pnl">
                       <span className="sign">{p.pnl >= 0 ? '+' : ''}</span>{fmtPnl(p.pnl)}<span className="cur">DUSDC</span>
                     </div>
@@ -298,8 +286,7 @@ export default function LeaderboardPage() {
             <section>
               <SectionHeader
                 number="02"
-                title="Yokozuna"
-                jp="横綱 · the grand champion"
+                title="Grand champion"
                 desc={`Top trader with ${topTrader.bestStreak} consecutive winning cuts.`}
                 meta="current season"
               />
@@ -308,7 +295,6 @@ export default function LeaderboardPage() {
                 <div className="yoko-left">
                   <div className="yoko-eyebrow"><span className="dot" />Reigning · {topTrader.bestStreak} cuts best streak</div>
                   <h3 className="yoko-name">{fmtAddr(topTrader.owner)}</h3>
-                  <div className="yoko-jp">{glyphFromAddress(topTrader.owner)} · {fmtAddr(topTrader.owner)}</div>
                   <div className="yoko-meta">BEST STREAK <span className="v">{topTrader.bestStreak}</span> · WIN RATE <span className="v">{topTrader.winRate}%</span></div>
                   <p className="yoko-quote">
                     &ldquo;The bell decides.&rdquo;
@@ -345,16 +331,15 @@ export default function LeaderboardPage() {
               <SectionHeader
                 number="03"
                 title="Ranking sheet"
-                jp="番付表"
                 desc="Top traders of the season ranked by net realized P&L."
-                meta="east 東 · west 西"
+                meta="east · west"
               />
 
               <div className="banzuke-wrap">
                 <div className="banzuke-strip">
-                  <span>EAST · 東 · UP-side specialists</span>
-                  <span className="center">第四場所 · 番付</span>
-                  <span>DOWN-side specialists · 西 · WEST</span>
+                  <span>EAST · UP-side specialists</span>
+                  <span className="center">SEASON №04 · RANKINGS</span>
+                  <span>DOWN-side specialists · WEST</span>
                 </div>
                 <div className="banzuke-cols-head">
                   <div className="east">↑ Long the bell</div>
@@ -367,10 +352,10 @@ export default function LeaderboardPage() {
                     return (
                       <div key={row.rank}>
                         {i > 0 && row.tier !== prevTier && row.tier === 4 && (
-                          <div className="bz-divider">前頭 <span className="jp">·下位·</span> RANK &amp; FILE</div>
+                          <div className="bz-divider">RANK &amp; FILE</div>
                         )}
                         {i > 0 && row.tier !== prevTier && row.tier === 5 && (
-                          <div className="bz-divider">幕下 <span className="jp">·末席·</span> THE LONG TAIL</div>
+                          <div className="bz-divider">THE LONG TAIL</div>
                         )}
                         <div className={`banzuke-row tier-${row.tier}`}>
                           {/* East cell */}
@@ -440,17 +425,15 @@ export default function LeaderboardPage() {
               <SectionHeader
                 number="04"
                 title="Records of the season"
-                jp="記録"
                 desc="The cuts the floor will remember."
                 meta="season №04 · sealed"
               />
 
               <div className="records-grid">
                 {records.map((rec, i) => {
-                  const ghosts = ['勝', '連', '逆'];
                   return (
                     <div key={i} className="record" data-cursor="hover">
-                      <div className="ghost">{ghosts[i] || '記'}</div>
+                      <div className="ghost">{String(i + 1).padStart(2, '0')}</div>
                       <div className="head">
                         <span className="lbl">{rec.label}</span>
                         <span className="badge">{rec.badge}</span>
