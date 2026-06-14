@@ -8,8 +8,8 @@ import Marquee from '@/components/Marquee';
 import GrainOverlay from '@/components/GrainOverlay';
 import SectionHeader from '@/components/SectionHeader';
 import { useDUSDCBalance } from '@/lib/sui/hooks';
-import { useReserveStats, useMySupply, useMyPositions } from '@/lib/sui/leverageHooks';
-import { supplyTx, withdrawTx, settleTx, type PositionData } from '@/lib/sui/leverageClient';
+import { useReserveStats, useMySupply, useMyPositions, useMyOrders } from '@/lib/sui/leverageHooks';
+import { supplyTx, withdrawTx, cancelOrderTx, type PositionData } from '@/lib/sui/leverageClient';
 import { fetchOracles, type OracleData } from '@/lib/sui/predictApi';
 
 const fmt = (n: number, d = 2) => n.toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -48,6 +48,7 @@ export default function EarnPage() {
   const { stats, refresh: refreshStats } = useReserveStats();
   const { positions, refresh: refreshMine } = useMySupply(stats);
   const { positions: myPositions, refresh: refreshPos } = useMyPositions();
+  const { orders: myOrders, refresh: refreshOrders } = useMyOrders();
   const { coins, refresh: refreshBal } = useDUSDCBalance();
 
   const [amount, setAmount] = useState('');
@@ -71,7 +72,7 @@ export default function EarnPage() {
     try {
       await fn();
       setMsg('Done ✓');
-      setTimeout(() => { refreshStats(); refreshMine(); refreshBal(); refreshPos(); }, 1200);
+      setTimeout(() => { refreshStats(); refreshMine(); refreshBal(); refreshPos(); refreshOrders(); }, 1200);
     } catch (e) {
       setMsg(e instanceof Error ? e.message.slice(0, 120) : String(e));
     } finally {
@@ -89,9 +90,9 @@ export default function EarnPage() {
     if (!address) return;
     await run('w:' + id, async () => { await signAndExecute({ transaction: withdrawTx(id, address) }); });
   }
-  async function doSettle(p: PositionData, won: boolean) {
+  async function doCancel(id: string) {
     if (!address) return;
-    await run('c:' + p.id, async () => { await signAndExecute({ transaction: settleTx(p, won, address) }); });
+    await run('x:' + id, async () => { await signAndExecute({ transaction: cancelOrderTx(id, address) }); });
   }
 
   return (
@@ -221,6 +222,27 @@ export default function EarnPage() {
             </div>
           </div>
 
+          {/* Pending escrows — the keeper is filling these */}
+          {address && myOrders.length > 0 && (
+            <div className="mb-6 rounded-2xl border border-vermilion/20 bg-vermilion/[0.04] p-5">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-vermilion opacity-75" /><span className="relative inline-flex h-2 w-2 rounded-full bg-vermilion" /></span>
+                <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-vermilion">Keeper is opening {myOrders.length} position{myOrders.length > 1 ? 's' : ''}…</span>
+              </div>
+              <div className="space-y-2">
+                {myOrders.map((o) => (
+                  <div key={o.id} className="flex items-center justify-between rounded-xl border border-white/[0.06] px-4 py-3">
+                    <span className="font-mono text-sm text-gray-300"><span className="text-vermilion font-bold">{o.leverage.toFixed(0)}×</span> · {fmt(o.margin)} DUSDC margin {o.isRange ? '· range' : ''}</span>
+                    <button onClick={() => doCancel(o.id)} disabled={busy === 'x:' + o.id} className="font-mono text-xs text-gray-500 hover:text-white transition-colors disabled:opacity-50">
+                      {busy === 'x:' + o.id ? 'Cancelling…' : 'Cancel'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <p className="font-mono text-[10px] text-gray-600 mt-3">Margin escrowed on-chain. The keeper fills within a few seconds — or Cancel to reclaim it instantly.</p>
+            </div>
+          )}
+
           {/* Your leveraged positions */}
           {address && myPositions.length > 0 && (
             <>
@@ -244,15 +266,15 @@ export default function EarnPage() {
                           <div className="font-mono text-sm text-emerald-400/90">{fmt(maxPayout)} DUSDC</div>
                         </div>
                         {oc === 'pending' ? (
-                          <span className="font-mono text-[11px] text-gray-500 px-3 py-2">Awaiting settlement…</span>
+                          <span className="font-mono text-[11px] text-gray-500 px-3 py-2 inline-flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-gray-600" /> live
+                          </span>
                         ) : oc === 'won' ? (
-                          <button onClick={() => doSettle(p, true)} disabled={busy === 'c:' + p.id} className="font-mono text-xs px-4 py-2 rounded-full border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10 transition-colors disabled:opacity-50">
-                            {busy === 'c:' + p.id ? 'Collecting…' : 'Collect'}
-                          </button>
+                          <span className="font-mono text-[11px] px-3 py-2 rounded-full border border-emerald-500/30 text-emerald-300 inline-flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> won · keeper settling
+                          </span>
                         ) : (
-                          <button onClick={() => doSettle(p, false)} disabled={busy === 'c:' + p.id} className="font-mono text-xs px-4 py-2 rounded-full border border-white/10 text-gray-400 hover:text-white hover:border-white/25 transition-colors disabled:opacity-50">
-                            {busy === 'c:' + p.id ? 'Closing…' : 'Close'}
-                          </button>
+                          <span className="font-mono text-[11px] px-3 py-2 rounded-full border border-white/10 text-gray-500">lost · margin only</span>
                         )}
                       </div>
                     </div>
@@ -260,8 +282,8 @@ export default function EarnPage() {
                 })}
               </div>
               <p className="font-mono text-[10px] text-gray-600 mt-4 leading-relaxed max-w-2xl">
-                On a win, <span className="text-emerald-400/80">Collect</span> redeems the position, repays the reserve&apos;s fronted capital, and returns your PnL.
-                On a loss your margin is gone — never more — and the reserve absorbs the fronted amount, paid for by premiums.
+                Positions are custodied by the protocol and <span className="text-vermilion/80">settled automatically by the keeper</span> when the round ends —
+                a win redeems, repays the reserve&apos;s fronted capital, and pays your PnL to your wallet; a loss costs only your margin. Nothing to claim.
               </p>
             </>
           )}

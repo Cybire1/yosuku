@@ -28,7 +28,7 @@ import {
 import { generateStrikeGrid, formatStrike, nearestStrike, savePosition } from '@/lib/roundHelpers';
 import { computeSviPrice, computeRangePrice, computeFeeBreakdown, type FeeBreakdown } from '@/lib/sui/sviPricing';
 import { fetchOnChainQuote, fetchOnChainRangeQuote, type OnChainQuote } from '@/lib/sui/onchainQuote';
-import { openLeveragedRangeTx, openLeveragedBinaryTx } from '@/lib/sui/leverageClient';
+import { requestOpenRangeTx, requestOpenBinaryTx } from '@/lib/sui/leverageClient';
 import { useReserveStats } from '@/lib/sui/leverageHooks';
 import { useDailyStop } from '@/lib/dailyStop';
 import { getSponsorStatus, submitSponsored, type SponsorStatus } from '@/lib/sponsor';
@@ -261,8 +261,9 @@ export default function TradePanel({
     try {
       let managerId = manager?.manager_id;
 
-      // Step 1: Create manager if needed
-      if (!managerId) {
+      // Step 1: Create manager if needed (leveraged trades use the keeper's manager,
+      // so they don't need the trader to have one).
+      if (!managerId && leverage === 1) {
         setStep('creating-manager');
         const tx = createManagerTx();
         await execTx(tx);
@@ -273,27 +274,29 @@ export default function TradePanel({
         managerId = m.manager_id;
       }
 
+      if (!managerId) throw new Error('No trading account.');
+
       // Step 2: Deposit + Mint
       const needsDeposit = managerBalance < amountMicro;
 
       if (leverage > 1) {
-        // Leveraged: the reserve fronts (L-1)× the margin, charges a premium, and
-        // we mint an L× position. No debt — max loss is the margin.
+        // Leveraged (trustless): the trader ESCROWS margin; the keeper fronts the
+        // reserve's capital and opens the position into the custody manager. No debt —
+        // max loss is the margin. Keeper fills within a few seconds.
         setStep('minting');
         const coinIds = coins.map(c => c.coinObjectId);
         const margin = BigInt(amountMicro);
         const leverageBps = leverage * 10_000;
-        const qty = BigInt(positionQty);
         const tx = side === 'RANGE' && rangeUpperStrike
-          ? openLeveragedRangeTx({
-              managerId, coinIds, marginAmount: margin, leverageBps,
+          ? requestOpenRangeTx({
+              coinIds, marginAmount: margin, leverageBps,
               oracleId: oracle.oracle_id, expiry: BigInt(oracle.expiry),
-              lower: BigInt(selectedStrike), higher: BigInt(rangeUpperStrike), quantity: qty, owner: address,
+              lower: BigInt(selectedStrike), higher: BigInt(rangeUpperStrike),
             })
-          : openLeveragedBinaryTx({
-              managerId, coinIds, marginAmount: margin, leverageBps,
+          : requestOpenBinaryTx({
+              coinIds, marginAmount: margin, leverageBps,
               oracleId: oracle.oracle_id, expiry: BigInt(oracle.expiry),
-              strike: BigInt(selectedStrike), isUp: side === 'UP', quantity: qty, owner: address,
+              strike: BigInt(selectedStrike), isUp: side === 'UP',
             });
         setTxDigest(await execTx(tx));
       } else if (side === 'RANGE' && rangeUpperStrike) {
@@ -370,7 +373,12 @@ export default function TradePanel({
       refreshManagerBalance();
       onSuccess?.();
       const strikeLabel = selectedStrike ? `$${(selectedStrike / FLOAT_SCALING).toLocaleString()}` : '';
-      toast(`Position opened: ${(amountMicro / DUSDC_MULTIPLIER).toFixed(2)} DUSDC on ${oracle.underlying_asset || 'BTC'} ${side} ${strikeLabel}`, 'success');
+      toast(
+        leverage > 1
+          ? `${leverage}× order placed — the keeper is opening your position (a few seconds). Track it on Earn.`
+          : `Position opened: ${(amountMicro / DUSDC_MULTIPLIER).toFixed(2)} DUSDC on ${oracle.underlying_asset || 'BTC'} ${side} ${strikeLabel}`,
+        'success',
+      );
 
       setTimeout(() => {
         setStep('idle');
@@ -702,7 +710,7 @@ export default function TradePanel({
             </span>
           </div>
           <div className="flex justify-between text-xs">
-            <span className="text-gray-500">Strike</span>
+            <span className="text-gray-500">Your line</span>
             <span className="text-white font-mono">
               {side === 'RANGE'
                 ? selectedStrike && rangeUpperStrike
@@ -752,20 +760,17 @@ export default function TradePanel({
             </span>
           </div>
 
-          {/* Fee breakdown (estimated) */}
+          {/* One plain line a bettor cares about: the odds. The vault's fee is
+              already baked into "You pay / To win" above, so no need to surface
+              SVI / Bernoulli / cost-per-unit jargon here. */}
           {feeBreakdown && (
-            <div className="space-y-1.5 py-2 border-t border-white/5">
+            <div className="py-2 border-t border-white/5">
               <div className="flex justify-between text-xs">
-                <span className="text-gray-500 inline-flex items-center gap-1">Fair Price (est.) <Tooltip text="SVI-derived probability of settlement above strike, based on implied volatility surface." position="bottom" /></span>
-                <span className="text-white font-mono">{(feeBreakdown.fairPrice * 100).toFixed(2)}%</span>
-              </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-gray-500 inline-flex items-center gap-1">Fee (est.) <Tooltip text="Bernoulli + utilization fee from the vault. Scales with vault utilization." position="bottom" /></span>
-                <span className="text-gray-400 font-mono">{(feeBreakdown.totalFee * 100).toFixed(2)}%</span>
-              </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-gray-500">Total Cost / Unit</span>
-                <span className="text-white font-mono font-semibold">{(feeBreakdown.totalCostPerUnit * 100).toFixed(2)}%</span>
+                <span className="text-gray-500 inline-flex items-center gap-1">
+                  Win chance
+                  <Tooltip text="The market's estimate of how likely your side is to win — fees included." position="bottom" />
+                </span>
+                <span className="text-white font-mono">{(feeBreakdown.fairPrice * 100).toFixed(0)}%</span>
               </div>
             </div>
           )}
