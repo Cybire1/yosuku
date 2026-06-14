@@ -11,16 +11,20 @@ export const PLP_TYPE = `${PACKAGE_ID}::plp::PLP`;
 export const CLOCK_ID = '0x6';
 export const PREDICT_SERVER = 'https://predict-server.testnet.mystenlabs.com';
 
-// yolev — yosuku's own leverage layer. v3 (2026-06-13): the UNDERWRITING model.
+// yolev — yosuku's own leverage layer. v4 (2026-06-13): UNDERWRITING + a KEEPER.
 // The reserve is the counterparty: it fronts the leveraged notional and charges a
-// premium up front. Traders have NO debt — max loss = margin — so there is nothing
-// to liquidate; settlement is deterministic. See project_yosuku_leverage memory.
-export const YOLEV_PACKAGE = '0x0a991b2fdb16614ae5c720655cd145103f910522fbc43547c9f525fd6124841a';
+// premium up front. Traders have NO debt — max loss = margin. Leveraged positions
+// are custodied in a protocol-owned (keeper-owned) PredictManager, and a settlement
+// keeper redeems winners → repays the reserve → pays the trader. `settle` is
+// permissionless and always routes PnL to the position owner, so it's trustless:
+// no one can divert proceeds and the reserve is always repaid. See memory.
+export const YOLEV_PACKAGE = '0x75e00dc36b96cc4adafd4b180c791f7a0fb40aed92fd11c40968227fc6318a36';
 // underwrite::Reserve<DUSDC> (Shared) — 3x max, 8% premium on fronted, 60% exposure cap.
-export const RESERVE_ID = '0x69acf004bd0d7eff54fa442840458c31ad01c96a4952d8dcf381d55fbbf5908c';
-// kept for any lingering references during the migration (old lending pool, unused).
-export const LENDING_POOL_ID = '0xba9eb2d107118d0b9dd2d577d158ec82c4aa97e4f1a5cda196b01bb293aeb9d5';
-export const LEV_CONFIG_ID = '0xd4dbc902e98cdc94b5c766c3e8fa4063f170bf7dbd711fc5eabde4d84f57fe8c';
+export const RESERVE_ID = '0xf715b4b8887b5e6de20f7d7eff5bd07f952f9aafaf65b477330d3c05b8c0cec0';
+// keeper-owned shared PredictManager that holds every leveraged position.
+export const LEVERAGE_MANAGER_ID = '0x45cd0bb299e63046c6d404af8d97a65bb53c9b6c6b0004f923f029a1042e61e6';
+// the settlement keeper EOA (owns the leverage manager; runs the settle crank).
+export const KEEPER_ADDRESS = '0xaa50ec0fe985825bd45fcc65d301da096a487349d6993fe8f9305890284a7244';
 
 // FLOAT_SCALING used in DeepBook Predict (1e9)
 export const FLOAT_SCALING = 1_000_000_000;

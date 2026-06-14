@@ -9,8 +9,6 @@ import { Transaction } from '@mysten/sui/transactions';
 import {
   YOLEV_PACKAGE,
   RESERVE_ID,
-  PACKAGE_ID,
-  PREDICT_ID,
   DUSDC_TYPE,
   CLOCK_ID,
   DUSDC_MULTIPLIER,
@@ -49,68 +47,13 @@ export function withdrawTx(positionId: string, owner: string): Transaction {
   return tx;
 }
 
-/** underwrite::open → returns [Position, notionalCoin]. */
-function openCall(tx: Transaction, p: {
-  marginCoin: ReturnType<Transaction['splitCoins']>[number];
-  leverageBps: number;
-  managerId: string;
-  oracleId: string;
-  expiry: bigint;
-  isRange: boolean;
-  lower: bigint;
-  higher: bigint;
-  isUp: boolean;
-  quantity: bigint;
-}) {
-  return tx.moveCall({
-    target: `${YOLEV_PACKAGE}::underwrite::open`,
-    typeArguments: [DUSDC_TYPE],
-    arguments: [
-      tx.object(RESERVE_ID), p.marginCoin, tx.pure.u64(p.leverageBps),
-      tx.pure.id(p.managerId), tx.pure.id(p.oracleId), tx.pure.u64(p.expiry),
-      tx.pure.bool(p.isRange), tx.pure.u64(p.lower), tx.pure.u64(p.higher), tx.pure.bool(p.isUp), tx.pure.u64(p.quantity),
-      tx.object(CLOCK_ID),
-    ],
-  });
-}
+// ── leverage open = escrow → fill (trustless custody) ──
+// The trader only ESCROWS margin here; the keeper executes the open into the
+// protocol-owned custody manager (it's the only address that can deposit/mint
+// there). The trader can `cancel` an unfilled order to get their margin back.
 
-/** Open a leveraged RANGE position: front the notional, deposit it, mint. */
-export function openLeveragedRangeTx(p: {
-  managerId: string;
-  coinIds: string[];
-  marginAmount: bigint;
-  leverageBps: number;
-  oracleId: string;
-  expiry: bigint;
-  lower: bigint;
-  higher: bigint;
-  quantity: bigint;
-  owner: string;
-}): Transaction {
-  const tx = new Transaction();
-  const [margin] = tx.splitCoins(mergedPrimary(tx, p.coinIds), [p.marginAmount]);
-  const open = openCall(tx, { marginCoin: margin, leverageBps: p.leverageBps, managerId: p.managerId, oracleId: p.oracleId, expiry: p.expiry, isRange: true, lower: p.lower, higher: p.higher, isUp: false, quantity: p.quantity });
-  tx.moveCall({
-    target: `${PACKAGE_ID}::predict_manager::deposit`,
-    typeArguments: [DUSDC_TYPE],
-    arguments: [tx.object(p.managerId), open[1]],
-  });
-  const rk = tx.moveCall({
-    target: `${PACKAGE_ID}::range_key::new`,
-    arguments: [tx.pure.id(p.oracleId), tx.pure.u64(p.expiry), tx.pure.u64(p.lower), tx.pure.u64(p.higher)],
-  });
-  tx.moveCall({
-    target: `${PACKAGE_ID}::predict::mint_range`,
-    typeArguments: [DUSDC_TYPE],
-    arguments: [tx.object(PREDICT_ID), tx.object(p.managerId), tx.object(p.oracleId), rk[0], tx.pure.u64(p.quantity), tx.object(CLOCK_ID)],
-  });
-  tx.transferObjects([open[0]], tx.pure.address(p.owner));
-  return tx;
-}
-
-/** Open a leveraged BINARY (UP/DOWN) position. */
-export function openLeveragedBinaryTx(p: {
-  managerId: string;
+/** Trader: escrow margin for a leveraged BINARY position. The keeper fills it. */
+export function requestOpenBinaryTx(p: {
   coinIds: string[];
   marginAmount: bigint;
   leverageBps: number;
@@ -118,31 +61,70 @@ export function openLeveragedBinaryTx(p: {
   expiry: bigint;
   strike: bigint;
   isUp: boolean;
-  quantity: bigint;
-  owner: string;
 }): Transaction {
   const tx = new Transaction();
   const [margin] = tx.splitCoins(mergedPrimary(tx, p.coinIds), [p.marginAmount]);
-  const open = openCall(tx, { marginCoin: margin, leverageBps: p.leverageBps, managerId: p.managerId, oracleId: p.oracleId, expiry: p.expiry, isRange: false, lower: p.strike, higher: BigInt(0), isUp: p.isUp, quantity: p.quantity });
   tx.moveCall({
-    target: `${PACKAGE_ID}::predict_manager::deposit`,
+    target: `${YOLEV_PACKAGE}::underwrite::request_open`,
     typeArguments: [DUSDC_TYPE],
-    arguments: [tx.object(p.managerId), open[1]],
+    arguments: [
+      tx.object(RESERVE_ID), margin, tx.pure.u64(p.leverageBps),
+      tx.pure.id(p.oracleId), tx.pure.u64(p.expiry),
+      tx.pure.bool(false), tx.pure.u64(p.strike), tx.pure.u64(BigInt(0)), tx.pure.bool(p.isUp),
+      tx.object(CLOCK_ID),
+    ],
   });
-  const mk = tx.moveCall({
-    target: `${PACKAGE_ID}::market_key::${p.isUp ? 'up' : 'down'}`,
-    arguments: [tx.pure.id(p.oracleId), tx.pure.u64(p.expiry), tx.pure.u64(p.strike)],
-  });
-  tx.moveCall({
-    target: `${PACKAGE_ID}::predict::mint`,
-    typeArguments: [DUSDC_TYPE],
-    arguments: [tx.object(PREDICT_ID), tx.object(p.managerId), tx.object(p.oracleId), mk[0], tx.pure.u64(p.quantity), tx.object(CLOCK_ID)],
-  });
-  tx.transferObjects([open[0]], tx.pure.address(p.owner));
   return tx;
 }
 
-/** The underwritten position record stored on-chain. */
+/** Trader: escrow margin for a leveraged RANGE position. The keeper fills it. */
+export function requestOpenRangeTx(p: {
+  coinIds: string[];
+  marginAmount: bigint;
+  leverageBps: number;
+  oracleId: string;
+  expiry: bigint;
+  lower: bigint;
+  higher: bigint;
+}): Transaction {
+  const tx = new Transaction();
+  const [margin] = tx.splitCoins(mergedPrimary(tx, p.coinIds), [p.marginAmount]);
+  tx.moveCall({
+    target: `${YOLEV_PACKAGE}::underwrite::request_open`,
+    typeArguments: [DUSDC_TYPE],
+    arguments: [
+      tx.object(RESERVE_ID), margin, tx.pure.u64(p.leverageBps),
+      tx.pure.id(p.oracleId), tx.pure.u64(p.expiry),
+      tx.pure.bool(true), tx.pure.u64(p.lower), tx.pure.u64(p.higher), tx.pure.bool(false),
+      tx.object(CLOCK_ID),
+    ],
+  });
+  return tx;
+}
+
+/** Trader: reclaim an unfilled order's escrowed margin. */
+export function cancelOrderTx(orderId: string, owner: string): Transaction {
+  const tx = new Transaction();
+  const coin = tx.moveCall({
+    target: `${YOLEV_PACKAGE}::underwrite::cancel`,
+    typeArguments: [DUSDC_TYPE],
+    arguments: [tx.object(RESERVE_ID), tx.object(orderId)],
+  });
+  tx.transferObjects([coin], tx.pure.address(owner));
+  return tx;
+}
+
+/** A pending escrowed open order. */
+export interface OrderData {
+  id: string;
+  trader: string;
+  margin: number;     // DUSDC
+  leverage: number;   // leverageBps / 10000
+  oracleId: string;
+  isRange: boolean;
+}
+
+/** The underwritten position record stored on-chain (a shared object). */
 export interface PositionData {
   id: string;
   owner: string;
@@ -159,54 +141,6 @@ export interface PositionData {
   higherStrike: bigint;
   isUp: boolean;
   quantity: bigint;
-}
-
-/**
- * Close an underwritten position. For a WIN, redeem the settled position → the
- * payout lands in the manager → withdraw it → `settle` reclaims the reserve's
- * fronted capital and returns the trader's PnL. For a LOSS, the position is worth
- * 0, so we settle with a zero coin (the reserve absorbs the fronted amount).
- */
-export function settleTx(pos: PositionData, won: boolean, owner: string): Transaction {
-  const tx = new Transaction();
-  let proceeds;
-  if (won) {
-    if (pos.isRange) {
-      const rk = tx.moveCall({
-        target: `${PACKAGE_ID}::range_key::new`,
-        arguments: [tx.pure.id(pos.oracleId), tx.pure.u64(pos.expiry), tx.pure.u64(pos.lowerStrike), tx.pure.u64(pos.higherStrike)],
-      });
-      tx.moveCall({
-        target: `${PACKAGE_ID}::predict::redeem_range`,
-        typeArguments: [DUSDC_TYPE],
-        arguments: [tx.object(PREDICT_ID), tx.object(pos.managerId), tx.object(pos.oracleId), rk[0], tx.pure.u64(pos.quantity), tx.object(CLOCK_ID)],
-      });
-    } else {
-      const mk = tx.moveCall({
-        target: `${PACKAGE_ID}::market_key::${pos.isUp ? 'up' : 'down'}`,
-        arguments: [tx.pure.id(pos.oracleId), tx.pure.u64(pos.expiry), tx.pure.u64(pos.lowerStrike)],
-      });
-      tx.moveCall({
-        target: `${PACKAGE_ID}::predict::redeem_permissionless`,
-        typeArguments: [DUSDC_TYPE],
-        arguments: [tx.object(PREDICT_ID), tx.object(pos.managerId), tx.object(pos.oracleId), mk[0], tx.pure.u64(pos.quantity), tx.object(CLOCK_ID)],
-      });
-    }
-    [proceeds] = [tx.moveCall({
-      target: `${PACKAGE_ID}::predict_manager::withdraw`,
-      typeArguments: [DUSDC_TYPE],
-      arguments: [tx.object(pos.managerId), tx.pure.u64(pos.quantity)],
-    })];
-  } else {
-    proceeds = tx.moveCall({ target: `0x2::coin::zero`, typeArguments: [DUSDC_TYPE], arguments: [] });
-  }
-  const remainder = tx.moveCall({
-    target: `${YOLEV_PACKAGE}::underwrite::settle`,
-    typeArguments: [DUSDC_TYPE],
-    arguments: [tx.object(RESERVE_ID), tx.object(pos.id), proceeds],
-  });
-  tx.transferObjects([remainder], tx.pure.address(owner));
-  return tx;
 }
 
 // ─── read: reserve stats ───
@@ -255,3 +189,5 @@ export function supplyPositionValue(shares: number, stats: ReserveStats): number
 
 export const SUPPLY_POSITION_TYPE = `${YOLEV_PACKAGE}::underwrite::SupplyPosition`;
 export const POSITION_TYPE = `${YOLEV_PACKAGE}::underwrite::Position<${DUSDC_TYPE}>`;
+export const ORDER_REQUESTED_EVENT = `${YOLEV_PACKAGE}::underwrite::OrderRequested`;
+export const ORDER_FILLED_EVENT = `${YOLEV_PACKAGE}::underwrite::OrderFilled`;

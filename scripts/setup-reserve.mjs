@@ -29,11 +29,13 @@ const coins = await rpc('suix_getCoins', [addr, DUSDC, null, 50]);
 const total = (coins?.data || []).reduce((s, c) => s + BigInt(c.balance), 0n);
 console.log('publisher DUSDC:', Number(total) / 1e6, '· coins', coins?.data?.length || 0);
 
-// 1) create the reserve (skip if RESERVE provided): 3x max, 8% premium, 60% exposure cap
+// 1) create the reserve (skip if RESERVE provided): keeper + custody mgr, 3x / 8% / 60%
+const KEEPER = process.env.KEEPER;
+const MGR = process.env.MGR;
 let reserve = process.env.RESERVE;
 if (!reserve) {
   const tx1 = new Transaction();
-  tx1.moveCall({ target: `${PKG}::underwrite::create`, typeArguments: [DUSDC], arguments: [tx1.pure.u64(30_000), tx1.pure.u64(800), tx1.pure.u64(6_000)] });
+  tx1.moveCall({ target: `${PKG}::underwrite::create`, typeArguments: [DUSDC], arguments: [tx1.pure.address(KEEPER), tx1.pure.id(MGR), tx1.pure.u64(30_000), tx1.pure.u64(800), tx1.pure.u64(6_000)] });
   tx1.setGasBudget(60_000_000);
   const r1 = await exec(tx1);
   console.log('create status', JSON.stringify(r1.tb?.effects?.status), r1.digest);
