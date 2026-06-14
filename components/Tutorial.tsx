@@ -13,40 +13,24 @@ interface TutorialStep {
   actions?: { label: string; href: string }[];
 }
 
+// A brief welcome that sets the mental model. The actual to-do list — sign in,
+// get funds, take a side — lives in the persistent FirstRunGuide bar, so this
+// modal stays short instead of re-walking steps the bar already tracks.
 const steps: TutorialStep[] = [
   {
     title: 'Welcome to Yosuku',
     jp: 'ようこそ',
-    description: 'Yosuku is a prediction market on Sui testnet. Trade binary positions on BTC price direction with 15-minute settlement windows. Test funds only — no real money.',
+    description: 'A prediction market on BTC. Pick a side, the oracle settles at the bell, the math decides. This is testnet — test funds only, no real money.',
   },
   {
-    title: 'Connect a Wallet',
-    jp: 'ウォレット接続',
-    description: 'Use the Connect button in the header with any Sui wallet. This is testnet, so the wallet you connect never risks real funds.',
-  },
-  {
-    title: 'Get Test Funds',
-    jp: '資金を入手',
-    description: 'You need two things: SUI for gas (free, instant from the faucet) and DUSDC to trade with (issued via a quick request form).',
-    actions: [
-      { label: 'SUI gas faucet', href: 'https://faucet.sui.io/' },
-      { label: 'Request DUSDC', href: 'https://tally.so/r/Xx102L' },
-    ],
-  },
-  {
-    title: 'Pick a Market and a Side',
+    title: 'How a round works',
     jp: '方向を選ぶ',
-    description: 'Each market asks one question — will the price be above the strike at expiry? Go UP for above, DOWN for below. Markets closing soon are at the top.',
+    description: 'Every market asks one question: will BTC be above your line at the bell? Go UP for above, DOWN for below. Get it right and you are paid automatically. Gas is on us, and there is no seed phrase.',
   },
   {
-    title: 'Set Your Amount',
-    jp: '金額を設定',
-    description: 'Enter how much DUSDC to trade. The exact cost is read live from the contract — you see fair price, fees, and max payout before you sign anything.',
-  },
-  {
-    title: 'Your First Trade Sets You Up',
+    title: 'Your first trade sets you up',
     jp: '準備完了',
-    description: 'The first trade also creates your on-chain trading account — one extra wallet confirmation, a few seconds, one time only. After that it\'s one tap per trade. Good luck on the floor.',
+    description: 'The three steps to your first bet stay in the corner until you are done. Your first trade also creates your on-chain account — one confirmation, a few seconds, once. After that it is one tap. Good luck on the floor.',
   },
 ];
 

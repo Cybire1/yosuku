@@ -12,7 +12,7 @@ import {
 import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from '@mysten/dapp-kit';
 import { useManager, usePositions, useManagerBalance, getPositionDirection, getPositionStrike, useSviPricing, useVaultStats } from '@/lib/sui/hooks';
 import { useOracles, useOraclePrices } from '@/lib/sui/hooks';
-import { redeemPositionTx, redeemRangePositionTx, redeemPermissionlessTx, redeemAllPermissionlessTx, type ClaimablePosition } from '@/lib/sui/predictClient';
+import { redeemPositionTx, redeemRangePositionTx, redeemPermissionlessTx, redeemAllPermissionlessTx, withdrawFromManagerTx, type ClaimablePosition } from '@/lib/sui/predictClient';
 import { FLOAT_SCALING, DUSDC_MULTIPLIER } from '@/lib/sui/constants';
 import { computeSviPrice, computeRangePrice, computeFeeBreakdown } from '@/lib/sui/sviPricing';
 import { computePositionPnL } from '@/lib/sui/pnlCalculator';
@@ -32,6 +32,24 @@ export default function PortfolioTable() {
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const [partialQty, setPartialQty] = useState<Record<string, string>>({});
   const [claimingAll, setClaimingAll] = useState(false);
+  const [withdrawing, setWithdrawing] = useState(false);
+
+  // Winnings land in the trading account (the keeper auto-redeems winners);
+  // this is how the user actually collects them to their wallet.
+  const handleWithdraw = async () => {
+    if (!manager || !address || managerBalance <= 0) return;
+    setWithdrawing(true);
+    try {
+      const tx = withdrawFromManagerTx(manager.manager_id, BigInt(managerBalance), address);
+      const res = await signAndExecute({ transaction: tx });
+      await client.waitForTransaction({ digest: res.digest });
+      refreshManagerBalance();
+    } catch (err) {
+      console.error('Withdraw error:', err);
+    } finally {
+      setWithdrawing(false);
+    }
+  };
 
   // Get unique oracle IDs from positions for SVI data
   const uniqueOracleIds = useMemo(() => {
@@ -75,11 +93,15 @@ export default function PortfolioTable() {
       const tx = redeemAllPermissionlessTx(claimableWinners);
       const result = await signAndExecute({ transaction: tx });
       await client.waitForTransaction({ digest: result.digest });
+    } catch (err) {
+      // abort 1 = already redeemed by the keeper — winnings are already in the
+      // trading balance. Not an error; just refresh.
+      if (!/abort code: 1|decrease_position|already/i.test(String(err))) {
+        console.error('Claim all error:', err);
+      }
+    } finally {
       refreshPositions();
       refreshManagerBalance();
-    } catch (err) {
-      console.error('Claim all error:', err);
-    } finally {
       setClaimingAll(false);
     }
   };
@@ -144,12 +166,16 @@ export default function PortfolioTable() {
         const result = await signAndExecute({ transaction: tx });
         await client.waitForTransaction({ digest: result.digest });
       }
-      refreshPositions();
-      refreshManagerBalance();
       setExpandedKey(null);
     } catch (err) {
-      console.error('Redeem error:', err);
+      // abort 1 = already redeemed by the keeper — the payout is already in the
+      // trading balance. Treat as done, just refresh.
+      if (!/abort code: 1|decrease_position|already/i.test(String(err))) {
+        console.error('Redeem error:', err);
+      }
     } finally {
+      refreshPositions();
+      refreshManagerBalance();
       setRedeemingKey(null);
     }
   };
@@ -166,14 +192,24 @@ export default function PortfolioTable() {
 
   return (
     <div className="space-y-4">
-      {/* Manager balance */}
-      <div className="flex items-center justify-between px-1">
-        <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500">
-          Manager Balance
-        </span>
-        <span className="text-sm font-mono font-bold text-white">
-          {(managerBalance / DUSDC_MULTIPLIER).toFixed(2)} DUSDC
-        </span>
+      {/* Trading balance + withdraw — winnings land here (keeper auto-redeems);
+          this is how the user collects to their wallet. */}
+      <div className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.07] bg-white/[0.015] px-4 py-3">
+        <div>
+          <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 mb-0.5">
+            Trading balance
+          </div>
+          <div className="text-lg font-mono font-bold text-white tabular-nums">
+            {(managerBalance / DUSDC_MULTIPLIER).toFixed(2)} <span className="text-xs text-gray-500">DUSDC</span>
+          </div>
+        </div>
+        <button
+          onClick={handleWithdraw}
+          disabled={withdrawing || managerBalance <= 0}
+          className="px-4 py-2.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.10] border border-white/10 hover:border-white/20 text-white text-xs font-bold uppercase tracking-wider transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+        >
+          {withdrawing ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Withdrawing…</> : 'Withdraw to wallet'}
+        </button>
       </div>
 
       {/* Claim all settled winners — one gas-negative PTB */}

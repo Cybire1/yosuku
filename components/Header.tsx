@@ -2,8 +2,9 @@
 
 import { useCurrentAccount, useDisconnectWallet, ConnectButton } from '@mysten/dapp-kit';
 import { usePathname } from 'next/navigation';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import AddFunds from './AddFunds';
+import FirstRunGuide from './FirstRunGuide';
 import { useDUSDCBalance } from '@/lib/sui/hooks';
 
 const NAV_LINKS = [
@@ -53,11 +54,35 @@ export default function Header() {
   const [mounted, setMounted] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [showFunds, setShowFunds] = useState(false);
-  const { balance: dusdcRaw, refresh: refreshDusdc } = useDUSDCBalance();
+  const { balance: dusdcRaw, loading: dusdcLoading, refresh: refreshDusdc } = useDUSDCBalance();
+  const promptedRef = useRef(false);
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // The faucet is reachable from anywhere (the first-run guide, deep links)
+  // by dispatching this event — one entry point, no prop drilling.
+  useEffect(() => {
+    const open = () => setShowFunds(true);
+    window.addEventListener('yosuku:open-funds', open);
+    return () => window.removeEventListener('yosuku:open-funds', open);
+  }, []);
+
+  // Auto-surface the faucet the first time a connected user is low on funds —
+  // on testnet you can't do anything without it, so don't make them hunt.
+  // Once per session, and never if they already hold more than 3 DUSDC (enough
+  // to trade — same cap the faucet itself enforces).
+  useEffect(() => {
+    const FUND_CAP = 3_000_000; // 3 DUSDC (6 decimals)
+    if (!mounted || !address || dusdcLoading || dusdcRaw > FUND_CAP || promptedRef.current) return;
+    try {
+      if (sessionStorage.getItem('yosuku_funds_prompted') === '1') { promptedRef.current = true; return; }
+      sessionStorage.setItem('yosuku_funds_prompted', '1');
+    } catch { /* ignore */ }
+    promptedRef.current = true;
+    setShowFunds(true);
+  }, [mounted, address, dusdcLoading, dusdcRaw]);
 
   const shortAddr = address
     ? `${address.slice(0, 6)}…${address.slice(-4)}`
@@ -162,7 +187,8 @@ export default function Header() {
         })}
       </nav>
 
-      <AddFunds open={showFunds} onClose={() => setShowFunds(false)} />
+      <FirstRunGuide />
+      <AddFunds open={showFunds} onClose={() => setShowFunds(false)} onFunded={refreshDusdc} />
     </>
   );
 }

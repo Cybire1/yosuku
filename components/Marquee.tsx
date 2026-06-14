@@ -21,7 +21,7 @@ interface OracleEntry {
   underlying_asset?: string;
 }
 
-const ASSET_ORDER = ['ETH', 'SOL', 'SUI'];
+const ASSET_ORDER: string[] = []; // only BTC oracles live on testnet
 const DECIMALS: Record<string, number> = { BTC: 0, ETH: 0, SOL: 2, SUI: 2 };
 
 export default function Marquee() {

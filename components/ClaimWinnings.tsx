@@ -1,34 +1,33 @@
-// @ts-nocheck
 'use client';
 
 import { useState } from 'react';
-import { Trophy, Loader, XCircle } from 'lucide-react';
+import { Trophy, Loader2, Check } from 'lucide-react';
 import { useCurrentAccount, useSignAndExecuteTransaction } from '@mysten/dapp-kit';
 import { redeemPermissionlessTx } from '@/lib/sui/predictClient';
 import { useDUSDCBalance, useManager } from '@/lib/sui/hooks';
-import {
-  formatPred,
-  type RoundState,
-  type ReputationData,
-} from '@/lib/predictionContract';
+import { formatPred, type RoundState, type ReputationData } from '@/lib/predictionContract';
 import { markClaimed } from '@/lib/roundHelpers';
 import { humanizeTxError } from '@/lib/errorMessages';
+import { FLOAT_SCALING } from '@/lib/sui/constants';
 
 interface ClaimWinningsProps {
   round: RoundState;
-  userDeposit: number;
+  userDeposit: number;       // position quantity (base units)
   userDirection: 'UP' | 'DOWN';
-  strike: number;
+  strike: number;            // FLOAT_SCALING-encoded
   reputation?: ReputationData;
   onClaimed?: () => void;
 }
 
+/**
+ * The single settled-result card — outcome, payout, the story, and the claim
+ * action in one place. Replaces the old stack of three near-identical cards.
+ */
 export default function ClaimWinnings({
   round,
   userDeposit,
   userDirection,
   strike,
-  reputation,
   onClaimed,
 }: ClaimWinningsProps) {
   const account = useCurrentAccount();
@@ -40,29 +39,22 @@ export default function ClaimWinnings({
   const [error, setError] = useState('');
   const [claimed, setClaimed] = useState(false);
 
-  // Determine if user won based on settlement price
+  const settlement = round.settlementPrice;
   const isWinner = (() => {
-    if (!round.resolved || round.settlementPrice === null) return false;
-    // UP = (strike, +inf] — wins if settlement > strike
-    // DOWN = (-inf, strike] — wins if settlement <= strike
-    if (userDirection === 'UP') return round.settlementPrice > strike;
-    return round.settlementPrice <= strike;
+    if (!round.resolved || settlement === null) return false;
+    return userDirection === 'UP' ? settlement > strike : settlement <= strike;
   })();
 
-  // Payout: winners get quantity (full $1 per unit), losers get 0
-  const estimatedPayout = isWinner ? userDeposit : 0;
+  const payout = isWinner ? userDeposit : 0;
+  const asset = round.underlyingAsset || 'BTC';
+  const usd = (scaled: number) => '$' + (scaled / FLOAT_SCALING).toLocaleString(undefined, { maximumFractionDigits: 0 });
+  const diff = settlement !== null ? Math.abs(settlement - strike) / FLOAT_SCALING : 0;
 
   const handleRedeem = async () => {
-    if (!address || !manager) {
-      setError('Connect wallet and create account first');
-      return;
-    }
-
+    if (!address || !manager) { setError('Connect your wallet first.'); return; }
     setLoading(true);
     setError('');
-
     try {
-      // Settled position → gas-negative permissionless redeem (no owner check needed).
       const tx = redeemPermissionlessTx({
         managerId: manager.manager_id,
         oracleId: round.oracleId,
@@ -71,105 +63,93 @@ export default function ClaimWinnings({
         direction: userDirection,
         quantity: BigInt(userDeposit),
       });
-
       await signAndExecute({ transaction: tx });
-
       markClaimed(round.oracleId);
       setClaimed(true);
       await refreshBalance();
       onClaimed?.();
     } catch (err: unknown) {
       console.error('Redeem error:', err);
-      setError(humanizeTxError(err).title);
+      // `decrease_position` abort 1 = the position was already redeemed — almost
+      // always by the permissionless keeper, which auto-collects winners. The
+      // payout is already in the trading balance, so this is a SUCCESS, not an
+      // error: refresh and show it as settled.
+      if (/abort code: 1|decrease_position|already/i.test(String(err))) {
+        markClaimed(round.oracleId);
+        await refreshBalance();
+        setClaimed(true);
+        onClaimed?.();
+      } else {
+        setError(humanizeTxError(err).title);
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  // Already claimed
-  if (claimed) {
+  if (!round.resolved || settlement === null) return null;
+
+  // ── Loser: honest, muted, no false cheer ──────────────────────────────────
+  if (!isWinner) {
     return (
-      <div className="relative">
-        <div className="absolute inset-0 bg-neutral-900/40 backdrop-blur-2xl border border-off-green/30 rounded-xl" />
-        <div className="relative p-4">
-          <div className="text-center">
-            <Trophy className="w-6 h-6 mx-auto text-off-green mb-2" />
-            <p className="text-off-green font-bold text-sm uppercase tracking-widest">
-              {isWinner ? 'Claimed!' : 'Redeemed'}
-            </p>
-            {isWinner && (
-              <p className="text-gray-400 text-xs mt-1">+{formatPred(estimatedPayout)} DUSDC</p>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Loser — there's nothing to claim and `redeem_permissionless` is winner-only
-  // (it aborts on losing positions). So no action: just show the settled loss.
-  if (!isWinner && round.resolved) {
-    return (
-      <div className="relative">
-        <div className="absolute inset-0 bg-neutral-900/40 backdrop-blur-2xl border border-off-red/15 rounded-xl" />
-        <div className="relative p-4 text-center space-y-1.5">
-          <div className="flex items-center justify-center gap-2">
-            <XCircle className="w-4 h-4 text-off-red/80" />
-            <p className="text-off-red font-bold text-sm uppercase tracking-widest">Position Lost</p>
-          </div>
-          <p className="text-gray-500 text-xs">Your {userDirection} position didn&apos;t hit — nothing to redeem.</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Not resolved yet
-  if (!round.resolved) return null;
-
-  // Winner
-  return (
-    <div className="relative">
-      <div className="absolute inset-0 bg-gradient-to-br from-off-green/10 to-new-mint/5 backdrop-blur-2xl border border-off-green/30 rounded-xl" />
-      <div className="absolute inset-0 bg-noise opacity-20 mix-blend-overlay rounded-xl pointer-events-none" />
-
-      <div className="relative p-4">
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <Trophy className="w-5 h-5 text-off-green" />
-              <span className="text-off-green font-black text-sm uppercase tracking-widest">Winner!</span>
-            </div>
-            <p className="text-xs text-gray-400">{round.underlyingAsset} settled</p>
-          </div>
-          <div className="text-right">
-            <p className="text-2xl font-black text-white font-mono">+{formatPred(estimatedPayout)}</p>
-            <p className="text-[10px] text-gray-500 uppercase tracking-widest">DUSDC</p>
-          </div>
-        </div>
-
-        {error && (
-          <p className="text-off-red text-xs font-medium text-center mb-3 break-words">
-            {error}
-          </p>
-        )}
-
-        <button
-          onClick={handleRedeem}
-          disabled={loading}
-          className="w-full py-3 bg-off-green hover:bg-off-green/90 text-black rounded-lg font-bold uppercase tracking-widest text-xs transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-        >
-          {loading ? (
-            <>
-              <Loader className="w-4 h-4 animate-spin" />
-              Claiming...
-            </>
-          ) : (
-            'Claim Winnings'
-          )}
-        </button>
-        <p className="text-[10px] text-gray-500 text-center mt-2">
-          ⚡ gas-negative · <span className="text-off-green/80">redeem_permissionless</span> — the claim pays its own gas
+      <div className="rounded-2xl border border-white/[0.07] bg-white/[0.015] p-5">
+        <div className="font-mono text-[10px] tracking-[0.16em] uppercase text-gray-500 mb-1.5">Not this time</div>
+        <p className="text-sm text-gray-400">
+          {asset} closed <span className="text-gray-200 font-mono">{usd(settlement)}</span>
+          {' '}— {settlement > strike ? 'above' : 'below'} your {userDirection} line at{' '}
+          <span className="text-gray-200 font-mono">{usd(strike)}</span>.
         </p>
+      </div>
+    );
+  }
+
+  // ── Winner ────────────────────────────────────────────────────────────────
+  return (
+    <div className="relative overflow-hidden rounded-2xl border border-emerald-500/25 bg-gradient-to-b from-emerald-500/[0.10] via-emerald-500/[0.03] to-transparent p-5">
+      {/* soft glow */}
+      <div className="pointer-events-none absolute -top-20 left-1/2 -translate-x-1/2 h-40 w-72 rounded-full bg-emerald-500/20 blur-3xl" />
+
+      <div className="relative">
+        <div className="flex items-center gap-2 mb-2">
+          <Trophy className="w-4 h-4 text-emerald-400" />
+          <span className="font-mono text-[10px] tracking-[0.18em] uppercase text-emerald-400">
+            {claimed ? 'Claimed' : 'You won'}
+          </span>
+        </div>
+
+        <div className="flex items-baseline gap-2">
+          <span className="font-mono text-4xl font-bold text-emerald-400 tracking-tight tabular-nums">
+            +{formatPred(payout)}
+          </span>
+          <span className="font-mono text-sm text-emerald-400/60">DUSDC</span>
+        </div>
+
+        <p className="text-xs text-gray-400 mt-2">
+          {asset} closed <span className="text-gray-200 font-mono">{usd(settlement)}</span>
+          {' '}— <span className="text-gray-200 font-mono">{usd(diff * FLOAT_SCALING)}</span>{' '}
+          above your {userDirection} line at <span className="text-gray-200 font-mono">{usd(strike)}</span>.
+        </p>
+
+        {error && <p className="text-rose-400 text-xs font-medium mt-3 break-words">{error}</p>}
+
+        {claimed ? (
+          <div className="mt-4 flex items-center justify-center gap-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 py-3 text-emerald-400 text-xs font-bold uppercase tracking-widest">
+            <Check className="w-4 h-4" /> Paid to your balance
+          </div>
+        ) : (
+          <>
+            <button
+              onClick={handleRedeem}
+              disabled={loading}
+              className="mt-4 w-full py-3.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-bold uppercase tracking-widest text-sm transition-all shadow-[0_0_30px_rgba(52,211,153,0.18)] disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              {loading ? (<><Loader2 className="w-4 h-4 animate-spin" /> Claiming…</>) : 'Claim winnings'}
+            </button>
+            <p className="text-[10px] text-gray-500 text-center mt-2">
+              Gas-free — the claim pays for itself.
+            </p>
+          </>
+        )}
       </div>
     </div>
   );

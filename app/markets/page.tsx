@@ -306,7 +306,7 @@ export default function MarketsPage() {
     return () => document.removeEventListener('click', handler);
   }, [sortOpen]);
 
-  const FILTERS = ['all', 'FAV', 'BTC', 'ETH', 'SOL', 'SUI'];
+  const FILTERS = ['all', 'FAV', 'BTC'];
   const favCount = active.filter(o => favorites.has(o.oracle_id)).length;
 
   return (

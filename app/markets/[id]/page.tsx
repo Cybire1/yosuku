@@ -13,8 +13,9 @@ import CashOut from '@/components/CashOut';
 import Verdict from '@/components/Verdict';
 import { fetchTrades, type OracleData, type TradeData } from '@/lib/sui/predictApi';
 import { useOracleState } from '@/lib/sui/hooks';
+import { useBtcPrice } from '@/lib/hooks/useBtcPrice';
 import { FLOAT_SCALING, DUSDC_MULTIPLIER } from '@/lib/sui/constants';
-import { Share2, Link2, Check, TrendingUp, TrendingDown } from 'lucide-react';
+import { Share2, Link2, Check } from 'lucide-react';
 import PriceAlertsButton from '@/components/PriceAlerts';
 import { useKeyboardShortcuts } from '@/lib/hooks/useKeyboardShortcuts';
 import { checkAlerts, sendNotification } from '@/lib/priceAlerts';
@@ -53,6 +54,9 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
 
   // Single combined API call: oracle + prices + SVI
   const { state: oracleState, loading } = useOracleState(oracleId);
+  // Sub-second live BTC price (Pyth SSE) — the chart's moving tip so it tracks
+  // BTC in real time instead of the 15s oracle-state poll.
+  const { price: livePrice } = useBtcPrice();
   const oracle = oracleState?.oracle ?? null;
   const prices = oracleState?.latest_price ?? null;
   const sviData = oracleState?.latest_svi ?? null;
@@ -113,6 +117,19 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
         } catch { /* ignore */ }
       }
 
+      // Append the live BTC price so the line tracks BTC in real time instead of
+      // freezing on the first fetch. Pyth SSE ticks sub-second; falls back to the
+      // oracle spot. New points accumulate (capped).
+      const liveSpot = livePrice || (prices?.spot ? prices.spot / FLOAT_SCALING : null);
+      if (cached && liveSpot != null) {
+        const last = cached.series[cached.series.length - 1];
+        if (last !== liveSpot) {
+          cached.series.push(liveSpot);
+          cached.times.push(Date.now());
+          if (cached.series.length > 300) { cached.series.shift(); cached.times.shift(); }
+        }
+      }
+
       // Fallback — generate a plausible series around spot.
       if (!cached || cached.series.length < 2) {
         const spot = prices?.spot ? prices.spot / FLOAT_SCALING : strikeD;
@@ -143,7 +160,7 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
     }
     renderChart();
     return () => { cancelled = true; };
-  }, [prices, oracle, selectedStrike, pinnedStrike, oracleId]);
+  }, [prices, oracle, selectedStrike, pinnedStrike, oracleId, livePrice]);
 
   // Check price alerts — kept above the early returns (Rules of Hooks)
   useEffect(() => {
@@ -240,11 +257,16 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
           <div>
             <div className="flex items-center gap-3 mb-3">
               <span className={`font-mono text-[9px] tracking-[0.16em] uppercase px-2.5 py-1 rounded-full border ${
-                isActive
+                isTradable
                   ? 'text-vermilion bg-vermilion/10 border-vermilion/20'
-                  : 'text-gray-400 bg-white/5 border-white/10'
+                  : inDeadZone
+                    ? 'text-amber-400 bg-amber-400/10 border-amber-400/20'
+                    : 'text-gray-400 bg-white/5 border-white/10'
               }`}>
-                {oracle.status}
+                {/* Derived state, not raw oracle.status — the indexer lags the
+                    bell, so an expired-awaiting-settlement round still reads
+                    "active" upstream. */}
+                {isTradable ? 'Live' : inDeadZone ? 'Settling' : isSettled ? 'Settled' : oracle.status}
               </span>
               <span className="font-mono text-[10px] tracking-[0.1em] uppercase text-gray-600">
                 {asset}
@@ -258,8 +280,8 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
               <div className="flex items-center gap-2 mt-3 font-mono text-base">
                 <span className={spot >= midStrikeDollars ? 'text-profit font-semibold' : 'text-loss font-semibold'}>
                   {spot >= midStrikeDollars
-                    ? `$${Math.round(spot - midStrikeDollars).toLocaleString()} above the bar`
-                    : `needs +$${Math.round(midStrikeDollars - spot).toLocaleString()}`}
+                    ? `$${Math.round(spot - midStrikeDollars).toLocaleString()} above your line`
+                    : `needs +$${Math.round(midStrikeDollars - spot).toLocaleString()} to win`}
                 </span>
                 <span className="text-gray-600">·</span>
                 <span className={timeLeft.totalMs < 120_000 ? 'text-vermilion' : 'text-gray-400'}>
@@ -267,12 +289,12 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
                 </span>
               </div>
             )}
-            {/* Photo finish — dead zone between expiry and the settlement print */}
+            {/* Dead zone — round closed, waiting for the final price */}
             {inDeadZone && spot !== null && (
               <div className="flex items-center gap-2 mt-3 font-mono text-base">
-                <span className="text-gray-400">photo finish —</span>
+                <span className="text-gray-400">Round closed —</span>
                 <span className={spot > midStrikeDollars ? 'text-profit font-semibold' : 'text-loss font-semibold'}>
-                  last spot {formatPrice(spot)} {spot > midStrikeDollars ? 'above' : 'at/below'} the bar
+                  last price {formatPrice(spot)}, {spot > midStrikeDollars ? 'above' : 'below'} your line
                 </span>
               </div>
             )}
@@ -298,7 +320,7 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
                 ● ● ●
               </span>
               <span className="font-mono text-[10px] text-gray-500 block mt-1">
-                waiting for the oracle&apos;s print — usually under 2 min
+                waiting for the final price — usually under 2 min
               </span>
             </div>
           )}
@@ -342,82 +364,20 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
           <PriceAlertsButton asset={asset} currentPrice={spot} />
         </div>
 
-        {/* Settlement result card */}
-        {isSettled && oracle.settlement_price !== null && (() => {
-          const settlementDollars = oracle.settlement_price / FLOAT_SCALING;
-          const upWins = settlementDollars >= midStrikeDollars;
-          return (
-            <div className={`flex items-center gap-4 p-4 rounded-xl border mb-8 ${
-              upWins
-                ? 'border-emerald-500/20 bg-emerald-500/[0.06]'
-                : 'border-rose-500/20 bg-rose-500/[0.06]'
-            }`}>
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                upWins ? 'bg-emerald-500/20' : 'bg-rose-500/20'
-              }`}>
-                {upWins
-                  ? <TrendingUp style={{ width: 20, height: 20, color: '#34D399' }} />
-                  : <TrendingDown style={{ width: 20, height: 20, color: '#F43F5E' }} />
-                }
-              </div>
-              <div className="flex-1">
-                <div className={`text-sm font-bold ${upWins ? 'text-emerald-400' : 'text-rose-400'}`}>
-                  {upWins ? 'UP Wins' : 'DOWN Wins'}
-                </div>
-                <div className="text-xs text-gray-400">
-                  {asset} settled at {formatPrice(settlementDollars)} — {upWins ? 'above' : 'below'} strike {formatPrice(midStrikeDollars)}
-                </div>
-              </div>
-              <div className="text-right">
-                <div className="font-mono text-xs text-gray-500">Settlement</div>
-                <div className="font-mono text-sm font-semibold text-white">{formatPrice(settlementDollars)}</div>
-              </div>
-            </div>
-          );
-        })()}
-
-        {/* Personal verdict + next-round loop */}
+        {/* One settled experience: personal result + claim (or neutral outcome
+            for non-holders) + the next-round loop — all inside Verdict. */}
         {isSettled && <Verdict oracle={oracle} />}
 
-        {/* Live prices */}
-        {(spot || forward) && (
-          <div className="flex items-center gap-8 mb-8">
-            {spot && (
-              <div className="border-l border-white/[0.12] pl-3.5">
-                <span className="font-mono text-[9px] tracking-[0.16em] uppercase text-gray-600 flex items-center gap-1">Spot <Tooltip text="Current Pyth oracle price for this asset." position="bottom" /></span>
-                <span className="font-mono text-lg font-semibold text-white">{formatPrice(spot)}</span>
-              </div>
-            )}
-            {forward && (
-              <div className="border-l border-white/[0.12] pl-3.5">
-                <span className="font-mono text-[9px] tracking-[0.16em] uppercase text-gray-600 flex items-center gap-1">Forward <Tooltip text="Where the market expects the price to be at expiry — what your odds are priced against." position="bottom" /></span>
-                <span className="font-mono text-lg font-semibold text-gray-300">{formatPrice(forward)}</span>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Volume & Open Interest */}
-        {trades.length > 0 && (
-          <div className="flex items-center gap-8 mb-8">
+        {/* Spot — the one orienting number a bettor needs. Forward (≈ spot on a
+            15-min round) and volume/OI (terminal jargon, tiny testnet numbers)
+            removed: they added density without helping the decision. */}
+        {spot && (
+          <div className="flex items-center mb-8">
             <div className="border-l border-white/[0.12] pl-3.5">
               <span className="font-mono text-[9px] tracking-[0.16em] uppercase text-gray-600 flex items-center gap-1">
-                Volume <Tooltip text="Total minted volume for this oracle." position="bottom" />
+                {asset} now <Tooltip text="Live Pyth oracle price." position="bottom" />
               </span>
-              <span className="font-mono text-lg font-semibold text-white">
-                {(trades.filter(t => t.type === 'mint').reduce((sum, t) => sum + t.quantity, 0) / DUSDC_MULTIPLIER).toFixed(0)} DUSDC
-              </span>
-            </div>
-            <div className="border-l border-white/[0.12] pl-3.5">
-              <span className="font-mono text-[9px] tracking-[0.16em] uppercase text-gray-600 flex items-center gap-1">
-                Open Interest <Tooltip text="Net minted minus redeemed positions." position="bottom" />
-              </span>
-              <span className="font-mono text-lg font-semibold text-white">
-                {Math.max(0, (
-                  trades.filter(t => t.type === 'mint').reduce((s, t) => s + t.quantity, 0) -
-                  trades.filter(t => t.type === 'redeem').reduce((s, t) => s + t.quantity, 0)
-                ) / DUSDC_MULTIPLIER).toFixed(0)} DUSDC
-              </span>
+              <span className="font-mono text-lg font-semibold text-white">{formatPrice(spot)}</span>
             </div>
           </div>
         )}
@@ -470,7 +430,7 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
               <div className="lg:sticky lg:top-[120px] rounded-2xl border border-white/[0.08] bg-neutral-900/60 p-6 text-center">
                 <p className="font-mono text-[10px] tracking-[0.16em] uppercase text-gray-500 mb-2">Trading closed</p>
                 <p className="text-sm text-gray-400 leading-relaxed">
-                  The bell has rung. The oracle posts the settlement print shortly — winners can claim from their portfolio right after.
+                  The bell has rung. The final price lands in a moment — if you won, your payout drops straight into your balance.
                 </p>
               </div>
             </div>

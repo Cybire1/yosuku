@@ -138,13 +138,16 @@ export function useDUSDCBalance(pollInterval = 30_000) {
   const client = useSuiClient();
   const [balance, setBalance] = useState(0);
   const [coins, setCoins] = useState<{ coinObjectId: string; balance: bigint }[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
     if (!address) {
       setBalance(0);
       setCoins([]);
+      setLoading(false);
       return;
     }
+    setLoading(true);
     try {
       const [bal, coinList] = await Promise.all([
         client.getBalance({ owner: address, coinType: DUSDC_TYPE }),
@@ -157,13 +160,15 @@ export function useDUSDCBalance(pollInterval = 30_000) {
       })));
     } catch (err) {
       console.error('Failed to fetch DUSDC balance:', err);
+    } finally {
+      setLoading(false);
     }
   }, [address, client]);
 
   useEffect(() => { refresh(); }, [refresh]);
   useVisibilityAwareInterval(refresh, pollInterval);
 
-  return { balance, coins, refresh };
+  return { balance, coins, loading, refresh };
 }
 
 /** Hook: PLP (LP token) balance with coin object IDs */
@@ -267,17 +272,27 @@ export function useManagerBalance(managerId: string | null) {
       return;
     }
     try {
-      const obj = await client.getObject({
-        id: managerId,
-        options: { showContent: true },
-      });
-      if (obj.data?.content && obj.data.content.dataType === 'moveObject') {
-        const fields = obj.data.content.fields as Record<string, unknown>;
-        const bm = fields.balance_manager as Record<string, unknown> | undefined;
-        const bf = bm?.fields as Record<string, unknown> | undefined;
-        const qb = bf?.quote_balance as string | undefined;
-        setBalance(qb ? Number(qb) : 0);
-      }
+      // The PredictManager wraps a DeepBook BalanceManager whose coin balances
+      // live in a `balances` Bag (dynamic fields), NOT a flat `quote_balance`.
+      // Read the DUSDC entry out of the Bag — this is where keeper-redeemed
+      // winnings land. (The old quote_balance read always returned 0.)
+      const obj = await client.getObject({ id: managerId, options: { showContent: true } });
+      const content = obj.data?.content;
+      if (content?.dataType !== 'moveObject') { setBalance(0); return; }
+      const fields = content.fields as Record<string, any>;
+      const bagId = fields?.balance_manager?.fields?.balances?.fields?.id?.id as string | undefined;
+      if (!bagId) { setBalance(0); return; }
+
+      const dfs = await client.getDynamicFields({ parentId: bagId });
+      const entry = dfs.data.find(e => {
+        const t = typeof e.name?.type === 'string' ? e.name.type : '';
+        return t.includes('dusdc::DUSDC');
+      }) ?? dfs.data[0];
+      if (!entry) { setBalance(0); return; }
+
+      const field = await client.getObject({ id: entry.objectId, options: { showContent: true } });
+      const val = (field.data?.content as any)?.fields?.value;
+      setBalance(val ? Number(val) : 0);
     } catch (err) {
       console.error('Failed to fetch manager balance:', err);
     } finally {

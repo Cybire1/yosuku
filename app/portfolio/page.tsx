@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { useCurrentAccount } from '@mysten/dapp-kit';
+import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from '@mysten/dapp-kit';
+import { withdrawFromManagerTx } from '@/lib/sui/predictClient';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import Marquee from '@/components/Marquee';
@@ -32,7 +33,25 @@ export default function PortfolioPage() {
 
   const { manager, loading: managerLoading } = useManager();
   const { balance: walletBalance } = useDUSDCBalance();
-  const { balance: managerBalance } = useManagerBalance(manager?.manager_id ?? null);
+  const { balance: managerBalance, refresh: refreshManagerBalance } = useManagerBalance(manager?.manager_id ?? null);
+  const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
+  const client = useSuiClient();
+  const [withdrawing, setWithdrawing] = useState(false);
+
+  const handleWithdraw = async () => {
+    if (!manager || !address || managerBalance <= 0) return;
+    setWithdrawing(true);
+    try {
+      const tx = withdrawFromManagerTx(manager.manager_id, BigInt(managerBalance), address);
+      const res = await signAndExecute({ transaction: tx });
+      await client.waitForTransaction({ digest: res.digest });
+      refreshManagerBalance();
+    } catch (err) {
+      console.error('Withdraw error:', err);
+    } finally {
+      setWithdrawing(false);
+    }
+  };
   const { positions, loading: positionsLoading } = usePositions(manager?.manager_id ?? null);
 
   // API-driven manager summary and P&L
@@ -141,13 +160,26 @@ export default function PortfolioPage() {
                     <span className="text-sm ml-2" style={{ color: '#6B6353' }}>DUSDC</span>
                   </div>
                 </div>
-                <div className="text-right">
-                  <span className="font-mono text-[9px] tracking-[0.16em] uppercase" style={{ color: '#6B6353' }}>
-                    {reputation?.tier || 'Novice'}
-                  </span>
-                  <div className="font-mono text-sm mt-1" style={{ color: '#1A1612' }}>
-                    {reputation ? `${reputation.bets} bets` : '0 bets'}
+                <div className="flex items-center gap-5">
+                  <div className="text-right">
+                    <span className="font-mono text-[9px] tracking-[0.16em] uppercase" style={{ color: '#6B6353' }}>
+                      {reputation?.tier || 'Novice'}
+                    </span>
+                    <div className="font-mono text-sm mt-1" style={{ color: '#1A1612' }}>
+                      {reputation ? `${reputation.bets} bets` : '0 bets'}
+                    </div>
                   </div>
+                  {managerBalance > 0 && (
+                    <button
+                      onClick={handleWithdraw}
+                      disabled={withdrawing}
+                      className="rounded-xl bg-black text-white font-bold text-sm px-5 py-3 hover:bg-black/85 transition-colors disabled:opacity-50 flex items-center gap-2 whitespace-nowrap shadow-[0_2px_12px_rgba(0,0,0,0.15)]"
+                    >
+                      {withdrawing
+                        ? 'Withdrawing…'
+                        : <>Withdraw {(managerBalance / DUSDC_MULTIPLIER).toFixed(2)} to wallet <span className="text-base leading-none">↑</span></>}
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -159,10 +191,7 @@ export default function PortfolioPage() {
                 <div>
                   <span className="font-mono text-[8px] tracking-[0.14em] uppercase" style={{ color: '#6B6353' }}>Trading</span>
                   <div className="font-mono text-sm" style={{ color: '#1A1612' }}>
-                    {managerSummary
-                      ? (managerSummary.trading_balance / DUSDC_MULTIPLIER).toFixed(2)
-                      : (managerBalance / DUSDC_MULTIPLIER).toFixed(2)
-                    }
+                    {(managerBalance / DUSDC_MULTIPLIER).toFixed(2)}
                   </div>
                 </div>
                 <div>
@@ -202,7 +231,7 @@ export default function PortfolioPage() {
             {manager && (
               <div className="border border-white/[0.06] rounded px-4 py-3 flex items-center justify-between">
                 <div>
-                  <span className="font-mono text-[9px] tracking-[0.16em] uppercase text-gray-600">PredictManager</span>
+                  <span className="font-mono text-[9px] tracking-[0.16em] uppercase text-gray-600">Trading account</span>
                   <p className="text-xs font-mono text-gray-400 mt-0.5 truncate max-w-[300px]">{manager.manager_id}</p>
                 </div>
                 <a
@@ -219,8 +248,8 @@ export default function PortfolioPage() {
 
             {!manager && !managerLoading && (
               <div className="border border-white/[0.06] rounded p-4 text-center">
-                <p className="text-sm text-gray-400 mb-1">No PredictManager account</p>
-                <p className="text-xs text-gray-600 font-mono">Created automatically on first trade</p>
+                <p className="text-sm text-gray-400 mb-1">No trading account yet</p>
+                <p className="text-xs text-gray-600 font-mono">Set up automatically on your first bet</p>
               </div>
             )}
 

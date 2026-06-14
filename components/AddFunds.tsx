@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useCurrentAccount } from '@mysten/dapp-kit';
 
 const OFFICIAL_FAUCET = 'https://tally.so/r/Xx102L';
@@ -69,13 +70,23 @@ export default function AddFunds({ open, onClose, onFunded }: { open: boolean; o
               </button>
             </div>
 
-            <button
-              onClick={getFunds}
-              disabled={state === 'loading' || state === 'done'}
-              className="w-full bg-white text-black font-semibold rounded-full py-3 hover:scale-[1.02] active:scale-[0.97] transition-transform disabled:opacity-60"
-            >
-              {state === 'loading' ? 'Adding…' : state === 'done' ? 'Done ✓' : 'Get 2 test USDC'}
-            </button>
+            {state === 'done' ? (
+              <Link
+                href="/bell"
+                onClick={onClose}
+                className="block w-full text-center bg-vermilion text-white font-semibold rounded-full py-3 hover:bg-vermilion-d transition-colors"
+              >
+                Place your first bet →
+              </Link>
+            ) : (
+              <button
+                onClick={getFunds}
+                disabled={state === 'loading'}
+                className="w-full bg-white text-black font-semibold rounded-full py-3 hover:scale-[1.02] active:scale-[0.97] transition-transform disabled:opacity-60"
+              >
+                {state === 'loading' ? 'Adding…' : 'Get 2 test USDC'}
+              </button>
+            )}
 
             {msg && (
               <p className={`text-[12px] mt-3 text-center ${state === 'error' ? 'text-rose-400' : 'text-emerald-400'}`}>{msg}</p>
