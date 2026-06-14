@@ -764,7 +764,7 @@ export default function TradePanel({
               already baked into "You pay / To win" above, so no need to surface
               SVI / Bernoulli / cost-per-unit jargon here. */}
           {feeBreakdown && (
-            <div className="py-2 border-t border-white/5">
+            <div className="py-2 border-t border-white/5 space-y-1.5">
               <div className="flex justify-between text-xs">
                 <span className="text-gray-500 inline-flex items-center gap-1">
                   Win chance
@@ -772,6 +772,25 @@ export default function TradePanel({
                 </span>
                 <span className="text-white font-mono">{(feeBreakdown.fairPrice * 100).toFixed(0)}%</span>
               </div>
+              {/* Verify: re-derive the price in the browser from the public vol
+                  surface and check it against the live on-chain quote. The moat,
+                  demonstrated — not claimed. */}
+              {onChainQuote && pricePerUnit > 0 && (() => {
+                const deltaCents = Math.abs(pricePerUnit - feeBreakdown.totalCostPerUnit) * 100;
+                const matches = deltaCents < 1;
+                return (
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-gray-500 inline-flex items-center gap-1">
+                      Price check
+                      <Tooltip text="We re-derive this price in your browser from the public volatility surface (SVI → N(d2)) and compare it to the live on-chain quote. You don't have to trust the number — it's math you can reproduce." position="bottom" />
+                    </span>
+                    <span className={`inline-flex items-center gap-1.5 font-mono ${matches ? 'text-emerald-400' : 'text-gray-400'}`}>
+                      {matches && <Check className="w-3 h-3" />}
+                      browser {(feeBreakdown.totalCostPerUnit * 100).toFixed(1)}¢ · chain {(pricePerUnit * 100).toFixed(1)}¢
+                    </span>
+                  </div>
+                );
+              })()}
             </div>
           )}
         </div>

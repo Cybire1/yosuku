@@ -162,9 +162,6 @@ export default function LeaderboardPage() {
   const ASSETS = [
     { key: 'all', label: 'All', glyph: '' },
     { key: 'btc', label: 'BTC', glyph: '\u20BF' },
-    { key: 'eth', label: 'ETH', glyph: '\u039E' },
-    { key: 'sol', label: 'SOL', glyph: '\u25CE' },
-    { key: 'sui', label: 'SUI', glyph: 'S' },
   ];
 
   return (

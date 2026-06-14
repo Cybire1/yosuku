@@ -36,6 +36,22 @@ export function depositTx(managerId: string, coinObjectId: string, amount: bigin
 }
 
 /**
+ * Withdraw DUSDC from the trading account (PredictManager) back to the wallet.
+ * Winnings land here after the keeper auto-redeems winning positions, so this
+ * is how a user actually collects: `predict_manager::withdraw<DUSDC>` → transfer.
+ */
+export function withdrawFromManagerTx(managerId: string, amount: bigint, owner: string): Transaction {
+  const tx = new Transaction();
+  const coin = tx.moveCall({
+    target: `${PACKAGE_ID}::predict_manager::withdraw`,
+    typeArguments: [DUSDC_TYPE],
+    arguments: [tx.object(managerId), tx.pure.u64(amount)],
+  });
+  tx.transferObjects([coin], tx.pure.address(owner));
+  return tx;
+}
+
+/**
  * Deposit all DUSDC coins by merging them first, then splitting the exact amount.
  */
 export function depositFromWalletTx(

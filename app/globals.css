@@ -90,6 +90,18 @@ html, body {
 ::selection { background: var(--vermilion); color: var(--white); }
 a { color: inherit; text-decoration: none; }
 
+/* inline code chip — docs prose */
+.dcode {
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+  color: var(--vermilion);
+  background: rgba(224,77,38,0.08);
+  border: 1px solid rgba(224,77,38,0.16);
+  border-radius: 5px;
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+
 
 /* the floor turns slightly red when round is closing */
 body.urgent { transition: background 600ms var(--ease); }
@@ -2439,7 +2451,7 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
   padding: 96px 0 88px;
 }
 .stats::before {
-  content: 'SESSION · 24·H · LIVE FROM TOKYO';
+  content: 'ON-CHAIN · LIVE · FROM TOKYO';
   position: absolute; top: 28px; left: 48px; right: 48px;
   display: flex; justify-content: space-between;
   font-family: var(--font-mono); font-size: 10px;

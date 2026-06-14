@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCurrentAccount } from '@mysten/dapp-kit';
-import { Trophy, ArrowRight } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import type { OracleData } from '@/lib/sui/predictApi';
 import type { RoundState } from '@/lib/predictionContract';
 import { loadPositions, isPositionClaimed, getTimeRemaining, formatCountdown, type LocalPosition } from '@/lib/roundHelpers';
@@ -84,38 +84,33 @@ export default function Verdict({ oracle }: VerdictProps) {
 
   const claimed = isPositionClaimed(oracle.oracle_id);
 
+
   return (
     <div className="space-y-3 mb-8">
-      {/* Personal verdicts */}
+      {/* Non-holders still see what the market did. */}
+      {positions.length === 0 && (
+        <div className="rounded-2xl border border-white/[0.07] bg-white/[0.015] p-5">
+          <div className="font-mono text-[10px] tracking-[0.16em] uppercase text-gray-500 mb-1.5">
+            {oracle.underlying_asset || 'BTC'} settled
+          </div>
+          <p className="text-sm text-gray-300">
+            Closed at <span className="text-white font-mono">{fmt(settlement)}</span> — this round is decided.
+          </p>
+        </div>
+      )}
+
+      {/* One premium result card per position (outcome + payout + claim). */}
       {positions.map(p => {
         const won = p.direction === 'UP' ? settlement > p.strike : settlement <= p.strike;
         return (
-          <div key={p.timestamp} className="space-y-2">
-            <div className={`flex items-center gap-3 p-4 rounded-xl border ${
-              won ? 'border-profit/25 bg-profit/[0.06]' : 'border-white/[0.08] bg-white/[0.02]'
-            }`}>
-              {won && <Trophy className="w-5 h-5 text-profit flex-shrink-0" />}
-              <div className="flex-1">
-                <div className={`text-sm font-bold ${won ? 'text-profit' : 'text-gray-300'}`}>
-                  {won
-                    ? `You won — +${(p.quantity / DUSDC_MULTIPLIER).toFixed(2)} DUSDC`
-                    : 'Not this time'}
-                </div>
-                <div className="text-xs text-gray-500 mt-0.5">
-                  Your {p.direction} at {fmt(p.strike)} · settlement {fmt(settlement)}
-                </div>
-              </div>
-            </div>
-            {!claimed && (
-              <ClaimWinnings
-                round={round}
-                userDeposit={p.quantity}
-                userDirection={p.direction}
-                strike={p.strike}
-                onClaimed={() => recordPnl((won ? p.quantity : 0) / DUSDC_MULTIPLIER - p.cost / DUSDC_MULTIPLIER)}
-              />
-            )}
-          </div>
+          <ClaimWinnings
+            key={p.timestamp}
+            round={round}
+            userDeposit={p.quantity}
+            userDirection={p.direction}
+            strike={p.strike}
+            onClaimed={() => recordPnl((won ? p.quantity : 0) / DUSDC_MULTIPLIER - p.cost / DUSDC_MULTIPLIER)}
+          />
         );
       })}
 

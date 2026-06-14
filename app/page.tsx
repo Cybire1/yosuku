@@ -76,7 +76,7 @@ const ASSET_GLYPH: Record<string, string> = {
 };
 
 const HOW_STEPS: HowStep[] = [
-  { num: '01', jp: '\u5E02\u5834', kicker: 'Choose', title: 'Pick a market.', body: 'BTC, ETH, SOL, SUI \u2014 each with a strike price and a fifteen-minute window. One question: above or below at the bell.', meta: '4 assets \u00B7 15-min rounds \u00B7 continuous' },
+  { num: '01', jp: '\u5E02\u5834', kicker: 'Choose', title: 'Pick a market.', body: 'Every BTC market has a strike price and a fifteen-minute window. One question: above or below at the bell.', meta: '15-min rounds \u00B7 continuous' },
   { num: '02', jp: '\u53D6\u5F15', kicker: 'Commit', title: 'Take a side.', body: 'One press. Your position is committed to Sui. No order books, no counterparties \u2014 just a binary stance and a fixed window.', meta: 'Binary \u00B7 Instant \u00B7 On-chain' },
   { num: '03', jp: '\u6C7A\u6E08', kicker: 'Settle', title: 'Settle automatically.', body: 'When the window closes, the oracle reports. Settlement is automatic. Winners receive proportional payouts. No claims, no friction.', meta: 'Oracle-settled \u00B7 Sub-second \u00B7 Trustless' },
 ];
@@ -401,14 +401,14 @@ export default function HomePage() {
   const dashOffset = 100 - probability;
   const needleAngle = (probability / 100) * 360 - 90;
   const filteredMarkets = marketTab === 'All' ? displayMarkets : displayMarkets.filter(m => m.asset === marketTab);
-  const marketTabs = ['All', 'BTC', 'ETH', 'SOL', 'SUI'];
+  const marketTabs = ['All', 'BTC'];
 
   /* ── Stats band data from protocol ── */
   const statsData = [
-    { idx: '01', label: 'Volume settled', value: protocolStats ? `$${(protocolStats.volumeSettled).toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '\u2014', spark: STAT_SPARKS[0], meta: 'on-chain total' },
-    { idx: '02', label: 'Markets resolved', value: protocolStats ? protocolStats.marketsResolved.toLocaleString() : '\u2014', spark: STAT_SPARKS[1], meta: 'oracle-settled' },
-    { idx: '03', label: 'Active wallets', value: protocolStats ? protocolStats.activeWallets.toLocaleString() : '\u2014', spark: STAT_SPARKS[2], meta: 'unique managers' },
-    { idx: '04', label: 'Settlement time', value: '< 1s', spark: STAT_SPARKS[3], meta: 'sub-second finality' },
+    { idx: '01', label: 'Markets live now', value: liveOracles.length ? String(liveOracles.length) : '\u2014', spark: STAT_SPARKS[0], meta: 'open for bets' },
+    { idx: '02', label: 'Oracle-settled', value: '100%', spark: STAT_SPARKS[1], meta: 'no committee, no disputes' },
+    { idx: '03', label: 'Players', value: protocolStats ? protocolStats.activeWallets.toLocaleString() : '\u2014', spark: STAT_SPARKS[2], meta: 'wallets in' },
+    { idx: '04', label: 'Settlement', value: '< 1s', spark: STAT_SPARKS[3], meta: 'sub-second, final' },
   ];
 
   return (
@@ -454,7 +454,7 @@ export default function HomePage() {
 
           <div className="hero-cta-row">
             <Link href="/markets" className="btn btn-primary" data-cursor="hover">
-              Take a side {'\u2197'}
+              Start betting {'\u2197'}
             </Link>
             <a href="#how" className="btn btn-ghost" data-cursor="hover">
               How it works {'\u2193'}
@@ -556,20 +556,12 @@ export default function HomePage() {
             </span>
           </div>
           <div className="ticker-cell">
-            <span className="ticker-label">ETH</span>
-            <span className="ticker-value">
-              {spotPrices.ETH ? `$${spotPrices.ETH.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '\u2014'}
-            </span>
-          </div>
-          <div className="ticker-cell">
-            <span className="ticker-label">SOL</span>
-            <span className="ticker-value">
-              {spotPrices.SOL ? `$${spotPrices.SOL.toLocaleString('en-US', { maximumFractionDigits: 2 })}` : '\u2014'}
-            </span>
-          </div>
-          <div className="ticker-cell">
-            <span className="ticker-label">Next round</span>
+            <span className="ticker-label">Next bell</span>
             <span className="ticker-value">{nextRound > 0 ? fmtTime(nextRound) : '\u2014'}</span>
+          </div>
+          <div className="ticker-cell">
+            <span className="ticker-label">Live now</span>
+            <span className="ticker-value">{liveOracles.length || '\u2014'}</span>
           </div>
         </div>
 
