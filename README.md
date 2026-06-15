@@ -7,7 +7,7 @@
   <img src="https://img.shields.io/badge/License-MIT-yellow" alt="License">
 </p>
 
-**The problem is not privacy by itself. The problem is that fast markets break without it.**
+**The problem is not privacy by itself. Theproblem is that fast markets break without it.**
 
 Every prediction market today has the same flaw: the moment you place a bet, everyone sees it. On a slow market, that is survivable. On a fast market, it is fatal. A whale enters, the pool shifts, traders copy, bots front-run, and the market starts reacting to visible order flow instead of the event itself.
 
