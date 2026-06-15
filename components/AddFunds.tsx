@@ -72,7 +72,7 @@ export default function AddFunds({ open, onClose, onFunded }: { open: boolean; o
 
             {state === 'done' ? (
               <Link
-                href="/bell"
+                href="/markets"
                 onClick={onClose}
                 className="block w-full text-center bg-vermilion text-white font-semibold rounded-full py-3 hover:bg-vermilion-d transition-colors"
               >

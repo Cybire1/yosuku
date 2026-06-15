@@ -8,7 +8,6 @@ import FirstRunGuide from './FirstRunGuide';
 import { useDUSDCBalance } from '@/lib/sui/hooks';
 
 const NAV_LINKS = [
-  { name: 'Bell', href: '/bell' },
   { name: 'Markets', href: '/markets' },
   { name: 'Pool', href: '/pool' },
   { name: 'Earn', href: '/earn' },
