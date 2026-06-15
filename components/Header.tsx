@@ -12,10 +12,9 @@ const NAV_LINKS = [
   { name: 'Markets', href: '/markets' },
   { name: 'Pool', href: '/pool' },
   { name: 'Earn', href: '/earn' },
+  { name: 'Agent', href: '/agent' },
   { name: 'Portfolio', href: '/portfolio' },
   { name: 'Leaderboard', href: '/leaderboard' },
-  { name: 'Strategies', href: '/market' },
-  { name: 'News', href: '/news' },
   { name: 'Docs', href: '/docs' },
 ];
 
