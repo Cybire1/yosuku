@@ -16,6 +16,9 @@ const NAV_LINKS = [
   { name: 'Docs', href: '/docs' },
 ];
 
+// Connected users at or below this DUSDC balance get auto-topped-up from the faucet.
+const AUTO_FUND_AT = 1_000_000; // 1 DUSDC (6 decimals)
+
 const MOBILE_NAV = [
   {
     name: 'Markets', href: '/markets',
@@ -52,7 +55,9 @@ export default function Header() {
   const [showMenu, setShowMenu] = useState(false);
   const [showFunds, setShowFunds] = useState(false);
   const { balance: dusdcRaw, loading: dusdcLoading, refresh: refreshDusdc } = useDUSDCBalance();
-  const promptedRef = useRef(false);
+  const autoFundingRef = useRef(false);   // in-flight guard (avoid concurrent drips)
+  const lowEpisodeRef = useRef(false);    // already auto-funded for the current low episode
+  const [autoFundMsg, setAutoFundMsg] = useState<string | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -66,20 +71,37 @@ export default function Header() {
     return () => window.removeEventListener('yosuku:open-funds', open);
   }, []);
 
-  // Auto-surface the faucet the first time a connected user is low on funds —
-  // on testnet you can't do anything without it, so don't make them hunt.
-  // Once per session, and never if they already hold more than 3 DUSDC (enough
-  // to trade — same cap the faucet itself enforces).
+  // Auto top-up: when a connected user falls to ≤ 1 DUSDC, silently drip test USDC
+  // from the in-app faucet — no tap, no hunting. Fires once per "low episode" and
+  // re-arms only after the balance recovers above the threshold (so it can't loop or
+  // spam). If the faucet declines (rate-limited / empty), fall back to surfacing the
+  // manual Add-funds modal so the user can use the official DeepBook faucet.
   useEffect(() => {
-    const FUND_CAP = 3_000_000; // 3 DUSDC (6 decimals)
-    if (!mounted || !address || dusdcLoading || dusdcRaw > FUND_CAP || promptedRef.current) return;
-    try {
-      if (sessionStorage.getItem('yosuku_funds_prompted') === '1') { promptedRef.current = true; return; }
-      sessionStorage.setItem('yosuku_funds_prompted', '1');
-    } catch { /* ignore */ }
-    promptedRef.current = true;
-    setShowFunds(true);
-  }, [mounted, address, dusdcLoading, dusdcRaw]);
+    if (!mounted || !address || dusdcLoading) return;
+    if (dusdcRaw > AUTO_FUND_AT) { lowEpisodeRef.current = false; return; } // comfortably funded → re-arm
+    if (autoFundingRef.current || lowEpisodeRef.current) return;            // already handling this episode
+    lowEpisodeRef.current = true;
+    autoFundingRef.current = true;
+    (async () => {
+      try {
+        const r = await fetch('/api/faucet', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ address }),
+        });
+        const d = await r.json().catch(() => ({}));
+        if (r.ok && !d.error) {
+          refreshDusdc();
+          if (!d.alreadyFunded) {
+            setAutoFundMsg(`${d.amount ?? 2} test USDC added automatically`);
+            setTimeout(() => setAutoFundMsg(null), 4000);
+          }
+        } else {
+          setShowFunds(true); // rate-limited / empty → let them use the official faucet
+        }
+      } catch { /* network hiccup — try again next balance tick */ lowEpisodeRef.current = false; }
+      finally { autoFundingRef.current = false; }
+    })();
+  }, [mounted, address, dusdcLoading, dusdcRaw, refreshDusdc]);
 
   const shortAddr = address
     ? `${address.slice(0, 6)}…${address.slice(-4)}`
@@ -183,6 +205,13 @@ export default function Header() {
           );
         })}
       </nav>
+
+      {autoFundMsg && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[120] flex items-center gap-2 border border-white/10 rounded-full bg-[#0d0d10]/95 backdrop-blur px-4 py-2 shadow-2xl">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" style={{ boxShadow: '0 0 10px #34d399' }} />
+          <span className="font-mono text-[12px] text-gray-200">{autoFundMsg}</span>
+        </div>
+      )}
 
       <FirstRunGuide />
       <AddFunds open={showFunds} onClose={() => setShowFunds(false)} onFunded={refreshDusdc} />

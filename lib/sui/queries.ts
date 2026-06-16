@@ -24,33 +24,32 @@ export {
   type PredictConfig,
 } from './predictApi';
 
-// On-chain queries via SuiClient
+// On-chain queries — now off JSON-RPC, served by GraphQL via the shared shim.
 import { DUSDC_TYPE, PLP_TYPE, DUSDC_MULTIPLIER, FLOAT_SCALING } from './constants';
+import { readClient } from './modernClients';
 
-// Use a loose type to avoid version mismatches between @mysten/sui and @mysten/dapp-kit
-type AnySuiClient = {
-  getBalance: (params: { owner: string; coinType: string }) => Promise<{ totalBalance: string }>;
-  getCoins: (params: { owner: string; coinType: string }) => Promise<{ data: { coinObjectId: string; balance: string }[] }>;
-};
+// Kept loose so legacy callers can still pass their dapp-kit client (ignored — reads
+// go through GraphQL). New code can call these with no client argument.
+type AnySuiClient = unknown;
 
-export async function fetchDUSDCBalance(client: AnySuiClient, address: string): Promise<number> {
-  const balance = await client.getBalance({ owner: address, coinType: DUSDC_TYPE });
+export async function fetchDUSDCBalance(_client: AnySuiClient, address: string): Promise<number> {
+  const balance = await readClient.getBalance({ owner: address, coinType: DUSDC_TYPE });
   return Number(balance.totalBalance);
 }
 
 export async function fetchDUSDCCoins(
-  client: AnySuiClient,
+  _client: AnySuiClient,
   address: string,
 ): Promise<{ coinObjectId: string; balance: bigint }[]> {
-  const coins = await client.getCoins({ owner: address, coinType: DUSDC_TYPE });
+  const coins = await readClient.getCoins({ owner: address, coinType: DUSDC_TYPE });
   return coins.data.map(c => ({
     coinObjectId: c.coinObjectId,
     balance: BigInt(c.balance),
   }));
 }
 
-export async function fetchPLPBalance(client: AnySuiClient, address: string): Promise<number> {
-  const balance = await client.getBalance({ owner: address, coinType: PLP_TYPE });
+export async function fetchPLPBalance(_client: AnySuiClient, address: string): Promise<number> {
+  const balance = await readClient.getBalance({ owner: address, coinType: PLP_TYPE });
   return Number(balance.totalBalance);
 }
 
