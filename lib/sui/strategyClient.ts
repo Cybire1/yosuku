@@ -15,12 +15,14 @@
 import { Transaction } from '@mysten/sui/transactions';
 import { gql, readClient } from './modernClients';
 import { DUSDC_TYPE, DUSDC_MULTIPLIER, DUSDC_DECIMALS } from './constants';
+import { NET } from './network';
 
 // yolev upgrade #2 — the package that introduced `strategy` + copy-trade. Call the new
 // functions (strategy::*, social_vault::authorized_trade/create_subscription) here.
-export const STRATEGY_PKG = '0x47d3c108b2165cb1190eefd0b67f73a386e8ca71b870f87a9afb096056795388';
+// Sourced from the network switch (testnet today; fills in on mainnet when yolev redeploys).
+export const STRATEGY_PKG = NET.strategyPackage;
 // The shared social vault that custodies subscriber balances (no-divert primitive).
-export const SOCIAL_VAULT_ID = '0xbe9e96fb8cb6be797c00529fc1f4fe1119192299579167140a084d946851e07b';
+export const SOCIAL_VAULT_ID = NET.socialVaultId;
 
 // StrategyListed/StrategySubscribed are typed at the strategy module's package.
 // CopyTraded/Subscribed were ADDED to social_vault in upgrade #2, so they are ALSO

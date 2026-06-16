@@ -20,12 +20,14 @@ import { SuiGraphQLClient } from '@mysten/sui/graphql';
 import { SuiGrpcClient } from '@mysten/sui/grpc';
 import { fromBase64 } from '@mysten/sui/utils';
 import type { Transaction } from '@mysten/sui/transactions';
+import { NET, SUI_NETWORK } from './network';
 
-export const GRAPHQL_URL = process.env.NEXT_PUBLIC_SUI_GRAPHQL_URL || 'https://graphql.testnet.sui.io/graphql';
-export const GRPC_URL = process.env.NEXT_PUBLIC_SUI_GRPC_URL || 'https://fullnode.testnet.sui.io:443';
+// endpoints follow the single network switch (env override still wins for power users).
+export const GRAPHQL_URL = process.env.NEXT_PUBLIC_SUI_GRAPHQL_URL || NET.graphqlUrl;
+export const GRPC_URL = process.env.NEXT_PUBLIC_SUI_GRPC_URL || NET.grpcUrl;
 
-export const gql = new SuiGraphQLClient({ url: GRAPHQL_URL, network: 'testnet' });
-export const grpc = new SuiGrpcClient({ network: 'testnet', baseUrl: GRPC_URL });
+export const gql = new SuiGraphQLClient({ url: GRAPHQL_URL, network: SUI_NETWORK });
+export const grpc = new SuiGrpcClient({ network: SUI_NETWORK, baseUrl: GRPC_URL });
 
 // ─── helpers ───
 
