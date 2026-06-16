@@ -4,7 +4,8 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Loader, Wallet, Droplets } from 'lucide-react';
-import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from '@mysten/dapp-kit';
+import { useCurrentAccount } from '@mysten/dapp-kit';
+import { useSmartSubmit } from '@/lib/sui/useSmartSubmit';
 import { useBtcPrice } from '@/lib/hooks/useBtcPrice';
 import { useDUSDCBalance } from '@/lib/sui/hooks';
 import { useManager } from '@/lib/sui/hooks';
@@ -43,8 +44,7 @@ interface BetSidebarProps {
 export default function BetSidebar({ round, onSuccess }: BetSidebarProps) {
   const account = useCurrentAccount();
   const address = account?.address ?? null;
-  const client = useSuiClient();
-  const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
+  const { submit } = useSmartSubmit();
   const { price } = useBtcPrice();
   const { balance, coins, refresh: refreshBalance } = useDUSDCBalance();
   const { manager, refresh: refreshManager } = useManager();
@@ -114,8 +114,7 @@ export default function BetSidebar({ round, onSuccess }: BetSidebarProps) {
     setLoading(true);
     setError('');
     try {
-      const tx = createManagerTx();
-      await signAndExecute({ transaction: tx });
+      await submit(() => createManagerTx());
       // Wait for chain to index the new manager
       await new Promise(r => setTimeout(r, 3000));
       await refreshManager();
@@ -157,7 +156,7 @@ export default function BetSidebar({ round, onSuccess }: BetSidebarProps) {
 
     try {
       const coinIds = coins.map(c => c.coinObjectId);
-      const tx = depositAndMintTx(
+      await submit(() => depositAndMintTx(
         manager.manager_id,
         coinIds,
         BigInt(microAmount),
@@ -166,9 +165,7 @@ export default function BetSidebar({ round, onSuccess }: BetSidebarProps) {
         BigInt(selectedStrike),
         direction,
         BigInt(microAmount), // quantity = amount (1 unit = $1)
-      );
-
-      await signAndExecute({ transaction: tx });
+      ));
 
       // Save position locally
       savePosition({

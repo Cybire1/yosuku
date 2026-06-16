@@ -12,8 +12,7 @@ import {
   ChevronDown,
   Wallet,
 } from 'lucide-react';
-import { useCurrentAccount, useSignAndExecuteTransaction, useSignTransaction, useSuiClient } from '@mysten/dapp-kit';
-import { Transaction } from '@mysten/sui/transactions';
+import { useCurrentAccount } from '@mysten/dapp-kit';
 import type { OracleData } from '@/lib/sui/predictApi';
 import { FLOAT_SCALING, DUSDC_MULTIPLIER } from '@/lib/sui/constants';
 import { useManager, useDUSDCBalance, useManagerBalance, useSviPricing, useVaultStats } from '@/lib/sui/hooks';
@@ -31,8 +30,8 @@ import { fetchOnChainQuote, fetchOnChainRangeQuote, type OnChainQuote } from '@/
 import { requestOpenRangeTx, requestOpenBinaryTx } from '@/lib/sui/leverageClient';
 import { useReserveStats } from '@/lib/sui/leverageHooks';
 import { useDailyStop } from '@/lib/dailyStop';
-import { getSponsorStatus, submitSponsored, type SponsorStatus } from '@/lib/sponsor';
 import { humanizeTxError } from '@/lib/errorMessages';
+import { useSmartSubmit } from '@/lib/sui/useSmartSubmit';
 import Countdown from './Countdown';
 import AccountSetup from './AccountSetup';
 import TradeConfirmationModal from './TradeConfirmationModal';
@@ -65,9 +64,7 @@ export default function TradePanel({
 }: TradePanelProps) {
   const account = useCurrentAccount();
   const address = account?.address ?? null;
-  const client = useSuiClient();
-  const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
-  const { mutateAsync: signTransaction } = useSignTransaction();
+  const { submit } = useSmartSubmit();
   const { manager, loading: managerLoading, refresh: refreshManager } = useManager();
   const { balance: walletBalance, coins, refresh: refreshBalance } = useDUSDCBalance();
   const { balance: managerBalance, refresh: refreshManagerBalance } = useManagerBalance(manager?.manager_id ?? null);
@@ -93,40 +90,6 @@ export default function TradePanel({
   const [quoteRetry, setQuoteRetry] = useState(0);
   const [errorDetail, setErrorDetail] = useState('');
   const [isTwoStep, setIsTwoStep] = useState(false);
-  // Gas sponsorship (Onara): zkLogin users hold zero SUI — when the gas
-  // station is up and the wallet can't cover gas, the sponsor pays it.
-  const [sponsor, setSponsor] = useState<SponsorStatus | null>(null);
-  const [suiLow, setSuiLow] = useState(false);
-  useEffect(() => { getSponsorStatus().then(setSponsor); }, []);
-  useEffect(() => {
-    if (!address) { setSuiLow(false); return; }
-    let cancelled = false;
-    const check = async () => {
-      try {
-        const b = await client.getBalance({ owner: address });
-        if (!cancelled) setSuiLow(Number(b.totalBalance) < 50_000_000); // < 0.05 SUI
-      } catch { /* keep last */ }
-    };
-    check();
-    const iv = setInterval(check, 30_000);
-    return () => { cancelled = true; clearInterval(iv); };
-  }, [address, client]);
-
-  // Execute a tx: sponsored (sponsor pays gas) when needed, normal otherwise.
-  const execTx = useCallback(async (tx: Transaction): Promise<string> => {
-    if (sponsor && suiLow && address) {
-      tx.setSender(address);
-      tx.setGasOwner(sponsor.address);
-      const bytes = await tx.build({ client });
-      const signed = await signTransaction({ transaction: Transaction.from(bytes) });
-      const { digest } = await submitSponsored({ sender: address, txBytes: signed.bytes, txSignature: signed.signature });
-      await client.waitForTransaction({ digest });
-      return digest;
-    }
-    const result = await signAndExecute({ transaction: tx });
-    await client.waitForTransaction({ digest: result.digest });
-    return result.digest;
-  }, [sponsor, suiLow, address, client, signTransaction, signAndExecute]);
   const { limit: dailyStopLimit, setLimit: setDailyStopLimit, todayLoss, stopHit } = useDailyStop();
   const [editingStop, setEditingStop] = useState(false);
   const [stopInput, setStopInput] = useState('');
@@ -306,7 +269,7 @@ export default function TradePanel({
       if (!managerId && leverage === 1) {
         setStep('creating-manager');
         const tx = createManagerTx();
-        await execTx(tx);
+        await submit(() => tx);
         await refreshManager();
         const { fetchManagerForAddress } = await import('@/lib/sui/predictApi');
         const m = await fetchManagerForAddress(address);
@@ -336,7 +299,7 @@ export default function TradePanel({
               oracleId: oracle.oracle_id, expiry: BigInt(oracle.expiry),
               strike: BigInt(selectedStrike), isUp: side === 'UP',
             });
-        digest = await execTx(tx);
+        ({ digest } = await submit(() => tx));
         setTxDigest(digest);
       } else {
         if (!managerId) throw new Error('No trading account.');
@@ -359,7 +322,7 @@ export default function TradePanel({
               BigInt(rangeUpperStrike),
               BigInt(positionQty),
             );
-            digest = await execTx(tx);
+            ({ digest } = await submit(() => tx));
             setTxDigest(digest);
           } else {
             const tx = mintRangePositionTx(
@@ -370,7 +333,7 @@ export default function TradePanel({
               BigInt(rangeUpperStrike),
               BigInt(positionQty),
             );
-            digest = await execTx(tx);
+            ({ digest } = await submit(() => tx));
             setTxDigest(digest);
           }
         } else if (needsDeposit && coins.length > 0) {
@@ -386,7 +349,7 @@ export default function TradePanel({
             side as 'UP' | 'DOWN',
             BigInt(positionQty),
           );
-          digest = await execTx(tx);
+          ({ digest } = await submit(() => tx));
           setTxDigest(digest);
         } else {
           setStep('minting');
@@ -398,7 +361,7 @@ export default function TradePanel({
             side as 'UP' | 'DOWN',
             BigInt(positionQty),
           );
-          digest = await execTx(tx);
+          ({ digest } = await submit(() => tx));
           setTxDigest(digest);
         }
       }
@@ -445,7 +408,7 @@ export default function TradePanel({
     }
   }, [
     address, selectedStrike, rangeUpperStrike, isValidAmount, isRangeValid, manager, managerBalance,
-    amountMicro, positionQty, coins, oracle, side, execTx, leverage, walletBalance,
+    amountMicro, positionQty, coins, oracle, side, submit, leverage, walletBalance,
     refreshManager, refreshBalance, refreshManagerBalance, onSuccess,
   ]);
 

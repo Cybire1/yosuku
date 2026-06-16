@@ -1,11 +1,9 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { useCurrentAccount, useSignTransaction, ConnectButton } from '@mysten/dapp-kit';
-import { Transaction } from '@mysten/sui/transactions';
+import { useCurrentAccount, ConnectButton } from '@mysten/dapp-kit';
 import { fetchWaitlist, buildJoinTx, type WaitlistState } from '@/lib/sui/waitlist';
-import { grpc, buildSignExecute } from '@/lib/sui/modernClients';
-import { getSponsorStatus, submitSponsored, type SponsorStatus } from '@/lib/sponsor';
+import { useSmartSubmit } from '@/lib/sui/useSmartSubmit';
 
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 
@@ -17,11 +15,10 @@ const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 export default function WaitlistCard() {
   const account = useCurrentAccount();
   const address = account?.address ?? null;
-  const { mutateAsync: signTransaction } = useSignTransaction();
+  const { submit, sponsorReady } = useSmartSubmit();
 
   const [state, setState] = useState<WaitlistState | null>(null);
   const [referrer, setReferrer] = useState<string | null>(null);
-  const [sponsor, setSponsor] = useState<SponsorStatus | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -31,8 +28,6 @@ export default function WaitlistCard() {
       const ref = new URLSearchParams(window.location.search).get('ref');
       if (ref && /^0x[0-9a-fA-F]{64}$/.test(ref)) setReferrer(ref);
     } catch { /* ignore */ }
-    // discover the gas station once; if up, joining is sponsored (gas-free)
-    getSponsorStatus().then(setSponsor).catch(() => {});
   }, []);
 
   const refresh = useCallback(async () => {
@@ -45,25 +40,7 @@ export default function WaitlistCard() {
     if (!address) return;
     setBusy(true); setErr(null);
     try {
-      const tx = buildJoinTx(referrer && referrer !== address ? referrer : null);
-      let digest: string;
-      if (sponsor) {
-        // sponsored: the gas station pays. Build with the sponsor as gas owner, user
-        // signs to authorize, Onara policy-checks + co-signs + executes → gas-free join.
-        tx.setSender(address);
-        tx.setGasOwner(sponsor.address);
-        const bytes = await tx.build({ client: grpc });
-        const signed = await signTransaction({ transaction: Transaction.from(bytes) });
-        const r = await submitSponsored({ sender: address, txBytes: signed.bytes, txSignature: signed.signature });
-        digest = r.digest;
-      } else {
-        // fallback: user pays gas (still off JSON-RPC — wallet signs, gRPC executes).
-        const r = await buildSignExecute(tx, ({ transaction }) =>
-          signTransaction({ transaction }).then((s) => ({ bytes: s.bytes, signature: s.signature })),
-        );
-        digest = r.digest;
-      }
-      await grpc.waitForTransaction({ digest });
+      await submit(() => buildJoinTx(referrer && referrer !== address ? referrer : null));
       await refresh();
     } catch (e) {
       setErr(String(e instanceof Error ? e.message : e).slice(0, 140));
@@ -118,7 +95,7 @@ export default function WaitlistCard() {
           disabled={busy}
           className="bg-vermilion text-white font-semibold rounded-full px-6 py-3 hover:bg-vermilion-d transition-colors disabled:opacity-60"
         >
-          {busy ? 'joining…' : sponsor ? 'Join the mainnet waitlist — free →' : 'Join the mainnet waitlist →'}
+          {busy ? 'joining…' : sponsorReady ? 'Join the mainnet waitlist — free →' : 'Join the mainnet waitlist →'}
         </button>
       )}
 

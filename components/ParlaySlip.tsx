@@ -1,13 +1,13 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useSignAndExecuteTransaction } from '@mysten/dapp-kit';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Check, X, Clock, Trophy, Loader2, Layers } from 'lucide-react';
 import { useMyParlays } from '@/lib/sui/parlayHooks';
 import { claimParlayTx, type MyParlay, type ParlayLegState } from '@/lib/sui/parlayClient';
 import { FLOAT_SCALING } from '@/lib/sui/constants';
 import { humanizeTxError } from '@/lib/errorMessages';
+import { useSmartSubmit } from '@/lib/sui/useSmartSubmit';
 import { useToast } from './Toast';
 
 const fmtUsd = (strike: bigint) => {
@@ -63,7 +63,7 @@ function LegRow({ leg, idx, now }: { leg: ParlayLegState; idx: number; now: numb
 }
 
 function ParlayCard({ p, now, onClaimed }: { p: MyParlay; now: number; onClaimed: () => void }) {
-  const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
+  const { submit } = useSmartSubmit();
   const { toast } = useToast();
   const [claiming, setClaiming] = useState(false);
 
@@ -74,8 +74,8 @@ function ParlayCard({ p, now, onClaimed }: { p: MyParlay; now: number; onClaimed
   const claim = useCallback(async () => {
     setClaiming(true);
     try {
-      const res = await signAndExecute({ transaction: claimParlayTx({ parlay: p.id }) });
-      toast(`Claimed ${p.maxPayout.toFixed(2)} DUSDC · ${res.digest.slice(0, 8)}…`, 'success');
+      const { digest } = await submit(() => claimParlayTx({ parlay: p.id }));
+      toast(`Claimed ${p.maxPayout.toFixed(2)} DUSDC · ${digest.slice(0, 8)}…`, 'success');
       onClaimed();
     } catch (err) {
       const friendly = humanizeTxError(err);
@@ -83,7 +83,7 @@ function ParlayCard({ p, now, onClaimed }: { p: MyParlay; now: number; onClaimed
     } finally {
       setClaiming(false);
     }
-  }, [signAndExecute, p.id, p.maxPayout, toast, onClaimed]);
+  }, [submit, p.id, p.maxPayout, toast, onClaimed]);
 
   return (
     <motion.div

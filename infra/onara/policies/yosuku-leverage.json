@@ -1,0 +1,16 @@
+{
+  "name": "yosuku-leverage",
+  "gasBudgetMax": 200000000,
+  "allowedCommandKinds": ["MoveCall", "SplitCoins", "MergeCoins", "TransferObjects"],
+  "targets": [
+    "0x75e00dc36b96cc4adafd4b180c791f7a0fb40aed92fd11c40968227fc6318a36::underwrite::request_open",
+    "0x75e00dc36b96cc4adafd4b180c791f7a0fb40aed92fd11c40968227fc6318a36::underwrite::cancel",
+    "0x75e00dc36b96cc4adafd4b180c791f7a0fb40aed92fd11c40968227fc6318a36::underwrite::settle",
+    "0x75e00dc36b96cc4adafd4b180c791f7a0fb40aed92fd11c40968227fc6318a36::underwrite::supply",
+    "0x75e00dc36b96cc4adafd4b180c791f7a0fb40aed92fd11c40968227fc6318a36::underwrite::withdraw",
+    "0xf5ea2b3749c65d6e56507cc35388719aadb28f9cab873696a2f8687f5c785138::predict::redeem_permissionless",
+    "0xf5ea2b3749c65d6e56507cc35388719aadb28f9cab873696a2f8687f5c785138::predict_manager::withdraw",
+    "0xf5ea2b3749c65d6e56507cc35388719aadb28f9cab873696a2f8687f5c785138::market_key::up",
+    "0xf5ea2b3749c65d6e56507cc35388719aadb28f9cab873696a2f8687f5c785138::market_key::down"
+  ]
+}

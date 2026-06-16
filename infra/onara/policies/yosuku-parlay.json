@@ -1,0 +1,10 @@
+{
+  "name": "yosuku-parlay",
+  "gasBudgetMax": 200000000,
+  "allowedCommandKinds": ["MoveCall", "SplitCoins", "MergeCoins", "TransferObjects"],
+  "targets": [
+    "0xd950420d3b3ac026c6f3b242010bec2dd2f7cdab6a7d68fb00087516094cbc02::parlay::open_parlay",
+    "0xd950420d3b3ac026c6f3b242010bec2dd2f7cdab6a7d68fb00087516094cbc02::parlay::resolve_leg",
+    "0xd950420d3b3ac026c6f3b242010bec2dd2f7cdab6a7d68fb00087516094cbc02::parlay::claim"
+  ]
+}

@@ -2,8 +2,9 @@
 
 import { useState } from 'react';
 import { Trophy, Loader2, Check } from 'lucide-react';
-import { useCurrentAccount, useSignAndExecuteTransaction } from '@mysten/dapp-kit';
+import { useCurrentAccount } from '@mysten/dapp-kit';
 import { redeemPermissionlessTx } from '@/lib/sui/predictClient';
+import { useSmartSubmit } from '@/lib/sui/useSmartSubmit';
 import { useDUSDCBalance, useManager } from '@/lib/sui/hooks';
 import { formatPred, type RoundState, type ReputationData } from '@/lib/predictionContract';
 import { markClaimed } from '@/lib/roundHelpers';
@@ -32,7 +33,7 @@ export default function ClaimWinnings({
 }: ClaimWinningsProps) {
   const account = useCurrentAccount();
   const address = account?.address ?? null;
-  const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
+  const { submit } = useSmartSubmit();
   const { manager } = useManager();
   const { refresh: refreshBalance } = useDUSDCBalance();
   const [loading, setLoading] = useState(false);
@@ -55,15 +56,14 @@ export default function ClaimWinnings({
     setLoading(true);
     setError('');
     try {
-      const tx = redeemPermissionlessTx({
+      await submit(() => redeemPermissionlessTx({
         managerId: manager.manager_id,
         oracleId: round.oracleId,
         expiry: BigInt(round.expiry),
         strike: BigInt(strike),
         direction: userDirection,
         quantity: BigInt(userDeposit),
-      });
-      await signAndExecute({ transaction: tx });
+      }));
       markClaimed(round.oracleId);
       setClaimed(true);
       await refreshBalance();

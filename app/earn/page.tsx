@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useCurrentAccount, useSignAndExecuteTransaction } from '@mysten/dapp-kit';
+import { useCurrentAccount } from '@mysten/dapp-kit';
+import { useSmartSubmit } from '@/lib/sui/useSmartSubmit';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import Marquee from '@/components/Marquee';
@@ -45,7 +46,7 @@ function Gauge({ bps }: { bps: number }) {
 export default function EarnPage() {
   const account = useCurrentAccount();
   const address = account?.address ?? null;
-  const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
+  const { submit } = useSmartSubmit();
   const { stats, refresh: refreshStats } = useReserveStats();
   const { positions, refresh: refreshMine } = useMySupply(stats);
   const { positions: myPositions, refresh: refreshPos } = useMyPositions();
@@ -85,22 +86,22 @@ export default function EarnPage() {
     if (!address) return;
     const micro = BigInt(Math.floor(Number(amount) * 1_000_000));
     if (micro <= BigInt(0)) { setMsg('Enter an amount'); return; }
-    await run('supply', async () => { await signAndExecute({ transaction: supplyTx(coins.map((c) => c.coinObjectId), micro, address) }); setAmount(''); });
+    await run('supply', async () => { await submit(() => supplyTx(coins.map((c) => c.coinObjectId), micro, address)); setAmount(''); });
   }
   async function doWithdraw(id: string) {
     if (!address) return;
-    await run('w:' + id, async () => { await signAndExecute({ transaction: withdrawTx(id, address) }); });
+    await run('w:' + id, async () => { await submit(() => withdrawTx(id, address)); });
   }
   async function doCancel(id: string) {
     if (!address) return;
-    await run('x:' + id, async () => { await signAndExecute({ transaction: cancelOrderTx(id, address) }); });
+    await run('x:' + id, async () => { await submit(() => cancelOrderTx(id, address)); });
   }
   async function doSettle(p: PositionData) {
     if (!address) return;
     // permissionless self-settle: redeem the won position, repay the reserve, and the
     // PnL is force-paid to the owner on-chain — works even if the keeper is down.
     await run('s:' + p.id, async () => {
-      await signAndExecute({ transaction: settleTx({
+      await submit(() => settleTx({
         positionId: p.id,
         managerId: p.managerId,
         oracleId: p.oracleId,
@@ -108,7 +109,7 @@ export default function EarnPage() {
         strike: p.lowerStrike, // binary: lowerStrike holds the strike
         isUp: p.isUp,
         quantity: p.quantity,
-      }) });
+      }));
     });
   }
 

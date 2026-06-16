@@ -4,9 +4,9 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { KeyRound, Loader, Wallet } from 'lucide-react';
-import { useCurrentAccount, useSignAndExecuteTransaction } from '@mysten/dapp-kit';
+import { useCurrentAccount } from '@mysten/dapp-kit';
 import { createManagerTx } from '@/lib/sui/predictClient';
-import { executeWithRetry } from '@/lib/walletExecution';
+import { useSmartSubmit } from '@/lib/sui/useSmartSubmit';
 
 interface InitSlotPromptProps {
   onInitialized?: () => void;
@@ -15,7 +15,7 @@ interface InitSlotPromptProps {
 export default function InitSlotPrompt({ onInitialized }: InitSlotPromptProps) {
   const account = useCurrentAccount();
   const address = account?.address ?? null;
-  const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
+  const { submit } = useSmartSubmit();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -26,10 +26,7 @@ export default function InitSlotPrompt({ onInitialized }: InitSlotPromptProps) {
     setError('');
 
     try {
-      const tx = createManagerTx();
-      await executeWithRetry(() =>
-        signAndExecute({ transaction: tx })
-      );
+      await submit(() => createManagerTx());
       onInitialized?.();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to create trading account';

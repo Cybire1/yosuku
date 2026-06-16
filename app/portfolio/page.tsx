@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from '@mysten/dapp-kit';
+import { useCurrentAccount } from '@mysten/dapp-kit';
 import { withdrawFromManagerTx } from '@/lib/sui/predictClient';
+import { useSmartSubmit } from '@/lib/sui/useSmartSubmit';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import Marquee from '@/components/Marquee';
@@ -34,17 +35,14 @@ export default function PortfolioPage() {
   const { manager, loading: managerLoading } = useManager();
   const { balance: walletBalance } = useDUSDCBalance();
   const { balance: managerBalance, refresh: refreshManagerBalance } = useManagerBalance(manager?.manager_id ?? null);
-  const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
-  const client = useSuiClient();
+  const { submit } = useSmartSubmit();
   const [withdrawing, setWithdrawing] = useState(false);
 
   const handleWithdraw = async () => {
     if (!manager || !address || managerBalance <= 0) return;
     setWithdrawing(true);
     try {
-      const tx = withdrawFromManagerTx(manager.manager_id, BigInt(managerBalance), address);
-      const res = await signAndExecute({ transaction: tx });
-      await client.waitForTransaction({ digest: res.digest });
+      await submit(() => withdrawFromManagerTx(manager.manager_id, BigInt(managerBalance), address));
       refreshManagerBalance();
     } catch (err) {
       console.error('Withdraw error:', err);

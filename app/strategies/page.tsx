@@ -1,8 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { useCurrentAccount, useSignTransaction, ConnectButton } from '@mysten/dapp-kit';
-import { Transaction } from '@mysten/sui/transactions';
+import { useCurrentAccount, ConnectButton } from '@mysten/dapp-kit';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import Marquee from '@/components/Marquee';
@@ -26,15 +25,15 @@ import {
   type CopyTrade,
 } from '@/lib/sui/strategyClient';
 import { DUSDC_MULTIPLIER } from '@/lib/sui/constants';
-import { grpc, buildSignExecute } from '@/lib/sui/modernClients';
-import { getSponsorStatus, submitSponsored, type SponsorStatus } from '@/lib/sponsor';
+import { getSponsorStatus, type SponsorStatus } from '@/lib/sponsor';
+import { useSmartSubmit } from '@/lib/sui/useSmartSubmit';
 
 export default function StrategiesPage() {
   const account = useCurrentAccount();
   const address = account?.address ?? null;
-  const { mutateAsync: signTransaction } = useSignTransaction();
   const { coins: dusdcCoins, refresh: refreshDusdc } = useDUSDCBalance();
   const { toast } = useToast();
+  const { submit } = useSmartSubmit();
 
   const [strategies, setStrategies] = useState<StrategyCard[]>([]);
   const [copyTrades, setCopyTrades] = useState<CopyTrade[]>([]);
@@ -58,23 +57,6 @@ export default function StrategiesPage() {
   useEffect(() => {
     if (address && !form.agent) setForm((f) => ({ ...f, agent: address }));
   }, [address, form.agent]);
-
-  // Build → sign → execute, off JSON-RPC: sponsored (gas-free) path when the gas station is
-  // up, wallet-pays fallback otherwise. Shared by subscribe + list. Returns the digest.
-  const signSend = useCallback(async (tx: Transaction): Promise<string> => {
-    if (sponsor) {
-      tx.setSender(address!);
-      tx.setGasOwner(sponsor.address);
-      const bytes = await tx.build({ client: grpc });
-      const signed = await signTransaction({ transaction: Transaction.from(bytes) });
-      const r = await submitSponsored({ sender: address!, txBytes: signed.bytes, txSignature: signed.signature });
-      return r.digest;
-    }
-    const r = await buildSignExecute(tx, ({ transaction }) =>
-      signTransaction({ transaction }).then((s) => ({ bytes: s.bytes, signature: s.signature })),
-    );
-    return r.digest;
-  }, [sponsor, address, signTransaction]);
 
   const load = useCallback(async () => {
     try {
@@ -106,13 +88,13 @@ export default function StrategiesPage() {
     }
     setSubscribingId(card.id);
     try {
-      const tx = buildSubscribeTx({
-        strategyId: card.id,
-        coinIds: dusdcCoins.map((c) => c.coinObjectId),
-        subFeeMicro: BigInt(Math.floor(card.subFee * DUSDC_MULTIPLIER)),
-      });
-      const digest = await signSend(tx);
-      await grpc.waitForTransaction({ digest });
+      await submit(() =>
+        buildSubscribeTx({
+          strategyId: card.id,
+          coinIds: dusdcCoins.map((c) => c.coinObjectId),
+          subFeeMicro: BigInt(Math.floor(card.subFee * DUSDC_MULTIPLIER)),
+        }),
+      );
       toast(`Subscribed to ${fmtAddr(card.agent)} — the agent can now copy-trade your vault`, 'success');
       await load();
       refreshDusdc();
@@ -137,17 +119,17 @@ export default function StrategiesPage() {
     if (!/^0x[0-9a-fA-F]{64}$/.test(agent)) { toast('Agent must be a 0x… address', 'error'); return; }
     setListing(true);
     try {
-      const tx = buildListStrategyTx({
-        agent,
-        capsuleBlob: BigInt(0), // Seal playbook can be attached later via update_strategy
-        memoryAccount: '0x0',   // MemWal pointer optional
-        maxLeverageBps,
-        maxMarginMicro,
-        subFeeMicro,
-        creator: address,
-      });
-      const digest = await signSend(tx);
-      await grpc.waitForTransaction({ digest });
+      await submit(() =>
+        buildListStrategyTx({
+          agent,
+          capsuleBlob: BigInt(0), // Seal playbook can be attached later via update_strategy
+          memoryAccount: '0x0',   // MemWal pointer optional
+          maxLeverageBps,
+          maxMarginMicro,
+          subFeeMicro,
+          creator: address,
+        }),
+      );
       toast('Strategy listed — it now appears in the marketplace', 'success');
       setShowList(false);
       await load();

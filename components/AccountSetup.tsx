@@ -2,10 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { Loader2, Check, Sparkles, AlertCircle } from 'lucide-react';
-import { useCurrentAccount, useSuiClient, useSignTransaction, useSignAndExecuteTransaction } from '@mysten/dapp-kit';
-import { Transaction } from '@mysten/sui/transactions';
+import { useCurrentAccount } from '@mysten/dapp-kit';
 import { createManagerTx } from '@/lib/sui/predictClient';
-import { getSponsorStatus, submitSponsored, type SponsorStatus } from '@/lib/sponsor';
+import { getSponsorStatus, type SponsorStatus } from '@/lib/sponsor';
+import { useSmartSubmit } from '@/lib/sui/useSmartSubmit';
 import { humanizeTxError } from '@/lib/errorMessages';
 import { useToast } from './Toast';
 
@@ -22,9 +22,7 @@ interface AccountSetupProps {
 export default function AccountSetup({ onReady }: AccountSetupProps) {
   const account = useCurrentAccount();
   const address = account?.address ?? null;
-  const client = useSuiClient();
-  const { mutateAsync: signTransaction } = useSignTransaction();
-  const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
+  const { submit } = useSmartSubmit();
   const { toast } = useToast();
 
   const [sponsor, setSponsor] = useState<SponsorStatus | null>(null);
@@ -42,30 +40,7 @@ export default function AccountSetup({ onReady }: AccountSetupProps) {
     setError('');
     setPhase('working');
     try {
-      let digest: string | undefined;
-
-      if (sponsor) {
-        // Sponsored path: sponsor pays gas. Build with the sponsor as gas
-        // owner (gas coins resolve from their address), user signs to
-        // authorize, Onara policy-checks, co-signs and executes.
-        const tx = createManagerTx();
-        tx.setSender(address);
-        tx.setGasOwner(sponsor.address);
-        const bytes = await tx.build({ client });
-        const signed = await signTransaction({ transaction: Transaction.from(bytes) });
-        const result = await submitSponsored({
-          sender: address,
-          txBytes: signed.bytes,
-          txSignature: signed.signature,
-        });
-        digest = result.digest;
-      } else {
-        // Fallback: user pays gas.
-        const result = await signAndExecute({ transaction: createManagerTx() });
-        digest = result.digest;
-      }
-
-      if (digest) await client.waitForTransaction({ digest });
+      await submit(() => createManagerTx());
       setPhase('done');
       toast('Trading account ready — trades are now one tap.', 'success');
       onReady?.();
