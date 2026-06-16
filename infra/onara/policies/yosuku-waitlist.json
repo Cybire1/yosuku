@@ -1,0 +1,8 @@
+{
+  "name": "yosuku-waitlist",
+  "gasBudgetMax": 20000000,
+  "allowedCommandKinds": ["MoveCall"],
+  "targets": [
+    "0x13d6dd6cb7effa390d60a259640d1640fda5d7b5be9f8c6019eaf7e34923bff9::waitlist::join"
+  ]
+}

@@ -4,14 +4,15 @@
 // browser side (reads + the purchase transaction); decryption runs server-side
 // (it needs @mysten/seal) via /api/market/unlock.
 import { Transaction } from '@mysten/sui/transactions';
-import { SuiJsonRpcClient, getJsonRpcFullnodeUrl } from '@mysten/sui/jsonRpc';
+import { readClient, simulateReturnBool } from './modernClients';
 import { DUSDC_TYPE, CLOCK_ID } from './constants';
 
 export const MARKET_PKG = '0x8b2f0931f0bf1b55385bb2d2322c14fc61ba7d9e8f43ff20f7bd37794fc8ca9e';
 export const MARKET_ID = '0x5bde72a992105011e851abd8f96026c27fc97440ac4db0a1f1356252b58be7dc';
 export const WALRUS_AGGREGATOR = 'https://aggregator.walrus-testnet.walrus.space';
 
-const client = new SuiJsonRpcClient({ url: getJsonRpcFullnodeUrl('testnet'), network: 'testnet' });
+// Reads run on GraphQL/gRPC (off JSON-RPC) via the shared compat shim. See modernClients.ts.
+const client = readClient;
 
 export interface ProvenanceManifest {
   strategist: string;
@@ -119,12 +120,8 @@ export async function hasAccess(listingId: string, address: string): Promise<boo
       typeArguments: [DUSDC_TYPE],
       arguments: [tx.object(listingId), tx.pure.address(address), tx.object(CLOCK_ID)],
     });
-    const res = await client.devInspectTransactionBlock({
-      sender: address,
-      transactionBlock: tx,
-    });
-    const ret = res.results?.[0]?.returnValues?.[0];
-    return !!ret && ret[0]?.[0] === 1; // bool true
+    // gRPC simulation reads the has_access bool return value (replaces devInspect).
+    return await simulateReturnBool(tx, address, 0);
   } catch {
     return false;
   }
