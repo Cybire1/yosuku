@@ -93,6 +93,85 @@ export function computeStrikeGrid(
   }));
 }
 
+// ── Implied volatility (from the SVI surface) — powers the chain / smile / term-structure ──
+
+const SECONDS_PER_YEAR = 365.25 * 24 * 3600;
+
+/**
+ * SVI total implied variance w(k) = σ²·T at `strike` (decoded from FLOAT_SCALING).
+ * Scale-invariant in strike/forward (only the ratio enters via k = ln(strike/forward)),
+ * so dollars or encoded values both work as long as both are in the same unit.
+ */
+export function totalVariance(svi: SviParams, strike: number, forward: number): number {
+  if (forward <= 0 || strike <= 0) return 0;
+  const a = svi.a / FLOAT_SCALING;
+  const b = svi.b / FLOAT_SCALING;
+  const rho = svi.rho / FLOAT_SCALING;
+  const m = svi.m / FLOAT_SCALING;
+  const sigma = svi.sigma / FLOAT_SCALING;
+  const k = Math.log(strike / forward);
+  const km = k - m;
+  return a + b * (rho * km + Math.sqrt(km * km + sigma * sigma));
+}
+
+/**
+ * Annualized implied volatility implied by the SVI surface at `strike`, as a fraction
+ * (e.g. 0.65 = 65%). IV = sqrt(totalVariance / T_years). `secondsToExpiry` is the time
+ * left on the round. The same surface that prices the binary IS the vol surface — this
+ * just reads it back as a quotable vol.
+ */
+export function impliedVolAnnual(
+  svi: SviParams,
+  strike: number,
+  forward: number,
+  secondsToExpiry: number,
+): number {
+  const w = totalVariance(svi, strike, forward);
+  const T = Math.max(secondsToExpiry, 1) / SECONDS_PER_YEAR;
+  if (w <= 0 || T <= 0) return 0;
+  return Math.sqrt(w / T);
+}
+
+/** At-the-money implied vol (strike = forward, k = 0) — the point for a term-structure curve. */
+export function atmImpliedVol(svi: SviParams, forward: number, secondsToExpiry: number): number {
+  return impliedVolAnnual(svi, forward, forward, secondsToExpiry);
+}
+
+export interface SmilePoint {
+  strike: number;
+  logMoneyness: number;
+  iv: number;        // annualized, as a fraction
+  prob: number;      // P(settle above strike) = the UP digital price, 0..1
+}
+
+/**
+ * A volatility smile: implied vol + the UP digital price across a strike grid centered on
+ * the forward (±spanPct). The curve you render to show Predict is a real, surfaced options
+ * venue rather than a single up/down toggle.
+ */
+export function sviSmile(
+  svi: SviParams,
+  forward: number,
+  secondsToExpiry: number,
+  opts?: { spanPct?: number; steps?: number },
+): SmilePoint[] {
+  const span = opts?.spanPct ?? 0.18; // ±18% around the forward
+  const steps = Math.max(3, opts?.steps ?? 41);
+  const pts: SmilePoint[] = [];
+  for (let i = 0; i < steps; i++) {
+    const f = (i / (steps - 1)) * 2 - 1; // -1 … 1
+    const strike = forward * (1 + f * span);
+    if (strike <= 0) continue;
+    pts.push({
+      strike,
+      logMoneyness: Math.log(strike / forward),
+      iv: impliedVolAnnual(svi, strike, forward, secondsToExpiry),
+      prob: computeSviPrice(svi, strike, forward),
+    });
+  }
+  return pts;
+}
+
 // ── Fee computation (from pricing_config.move lines 106-121) ──
 
 export interface FeeBreakdown {
