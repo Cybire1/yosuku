@@ -11,6 +11,8 @@ const NAV_LINKS = [
   { name: 'Markets', href: '/markets' },
   { name: 'Pool', href: '/pool' },
   { name: 'Earn', href: '/earn' },
+  { name: 'Strategies', href: '/strategies' },
+  { name: 'Agents', href: '/agents' },
   { name: 'Portfolio', href: '/portfolio' },
   { name: 'Leaderboard', href: '/leaderboard' },
   { name: 'Docs', href: '/docs' },

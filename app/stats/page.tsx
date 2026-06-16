@@ -3,6 +3,11 @@
 import { useEffect, useState, useCallback } from 'react';
 import { fetchTraction, type TractionStats, type Interaction } from '@/lib/sui/traction';
 import WaitlistCard from '@/components/WaitlistCard';
+import Header from '@/components/Header';
+import Footer from '@/components/Footer';
+import Marquee from '@/components/Marquee';
+import GrainOverlay from '@/components/GrainOverlay';
+import CustomCursor from '@/components/CustomCursor';
 
 const SCAN_TX = (d: string) => `https://suiscan.xyz/testnet/tx/${d}`;
 const SCAN_ACC = (a: string) => `https://suiscan.xyz/testnet/account/${a}`;
@@ -56,7 +61,13 @@ export default function StatsPage() {
   }, [load]);
 
   return (
-    <main className="max-w-5xl mx-auto px-5 py-12">
+    <div className="min-h-screen relative">
+      <Marquee />
+      <Header />
+      <CustomCursor />
+      <GrainOverlay />
+      <main className="container pt-[120px] pb-12">
+        <div className="max-w-5xl mx-auto">
       <div className="flex items-center gap-2 mb-2">
         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" style={{ boxShadow: '0 0 12px #34d399' }} />
         <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-gray-500">Live · testnet · verifiable on-chain</span>
@@ -125,6 +136,9 @@ export default function StatsPage() {
       ) : (
         <div className="font-mono text-sm text-rose-400 py-20 text-center">couldn&apos;t reach the chain — retrying…</div>
       )}
-    </main>
+        </div>
+        <Footer />
+      </main>
+    </div>
   );
 }
