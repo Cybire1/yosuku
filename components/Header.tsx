@@ -111,16 +111,27 @@ export default function Header() {
   }, []);
 
   // Auto top-up: when a connected user falls to ≤ 1 DUSDC, silently drip test USDC
-  // from the in-app faucet — no tap, no hunting. Fires once per "low episode" and
-  // re-arms only after the balance recovers above the threshold (so it can't loop or
-  // spam). If the faucet declines (rate-limited / empty), fall back to surfacing the
-  // manual Add-funds modal so the user can use the official DeepBook faucet.
+  // from the in-app faucet — no tap, no hunting. Each page is a FULL reload that mounts a
+  // fresh Header, so the in-memory refs below reset on every navigation; the real guard is
+  // a per-address cooldown in localStorage (survives reloads) so a low wallet can't
+  // re-trigger the faucet — and never the modal — on every page. If the faucet declines
+  // (rate-limited / empty) we show a quiet, dismissable toast instead of hijacking the
+  // page with the Add-funds modal (the balance pill `+` still opens it on demand).
   useEffect(() => {
     if (!mounted || !address || dusdcLoading) return;
     if (dusdcRaw > AUTO_FUND_AT) { lowEpisodeRef.current = false; return; } // comfortably funded → re-arm
     if (autoFundingRef.current || lowEpisodeRef.current) return;            // already handling this episode
+    const cdKey = `yosuku:autofund:${address}`;
+    const COOLDOWN_MS = 10 * 60_000; // don't re-attempt within 10 min (survives page reloads)
+    try {
+      if (Date.now() - Number(localStorage.getItem(cdKey) || 0) < COOLDOWN_MS) {
+        lowEpisodeRef.current = true; // recently handled — stay quiet this page
+        return;
+      }
+    } catch { /* localStorage unavailable — fall through */ }
     lowEpisodeRef.current = true;
     autoFundingRef.current = true;
+    try { localStorage.setItem(cdKey, String(Date.now())); } catch { /* ignore */ }
     (async () => {
       try {
         const r = await fetch('/api/faucet', {
@@ -135,10 +146,14 @@ export default function Header() {
             setTimeout(() => setAutoFundMsg(null), 4000);
           }
         } else {
-          setShowFunds(true); // rate-limited / empty → let them use the official faucet
+          // rate-limited / empty — a quiet cue, NOT a forced modal on every page.
+          setAutoFundMsg('Faucet busy — tap your balance to add test USDC');
+          setTimeout(() => setAutoFundMsg(null), 5000);
         }
-      } catch { /* network hiccup — try again next balance tick */ lowEpisodeRef.current = false; }
-      finally { autoFundingRef.current = false; }
+      } catch { /* network hiccup — clear cooldown so the next balance tick can retry */
+        try { localStorage.removeItem(cdKey); } catch { /* ignore */ }
+        lowEpisodeRef.current = false;
+      } finally { autoFundingRef.current = false; }
     })();
   }, [mounted, address, dusdcLoading, dusdcRaw, refreshDusdc]);
 

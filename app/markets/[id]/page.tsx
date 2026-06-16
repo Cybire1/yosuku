@@ -60,7 +60,6 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
   // Price series cached per oracle so strike/price changes redraw the chart
   // without re-fetching /prices every poll.
   const chartSeriesRef = useRef<{ id: string; series: number[]; times: number[] } | null>(null);
-  const chartMotionRef = useRef<{ id: string; last: number } | null>(null);
   const [copied, setCopied] = useState(false);
   const [activeSide, setActiveSide] = useState<'UP' | 'DOWN'>(defaultSide);
 
@@ -213,20 +212,7 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
         const drawFrame = (now: number) => {
           if (cancelled || !chartCanvasRef.current || !cached || cached.series.length < 2) return;
 
-          const targetLast = cached.series[cached.series.length - 1];
-          let motion = chartMotionRef.current?.id === oracleId
-            ? chartMotionRef.current
-            : { id: oracleId, last: targetLast };
-          const nextLast = motion.last + (targetLast - motion.last) * 0.16;
-          motion = {
-            id: oracleId,
-            last: Math.abs(nextLast - targetLast) < 0.01 ? targetLast : nextLast,
-          };
-          chartMotionRef.current = motion;
-
-          const renderSeries = cached.series.slice();
-          renderSeries[renderSeries.length - 1] = motion.last;
-          drawPriceLine(chartCanvasRef.current, renderSeries, {
+          drawPriceLine(chartCanvasRef.current, cached.series, {
             target: strikeD,
             targetLabel: 'Target',
             verdict: true,
