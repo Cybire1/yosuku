@@ -9,7 +9,8 @@ import GrainOverlay from '@/components/GrainOverlay';
 import SectionHeader from '@/components/SectionHeader';
 import { useDUSDCBalance } from '@/lib/sui/hooks';
 import { useReserveStats, useMySupply, useMyPositions, useMyOrders } from '@/lib/sui/leverageHooks';
-import { supplyTx, withdrawTx, cancelOrderTx, type PositionData } from '@/lib/sui/leverageClient';
+import { supplyTx, withdrawTx, cancelOrderTx, settleTx, type PositionData } from '@/lib/sui/leverageClient';
+import { KEEPER_ADDRESS } from '@/lib/sui/constants';
 import { fetchOracles, type OracleData } from '@/lib/sui/predictApi';
 
 const fmt = (n: number, d = 2) => n.toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -93,6 +94,22 @@ export default function EarnPage() {
   async function doCancel(id: string) {
     if (!address) return;
     await run('x:' + id, async () => { await signAndExecute({ transaction: cancelOrderTx(id, address) }); });
+  }
+  async function doSettle(p: PositionData) {
+    if (!address) return;
+    // permissionless self-settle: redeem the won position, repay the reserve, and the
+    // PnL is force-paid to the owner on-chain — works even if the keeper is down.
+    await run('s:' + p.id, async () => {
+      await signAndExecute({ transaction: settleTx({
+        positionId: p.id,
+        managerId: p.managerId,
+        oracleId: p.oracleId,
+        expiry: p.expiry,
+        strike: p.lowerStrike, // binary: lowerStrike holds the strike
+        isUp: p.isUp,
+        quantity: p.quantity,
+      }) });
+    });
   }
 
   return (
@@ -270,9 +287,25 @@ export default function EarnPage() {
                             <span className="w-1.5 h-1.5 rounded-full bg-gray-600" /> live
                           </span>
                         ) : oc === 'won' ? (
-                          <span className="font-mono text-[11px] px-3 py-2 rounded-full border border-emerald-500/30 text-emerald-300 inline-flex items-center gap-1.5">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> won · keeper settling
-                          </span>
+                          p.isRange ? (
+                            <span className="font-mono text-[11px] px-3 py-2 rounded-full border border-emerald-500/30 text-emerald-300 inline-flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> won · keeper settling
+                            </span>
+                          ) : address === KEEPER_ADDRESS ? (
+                            <button
+                              onClick={() => doSettle(p)}
+                              disabled={busy === 's:' + p.id}
+                              className="font-mono text-[11px] px-4 py-2 rounded-full border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 hover:border-emerald-400/60 transition-colors disabled:opacity-50 inline-flex items-center gap-1.5"
+                              title="keeper liveness crank"
+                            >
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                              {busy === 's:' + p.id ? 'Settling…' : 'Settle now'}
+                            </button>
+                          ) : (
+                            <span className="font-mono text-[11px] px-3 py-2 rounded-full border border-emerald-500/30 text-emerald-300 inline-flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> won · keeper settling
+                            </span>
+                          )
                         ) : (
                           <span className="font-mono text-[11px] px-3 py-2 rounded-full border border-white/10 text-gray-500">lost · margin only</span>
                         )}
@@ -282,8 +315,9 @@ export default function EarnPage() {
                 })}
               </div>
               <p className="font-mono text-[10px] text-gray-600 mt-4 leading-relaxed max-w-2xl">
-                Positions are custodied by the protocol and <span className="text-vermilion/80">settled automatically by the keeper</span> when the round ends —
-                a win redeems, repays the reserve&apos;s fronted capital, and pays your PnL to your wallet; a loss costs only your margin. Nothing to claim.
+                Positions are custodied by the protocol and <span className="text-vermilion/80">settled by the keeper crank</span> when the round ends —
+                a win redeems, repays the reserve&apos;s fronted capital, and force-pays your PnL to your wallet on-chain; a loss costs only your margin.
+                Redeem and settle are permissionless on-chain; the protocol-owned manager withdraw is keeper-gated, so the crank runs from the keeper.
               </p>
             </>
           )}

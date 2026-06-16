@@ -231,12 +231,14 @@ export default function PortfolioTable() {
 
       {/* Positions list */}
       <div className="space-y-2">
-        {positions.map((pos) => {
+        {positions.map((pos, idx) => {
           const direction = getPositionDirection(pos.lower_strike, pos.higher_strike);
           const strike = getPositionStrike(pos.lower_strike, pos.higher_strike);
           const strikeDollars = strike / FLOAT_SCALING;
           const quantity = Number(pos.quantity) / DUSDC_MULTIPLIER;
-          const key = `${pos.oracle_id}-${pos.lower_strike}-${pos.higher_strike}`;
+          // include the row index so two positions in the same market (same oracle+strikes)
+          // can't collide on key — the per-row key stays stable for the expand toggle.
+          const key = `${pos.oracle_id}-${pos.lower_strike}-${pos.higher_strike}-${idx}`;
 
           // Find matching oracle for status
           const oracle = oracles.find(o => o.oracle_id === pos.oracle_id);

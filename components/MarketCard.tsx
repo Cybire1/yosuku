@@ -4,16 +4,19 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import type { OracleData } from '@/lib/sui/predictApi';
 import { FLOAT_SCALING } from '@/lib/sui/constants';
-import { getTimeRemaining, nearestStrike, formatCountdown } from '@/lib/roundHelpers';
+import { getTimeRemaining, formatCountdown } from '@/lib/roundHelpers';
+import { getCanonicalMarketLine } from '@/lib/marketLine';
 import { genCandles, drawPriceLine, priceHistoryToCandles, type Candle } from '@/lib/charts/canvasChart';
 import { fetchPriceHistory } from '@/lib/sui/predictApi';
 import { seedOracle } from '@/lib/sui/oracleCache';
+import { fetchOnChainQuote } from '@/lib/sui/onchainQuote';
 import { Star } from 'lucide-react';
 
 interface MarketCardProps {
   oracle: OracleData;
   spotPrice?: number | null;
   forwardPrice?: number | null;
+  seedStrike?: number | null;
   isFavorite?: boolean;
   onToggleFavorite?: (oracleId: string) => void;
 }
@@ -22,11 +25,12 @@ const ASSET_GLYPH: Record<string, string> = {
   BTC: '₿', ETH: 'Ξ', SOL: '◎', SUI: 'S',
 };
 
-export default function MarketCard({ oracle, spotPrice, forwardPrice, isFavorite, onToggleFavorite }: MarketCardProps) {
+export default function MarketCard({ oracle, spotPrice, forwardPrice, seedStrike, isFavorite, onToggleFavorite }: MarketCardProps) {
   const router = useRouter();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [timeLeft, setTimeLeft] = useState(getTimeRemaining(oracle.expiry));
   const [deltaPct, setDeltaPct] = useState<number | null>(null);
+  const [askCents, setAskCents] = useState<{ up: number; down: number } | null>(null);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -41,33 +45,46 @@ export default function MarketCard({ oracle, spotPrice, forwardPrice, isFavorite
     seedOracle(oracle, spotPrice, forwardPrice);
   }, [oracle, spotPrice, forwardPrice]);
 
-  // On hover/touch, warm the route's JS chunk so the click is instant too.
-  const warmed = useRef(false);
-  const warm = () => {
-    if (warmed.current) return;
-    warmed.current = true;
-    seedOracle(oracle, spotPrice, forwardPrice);
-    router.prefetch(`/markets/${oracle.oracle_id}`);
-  };
-
   const spot = spotPrice ? spotPrice / FLOAT_SCALING : null;
   const forward = forwardPrice ? forwardPrice / FLOAT_SCALING : null;
 
   // Lock display strike on first price — question text shouldn't fluctuate
   const lockedStrikeRef = useRef<number | null>(null);
-  const refPrice = forward || spot;
-  // For settled oracles, use settlement_price as reference
-  const settledRef = oracle.settlement_price ? oracle.settlement_price / FLOAT_SCALING : null;
-  const priceRef = refPrice || settledRef;
-  if (priceRef && lockedStrikeRef.current === null) {
-    lockedStrikeRef.current = nearestStrike(priceRef * FLOAT_SCALING, oracle.min_strike, oracle.tick_size);
+  const referencePrice = forwardPrice ?? spotPrice ?? oracle.settlement_price;
+  const initialLine = getCanonicalMarketLine({
+    oracle,
+    referencePrice,
+    explicitStrike: seedStrike,
+  });
+  if (lockedStrikeRef.current === null && initialLine && initialLine.source !== 'grid-fallback') {
+    lockedStrikeRef.current = initialLine.strike;
   }
-  const hasRealStrike = lockedStrikeRef.current !== null;
-  const midStrike = lockedStrikeRef.current ?? (oracle.min_strike + oracle.tick_size * 25);
-  const midStrikeDollars = midStrike / FLOAT_SCALING;
+  const fallbackLine = getCanonicalMarketLine({ oracle, referencePrice });
+  const displayStrike = lockedStrikeRef.current
+    ?? (fallbackLine?.source !== 'grid-fallback' ? fallbackLine?.strike : null);
+  const hasRealStrike = displayStrike !== null && displayStrike !== undefined;
+  const midStrike = displayStrike
+    ?? getCanonicalMarketLine({
+      oracle,
+      referencePrice,
+    })?.strike ?? null;
+  const midStrikeDollars = midStrike ? midStrike / FLOAT_SCALING : 0;
+  const marketHref = hasRealStrike
+    ? `/markets/${oracle.oracle_id}?strike=${midStrike}`
+    : `/markets/${oracle.oracle_id}`;
+  const sideHref = (side: 'UP' | 'DOWN') => hasRealStrike ? `${marketHref}&side=${side}` : marketHref;
+
+  // On hover/touch, warm the exact route's JS chunk so the click is instant too.
+  const warmed = useRef(false);
+  const warm = () => {
+    if (warmed.current) return;
+    warmed.current = true;
+    seedOracle(oracle, spotPrice, forwardPrice);
+    router.prefetch(marketHref);
+  };
 
   let yesProb = 50;
-  if (forward && midStrikeDollars > 0) {
+  if (forward && hasRealStrike && midStrikeDollars > 0) {
     const diff = (forward - midStrikeDollars) / midStrikeDollars;
     const minsLeft = Math.max(1, timeLeft.totalMs / 60000);
     const sigma = 0.001 * Math.sqrt(minsLeft);
@@ -79,6 +96,52 @@ export default function MarketCard({ oracle, spotPrice, forwardPrice, isFavorite
   const isExpired = timeLeft.expired;
   const isSettled = oracle.status === 'settled';
   const isUrgent = !isExpired && timeLeft.totalMs < 5 * 60 * 1000;
+  const upAsk = askCents?.up ?? yesProb;
+  const downAsk = askCents?.down ?? noProb;
+
+  useEffect(() => {
+    if (isSettled || isExpired || !hasRealStrike || midStrike === null) {
+      setAskCents(null);
+      return;
+    }
+
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const [up, down] = await Promise.all([
+          fetchOnChainQuote({
+            oracleId: oracle.oracle_id,
+            expiry: oracle.expiry,
+            strike: midStrike,
+            isUp: true,
+            quantity: 1_000_000,
+          }),
+          fetchOnChainQuote({
+            oracleId: oracle.oracle_id,
+            expiry: oracle.expiry,
+            strike: midStrike,
+            isUp: false,
+            quantity: 1_000_000,
+          }),
+        ]);
+        if (!cancelled) {
+          setAskCents({
+            up: Math.round(up.mintCost * 100),
+            down: Math.round(down.mintCost * 100),
+          });
+        }
+      } catch {
+        if (!cancelled) setAskCents(null);
+      }
+    };
+
+    load();
+    const iv = setInterval(load, 10_000);
+    return () => {
+      cancelled = true;
+      clearInterval(iv);
+    };
+  }, [hasRealStrike, isExpired, isSettled, midStrike, oracle.expiry, oracle.oracle_id]);
 
   // Sparkline chart. Price history barely changes over a card's lifetime, so we
   // fetch it ONCE per oracle and cache the candles — redraws (on spot/strike
@@ -87,7 +150,7 @@ export default function MarketCard({ oracle, spotPrice, forwardPrice, isFavorite
   const candlesRef = useRef<{ id: string; candles: Candle[] } | null>(null);
   useEffect(() => {
     if (!canvasRef.current || isSettled) return;
-    const strike = midStrikeDollars;
+      const strike = midStrikeDollars || (spot ?? 0);
     let cancelled = false;
 
     const draw = (candles: Candle[]) => {
@@ -146,11 +209,24 @@ export default function MarketCard({ oracle, spotPrice, forwardPrice, isFavorite
 
   const asset = oracle.underlying_asset || 'BTC';
   const glyph = ASSET_GLYPH[asset] || asset[0];
+  const questionLabel = hasRealStrike
+    ? `${asset} above ${formatPrice(midStrikeDollars)}`
+    : `${asset} market`;
 
   return (
     <article
       className={`market-card ${isUrgent ? 'urgent' : ''}`}
-      onClick={() => router.push(`/markets/${oracle.oracle_id}`)}
+      role="link"
+      tabIndex={0}
+      aria-label={`${questionLabel}. Opens market details.`}
+      onClick={() => router.push(marketHref)}
+      onKeyDown={(e) => {
+        if (e.target !== e.currentTarget) return;
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          router.push(marketHref);
+        }
+      }}
       onMouseEnter={warm}
       onPointerDown={warm}
       data-cursor="hover"
@@ -164,12 +240,14 @@ export default function MarketCard({ oracle, spotPrice, forwardPrice, isFavorite
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           {onToggleFavorite && (
             <button
+              type="button"
               onClick={(e) => { e.stopPropagation(); onToggleFavorite(oracle.oracle_id); }}
               style={{
                 background: 'none', border: 'none', cursor: 'pointer', padding: '2px',
                 display: 'flex', alignItems: 'center', transition: 'transform 150ms',
               }}
               title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+              aria-label={isFavorite ? `Remove ${questionLabel} from favorites` : `Add ${questionLabel} to favorites`}
             >
               <Star
                 style={{
@@ -223,11 +301,11 @@ export default function MarketCard({ oracle, spotPrice, forwardPrice, isFavorite
 
         {!isSettled && !isExpired && (
           <div className="mc-strip">
-            <span>LIVE · PYTH ORACLE</span>
+            <span>{askCents ? 'LIVE · ON-CHAIN ASK' : 'EST · QUOTING'}</span>
             <span className="ramp">
               <span>UP</span>
-              <span className="bar"><span className="fill" style={{ width: `${yesProb}%` }} /></span>
-              <span className="pct">{yesProb}¢</span>
+              <span className="bar"><span className="fill" style={{ width: `${Math.min(99, Math.max(1, upAsk))}%` }} /></span>
+              <span className="pct">{upAsk}¢</span>
             </span>
           </div>
         )}
@@ -246,23 +324,27 @@ export default function MarketCard({ oracle, spotPrice, forwardPrice, isFavorite
       </div>
 
       {/* Foot — bet buttons only while the round is actually tradable */}
-      {!isSettled && !isExpired && (
+      {!isSettled && !isExpired && hasRealStrike && (
         <div className="mc-foot">
           <button
+            type="button"
             className="mc-side up"
             data-cursor="up"
-            onClick={(e) => { e.stopPropagation(); router.push(`/markets/${oracle.oracle_id}?side=UP`); }}
+            aria-label={`Buy UP on ${questionLabel} for ${upAsk} cents`}
+            onClick={(e) => { e.stopPropagation(); router.push(sideHref('UP')); }}
           >
             <span>UP</span>
-            <span className="price">{yesProb}¢</span>
+            <span className="price">{upAsk}¢</span>
           </button>
           <button
+            type="button"
             className="mc-side down"
             data-cursor="hover"
-            onClick={(e) => { e.stopPropagation(); router.push(`/markets/${oracle.oracle_id}?side=DOWN`); }}
+            aria-label={`Buy DOWN on ${questionLabel} for ${downAsk} cents`}
+            onClick={(e) => { e.stopPropagation(); router.push(sideHref('DOWN')); }}
           >
             <span>DOWN</span>
-            <span className="price">{noProb}¢</span>
+            <span className="price">{downAsk}¢</span>
           </button>
         </div>
       )}

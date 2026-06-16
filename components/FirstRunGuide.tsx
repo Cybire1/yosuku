@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { usePathname } from 'next/navigation';
 import { Check, X, ArrowRight } from 'lucide-react';
 import { useCurrentAccount } from '@mysten/dapp-kit';
 import { useDUSDCBalance } from '@/lib/sui/hooks';
@@ -19,6 +20,7 @@ export default function FirstRunGuide() {
   const account = useCurrentAccount();
   const address = account?.address ?? null;
   const { balance } = useDUSDCBalance();
+  const pathname = usePathname();
   const [dismissed, setDismissed] = useState(true); // hidden until storage is read (no hydration flash)
   const [hasTraded, setHasTraded] = useState(false);
 
@@ -38,7 +40,11 @@ export default function FirstRunGuide() {
     try { localStorage.setItem(DISMISS_KEY, '1'); } catch { /* ignore */ }
   };
 
-  if (dismissed || hasTraded) return null;
+  // Don't crowd the trade surfaces — on a market detail page or the bell, the
+  // user is already taking a side, so the "tap UP or DOWN" guide is just noise.
+  const onTradeSurface = pathname === '/bell' || /^\/markets\/[^/]+/.test(pathname ?? '');
+
+  if (dismissed || hasTraded || onTradeSurface) return null;
 
   const steps = [
     { label: 'Sign in', hint: 'Google or a Sui wallet', done: !!address },

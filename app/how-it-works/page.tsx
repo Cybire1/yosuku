@@ -38,7 +38,7 @@ export default function HowItWorksPage() {
     {
       number: 4,
       title: 'Collect Payout',
-      description: 'When the market settles, the oracle reports the final price. Winning positions pay out automatically. A 1-2% settlement fee applies.',
+      description: 'When the market settles, the oracle reports the final price. Winning contracts pay 1 DUSDC per unit; losing contracts pay 0.',
       icon: Trophy,
       numClass: 'bg-new-blue/10 text-new-blue',
       iconClass: 'text-new-blue',
@@ -53,7 +53,7 @@ export default function HowItWorksPage() {
     },
     {
       title: 'Live BTC Price',
-      description: 'Real-time BTC price from Pyth Network oracle feeds on Sui. The chart shows price movement relative to the strike so you can track your position.',
+      description: 'Real-time BTC reference price and DeepBook Predict market data. The chart shows price movement relative to the strike so you can track your position.',
       icon: TrendingUp,
     },
     {
@@ -75,11 +75,11 @@ export default function HowItWorksPage() {
     },
     {
       question: 'How is the outcome decided?',
-      answer: 'When the window closes, the Pyth oracle reports the final BTC price. If BTC >= strike price, UP positions win. If BTC < strike, DOWN positions win. Settlement is automatic and deterministic.',
+      answer: 'When the window closes, the Predict oracle reports the final BTC price. If BTC is above the strike, UP positions win. If BTC is at or below the strike, DOWN positions win. Settlement is deterministic on-chain.',
     },
     {
       question: 'How much do I win?',
-      answer: 'Each position pays out $1 per unit if correct, $0 if not. Your cost is the SVI fair price (e.g. 64¢ for a 64% probability UP position). If you win, your profit is $1 minus cost per unit. A 1-2% settlement fee applies.',
+      answer: 'Each position pays out 1 DUSDC per unit if correct, 0 if not. Your cost is the live Predict quote, including protocol spread. If you win, your profit is payout minus entry cost.',
     },
     {
       question: 'What wallet do I need?',
@@ -298,7 +298,7 @@ export default function HowItWorksPage() {
               <div className="flex flex-col gap-4">
                 {[
                   { step: '1', label: 'Window Closes', desc: 'The 15-minute market window expires.' },
-                  { step: '2', label: 'Oracle Reports', desc: 'Pyth Network reports the final BTC price to the Sui smart contract.' },
+                  { step: '2', label: 'Oracle Reports', desc: 'The Predict oracle reports the final BTC price to the Sui smart contract.' },
                   { step: '3', label: 'Settlement', desc: 'The DeepBook Predict contract compares settlement price vs strike. Winners are determined automatically.' },
                   { step: '4', label: 'Payout', desc: 'Winning positions receive 1 DUSDC per unit. Losing positions receive 0. Payouts are claimable immediately.' },
                 ].map((item) => (

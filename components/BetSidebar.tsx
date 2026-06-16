@@ -16,7 +16,7 @@ import {
   getConfidenceLabel,
   type RoundState,
 } from '@/lib/predictionContract';
-import { savePosition, generateStrikeGrid, formatStrike } from '@/lib/roundHelpers';
+import { defaultStrike, savePosition, generateDisplayStrikeGrid, formatStrike } from '@/lib/roundHelpers';
 import AnimatedNumber from './AnimatedNumber';
 
 const QUICK_AMOUNTS = [50, 100, 250, 500];
@@ -57,18 +57,15 @@ export default function BetSidebar({ round, onSuccess }: BetSidebarProps) {
   const [flashType, setFlashType] = useState<'none' | 'UP' | 'DOWN'>('none');
   const [selectedStrike, setSelectedStrike] = useState<number | null>(null);
 
-  // Generate strike grid centered around current price
+  // Generate a curated strike grid centered around current price.
   const centerPrice = price ? price * FLOAT_SCALING : undefined;
-  const strikes = generateStrikeGrid(round.minStrike, round.tickSize, 50, centerPrice);
+  const strikes = generateDisplayStrikeGrid(round.minStrike, round.tickSize, 21, centerPrice);
 
-  // Auto-select nearest strike to spot price
+  // Auto-select the app default line, not every raw protocol tick.
   useEffect(() => {
     if (selectedStrike === null && strikes.length > 0) {
       if (centerPrice) {
-        const nearest = strikes.reduce((prev, curr) =>
-          Math.abs(curr - centerPrice) < Math.abs(prev - centerPrice) ? curr : prev
-        );
-        setSelectedStrike(nearest);
+        setSelectedStrike(defaultStrike(centerPrice, round.minStrike, round.tickSize));
       } else {
         setSelectedStrike(strikes[Math.floor(strikes.length / 2)]);
       }

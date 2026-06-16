@@ -85,10 +85,18 @@ html, body {
   font-size: 15px; line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  overflow-x: hidden;
+  /* `clip` (not `hidden`) clips horizontal overflow WITHOUT making the page a
+     scroll container — `hidden` silently coerces overflow-y to auto and breaks
+     every `position: sticky` descendant (e.g. the docs sidebar). */
+  overflow-x: clip;
 }
 ::selection { background: var(--vermilion); color: var(--white); }
 a { color: inherit; text-decoration: none; }
+:where(a, button, input, textarea, select, [tabindex]):focus-visible {
+  outline: 2px solid rgba(224,77,38,0.72);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
 
 /* inline code chip — docs prose */
 .dcode {
@@ -165,8 +173,8 @@ body.urgent::before {
 .logo-mark svg { width: 100%; height: 100%; display: block; overflow: visible; }
 .logo-mark .dot { fill: var(--vermilion); }
 
-.nav { display: flex; align-items: center; gap: 36px; }
-.nav-links { display: flex; gap: 32px; }
+.nav { display: flex; align-items: center; gap: 28px; }
+.nav-links { display: flex; align-items: center; gap: 24px; }
 .nav-link {
   position: relative; color: var(--gray-400); font-size: 13px; font-weight: 500; letter-spacing: 0.01em;
   transition: color 200ms var(--ease), letter-spacing 300ms var(--ease);
@@ -181,6 +189,64 @@ body.urgent::before {
 .nav-link:hover::after { transform: scaleX(1); }
 .nav-link.active { color: var(--white); }
 .nav-link.active::after { transform: scaleX(1); }
+
+.nav-more { position: relative; display: flex; align-items: center; }
+.nav-more-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+.nav-more-button svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 2;
+  transition: transform 200ms var(--ease);
+}
+.nav-more-button.open svg { transform: rotate(180deg); }
+.nav-more-menu {
+  position: absolute;
+  top: calc(100% + 18px);
+  right: 0;
+  z-index: 60;
+  width: 202px;
+  padding: 8px;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  background: rgba(8,8,9,0.94);
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
+  box-shadow: 0 24px 80px rgba(0,0,0,0.45);
+}
+.nav-more-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 11px;
+  border-radius: 6px;
+  color: var(--gray-400);
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background 180ms var(--ease), color 180ms var(--ease);
+}
+.nav-more-link svg {
+  width: 16px;
+  height: 16px;
+  color: var(--gray-600);
+  stroke-width: 1.9;
+  transition: color 180ms var(--ease);
+}
+.nav-more-link:hover,
+.nav-more-link.active {
+  color: var(--white);
+  background: rgba(255,255,255,0.06);
+}
+.nav-more-link.active svg { color: var(--vermilion); }
 
 .header-right { display: flex; align-items: center; gap: 14px; }
 
@@ -3471,40 +3537,100 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
   padding: 6px 8px;
   gap: 2px;
 }
-.mobile-bottom-nav a {
+.mobile-bottom-nav a,
+.mobile-bottom-nav button {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 2px;
   padding: 8px 14px;
+  border: 0;
   border-radius: 999px;
+  background: transparent;
   color: var(--gray-500);
   font-family: var(--font-body); font-size: 10px; font-weight: 500;
   letter-spacing: 0.02em;
   transition: color 200ms var(--ease), background 200ms var(--ease);
   text-decoration: none;
+  cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
-.mobile-bottom-nav a svg {
+.mobile-bottom-nav a svg,
+.mobile-bottom-nav button svg {
   width: 20px; height: 20px;
   stroke: currentColor; fill: none;
   stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
 }
 .mobile-bottom-nav a:hover,
-.mobile-bottom-nav a.active {
+.mobile-bottom-nav button:hover,
+.mobile-bottom-nav a.active,
+.mobile-bottom-nav button.active {
   color: var(--white);
   background: rgba(255,255,255,0.08);
 }
-.mobile-bottom-nav a.active svg {
+.mobile-bottom-nav a.active svg,
+.mobile-bottom-nav button.active svg {
   stroke: var(--vermilion);
 }
+.mobile-more-menu {
+  display: none;
+  position: fixed;
+  left: 14px;
+  right: 14px;
+  bottom: 92px;
+  z-index: 899;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 14px;
+  background: rgba(8,8,9,0.94);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  box-shadow: 0 22px 70px rgba(0,0,0,0.48);
+}
+.mobile-more-menu a {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  color: var(--gray-400);
+  font-size: 12px;
+  font-weight: 650;
+  text-decoration: none;
+  background: rgba(255,255,255,0.025);
+  border: 1px solid rgba(255,255,255,0.055);
+}
+.mobile-more-menu a svg {
+  width: 17px;
+  height: 17px;
+  color: var(--gray-600);
+  stroke-width: 1.9;
+}
+.mobile-more-menu a.active {
+  color: var(--white);
+  border-color: rgba(224,77,38,0.28);
+  background: rgba(224,77,38,0.08);
+}
+.mobile-more-menu a.active svg { color: var(--vermilion); }
 
 @media (max-width: 720px) {
   .nav-links { display: none; }
-  .header { padding: 0 18px; }
+  /* Slim the top bar on mobile: shorter header, tighter logo + wallet pill. */
+  .header { padding: 0 14px; height: 46px; }
+  .logo { font-size: 11px; font-weight: 700; letter-spacing: 0.04em; gap: 6px; }
+  .logo-mark { width: 13px; height: 13px; }
+  .wallet-pill { font-size: 10px; padding: 4px 9px 4px 4px; gap: 5px; }
+  .wallet-pill .addr-dot { width: 14px; height: 14px; }
+  .wallet-pill .addr-dot::after { inset: 4px; }
+  .header-right { gap: 8px; }
   /* Keep the wallet entry point reachable on mobile — header is logo + connect.
      Secondary actions (faucet link) yield the space. */
-  .header-right .btn-ghost { display: none; }
+  .header-right .btn-ghost,
+  .header-right .dusdc-pill { display: none; }
   .mobile-menu-toggle { display: none; }
   .mobile-bottom-nav { display: flex; }
+  .mobile-more-menu { display: grid; }
   .container { padding-inline: 18px; }
   .page-hero { padding: 140px 0 48px; }
   .markets-grid { grid-template-columns: 1fr; }
@@ -3724,32 +3850,68 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
 .mc-strip .ramp .pct { color: var(--vermilion); font-size: 11px; }
 
 /* Mobile: drop the editorial coordinates/edition ornament + breadcrumb on markets */
-@media (max-width: 720px) {
+@media (max-width: 1100px) {
+  /* Editorial corner labels (EDITION / R/N / LAT-LON) + crop marks bleed over the
+     card on narrow screens — keep them for the full-width desktop look only. */
   .markets-hero .hero-meta,
+  .markets-hero .crop,
   .markets-hero .breadcrumb { display: none; }
 }
 
-/* Hero chart = tradable live market: bet buttons in the foot strip */
+/* Hero bet buttons — the two outcomes as solid, modern, unmistakably-tappable
+   pills (filled side colour so a first-timer can't read them as plain labels). */
 .hero-bet { display: flex; gap: 8px; }
 .hero-bet-btn {
-  display: inline-flex; align-items: center; gap: 7px;
-  padding: 7px 16px; border-radius: 999px;
-  font-family: var(--font-mono); font-size: 11px; font-weight: 700;
-  letter-spacing: 0.1em;
-  border: 1px solid rgba(255,255,255,0.10);
-  background: rgba(255,255,255,0.02);
-  transition: all 200ms var(--ease);
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 10px 18px; border-radius: 10px;
+  font-family: var(--font-mono); font-size: 12px; font-weight: 700;
+  letter-spacing: 0.08em; text-decoration: none;
+  border: 1px solid transparent; cursor: pointer;
+  transition: transform 150ms var(--ease), background 200ms var(--ease), box-shadow 200ms var(--ease);
 }
-.hero-bet-btn .c { font-weight: 500; }
-.hero-bet-btn.up { color: var(--profit); }
-.hero-bet-btn.up:hover { border-color: var(--profit); background: rgba(52,211,153,0.08); }
-.hero-bet-btn.down { color: var(--loss); }
-.hero-bet-btn.down:hover { border-color: var(--loss); background: rgba(251,113,133,0.08); }
+.hero-bet-btn .c { font-weight: 800; opacity: 0.82; }
+.hero-bet-btn:hover { transform: translateY(-1px); }
+.hero-bet-btn:active { transform: translateY(0); }
+.hero-bet-btn:focus-visible { outline: 2px solid var(--white); outline-offset: 2px; }
 
-/* cache-bust 1781263542 */
+/* HIGHER = soft green wash + green edge + green text — clearly a button, stays quiet */
+.hero-bet-btn.up {
+  color: var(--profit);
+  background: rgba(52,211,153,0.08);
+  border-color: rgba(52,211,153,0.32);
+}
+.hero-bet-btn.up:hover { background: rgba(52,211,153,0.15); border-color: var(--profit); }
+
+/* LOWER = soft pink/red wash */
+.hero-bet-btn.down {
+  color: var(--loss);
+  background: rgba(251,113,133,0.08);
+  border-color: rgba(251,113,133,0.32);
+}
+.hero-bet-btn.down:hover { background: rgba(251,113,133,0.15); border-color: var(--loss); }
+
+/* keep the foot helper label quiet next to the buttons */
+.hero-chart-foot > span:first-child {
+  font-size: 9px; max-width: 156px; line-height: 1.4;
+  color: var(--gray-600); letter-spacing: 0.1em;
+}
+
 @media (max-width: 480px) {
-  /* keep the bet buttons roomy on small phones — the label yields */
   .hero-chart-foot > span:first-child { display: none; }
   .hero-bet { width: 100%; }
   .hero-bet-btn { flex: 1; justify-content: center; }
+}
+
+/* Narrow screens: simplify the chart head so the question + price never cram or
+   wrap into the chart. Drop the verbose framing ("Tap a side… / settled by oracle /
+   live oracle price…") — the question, countdown and price are what matter. */
+@media (max-width: 760px) {
+  .hero-chart-head { padding: 12px 14px; gap: 10px; }
+  .hero-chart-head .meta-soft { display: none; }
+  .hero-chart-head .left { gap: 9px; min-width: 0; }
+  .hero-chart-head .left > div { min-width: 0; }
+  .hero-chart-head .pair { font-size: 12px; letter-spacing: 0.03em; }
+  .hero-chart-head .price { font-size: 15px; }
+  .hero-chart-head .pair-meta { font-size: 9px; white-space: nowrap; }
+  .hero-chart-head .glyph { width: 18px; height: 18px; font-size: 10px; }
 }

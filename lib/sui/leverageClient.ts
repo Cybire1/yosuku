@@ -7,6 +7,8 @@
 // capital from the redeemed proceeds and returns the remainder.
 import { Transaction } from '@mysten/sui/transactions';
 import {
+  PACKAGE_ID,
+  PREDICT_ID,
   YOLEV_PACKAGE,
   RESERVE_ID,
   DUSDC_TYPE,
@@ -111,6 +113,58 @@ export function cancelOrderTx(orderId: string, owner: string): Transaction {
     arguments: [tx.object(RESERVE_ID), tx.object(orderId)],
   });
   tx.transferObjects([coin], tx.pure.address(owner));
+  return tx;
+}
+
+// ── settle = redeem → withdraw → settle (the permissionless close) ──
+// `underwrite::settle` is permissionless and always force-pays the position owner,
+// so a won position never hangs if the keeper is down — anyone (the trader included)
+// can crank it. The full close mirrors the keeper's settle crank, in one PTB:
+//   1. predict::redeem_permissionless — redeems the (settled, winning) position into
+//      the protocol-owned manager. NO owner check, so the trader can call it.
+//   2. predict_manager::withdraw — pulls the redeemed proceeds back out as a coin.
+//   3. underwrite::settle — reclaims the reserve's fronted capital and force-pays the
+//      remainder (the amplified PnL) to the position owner — never the caller.
+// A settled winning binary redeems at face value (bid = 1.0), so the payout in
+// micro-DUSDC equals the position `quantity`; we withdraw exactly that.
+
+/** Trader/anyone: self-settle a won leveraged BINARY position (keeper fallback). */
+export function settleTx(p: {
+  positionId: string;
+  managerId: string;
+  oracleId: string;
+  expiry: bigint;
+  strike: bigint;      // binary strike (Position.lowerStrike)
+  isUp: boolean;
+  quantity: bigint;    // Position.quantity — also the winning payout in micro-DUSDC
+}): Transaction {
+  const tx = new Transaction();
+  // 1. build the MarketKey for this position
+  const key = tx.moveCall({
+    target: `${PACKAGE_ID}::market_key::${p.isUp ? 'up' : 'down'}`,
+    arguments: [tx.pure.id(p.oracleId), tx.pure.u64(p.expiry), tx.pure.u64(p.strike)],
+  });
+  // 2. redeem the settled winner into the protocol-owned manager (permissionless)
+  tx.moveCall({
+    target: `${PACKAGE_ID}::predict::redeem_permissionless`,
+    typeArguments: [DUSDC_TYPE],
+    arguments: [
+      tx.object(PREDICT_ID), tx.object(p.managerId), tx.object(p.oracleId),
+      key, tx.pure.u64(p.quantity), tx.object(CLOCK_ID),
+    ],
+  });
+  // 3. withdraw the redeemed proceeds back out as a coin
+  const proceeds = tx.moveCall({
+    target: `${PACKAGE_ID}::predict_manager::withdraw`,
+    typeArguments: [DUSDC_TYPE],
+    arguments: [tx.object(p.managerId), tx.pure.u64(p.quantity)],
+  });
+  // 4. settle: repay the reserve, force-pay the PnL to the position owner
+  tx.moveCall({
+    target: `${YOLEV_PACKAGE}::underwrite::settle`,
+    typeArguments: [DUSDC_TYPE],
+    arguments: [tx.object(RESERVE_ID), tx.object(p.positionId), proceeds],
+  });
   return tx;
 }
 
