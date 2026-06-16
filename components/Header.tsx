@@ -3,49 +3,52 @@
 import { useCurrentAccount, useDisconnectWallet, ConnectButton } from '@mysten/dapp-kit';
 import { usePathname } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
+import {
+  BadgeDollarSign,
+  BookOpen,
+  Bot,
+  ChartLine,
+  ChartNoAxesCombined,
+  ChevronDown,
+  Coins,
+  MoreHorizontal,
+  Trophy,
+  WalletCards,
+  type LucideIcon,
+} from 'lucide-react';
 import AddFunds from './AddFunds';
 import FirstRunGuide from './FirstRunGuide';
 import { useDUSDCBalance } from '@/lib/sui/hooks';
 
-const NAV_LINKS = [
+type NavLink = {
+  name: string;
+  href: string;
+  icon?: LucideIcon;
+};
+
+const PRIMARY_NAV: NavLink[] = [
   { name: 'Markets', href: '/markets' },
-  { name: 'Pool', href: '/pool' },
   { name: 'Earn', href: '/earn' },
   { name: 'Strategies', href: '/strategies' },
-  { name: 'Agents', href: '/agents' },
   { name: 'Portfolio', href: '/portfolio' },
-  { name: 'Leaderboard', href: '/leaderboard' },
-  { name: 'Docs', href: '/docs' },
+];
+
+const SECONDARY_NAV: NavLink[] = [
+  { name: 'Parlay', href: '/parlay', icon: ChartNoAxesCombined },
+  { name: 'Pool', href: '/pool', icon: Coins },
+  { name: 'Agents', href: '/agents', icon: Bot },
+  { name: 'Leaderboard', href: '/leaderboard', icon: Trophy },
+  { name: 'Docs', href: '/docs', icon: BookOpen },
 ];
 
 // Connected users at or below this DUSDC balance get auto-topped-up from the faucet.
 const AUTO_FUND_AT = 1_000_000; // 1 DUSDC (6 decimals)
 
-const MOBILE_NAV = [
-  {
-    name: 'Markets', href: '/markets',
-    icon: (
-      <svg viewBox="0 0 24 24"><path d="M3 3v18h18" /><path d="M7 16l4-8 4 4 5-9" /></svg>
-    ),
-  },
-  {
-    name: 'Pool', href: '/pool',
-    icon: (
-      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M12 3c-3 4-3 14 0 18" /><path d="M12 3c3 4 3 14 0 18" /><path d="M3 12h18" /></svg>
-    ),
-  },
-  {
-    name: 'Portfolio', href: '/portfolio',
-    icon: (
-      <svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2" /><path d="M16 7V5a4 4 0 0 0-8 0v2" /></svg>
-    ),
-  },
-  {
-    name: 'Ranks', href: '/leaderboard',
-    icon: (
-      <svg viewBox="0 0 24 24"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 16.8l-6.2 4.5 2.4-7.4L2 9.4h7.6z" /></svg>
-    ),
-  },
+const MOBILE_NAV: NavLink[] = [
+  { name: 'Markets', href: '/markets', icon: ChartLine },
+  { name: 'Earn', href: '/earn', icon: BadgeDollarSign },
+  { name: 'Strategies', href: '/strategies', icon: Bot },
+  { name: 'Portfolio', href: '/portfolio', icon: WalletCards },
 ];
 
 export default function Header() {
@@ -55,14 +58,48 @@ export default function Header() {
   const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
+  const [showMore, setShowMore] = useState(false);
   const [showFunds, setShowFunds] = useState(false);
   const { balance: dusdcRaw, loading: dusdcLoading, refresh: refreshDusdc } = useDUSDCBalance();
   const autoFundingRef = useRef(false);   // in-flight guard (avoid concurrent drips)
   const lowEpisodeRef = useRef(false);    // already auto-funded for the current low episode
+  const moreMenuRef = useRef<HTMLDivElement>(null);
+  const mobileMoreMenuRef = useRef<HTMLDivElement>(null);
+  const walletMenuRef = useRef<HTMLDivElement>(null);
   const [autoFundMsg, setAutoFundMsg] = useState<string | null>(null);
 
   useEffect(() => {
     setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    setShowMenu(false);
+    setShowMore(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    const closeFloatingMenus = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (
+        moreMenuRef.current?.contains(target) ||
+        mobileMoreMenuRef.current?.contains(target) ||
+        walletMenuRef.current?.contains(target)
+      ) return;
+      setShowMore(false);
+      setShowMenu(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      setShowMore(false);
+      setShowMenu(false);
+    };
+
+    document.addEventListener('pointerdown', closeFloatingMenus);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeFloatingMenus);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
   }, []);
 
   // The faucet is reachable from anywhere (the first-run guide, deep links)
@@ -108,12 +145,14 @@ export default function Header() {
   const shortAddr = address
     ? `${address.slice(0, 6)}…${address.slice(-4)}`
     : null;
+  const isActiveHref = (href: string) => pathname === href || pathname?.startsWith(href + '/');
+  const secondaryActive = SECONDARY_NAV.some(link => isActiveHref(link.href));
 
   return (
     <>
       <header className="header">
         {/* Logo */}
-        <a className="logo" href="/markets" data-cursor="hover">
+        <a className="logo" href="/markets" aria-label="Yosuku markets" data-cursor="hover">
           <span className="logo-mark">
             <svg viewBox="0 0 18 18">
               <line x1="9" y1="2" x2="9" y2="6" stroke="white" strokeWidth="1.4" />
@@ -125,21 +164,60 @@ export default function Header() {
           <span>YOSUKU</span>
         </a>
 
-        <nav className="nav">
+        <nav className="nav" aria-label="Primary navigation">
           <div className="nav-links">
-            {NAV_LINKS.map(link => {
-              const isActive = pathname === link.href || pathname?.startsWith(link.href + '/');
+            {PRIMARY_NAV.map(link => {
+              const isActive = isActiveHref(link.href);
               return (
                 <a
                   key={link.name}
                   href={link.href}
                   className={`nav-link ${isActive ? 'active' : ''}`}
+                  aria-current={isActive ? 'page' : undefined}
                   data-cursor="hover"
                 >
                   {link.name}
                 </a>
               );
             })}
+            <div className="nav-more" ref={moreMenuRef}>
+              <button
+                type="button"
+                className={`nav-link nav-more-button ${secondaryActive ? 'active' : ''} ${showMore ? 'open' : ''}`}
+                onClick={() => {
+                  setShowMore(prev => !prev);
+                  setShowMenu(false);
+                }}
+                aria-haspopup="menu"
+                aria-expanded={showMore}
+                aria-controls="secondary-nav-menu"
+                data-cursor="hover"
+              >
+                More
+                <ChevronDown aria-hidden="true" />
+              </button>
+              {showMore && (
+                <div className="nav-more-menu" id="secondary-nav-menu" role="menu">
+                  {SECONDARY_NAV.map(link => {
+                    const isActive = isActiveHref(link.href);
+                    const Icon = link.icon;
+                    return (
+                      <a
+                        key={link.name}
+                        href={link.href}
+                        className={`nav-more-link ${isActive ? 'active' : ''}`}
+                        role="menuitem"
+                        aria-current={isActive ? 'page' : undefined}
+                        data-cursor="hover"
+                      >
+                        {Icon && <Icon aria-hidden="true" />}
+                        <span>{link.name}</span>
+                      </a>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="header-right">
@@ -148,7 +226,7 @@ export default function Header() {
                 onClick={() => setShowFunds(true)}
                 data-cursor="hover"
                 title="Add test USDC"
-                className="flex items-center gap-1.5 font-mono text-[12px] px-3 py-1.5 rounded-full border border-white/10 hover:border-white/25 hover:bg-white/[0.03] text-gray-300 hover:text-white transition-colors"
+                className="dusdc-pill flex items-center gap-1.5 font-mono text-[12px] px-3 py-1.5 rounded-full border border-white/10 hover:border-white/25 hover:bg-white/[0.03] text-gray-300 hover:text-white transition-colors"
               >
                 <span className="text-white font-semibold tabular-nums">{(dusdcRaw / 1e6).toFixed(2)}</span>
                 <span className="text-gray-500">DUSDC</span>
@@ -157,28 +235,37 @@ export default function Header() {
             )}
 
             {mounted && (
-              <div data-cursor="hover" className="relative">
+              <div data-cursor="hover" className="relative" ref={walletMenuRef}>
                 {address ? (
                   <>
                     <button
                       className="wallet-pill"
-                      onClick={() => setShowMenu(prev => !prev)}
+                      type="button"
+                      aria-label="Open account menu"
+                      aria-haspopup="menu"
+                      aria-expanded={showMenu}
+                      onClick={() => {
+                        setShowMenu(prev => !prev);
+                        setShowMore(false);
+                      }}
                     >
                       <span className="addr-dot" />
                       <span>{shortAddr}</span>
                     </button>
                     {showMenu && (
-                      <div className="absolute right-0 top-full mt-2 z-50 border border-white/10 rounded bg-bg backdrop-blur-md min-w-[160px] py-1">
+                      <div className="absolute right-0 top-full mt-2 z-50 border border-white/10 rounded bg-bg backdrop-blur-md min-w-[160px] py-1" role="menu">
                         <a
                           href="/portfolio"
                           className="block px-4 py-2 text-xs font-mono text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
                           onClick={() => setShowMenu(false)}
+                          role="menuitem"
                         >
                           Portfolio
                         </a>
                         <button
                           onClick={() => { disconnect(); setShowMenu(false); }}
                           className="block w-full text-left px-4 py-2 text-xs font-mono text-vermilion/70 hover:bg-white/5 hover:text-vermilion transition-colors"
+                          role="menuitem"
                         >
                           Disconnect
                         </button>
@@ -196,17 +283,55 @@ export default function Header() {
       </header>
 
       {/* Mobile floating pill bottom nav */}
-      <nav className="mobile-bottom-nav">
-        {MOBILE_NAV.map(link => {
-          const isActive = pathname === link.href || pathname?.startsWith(link.href + '/');
-          return (
-            <a key={link.name} href={link.href} className={isActive ? 'active' : ''}>
-              {link.icon}
-              <span>{link.name}</span>
-            </a>
-          );
-        })}
-      </nav>
+      <div ref={mobileMoreMenuRef}>
+        <nav className="mobile-bottom-nav" aria-label="Mobile primary navigation">
+          {MOBILE_NAV.map(link => {
+            const isActive = isActiveHref(link.href);
+            const Icon = link.icon;
+            return (
+              <a key={link.name} href={link.href} className={isActive ? 'active' : ''} aria-current={isActive ? 'page' : undefined}>
+                {Icon && <Icon aria-hidden="true" />}
+                <span>{link.name}</span>
+              </a>
+            );
+          })}
+          <button
+            type="button"
+            className={secondaryActive || showMore ? 'active' : ''}
+            aria-haspopup="menu"
+            aria-expanded={showMore}
+            aria-controls="mobile-more-menu"
+            onClick={() => {
+              setShowMore(prev => !prev);
+              setShowMenu(false);
+            }}
+          >
+            <MoreHorizontal aria-hidden="true" />
+            <span>More</span>
+          </button>
+        </nav>
+
+        {showMore && (
+          <div className="mobile-more-menu" id="mobile-more-menu" role="menu">
+            {SECONDARY_NAV.map(link => {
+              const isActive = isActiveHref(link.href);
+              const Icon = link.icon;
+              return (
+                <a
+                  key={link.name}
+                  href={link.href}
+                  className={isActive ? 'active' : ''}
+                  role="menuitem"
+                  aria-current={isActive ? 'page' : undefined}
+                >
+                  {Icon && <Icon aria-hidden="true" />}
+                  <span>{link.name}</span>
+                </a>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
       {autoFundMsg && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[120] flex items-center gap-2 border border-white/10 rounded-full bg-[#0d0d10]/95 backdrop-blur px-4 py-2 shadow-2xl">

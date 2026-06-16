@@ -16,9 +16,14 @@ interface TradeConfirmationModalProps {
   strike: number;
   upperStrike?: number | null;
   amount: number; // micro DUSDC
+  quantity: number; // micro DUSDC payout units
   fairPrice: number | null; // 0-1
   feeBreakdown: FeeBreakdown | null;
   onChainCost?: number | null; // exact DUSDC from get_trade_amounts (UP/DOWN only)
+  estimatedTradeCost?: number | null; // DUSDC for the sized position
+  leverage?: number;
+  frontedAmount?: number; // micro DUSDC repaid to reserve first
+  premiumAmount?: number; // micro DUSDC
   expiry: number;
   onConfirm: () => void;
   onCancel: () => void;
@@ -36,9 +41,14 @@ export default function TradeConfirmationModal({
   strike,
   upperStrike,
   amount,
+  quantity,
   fairPrice,
   feeBreakdown,
   onChainCost,
+  estimatedTradeCost,
+  leverage = 1,
+  frontedAmount = 0,
+  premiumAmount = 0,
   expiry,
   onConfirm,
   onCancel,
@@ -48,17 +58,25 @@ export default function TradeConfirmationModal({
   const amountDisplay = (amount / DUSDC_MULTIPLIER).toFixed(2);
   const strikeDollars = strike / FLOAT_SCALING;
   const upperStrikeDollars = upperStrike ? upperStrike / FLOAT_SCALING : 0;
+  const isLeveraged = leverage > 1;
 
-  // Max payout for binary: 1 DUSDC per unit
-  const maxPayout = amount / DUSDC_MULTIPLIER;
-  // Prefer the exact on-chain cost; fall back to the SVI estimate.
-  const hasExact = typeof onChainCost === 'number' && onChainCost > 0;
+  // Max payout for binary: 1 DUSDC per unit. Leveraged positions repay the
+  // reserve's fronted capital first, so the trader-facing max is net of that.
+  const grossPayout = quantity / DUSDC_MULTIPLIER;
+  const maxCollect = Math.max(0, (quantity - frontedAmount) / DUSDC_MULTIPLIER);
+  const premiumDisplay = premiumAmount / DUSDC_MULTIPLIER;
+  const frontedDisplay = frontedAmount / DUSDC_MULTIPLIER;
+  // Prefer the estimated cost for the actual sized position; fall back to exact
+  // cost for the quote quantity, then the SVI estimate.
+  const hasExact = typeof estimatedTradeCost === 'number' && estimatedTradeCost > 0;
   const totalCost = hasExact
-    ? (onChainCost as number)
+    ? (estimatedTradeCost as number)
+    : typeof onChainCost === 'number' && onChainCost > 0
+      ? onChainCost
     : feeBreakdown
-      ? feeBreakdown.totalCostPerUnit * maxPayout
+      ? feeBreakdown.totalCostPerUnit * grossPayout
       : parseFloat(amountDisplay);
-  const potentialProfit = maxPayout - totalCost;
+  const potentialProfit = maxCollect - parseFloat(amountDisplay);
 
   // Close on Escape
   useEffect(() => {
@@ -115,7 +133,7 @@ export default function TradeConfirmationModal({
               </div>
 
               <div className="flex justify-between text-sm">
-                <span className="text-gray-500">Amount</span>
+                <span className="text-gray-500">{isLeveraged ? 'Margin' : 'Amount'}</span>
                 <span className="text-white font-mono font-bold">{amountDisplay} DUSDC</span>
               </div>
 
@@ -152,12 +170,28 @@ export default function TradeConfirmationModal({
             {/* Payout summary */}
             <div className="rounded-xl bg-white/[0.02] border border-white/5 p-3 space-y-2">
               <div className="flex justify-between text-xs">
-                <span className="text-gray-500">Max Payout</span>
-                <span className="text-white font-mono font-bold">{maxPayout.toFixed(2)} DUSDC</span>
+                <span className="text-gray-500">{isLeveraged ? 'Max Collect' : 'Max Payout'}</span>
+                <span className="text-white font-mono font-bold">{maxCollect.toFixed(2)} DUSDC</span>
               </div>
+              {isLeveraged && (
+                <>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-gray-500">Gross Payout</span>
+                    <span className="text-gray-400 font-mono">{grossPayout.toFixed(2)} DUSDC</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-gray-500">Reserve Repay</span>
+                    <span className="text-gray-400 font-mono">{frontedDisplay.toFixed(2)} DUSDC</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-gray-500">Premium</span>
+                    <span className="text-gray-400 font-mono">{premiumDisplay.toFixed(2)} DUSDC</span>
+                  </div>
+                </>
+              )}
               <div className="flex justify-between text-xs">
                 <span className="text-gray-500 inline-flex items-center gap-1.5">
-                  {hasExact ? 'Cost' : 'Est. Cost'}
+                  {hasExact ? 'Position Cost' : 'Est. Cost'}
                   {hasExact && (
                     <span className="text-[8px] font-bold uppercase tracking-wider text-vermilion/80 bg-vermilion/10 px-1 py-0.5 rounded">on-chain</span>
                   )}
@@ -165,8 +199,10 @@ export default function TradeConfirmationModal({
                 <span className="text-white font-mono">{totalCost.toFixed(hasExact ? 4 : 2)} DUSDC</span>
               </div>
               <div className="border-t border-white/5 pt-2 flex justify-between text-xs">
-                <span className="text-gray-500">Potential Profit</span>
-                <span className="text-emerald-400 font-mono font-bold">+{potentialProfit.toFixed(2)} DUSDC</span>
+                <span className="text-gray-500">Max Profit</span>
+                <span className={`font-mono font-bold ${potentialProfit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  {potentialProfit >= 0 ? '+' : ''}{potentialProfit.toFixed(2)} DUSDC
+                </span>
               </div>
             </div>
 

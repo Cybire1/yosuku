@@ -25,7 +25,7 @@ import {
   mintPositionTx,
   mintRangePositionTx,
 } from '@/lib/sui/predictClient';
-import { generateStrikeGrid, formatStrike, nearestStrike, savePosition } from '@/lib/roundHelpers';
+import { defaultStrike, generateDisplayStrikeGrid, formatStrike, savePosition } from '@/lib/roundHelpers';
 import { computeSviPrice, computeRangePrice, computeFeeBreakdown, type FeeBreakdown } from '@/lib/sui/sviPricing';
 import { fetchOnChainQuote, fetchOnChainRangeQuote, type OnChainQuote } from '@/lib/sui/onchainQuote';
 import { requestOpenRangeTx, requestOpenBinaryTx } from '@/lib/sui/leverageClient';
@@ -44,6 +44,9 @@ interface TradePanelProps {
   spotPrice?: number | null;
   forwardPrice?: number | null;
   defaultSide?: 'UP' | 'DOWN';
+  initialStrike?: number | null;
+  onSideChange?: (side: 'UP' | 'DOWN') => void;
+  onStrikeChange?: (strike: number) => void;
   onSuccess?: () => void;
 }
 
@@ -55,6 +58,9 @@ export default function TradePanel({
   spotPrice,
   forwardPrice,
   defaultSide = 'UP',
+  initialStrike = null,
+  onSideChange,
+  onStrikeChange,
   onSuccess,
 }: TradePanelProps) {
   const account = useCurrentAccount();
@@ -73,7 +79,7 @@ export default function TradePanel({
   const [leverage, setLeverage] = useState(1); // 1× = no leverage; 2×/3× underwritten by the yolev reserve
   const { stats: reserveStats } = useReserveStats();
   const [amount, setAmount] = useState('10');
-  const [selectedStrike, setSelectedStrike] = useState<number | null>(null);
+  const [selectedStrike, setSelectedStrike] = useState<number | null>(initialStrike);
   const [rangeUpperStrike, setRangeUpperStrike] = useState<number | null>(null);
   const [showStrikeSelector, setShowStrikeSelector] = useState(false);
   const [showUpperStrikeSelector, setShowUpperStrikeSelector] = useState(false);
@@ -125,25 +131,53 @@ export default function TradePanel({
   const [editingStop, setEditingStop] = useState(false);
   const [stopInput, setStopInput] = useState('');
 
-  // Generate strike grid centered around current price
-  const refPriceForGrid = forwardPrice ?? spotPrice ?? undefined;
-  const strikes = generateStrikeGrid(oracle.min_strike, oracle.tick_size, 50, refPriceForGrid);
+  useEffect(() => {
+    setSide(defaultSide);
+  }, [defaultSide]);
 
-  // Auto-select nearest strike to spot/forward
+  // Default app strike is a clean display line; explicit configuration uses the same coarse grid.
+  const refPriceForGrid = forwardPrice ?? spotPrice ?? undefined;
+  const strikes = useMemo(
+    () => generateDisplayStrikeGrid(oracle.min_strike, oracle.tick_size, 21, refPriceForGrid),
+    [oracle.min_strike, oracle.tick_size, refPriceForGrid],
+  );
+  const displayedStrikes = useMemo(() => {
+    if (selectedStrike === null || strikes.includes(selectedStrike)) return strikes;
+    return [...strikes, selectedStrike].sort((a, b) => a - b);
+  }, [selectedStrike, strikes]);
+
+  const chooseStrike = useCallback((strike: number) => {
+    setSelectedStrike(strike);
+    onStrikeChange?.(strike);
+  }, [onStrikeChange]);
+
+  useEffect(() => {
+    if (initialStrike === null || initialStrike === selectedStrike) return;
+    setSelectedStrike(initialStrike);
+  }, [initialStrike, selectedStrike]);
+
+  // Auto-select the stable default app line, not the raw nearest protocol tick.
   useEffect(() => {
     if (selectedStrike !== null) return;
+    if (initialStrike !== null) {
+      setSelectedStrike(initialStrike);
+      return;
+    }
     const refPrice = forwardPrice || spotPrice;
     if (refPrice && oracle.tick_size > 0) {
-      const nearest = nearestStrike(refPrice, oracle.min_strike, oracle.tick_size);
-      setSelectedStrike(nearest);
-    } else if (strikes.length > 0) {
-      setSelectedStrike(strikes[Math.floor(strikes.length / 2)]);
+      const nearest = defaultStrike(refPrice, oracle.min_strike, oracle.tick_size);
+      chooseStrike(nearest);
+    } else if (displayedStrikes.length > 0) {
+      chooseStrike(displayedStrikes[Math.floor(displayedStrikes.length / 2)]);
     }
-  }, [spotPrice, forwardPrice, oracle.min_strike, oracle.tick_size, selectedStrike, strikes]);
+  }, [chooseStrike, displayedStrikes, initialStrike, spotPrice, forwardPrice, oracle.min_strike, oracle.tick_size, selectedStrike]);
 
   const amountMicro = Math.floor(parseFloat(amount || '0') * DUSDC_MULTIPLIER);
   const isValidAmount = amountMicro > 0;
-  const hasEnoughBalance = walletBalance >= amountMicro || managerBalance >= amountMicro;
+  const isLeveraged = leverage > 1;
+  const hasEnoughBalance = isLeveraged
+    ? walletBalance >= amountMicro
+    : walletBalance >= amountMicro || managerBalance >= amountMicro;
 
   // Range validation
   const isRangeValid = side !== 'RANGE' || (selectedStrike !== null && rangeUpperStrike !== null && selectedStrike < rangeUpperStrike);
@@ -246,6 +280,11 @@ export default function TradePanel({
   const positionQty = pricePerUnit > 0
     ? Math.max(1, Math.floor((notionalMicro * SIZE_BUFFER) / pricePerUnit))
     : amountMicro;
+  const maxCollectMicro = isLeveraged
+    ? Math.max(0, positionQty - frontedMicro)
+    : positionQty;
+  const needsLiveQuote = isValidAmount && isRangeValid && selectedStrike !== null;
+  const hasLiveQuote = !needsLiveQuote || (!!onChainQuote && !quoteLoading && !quoteError);
   // Estimated cost of the sized position (per-unit price read on-chain × our quantity).
   const estTradeCost = pricePerUnit > 0
     ? (positionQty * pricePerUnit) / DUSDC_MULTIPLIER
@@ -256,10 +295,11 @@ export default function TradePanel({
 
     setErrorMsg('');
     setTxDigest('');
-    setIsTwoStep(!manager?.manager_id);
+    setIsTwoStep(leverage === 1 && !manager?.manager_id);
 
     try {
       let managerId = manager?.manager_id;
+      let digest = '';
 
       // Step 1: Create manager if needed (leveraged trades use the keeper's manager,
       // so they don't need the trader to have one).
@@ -274,15 +314,13 @@ export default function TradePanel({
         managerId = m.manager_id;
       }
 
-      if (!managerId) throw new Error('No trading account.');
-
-      // Step 2: Deposit + Mint
-      const needsDeposit = managerBalance < amountMicro;
-
       if (leverage > 1) {
         // Leveraged (trustless): the trader ESCROWS margin; the keeper fronts the
         // reserve's capital and opens the position into the custody manager. No debt —
         // max loss is the margin. Keeper fills within a few seconds.
+        if (walletBalance < amountMicro || coins.length === 0) {
+          throw new Error('Leveraged trades need DUSDC in your wallet for the margin escrow.');
+        }
         setStep('minting');
         const coinIds = coins.map(c => c.coinObjectId);
         const margin = BigInt(amountMicro);
@@ -298,58 +336,71 @@ export default function TradePanel({
               oracleId: oracle.oracle_id, expiry: BigInt(oracle.expiry),
               strike: BigInt(selectedStrike), isUp: side === 'UP',
             });
-        setTxDigest(await execTx(tx));
-      } else if (side === 'RANGE' && rangeUpperStrike) {
-        setStep('minting');
-        if (needsDeposit && coins.length > 0) {
+        digest = await execTx(tx);
+        setTxDigest(digest);
+      } else {
+        if (!managerId) throw new Error('No trading account.');
+        const needsDeposit = managerBalance < amountMicro;
+        if (needsDeposit && coins.length === 0) {
+          throw new Error('DUSDC wallet coins are still loading. Try again in a moment.');
+        }
+
+        if (side === 'RANGE' && rangeUpperStrike) {
+          setStep('minting');
+          if (needsDeposit && coins.length > 0) {
+            const coinIds = coins.map(c => c.coinObjectId);
+            const tx = depositAndMintRangeTx(
+              managerId,
+              coinIds,
+              BigInt(amountMicro),
+              oracle.oracle_id,
+              BigInt(oracle.expiry),
+              BigInt(selectedStrike),
+              BigInt(rangeUpperStrike),
+              BigInt(positionQty),
+            );
+            digest = await execTx(tx);
+            setTxDigest(digest);
+          } else {
+            const tx = mintRangePositionTx(
+              managerId,
+              oracle.oracle_id,
+              BigInt(oracle.expiry),
+              BigInt(selectedStrike),
+              BigInt(rangeUpperStrike),
+              BigInt(positionQty),
+            );
+            digest = await execTx(tx);
+            setTxDigest(digest);
+          }
+        } else if (needsDeposit && coins.length > 0) {
+          setStep('minting');
           const coinIds = coins.map(c => c.coinObjectId);
-          const tx = depositAndMintRangeTx(
+          const tx = depositAndMintTx(
             managerId,
             coinIds,
             BigInt(amountMicro),
             oracle.oracle_id,
             BigInt(oracle.expiry),
             BigInt(selectedStrike),
-            BigInt(rangeUpperStrike),
+            side as 'UP' | 'DOWN',
             BigInt(positionQty),
           );
-          setTxDigest(await execTx(tx));
+          digest = await execTx(tx);
+          setTxDigest(digest);
         } else {
-          const tx = mintRangePositionTx(
+          setStep('minting');
+          const tx = mintPositionTx(
             managerId,
             oracle.oracle_id,
             BigInt(oracle.expiry),
             BigInt(selectedStrike),
-            BigInt(rangeUpperStrike),
+            side as 'UP' | 'DOWN',
             BigInt(positionQty),
           );
-          setTxDigest(await execTx(tx));
+          digest = await execTx(tx);
+          setTxDigest(digest);
         }
-      } else if (needsDeposit && coins.length > 0) {
-        setStep('minting');
-        const coinIds = coins.map(c => c.coinObjectId);
-        const tx = depositAndMintTx(
-          managerId,
-          coinIds,
-          BigInt(amountMicro),
-          oracle.oracle_id,
-          BigInt(oracle.expiry),
-          BigInt(selectedStrike),
-          side as 'UP' | 'DOWN',
-          BigInt(positionQty),
-        );
-        setTxDigest(await execTx(tx));
-      } else {
-        setStep('minting');
-        const tx = mintPositionTx(
-          managerId,
-          oracle.oracle_id,
-          BigInt(oracle.expiry),
-          BigInt(selectedStrike),
-          side as 'UP' | 'DOWN',
-          BigInt(positionQty),
-        );
-        setTxDigest(await execTx(tx));
       }
 
       // Leveraged positions are settled via /earn (which repays the reserve its
@@ -364,7 +415,7 @@ export default function TradePanel({
           quantity: positionQty,
           cost: amountMicro,
           timestamp: Date.now(),
-          txDigest: txDigest,
+          txDigest: digest,
         });
       }
 
@@ -394,8 +445,8 @@ export default function TradePanel({
     }
   }, [
     address, selectedStrike, rangeUpperStrike, isValidAmount, isRangeValid, manager, managerBalance,
-    amountMicro, positionQty, coins, oracle, side, execTx, leverage,
-    refreshManager, refreshBalance, refreshManagerBalance, onSuccess, txDigest,
+    amountMicro, positionQty, coins, oracle, side, execTx, leverage, walletBalance,
+    refreshManager, refreshBalance, refreshManagerBalance, onSuccess,
   ]);
 
   const quickAmounts = [5, 10, 25, 50, 100];
@@ -417,7 +468,9 @@ export default function TradePanel({
       {/* Side selector */}
       <div className="flex border-b border-white/5">
         <button
-          onClick={() => setSide('UP')}
+          type="button"
+          onClick={() => { setSide('UP'); onSideChange?.('UP'); }}
+          aria-pressed={side === 'UP'}
           className={`flex-1 flex items-center justify-center gap-2 py-3.5 text-sm font-bold transition-all ${
             side === 'UP'
               ? 'bg-emerald-500/10 text-emerald-400 border-b-2 border-emerald-400'
@@ -428,7 +481,9 @@ export default function TradePanel({
           Up
         </button>
         <button
-          onClick={() => setSide('DOWN')}
+          type="button"
+          onClick={() => { setSide('DOWN'); onSideChange?.('DOWN'); }}
+          aria-pressed={side === 'DOWN'}
           className={`flex-1 flex items-center justify-center gap-2 py-3.5 text-sm font-bold transition-all ${
             side === 'DOWN'
               ? 'bg-rose-500/10 text-rose-400 border-b-2 border-rose-400'
@@ -439,7 +494,9 @@ export default function TradePanel({
           Down
         </button>
         <button
+          type="button"
           onClick={() => setSide('RANGE')}
+          aria-pressed={side === 'RANGE'}
           className={`flex-1 flex items-center justify-center gap-2 py-3.5 text-sm font-bold transition-all ${
             side === 'RANGE'
               ? 'bg-amber-500/10 text-amber-400 border-b-2 border-amber-400'
@@ -461,7 +518,9 @@ export default function TradePanel({
                 Lower Strike
               </label>
               <button
+                type="button"
                 onClick={() => { setShowStrikeSelector(!showStrikeSelector); setShowUpperStrikeSelector(false); }}
+                aria-expanded={showStrikeSelector}
                 className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.08] hover:border-white/20 transition-colors text-sm"
               >
                 <span className="text-white font-mono font-bold">
@@ -476,7 +535,9 @@ export default function TradePanel({
                 Upper Strike
               </label>
               <button
+                type="button"
                 onClick={() => { setShowUpperStrikeSelector(!showUpperStrikeSelector); setShowStrikeSelector(false); }}
+                aria-expanded={showUpperStrikeSelector}
                 className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.08] hover:border-white/20 transition-colors text-sm"
               >
                 <span className="text-white font-mono font-bold">
@@ -496,13 +557,14 @@ export default function TradePanel({
                   className="overflow-hidden col-span-2"
                 >
                   <div className="max-h-36 overflow-y-auto rounded-xl border border-white/[0.08] bg-black/40 scrollbar-hide">
-                    {strikes.map((strike) => {
+                    {displayedStrikes.map((strike) => {
                       const dollars = strike / FLOAT_SCALING;
                       const isSelected = strike === selectedStrike;
                       return (
                         <button
                           key={strike}
-                          onClick={() => { setSelectedStrike(strike); setShowStrikeSelector(false); }}
+                          type="button"
+                          onClick={() => { chooseStrike(strike); setShowStrikeSelector(false); }}
                           className={`w-full flex items-center px-4 py-2 text-sm transition-colors ${
                             isSelected ? 'bg-white/10 text-white' : 'text-gray-400 hover:bg-white/5 hover:text-white'
                           }`}
@@ -526,12 +588,13 @@ export default function TradePanel({
                   className="overflow-hidden col-span-2"
                 >
                   <div className="max-h-36 overflow-y-auto rounded-xl border border-white/[0.08] bg-black/40 scrollbar-hide">
-                    {strikes.filter(s => !selectedStrike || s > selectedStrike).map((strike) => {
+                    {displayedStrikes.filter(s => !selectedStrike || s > selectedStrike).map((strike) => {
                       const dollars = strike / FLOAT_SCALING;
                       const isSelected = strike === rangeUpperStrike;
                       return (
                         <button
                           key={strike}
+                          type="button"
                           onClick={() => { setRangeUpperStrike(strike); setShowUpperStrikeSelector(false); }}
                           className={`w-full flex items-center px-4 py-2 text-sm transition-colors ${
                             isSelected ? 'bg-white/10 text-white' : 'text-gray-400 hover:bg-white/5 hover:text-white'
@@ -557,7 +620,9 @@ export default function TradePanel({
               Strike Price
             </label>
             <button
+              type="button"
               onClick={() => setShowStrikeSelector(!showStrikeSelector)}
+              aria-expanded={showStrikeSelector}
               className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-white/[0.03] border border-white/[0.08] hover:border-white/20 transition-colors"
             >
               <span className="text-white font-mono font-bold">
@@ -575,7 +640,7 @@ export default function TradePanel({
                   className="overflow-hidden"
                 >
                   <div className="mt-2 max-h-48 overflow-y-auto rounded-xl border border-white/[0.08] bg-black/40 scrollbar-hide">
-                    {strikes.map((strike) => {
+                    {displayedStrikes.map((strike) => {
                       const dollars = strike / FLOAT_SCALING;
                       const isSelected = strike === selectedStrike;
                       const spotDollars = spotPrice ? spotPrice / FLOAT_SCALING : null;
@@ -591,8 +656,9 @@ export default function TradePanel({
                       return (
                         <button
                           key={strike}
+                          type="button"
                           onClick={() => {
-                            setSelectedStrike(strike);
+                            chooseStrike(strike);
                             setShowStrikeSelector(false);
                           }}
                           className={`w-full flex items-center justify-between px-4 py-2.5 text-sm transition-colors ${
@@ -654,7 +720,9 @@ export default function TradePanel({
             {quickAmounts.map((qa) => (
               <button
                 key={qa}
+                type="button"
                 onClick={() => setAmount(String(qa))}
+                aria-pressed={amount === String(qa)}
                 className={`flex-1 py-1.5 text-xs font-bold rounded-lg border transition-colors ${
                   amount === String(qa)
                     ? 'border-white/20 bg-white/10 text-white'
@@ -672,7 +740,7 @@ export default function TradePanel({
           <div className="flex items-center justify-between mb-2">
             <span className="text-gray-500 text-xs inline-flex items-center gap-1">
               Leverage <span className="text-[8px] font-bold uppercase tracking-wider text-vermilion/80 bg-vermilion/10 px-1 py-0.5 rounded">yolev</span>
-              <Tooltip text="The yolev reserve fronts the extra notional and charges a premium — you take a bigger position with no debt. Your max loss is always your margin; there's nothing to liquidate. Settle from your Portfolio when the round ends." position="bottom" />
+              <Tooltip text="The yolev reserve fronts the extra notional and charges a premium. Your max loss is your margin; if you win, settlement repays the reserve first and sends the remainder to you." position="bottom" />
             </span>
             <span className="font-mono text-xs text-white">{leverage}×</span>
           </div>
@@ -680,7 +748,9 @@ export default function TradePanel({
             {[1, 2, 3].map((l) => (
               <button
                 key={l}
+                type="button"
                 onClick={() => setLeverage(l)}
+                aria-pressed={leverage === l}
                 className={`flex-1 py-1.5 text-xs font-bold rounded-lg border transition-colors ${
                   leverage === l ? 'border-vermilion/50 bg-vermilion/10 text-vermilion' : 'border-white/5 bg-white/[0.02] text-gray-500 hover:text-gray-300'
                 }`}
@@ -709,17 +779,9 @@ export default function TradePanel({
               {side === 'UP' ? 'UP' : side === 'DOWN' ? 'DOWN' : 'RANGE'}
             </span>
           </div>
-          <div className="flex justify-between text-xs">
-            <span className="text-gray-500">Your line</span>
-            <span className="text-white font-mono">
-              {side === 'RANGE'
-                ? selectedStrike && rangeUpperStrike
-                  ? `$${strikeDollars.toLocaleString()} — $${upperStrikeDollars.toLocaleString()}`
-                  : '—'
-                : selectedStrike ? `$${strikeDollars.toLocaleString()}` : '—'
-              }
-            </span>
-          </div>
+          {/* "Your line" intentionally omitted here — it just repeats the strike
+              selector above. Keep the summary to numbers the bettor can't see
+              elsewhere: pay, win, odds, countdown. */}
           {/* The only two numbers a bettor needs: what you pay, what you win.
               "You pay" = the amount you chose (what leaves your wallet). The
               position is sized to use it; any sub-unit remainder stays in your
@@ -735,11 +797,11 @@ export default function TradePanel({
           </div>
           <div className="flex justify-between items-baseline">
             <span className="text-gray-500 text-xs inline-flex items-center gap-1">
-              To win
-              <Tooltip text="If you win, every contract pays 1 DUSDC. This is the most you can collect." position="bottom" />
+              {isLeveraged ? 'Max collect' : 'To win'}
+              <Tooltip text={isLeveraged ? 'Net amount you can receive after the reserve is repaid from a winning leveraged position.' : 'If you win, every contract pays 1 DUSDC. This is the most you can collect.'} position="bottom" />
             </span>
             <span className="text-emerald-400 font-mono font-bold text-base">
-              {quoteLoading ? '…' : isValidAmount && onChainQuote ? `${(positionQty / DUSDC_MULTIPLIER).toFixed(2)} DUSDC` : quoteError ? (
+              {quoteLoading ? '…' : isValidAmount && onChainQuote ? `${(maxCollectMicro / DUSDC_MULTIPLIER).toFixed(2)} DUSDC` : quoteError ? (
                 <button onClick={() => setQuoteRetry((k) => k + 1)} className="text-rose-400/90 font-sans font-medium text-[11px] underline underline-offset-2 hover:text-rose-300">
                   quote unavailable — retry
                 </button>
@@ -749,7 +811,8 @@ export default function TradePanel({
           {isValidAmount && onChainQuote && positionQty > 0 && (
             <div className="flex justify-end -mt-1">
               <span className="font-mono text-[10px] text-gray-600">
-                {(((positionQty / DUSDC_MULTIPLIER) / Math.max(0.0001, amountMicro / DUSDC_MULTIPLIER))).toFixed(2)}× if you&apos;re right
+                {isLeveraged && `gross payout ${(positionQty / DUSDC_MULTIPLIER).toFixed(2)} DUSDC · `}
+                {(((maxCollectMicro / DUSDC_MULTIPLIER) / Math.max(0.0001, amountMicro / DUSDC_MULTIPLIER))).toFixed(2)}× if you&apos;re right
               </span>
             </div>
           )}
@@ -782,11 +845,10 @@ export default function TradePanel({
                   <div className="flex justify-between items-center text-xs">
                     <span className="text-gray-500 inline-flex items-center gap-1">
                       Price check
-                      <Tooltip text="We re-derive this price in your browser from the public volatility surface (SVI → N(d2)) and compare it to the live on-chain quote. You don't have to trust the number — it's math you can reproduce." position="bottom" />
+                      <Tooltip text={`We re-derive this price in your browser from the public volatility surface (SVI → N(d2)) and compare it to the live on-chain quote — math you can reproduce, not a number to trust. Browser ${(feeBreakdown.totalCostPerUnit * 100).toFixed(1)}¢ · chain ${(pricePerUnit * 100).toFixed(1)}¢.`} position="bottom" />
                     </span>
-                    <span className={`inline-flex items-center gap-1.5 font-mono ${matches ? 'text-emerald-400' : 'text-gray-400'}`}>
-                      {matches && <Check className="w-3 h-3" />}
-                      browser {(feeBreakdown.totalCostPerUnit * 100).toFixed(1)}¢ · chain {(pricePerUnit * 100).toFixed(1)}¢
+                    <span className={`inline-flex items-center gap-1.5 font-mono ${matches ? 'text-emerald-400' : 'text-amber-400'}`}>
+                      {matches ? <><Check className="w-3 h-3" /> verified on-chain</> : 'recheck'}
                     </span>
                   </div>
                 );
@@ -797,8 +859,9 @@ export default function TradePanel({
 
         {/* Execute button */}
         <button
+          type="button"
           onClick={() => setShowConfirmModal(true)}
-          disabled={!isValidAmount || !selectedStrike || step !== 'idle' || !hasEnoughBalance || !isRangeValid || stopHit}
+          disabled={!isValidAmount || !selectedStrike || step !== 'idle' || !hasEnoughBalance || !isRangeValid || stopHit || !hasLiveQuote}
           className={`w-full py-4 rounded-xl text-sm font-bold uppercase tracking-wider transition-all disabled:cursor-not-allowed ${
             // Blocked (no balance / no amount / stop hit) → neutral grey, NOT the
             // buy-green: an error state must never wear the success colour.
@@ -836,7 +899,9 @@ export default function TradePanel({
           ) : !isValidAmount ? (
             'Enter amount'
           ) : !hasEnoughBalance ? (
-            'Insufficient DUSDC'
+            isLeveraged ? 'Insufficient wallet DUSDC' : 'Insufficient DUSDC'
+          ) : !hasLiveQuote ? (
+            quoteLoading ? 'Quoting...' : 'Quote unavailable'
           ) : !isRangeValid ? (
             'Select valid range'
           ) : side === 'RANGE' ? (
@@ -896,7 +961,7 @@ export default function TradePanel({
         </AnimatePresence>
 
         {/* One-time account setup (sponsored when a gas station is configured) */}
-        {!managerLoading && !manager && address && (
+        {!managerLoading && !manager && address && leverage === 1 && (
           <AccountSetup onReady={() => { refreshManager(); }} />
         )}
 
@@ -951,9 +1016,13 @@ export default function TradePanel({
           strike={selectedStrike}
           upperStrike={side === 'RANGE' ? rangeUpperStrike : null}
           amount={amountMicro}
+          quantity={positionQty}
           fairPrice={fairPrice}
           feeBreakdown={feeBreakdown}
-          onChainCost={onChainQuote?.mintCost ?? null}
+          estimatedTradeCost={estTradeCost || null}
+          leverage={leverage}
+          frontedAmount={frontedMicro}
+          premiumAmount={premiumMicro}
           expiry={oracle.expiry}
           onConfirm={() => {
             setShowConfirmModal(false);

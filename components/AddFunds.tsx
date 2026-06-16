@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useCurrentAccount } from '@mysten/dapp-kit';
+import { X } from 'lucide-react';
 
 const OFFICIAL_FAUCET = 'https://tally.so/r/Xx102L';
 const short = (a: string) => `${a.slice(0, 8)}…${a.slice(-6)}`;
@@ -18,6 +19,20 @@ export default function AddFunds({ open, onClose, onFunded }: { open: boolean; o
   const [state, setState] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
   const [msg, setMsg] = useState<string>('');
   const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [open, onClose]);
 
   if (!open) return null;
 
@@ -44,13 +59,25 @@ export default function AddFunds({ open, onClose, onFunded }: { open: boolean; o
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
       <div
         className="relative w-full max-w-md border border-white/10 rounded-2xl bg-[#0d0d10] p-7 shadow-2xl"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="add-funds-title"
         onClick={(e) => e.stopPropagation()}
       >
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close add funds"
+          className="absolute right-4 top-4 rounded-full p-2 text-gray-600 hover:bg-white/[0.05] hover:text-white transition-colors"
+        >
+          <X className="h-4 w-4" />
+        </button>
+
         <div className="flex items-center gap-2 mb-1">
           <span className="w-1.5 h-1.5 rounded-full bg-vermilion" style={{ boxShadow: '0 0 12px var(--vermilion)' }} />
           <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-gray-500">Add funds · testnet</span>
         </div>
-        <h2 className="font-display text-2xl font-extrabold tracking-tight mb-1">Get test USDC</h2>
+        <h2 id="add-funds-title" className="font-display text-2xl font-extrabold tracking-tight mb-1">Get test USDC</h2>
         <p className="text-gray-400 text-sm leading-relaxed mb-6">
           Yosuku runs on testnet — these are play chips, not real money. Tap once and they land in your account. One claim per day.
         </p>
@@ -63,7 +90,9 @@ export default function AddFunds({ open, onClose, onFunded }: { open: boolean; o
             <div className="flex items-center justify-between border border-white/[0.06] rounded-xl px-4 py-3 mb-4">
               <span className="font-mono text-[11px] text-gray-500">Your account</span>
               <button
+                type="button"
                 className="font-mono text-xs text-gray-300 hover:text-white transition-colors"
+                aria-label="Copy account address"
                 onClick={() => { navigator.clipboard.writeText(address); setCopied(true); setTimeout(() => setCopied(false), 1500); }}
               >
                 {copied ? 'copied ✓' : `${short(address)} ⧉`}
@@ -80,6 +109,7 @@ export default function AddFunds({ open, onClose, onFunded }: { open: boolean; o
               </Link>
             ) : (
               <button
+                type="button"
                 onClick={getFunds}
                 disabled={state === 'loading'}
                 className="w-full bg-white text-black font-semibold rounded-full py-3 hover:scale-[1.02] active:scale-[0.97] transition-transform disabled:opacity-60"

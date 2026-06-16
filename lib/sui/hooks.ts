@@ -96,9 +96,15 @@ export function useOracles(pollInterval = 30_000) {
   useEffect(() => { refresh(); }, [refresh]);
   useVisibilityAwareInterval(refresh, pollInterval);
 
-  const active = oracles.filter(o => o.status === 'active');
-  const settled = oracles.filter(o => o.status === 'settled');
-  const pendingSettlement = oracles.filter(o => o.status === 'pending_settlement');
+  const active = oracles
+    .filter(o => o.status === 'active')
+    .sort((a, b) => a.expiry - b.expiry);
+  const settled = oracles
+    .filter(o => o.status === 'settled')
+    .sort((a, b) => (b.settled_at ?? b.expiry) - (a.settled_at ?? a.expiry));
+  const pendingSettlement = oracles
+    .filter(o => o.status === 'pending_settlement')
+    .sort((a, b) => a.expiry - b.expiry);
 
   return { oracles, active, settled, pendingSettlement, loading, error, refresh };
 }

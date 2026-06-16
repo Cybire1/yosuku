@@ -281,7 +281,7 @@ export default function PortfolioPage() {
             {address && (
               <section>
                 <SectionHeader number="03" title="Achievements" jp="実績" />
-                <div className="border border-white/[0.08] rounded bg-bg p-5">
+                <div>
                   <BadgeDisplay badges={badges} />
                 </div>
               </section>

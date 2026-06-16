@@ -104,8 +104,12 @@ export function setupCanvas(canvas: HTMLCanvasElement): {
 } {
   const dpr = window.devicePixelRatio || 1;
   const r = canvas.getBoundingClientRect();
-  canvas.width = r.width * dpr;
-  canvas.height = r.height * dpr;
+  const nextW = Math.max(1, Math.round(r.width * dpr));
+  const nextH = Math.max(1, Math.round(r.height * dpr));
+  if (canvas.width !== nextW || canvas.height !== nextH) {
+    canvas.width = nextW;
+    canvas.height = nextH;
+  }
   const ctx = canvas.getContext('2d')!;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   return { ctx, w: r.width, h: r.height };
@@ -264,6 +268,8 @@ export function drawPriceLine(
     targetLabel?: string;   // pill text on the target line
     gridLines?: boolean;
     xLabels?: string[];     // evenly spaced labels along the bottom
+    motion?: boolean;       // animated live chart treatment
+    now?: number;           // requestAnimationFrame timestamp
   } = {},
 ): void {
   if (!canvas || series.length < 2) return;
@@ -275,6 +281,9 @@ export function drawPriceLine(
   const padTop = opts.padTop ?? 14;
   const padBot = opts.padBot ?? (opts.xLabels ? 22 : 12);
   const axisR = opts.axisRight ?? 0;
+  const motion = !!opts.motion;
+  const now = opts.now ?? Date.now();
+  const pulse = motion ? (Math.sin(now / 190) + 1) / 2 : 0;
 
   // Value range with headroom; include the target so its dashed line is on-canvas.
   let lo = Math.min(...series);
@@ -288,6 +297,10 @@ export function drawPriceLine(
   const xFor = (i: number) => padX + (i / (series.length - 1)) * (rightEdge - padX * 2);
   const yFor = (v: number) => padTop + (hi - v) * (h - padTop - padBot) / range;
   const pts = series.map((v, i) => ({ x: xFor(i), y: yFor(v) }));
+  const chartBottom = h - padBot;
+  const chartH = Math.max(1, chartBottom - padTop);
+  const pathRight = Math.max(padX + 1, rightEdge - padX);
+  const pathW = Math.max(1, pathRight - padX);
 
   // Faint gridlines + right-edge price labels
   if (opts.gridLines) {
@@ -305,6 +318,18 @@ export function drawPriceLine(
         ctx.fillText('$' + Math.round(v).toLocaleString(), rightEdge + 6, y + 3);
       }
     }
+  }
+
+  if (motion) {
+    const sweepX = padX + (((now / 2200) % 1) * pathW);
+    const sweep = ctx.createLinearGradient(sweepX - 90, 0, sweepX + 90, 0);
+    sweep.addColorStop(0, 'rgba(255,255,255,0)');
+    sweep.addColorStop(0.5, 'rgba(255,255,255,0.045)');
+    sweep.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.save();
+    ctx.fillStyle = sweep;
+    ctx.fillRect(padX, padTop, pathW, chartH);
+    ctx.restore();
   }
 
   // smoothed path (quadratic midpoints) — shared by fill + stroke
@@ -335,12 +360,23 @@ export function drawPriceLine(
   // Paint fill + line in one color
   const paint = (col: string) => {
     const grd = ctx.createLinearGradient(0, padTop, 0, h - padBot);
-    grd.addColorStop(0, hexA(col, 0.2));
+    grd.addColorStop(0, hexA(col, motion ? 0.28 : 0.2));
     grd.addColorStop(1, hexA(col, 0));
     ctx.fillStyle = grd;
     ctx.beginPath(); traceArea(); ctx.fill();
+    if (motion) {
+      ctx.save();
+      ctx.strokeStyle = hexA(col, 0.38 + pulse * 0.12);
+      ctx.lineWidth = 5.2;
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
+      ctx.shadowColor = hexA(col, 0.7);
+      ctx.shadowBlur = 14 + pulse * 8;
+      ctx.beginPath(); tracePath(); ctx.stroke();
+      ctx.restore();
+    }
     ctx.strokeStyle = col;
-    ctx.lineWidth = 2;
+    ctx.lineWidth = motion ? 2.35 : 2;
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
     ctx.beginPath(); tracePath(); ctx.stroke();
@@ -348,6 +384,10 @@ export function drawPriceLine(
 
   const verdict = !!opts.verdict && opts.target != null;
   const UP = '#34D399', DOWN = '#FB7185';
+  const last = pts[pts.length - 1];
+  const dotCol = verdict
+    ? (series[series.length - 1] >= (opts.target as number) ? UP : DOWN)
+    : color;
 
   if (verdict) {
     // Verdict mode: green where the price is above the bar, red below —
@@ -365,6 +405,34 @@ export function drawPriceLine(
     paint(color);
   }
 
+  if (motion) {
+    const glintX = padX + (((now / 1450) % 1) * pathW);
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(Math.max(padX, glintX - 72), padTop, 144, chartH);
+    ctx.clip();
+    ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+    ctx.lineWidth = 3.2;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.shadowColor = 'rgba(255,255,255,0.35)';
+    ctx.shadowBlur = 12;
+    ctx.beginPath(); tracePath(); ctx.stroke();
+    ctx.restore();
+
+    ctx.save();
+    const tailLeft = Math.max(padX, last.x - pathW * 0.18);
+    ctx.beginPath();
+    ctx.rect(tailLeft, padTop, Math.max(1, last.x - tailLeft + 8), chartH);
+    ctx.clip();
+    ctx.strokeStyle = hexA(dotCol, 0.28);
+    ctx.lineWidth = 8;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.beginPath(); tracePath(); ctx.stroke();
+    ctx.restore();
+  }
+
   // Target (strike) dashed line + pill — vermilion in verdict mode: the decision line
   if (opts.target != null) {
     const y = yFor(opts.target);
@@ -372,6 +440,7 @@ export function drawPriceLine(
     ctx.strokeStyle = verdict ? 'rgba(224, 77, 38, 0.75)' : 'rgba(255,255,255,0.32)';
     ctx.lineWidth = 1;
     ctx.setLineDash([5, 4]);
+    if (motion) ctx.lineDashOffset = -((now / 85) % 9);
     ctx.beginPath(); ctx.moveTo(padX, y); ctx.lineTo(rightEdge, y); ctx.stroke();
     ctx.restore();
 
@@ -388,14 +457,15 @@ export function drawPriceLine(
   }
 
   // Current-price dot + glow — in verdict mode it wears the current verdict
-  const last = pts[pts.length - 1];
-  const dotCol = verdict
-    ? (series[series.length - 1] >= (opts.target as number) ? UP : DOWN)
-    : color;
-  ctx.fillStyle = hexA(dotCol, 0.18);
-  ctx.beginPath(); ctx.arc(last.x, last.y, 9, 0, Math.PI * 2); ctx.fill();
+  if (motion) {
+    ctx.strokeStyle = hexA(dotCol, 0.24 + pulse * 0.18);
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(last.x, last.y, 12 + pulse * 8, 0, Math.PI * 2); ctx.stroke();
+  }
+  ctx.fillStyle = hexA(dotCol, motion ? 0.2 + pulse * 0.08 : 0.18);
+  ctx.beginPath(); ctx.arc(last.x, last.y, motion ? 9 + pulse * 4 : 9, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = dotCol;
-  ctx.beginPath(); ctx.arc(last.x, last.y, 3.5, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(last.x, last.y, motion ? 3.8 + pulse * 0.8 : 3.5, 0, Math.PI * 2); ctx.fill();
 
   // X-axis labels
   if (opts.xLabels && opts.xLabels.length > 1) {

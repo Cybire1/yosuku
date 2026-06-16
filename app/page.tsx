@@ -10,7 +10,7 @@ import { useBtcPrice } from '@/lib/hooks/useBtcPrice';
 import { useOracles, useProtocolStats } from '@/lib/sui/hooks';
 import { type PriceData } from '@/lib/sui/predictApi';
 import { FLOAT_SCALING } from '@/lib/sui/constants';
-import { nearestStrike } from '@/lib/roundHelpers';
+import { getCanonicalMarketLine } from '@/lib/marketLine';
 
 /* ───────── Types ───────── */
 interface FaqItem {
@@ -77,8 +77,8 @@ const ASSET_GLYPH: Record<string, string> = {
 
 const HOW_STEPS: HowStep[] = [
   { num: '01', jp: '\u5E02\u5834', kicker: 'Choose', title: 'Pick a market.', body: 'Every BTC market has a strike price and a fifteen-minute window. One question: above or below at the bell.', meta: '15-min rounds \u00B7 continuous' },
-  { num: '02', jp: '\u53D6\u5F15', kicker: 'Commit', title: 'Take a side.', body: 'One press. Your position is committed to Sui. No order books, no counterparties \u2014 just a binary stance and a fixed window.', meta: 'Binary \u00B7 Instant \u00B7 On-chain' },
-  { num: '03', jp: '\u6C7A\u6E08', kicker: 'Settle', title: 'Settle automatically.', body: 'When the window closes, the oracle reports. Settlement is automatic. Winners receive proportional payouts. No claims, no friction.', meta: 'Oracle-settled \u00B7 Sub-second \u00B7 Trustless' },
+  { num: '02', jp: '\u53D6\u5F15', kicker: 'Commit', title: 'Take a side.', body: 'One press. Your position is committed to Sui through DeepBook Predict. No order book, just a binary stance and a fixed window.', meta: 'Binary \u00B7 Instant \u00B7 On-chain' },
+  { num: '03', jp: '\u6C7A\u6E08', kicker: 'Settle', title: 'Settle on-chain.', body: 'When the window closes, the oracle reports the final price. Winning contracts pay 1 DUSDC per unit; losing contracts pay 0.', meta: 'Oracle-settled \u00B7 Binary \u00B7 Verifiable' },
 ];
 
 const FEATURES: FeatureItem[] = [
@@ -90,17 +90,17 @@ const FEATURES: FeatureItem[] = [
 ];
 
 const FAQ_DATA: FaqItem[] = [
-  { q: 'What does YOSUKU settle on?', a: 'Pyth Network price feeds on Sui. Every settlement is deterministic, verifiable on-chain, and independent of YOSUKU as an operator. The oracle reports; the contract executes.', tags: ['Oracle', 'Sui'], cat: 'Protocol' },
-  { q: 'How does YOSUKU make money?', a: 'A small settlement fee (1-2%) is taken from the winning side of each market. There are no hidden spreads, no market-making positions, and no proprietary trading.', tags: ['Fees', 'Transparency'], cat: 'Protocol' },
-  { q: 'Can I lose more than I stake?', a: 'On an un-leveraged binary, no — your max loss is your position size. If you opt into leverage (the optional yolev pool, up to 3×), your borrowed portion can be liquidated, so a losing leveraged position loses your margin. Plain trades stay fixed-downside.', tags: ['Risk', 'Binary'], cat: 'Mechanics' },
+  { q: 'What does YOSUKU settle on?', a: 'DeepBook Predict oracle markets on Sui. Every settlement is deterministic, verifiable on-chain, and independent of YOSUKU as an operator. The oracle reports; the contract executes.', tags: ['Oracle', 'Sui'], cat: 'Protocol' },
+  { q: 'How does YOSUKU make money?', a: 'Plain Predict trades pay the protocol spread baked into the quote. Optional yolev leverage pays a premium to the underwriting reserve that fronts extra notional.', tags: ['Fees', 'Transparency'], cat: 'Protocol' },
+  { q: 'Can I lose more than I stake?', a: 'No. Plain binaries are fixed-downside. With optional yolev leverage, the reserve fronts capital and is repaid first from wins, but your max loss is still your margin.', tags: ['Risk', 'Binary'], cat: 'Mechanics' },
   { q: 'Why fifteen-minute windows?', a: 'Short enough to be engaging and testable, long enough for genuine price discovery. Fifteen minutes is the smallest window where oracle latency is negligible relative to the round duration.', tags: ['Design', 'Cadence'], cat: 'Mechanics' },
   { q: 'Is this available in my country?', a: 'YOSUKU is a decentralised protocol on Sui. There is no geo-blocking at the protocol level. However, you are responsible for compliance with your local regulations.', tags: ['Legal', 'Access'], cat: 'Access' },
 ];
 
 const SPEC_ROWS: SpecRow[] = [
   { label: 'Chain', value: 'Sui Network (L1)' },
-  { label: 'Settlement', value: 'Pyth oracle, deterministic' },
-  { label: 'Oracle', value: 'Pyth Network price feeds' },
+  { label: 'Settlement', value: 'DeepBook Predict oracle, deterministic' },
+  { label: 'Oracle', value: 'Predict oracle surface' },
   { label: 'Round cadence', value: '15 minutes, continuous' },
   { label: 'Asset', value: 'DUSDC' },
   { label: 'Latency', value: 'Sub-second finality' },
@@ -131,9 +131,10 @@ function clamp(v: number, lo: number, hi: number): number {
    ═══════════════════════════════════════════════════ */
 export default function HomePage() {
   const { price: btcPrice } = useBtcPrice();
-  const { active: liveOracles, loading: oraclesLoading } = useOracles();
+  const { active: liveOracles, settled: settledOracles, loading: oraclesLoading } = useOracles();
   const { stats: protocolStats, loading: statsLoading } = useProtocolStats();
   const [oraclePrices, setOraclePrices] = useState<Record<string, PriceData>>({});
+  const [nowMs, setNowMs] = useState(0);
 
   /* ── state ── */
   const [probability, setProbability] = useState<number>(50);
@@ -150,6 +151,19 @@ export default function HomePage() {
   const featuresRef = useRef<HTMLDivElement>(null);
   const featurePinRef = useRef<HTMLDivElement>(null);
   const lockedStrikesRef = useRef<Record<string, number>>({});
+
+  useEffect(() => {
+    const tick = () => setNowMs(Date.now());
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const futureOracles = useMemo(() => {
+    return liveOracles
+      .filter(o => !nowMs || o.expiry > nowMs)
+      .sort((a, b) => a.expiry - b.expiry);
+  }, [liveOracles, nowMs]);
 
   /* ── Fetch prices via combined server route ── */
   useEffect(() => {
@@ -171,26 +185,30 @@ export default function HomePage() {
 
   /* ── Derive probability from first oracle ── */
   useEffect(() => {
-    if (liveOracles.length === 0) return;
-    const firstOracle = liveOracles[0];
+    if (futureOracles.length === 0 || !nowMs) return;
+    const firstOracle = futureOracles[0];
     const prices = oraclePrices[firstOracle.oracle_id];
     if (!prices) return;
     // Lock strike on first price — display shouldn't fluctuate
     if (!lockedStrikesRef.current[firstOracle.oracle_id]) {
-      lockedStrikesRef.current[firstOracle.oracle_id] = nearestStrike(prices.forward, firstOracle.min_strike, firstOracle.tick_size);
+      lockedStrikesRef.current[firstOracle.oracle_id] = getCanonicalMarketLine({
+        oracle: firstOracle,
+        settledOracles,
+        referencePrice: prices.forward || prices.spot,
+      })!.strike;
     }
     const midStrike = lockedStrikesRef.current[firstOracle.oracle_id];
     const midStrikeDollars = midStrike / FLOAT_SCALING;
     const forward = prices.forward / FLOAT_SCALING;
     if (midStrikeDollars > 0 && forward > 0) {
       const diff = (forward - midStrikeDollars) / midStrikeDollars;
-      const secsLeft = Math.max(60, (firstOracle.expiry - Date.now()) / 1000);
+      const secsLeft = Math.max(60, (firstOracle.expiry - nowMs) / 1000);
       const sigma = 0.001 * Math.sqrt(secsLeft / 60);
       const z = diff / (sigma || 0.01);
       const p = Math.round(Math.max(1, Math.min(99, 100 / (1 + Math.exp(-1.7 * z)))));
       setProbability(p);
     }
-  }, [liveOracles, oraclePrices]);
+  }, [futureOracles, nowMs, oraclePrices, settledOracles]);
 
   /* ── Dial sparkline (decorative) ── */
   useEffect(() => {
@@ -220,12 +238,12 @@ export default function HomePage() {
 
   /* ── Real next-expiry countdown ── */
   const nextExpirySec = useMemo(() => {
-    if (liveOracles.length === 0) return 0;
-    const nearest = Math.min(...liveOracles.map(o => o.expiry));
+    if (futureOracles.length === 0 || !nowMs) return 0;
+    const nearest = Math.min(...futureOracles.map(o => o.expiry));
     // expiry is in ms, convert to seconds for countdown
     const nearestSec = nearest > 1e12 ? nearest / 1000 : nearest;
-    return Math.max(0, Math.floor(nearestSec - Date.now() / 1000));
-  }, [liveOracles]);
+    return Math.max(0, Math.floor(nearestSec - nowMs / 1000));
+  }, [futureOracles, nowMs]);
 
   const [nextRound, setNextRound] = useState<number>(0);
   useEffect(() => {
@@ -241,10 +259,10 @@ export default function HomePage() {
 
   /* ── Per-oracle dial countdown (first oracle) ── */
   const dialExpiry = useMemo(() => {
-    if (liveOracles.length === 0) return 0;
-    const exp = liveOracles[0].expiry > 1e12 ? liveOracles[0].expiry / 1000 : liveOracles[0].expiry;
-    return Math.max(0, Math.floor(exp - Date.now() / 1000));
-  }, [liveOracles]);
+    if (futureOracles.length === 0 || !nowMs) return 0;
+    const exp = futureOracles[0].expiry > 1e12 ? futureOracles[0].expiry / 1000 : futureOracles[0].expiry;
+    return Math.max(0, Math.floor(exp - nowMs / 1000));
+  }, [futureOracles, nowMs]);
 
   const [dialCountdown, setDialCountdown] = useState<number>(0);
   useEffect(() => {
@@ -260,16 +278,21 @@ export default function HomePage() {
 
   /* ── Build market cards from real oracles ── */
   const displayMarkets = useMemo(() => {
-    return liveOracles.slice(0, 6).map((oracle, i) => {
+    return futureOracles.slice(0, 6).map((oracle, i) => {
       const asset = oracle.underlying_asset || 'BTC';
       const glyph = ASSET_GLYPH[asset] || asset[0];
       const prices = oraclePrices[oracle.oracle_id];
       // Lock strike on first price — question text shouldn't fluctuate
       const refPrice = prices?.forward || prices?.spot;
-      if (refPrice && !lockedStrikesRef.current[oracle.oracle_id]) {
-        lockedStrikesRef.current[oracle.oracle_id] = nearestStrike(refPrice, oracle.min_strike, oracle.tick_size);
+      if (!lockedStrikesRef.current[oracle.oracle_id]) {
+        lockedStrikesRef.current[oracle.oracle_id] = getCanonicalMarketLine({
+          oracle,
+          settledOracles,
+          referencePrice: refPrice,
+        })!.strike;
       }
-      const midStrike = lockedStrikesRef.current[oracle.oracle_id] ?? (oracle.min_strike + oracle.tick_size * 25);
+      const midStrike = lockedStrikesRef.current[oracle.oracle_id]
+        ?? getCanonicalMarketLine({ oracle, settledOracles, referencePrice: refPrice })!.strike;
       const midStrikeDollars = midStrike / FLOAT_SCALING;
 
       let yesC = 50;
@@ -277,14 +300,14 @@ export default function HomePage() {
         const forward = prices.forward / FLOAT_SCALING;
         if (midStrikeDollars > 0 && forward > 0) {
           const diff = (forward - midStrikeDollars) / midStrikeDollars;
-          const secsLeft = Math.max(60, (oracle.expiry - Date.now()) / 1000);
+          const secsLeft = Math.max(60, (oracle.expiry - nowMs) / 1000);
           const sigma = 0.001 * Math.sqrt(secsLeft / 60);
           const z = diff / (sigma || 0.01);
           yesC = Math.round(Math.max(1, Math.min(99, 100 / (1 + Math.exp(-1.7 * z)))));
         }
       }
 
-      const secsLeft = Math.max(0, Math.floor((oracle.expiry - Date.now()) / 1000));
+      const secsLeft = nowMs ? Math.max(0, Math.floor((oracle.expiry - nowMs) / 1000)) : 0;
       const formatStrike = (n: number) => '$' + n.toLocaleString(undefined, { maximumFractionDigits: 0 });
       const expDate = new Date(oracle.expiry);
       const timeStr = expDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'UTC' });
@@ -313,14 +336,15 @@ export default function HomePage() {
         featured: i === 0,
         spark,
         oracleId: oracle.oracle_id,
+        strike: midStrike,
       };
     });
-  }, [liveOracles, oraclePrices]);
+  }, [futureOracles, nowMs, oraclePrices, settledOracles]);
 
   /* ── Derive spot prices for ticker ── */
   const spotPrices = useMemo(() => {
     const byAsset: Record<string, number> = {};
-    for (const oracle of liveOracles) {
+    for (const oracle of futureOracles) {
       const asset = oracle.underlying_asset || 'BTC';
       const prices = oraclePrices[oracle.oracle_id];
       if (prices && !byAsset[asset]) {
@@ -328,22 +352,27 @@ export default function HomePage() {
       }
     }
     return byAsset;
-  }, [liveOracles, oraclePrices]);
+  }, [futureOracles, oraclePrices]);
 
   /* ── Dial question label ── */
   const dialLabel = useMemo(() => {
-    if (liveOracles.length === 0) return 'BTC > $95,000';
-    const o = liveOracles[0];
+    if (futureOracles.length === 0) return 'BTC > $95,000';
+    const o = futureOracles[0];
     const asset = o.underlying_asset || 'BTC';
     const prices = oraclePrices[o.oracle_id];
     const refPrice = prices?.forward || prices?.spot;
-    if (refPrice && !lockedStrikesRef.current[o.oracle_id]) {
-      lockedStrikesRef.current[o.oracle_id] = nearestStrike(refPrice, o.min_strike, o.tick_size);
+    if (!lockedStrikesRef.current[o.oracle_id]) {
+      lockedStrikesRef.current[o.oracle_id] = getCanonicalMarketLine({
+        oracle: o,
+        settledOracles,
+        referencePrice: refPrice,
+      })!.strike;
     }
-    const midStrike = lockedStrikesRef.current[o.oracle_id] ?? (o.min_strike + o.tick_size * 25);
+    const midStrike = lockedStrikesRef.current[o.oracle_id]
+      ?? getCanonicalMarketLine({ oracle: o, settledOracles, referencePrice: refPrice })!.strike;
     const dollars = midStrike / FLOAT_SCALING;
     return `${asset} > $${dollars.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
-  }, [liveOracles, oraclePrices]);
+  }, [futureOracles, oraclePrices, settledOracles]);
 
   /* ── IntersectionObserver for .how-steps ── */
   useEffect(() => {
@@ -826,12 +855,12 @@ export default function HomePage() {
               Sub-second settlement. Custodial of nothing. <em>Owner of everything.</em>
             </h2>
             <p>
-              Built on Sui for parallel execution and instant finality. Pyth oracles for
-              deterministic price feeds. No intermediaries between your position and your payout.
+              Built on Sui for parallel execution and instant finality. DeepBook Predict supplies
+              the oracle-priced market surface, settlement rules, and shared liquidity vault.
             </p>
             <div className="footrule">
               <span><b>Sui L1</b> &middot; Native</span>
-              <span><b>Pyth</b> &middot; Oracle</span>
+              <span><b>Predict</b> &middot; Oracle</span>
             </div>
           </div>
           <div className="split-right">
@@ -888,7 +917,7 @@ export default function HomePage() {
             </div>
           )}
           {filteredMarkets.map((m, i) => (
-            <Link href={`/markets/${m.oracleId}`} key={m.oracleId} className={`lp-market-card ${m.hot ? 'hot' : ''}`} data-cursor="hover">
+            <Link href={`/markets/${m.oracleId}?strike=${m.strike}&side=UP`} key={m.oracleId} className={`lp-market-card ${m.hot ? 'hot' : ''}`} data-cursor="hover">
               <div className="market-row1">
                 <div className="market-glyph">{m.glyph}</div>
                 <div className="market-asset-block">

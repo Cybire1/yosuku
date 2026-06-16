@@ -59,6 +59,14 @@ export function isPositionClaimed(oracleId: string): boolean {
 
 // ── Strike Grid Helpers ──────────────────────────────────
 
+export const DEFAULT_DISPLAY_STRIKE_STEP = 50 * FLOAT_SCALING;
+
+function displayStrikeStep(tickSize: number, displayStep: number = DEFAULT_DISPLAY_STRIKE_STEP): number {
+  if (tickSize <= 0) return Math.max(displayStep, 1);
+  const minStep = Math.max(displayStep, tickSize);
+  return Math.ceil(minStep / tickSize) * tickSize;
+}
+
 export function generateStrikeGrid(
   minStrike: number,
   tickSize: number,
@@ -93,6 +101,49 @@ export function nearestStrike(price: number, minStrike: number, tickSize: number
   if (tickSize <= 0) return minStrike;
   const ticks = Math.round((price - minStrike) / tickSize);
   return minStrike + Math.max(0, ticks) * tickSize;
+}
+
+/** Default app line: human-readable, still snapped back to the valid protocol grid. */
+export function defaultStrike(
+  price: number,
+  minStrike: number,
+  tickSize: number,
+  displayStep: number = DEFAULT_DISPLAY_STRIKE_STEP,
+): number {
+  if (price <= 0 || tickSize <= 0) return minStrike;
+  const step = displayStrikeStep(tickSize, displayStep);
+  const rounded = Math.round(price / step) * step;
+  return nearestStrike(rounded, minStrike, tickSize);
+}
+
+/** Coarse strike menu for explicit configuration; avoids exposing every raw tick. */
+export function generateDisplayStrikeGrid(
+  minStrike: number,
+  tickSize: number,
+  numSteps: number = 21,
+  centerPrice?: number,
+  displayStep: number = DEFAULT_DISPLAY_STRIKE_STEP,
+): number[] {
+  if (tickSize <= 0) return [minStrike];
+
+  const step = displayStrikeStep(tickSize, displayStep);
+  const half = Math.floor(numSteps / 2);
+  const center = centerPrice
+    ? defaultStrike(centerPrice, minStrike, tickSize, displayStep)
+    : defaultStrike(minStrike + step * half, minStrike, tickSize, displayStep);
+  const start = center - half * step;
+  const seen = new Set<number>();
+  const strikes: number[] = [];
+
+  for (let i = 0; i < numSteps; i++) {
+    const strike = nearestStrike(Math.max(minStrike, start + i * step), minStrike, tickSize);
+    if (!seen.has(strike)) {
+      seen.add(strike);
+      strikes.push(strike);
+    }
+  }
+
+  return strikes;
 }
 
 // ── Time helpers ─────────────────────────────────────────

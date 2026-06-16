@@ -15,6 +15,7 @@ import {
   fetchStrategies,
   fetchCopyTrades,
   buildSubscribeTx,
+  buildListStrategyTx,
   fmtDusdc,
   fmtAddr,
   ago,
@@ -42,10 +43,38 @@ export default function StrategiesPage() {
   const [sponsor, setSponsor] = useState<SponsorStatus | null>(null);
   const [subscribingId, setSubscribingId] = useState<string | null>(null);
 
+  // creator: "list a strategy" form
+  const [showList, setShowList] = useState(false);
+  const [listing, setListing] = useState(false);
+  const [form, setForm] = useState({ agent: '', maxLeverage: '3', maxMargin: '5', subFee: '0.1' });
+
   // discover the gas station once; if up, subscribing is gas-free.
   useEffect(() => {
     getSponsorStatus().then(setSponsor).catch(() => {});
   }, []);
+
+  // default the strategy's executing agent to the connected wallet (a creator usually runs
+  // their own agent key; they can paste a dedicated agent address instead).
+  useEffect(() => {
+    if (address && !form.agent) setForm((f) => ({ ...f, agent: address }));
+  }, [address, form.agent]);
+
+  // Build → sign → execute, off JSON-RPC: sponsored (gas-free) path when the gas station is
+  // up, wallet-pays fallback otherwise. Shared by subscribe + list. Returns the digest.
+  const signSend = useCallback(async (tx: Transaction): Promise<string> => {
+    if (sponsor) {
+      tx.setSender(address!);
+      tx.setGasOwner(sponsor.address);
+      const bytes = await tx.build({ client: grpc });
+      const signed = await signTransaction({ transaction: Transaction.from(bytes) });
+      const r = await submitSponsored({ sender: address!, txBytes: signed.bytes, txSignature: signed.signature });
+      return r.digest;
+    }
+    const r = await buildSignExecute(tx, ({ transaction }) =>
+      signTransaction({ transaction }).then((s) => ({ bytes: s.bytes, signature: s.signature })),
+    );
+    return r.digest;
+  }, [sponsor, address, signTransaction]);
 
   const load = useCallback(async () => {
     try {
@@ -82,22 +111,7 @@ export default function StrategiesPage() {
         coinIds: dusdcCoins.map((c) => c.coinObjectId),
         subFeeMicro: BigInt(Math.floor(card.subFee * DUSDC_MULTIPLIER)),
       });
-      let digest: string;
-      if (sponsor) {
-        // sponsored: the gas station pays. User signs to authorize, Onara co-signs + executes.
-        tx.setSender(address);
-        tx.setGasOwner(sponsor.address);
-        const bytes = await tx.build({ client: grpc });
-        const signed = await signTransaction({ transaction: Transaction.from(bytes) });
-        const r = await submitSponsored({ sender: address, txBytes: signed.bytes, txSignature: signed.signature });
-        digest = r.digest;
-      } else {
-        // fallback: user pays gas (still off JSON-RPC — wallet signs, gRPC executes).
-        const r = await buildSignExecute(tx, ({ transaction }) =>
-          signTransaction({ transaction }).then((s) => ({ bytes: s.bytes, signature: s.signature })),
-        );
-        digest = r.digest;
-      }
+      const digest = await signSend(tx);
       await grpc.waitForTransaction({ digest });
       toast(`Subscribed to ${fmtAddr(card.agent)} — the agent can now copy-trade your vault`, 'success');
       await load();
@@ -107,6 +121,41 @@ export default function StrategiesPage() {
       toast(`Subscribe failed: ${msg}`, 'error');
     } finally {
       setSubscribingId(null);
+    }
+  }
+
+  // Creator: publish a new investable strategy. The caps become the hard ceiling the agent
+  // is bound to on every subscriber's funds. Capsule/memory pointers are optional (0 = none).
+  async function listStrategy() {
+    if (!address) return;
+    const maxLeverageBps = Math.round(parseFloat(form.maxLeverage || '0') * 10_000);
+    const maxMarginMicro = BigInt(Math.floor(parseFloat(form.maxMargin || '0') * DUSDC_MULTIPLIER));
+    const subFeeMicro = BigInt(Math.floor(parseFloat(form.subFee || '0') * DUSDC_MULTIPLIER));
+    const agent = form.agent.trim() || address;
+    if (maxLeverageBps < 10_000) { toast('Max leverage must be at least 1x', 'error'); return; }
+    if (maxMarginMicro <= BigInt(0)) { toast('Max margin must be greater than 0', 'error'); return; }
+    if (!/^0x[0-9a-fA-F]{64}$/.test(agent)) { toast('Agent must be a 0x… address', 'error'); return; }
+    setListing(true);
+    try {
+      const tx = buildListStrategyTx({
+        agent,
+        capsuleBlob: BigInt(0), // Seal playbook can be attached later via update_strategy
+        memoryAccount: '0x0',   // MemWal pointer optional
+        maxLeverageBps,
+        maxMarginMicro,
+        subFeeMicro,
+        creator: address,
+      });
+      const digest = await signSend(tx);
+      await grpc.waitForTransaction({ digest });
+      toast('Strategy listed — it now appears in the marketplace', 'success');
+      setShowList(false);
+      await load();
+    } catch (e) {
+      const msg = String(e instanceof Error ? e.message : e).slice(0, 140);
+      toast(`List failed: ${msg}`, 'error');
+    } finally {
+      setListing(false);
     }
   }
 
@@ -129,11 +178,79 @@ export default function StrategiesPage() {
         </h1>
         <p className="font-jp text-gray-500 text-sm mb-6">戦略取引所</p>
 
-        <p className="text-gray-400 text-sm leading-relaxed max-w-2xl mb-10">
+        <p className="text-gray-400 text-sm leading-relaxed max-w-2xl mb-6">
           A catalogue of investable prediction-market agent strategies. Subscribe to one and the
           agent trades your funds under hard on-chain caps — and can never divert a cent: every
           position it opens is owned by you and force-pays you on exit.
         </p>
+
+        {/* Creator: list a strategy */}
+        <div className="mb-10">
+          {address && (
+            <button
+              onClick={() => setShowList((v) => !v)}
+              className="font-mono text-[12px] px-4 py-2 rounded-full border border-white/10 hover:border-white/25 hover:bg-white/[0.03] text-gray-300 hover:text-white transition-colors"
+            >
+              {showList ? '× Close' : '+ List a strategy'}
+            </button>
+          )}
+
+          {address && showList && (
+            <div className="border border-white/[0.08] rounded bg-bg p-5 mt-4 max-w-2xl">
+              <h3 className="font-display font-[700] text-sm text-white mb-1">Publish a strategy</h3>
+              <p className="text-gray-500 text-xs leading-relaxed mb-5">
+                Your caps are the hard ceiling your agent is bound to on every subscriber&apos;s funds —
+                it can never exceed them, and never holds subscriber capital. A Seal playbook capsule
+                can be attached later.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <label className="block">
+                  <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 block mb-1.5">Executing agent</span>
+                  <input
+                    value={form.agent}
+                    onChange={(e) => setForm((f) => ({ ...f, agent: e.target.value }))}
+                    placeholder="0x… (defaults to you)"
+                    className="w-full px-3 py-2 rounded bg-white/[0.03] border border-white/[0.08] focus:border-white/20 text-white font-mono text-[12px] outline-none transition-colors"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 block mb-1.5">Sub fee (DUSDC)</span>
+                  <input
+                    type="number" min="0" step="0.1"
+                    value={form.subFee}
+                    onChange={(e) => setForm((f) => ({ ...f, subFee: e.target.value }))}
+                    className="w-full px-3 py-2 rounded bg-white/[0.03] border border-white/[0.08] focus:border-white/20 text-white font-mono text-sm outline-none transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 block mb-1.5">Max leverage (x)</span>
+                  <input
+                    type="number" min="1" step="1"
+                    value={form.maxLeverage}
+                    onChange={(e) => setForm((f) => ({ ...f, maxLeverage: e.target.value }))}
+                    className="w-full px-3 py-2 rounded bg-white/[0.03] border border-white/[0.08] focus:border-white/20 text-white font-mono text-sm outline-none transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 block mb-1.5">Max margin / trade (DUSDC)</span>
+                  <input
+                    type="number" min="0" step="1"
+                    value={form.maxMargin}
+                    onChange={(e) => setForm((f) => ({ ...f, maxMargin: e.target.value }))}
+                    className="w-full px-3 py-2 rounded bg-white/[0.03] border border-white/[0.08] focus:border-white/20 text-white font-mono text-sm outline-none transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  />
+                </label>
+              </div>
+              <button
+                onClick={listStrategy}
+                disabled={listing}
+                className="w-full mt-5 py-3 rounded text-sm font-semibold bg-vermilion hover:bg-vermilion-d text-white transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {listing ? 'listing…' : 'List strategy'}
+              </button>
+            </div>
+          )}
+        </div>
 
         {loading && strategies.length === 0 ? (
           <div className="font-mono text-sm text-gray-500 py-20 text-center">reading the chain…</div>

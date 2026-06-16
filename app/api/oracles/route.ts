@@ -1,8 +1,12 @@
 import { NextResponse } from 'next/server';
+import { readFile, writeFile } from 'node:fs/promises';
 
 const PREDICT_BASE = 'https://predict-server.testnet.mystenlabs.com';
-const ORACLE_CACHE_TTL = 5 * 60_000; // 5 minutes — oracles created every 15 min
+const ORACLE_CACHE_TTL = 30_000;      // 15-minute rounds need a short market-list cache
 const PRICE_CACHE_TTL = 10_000;       // 10 seconds for prices
+const ORACLE_COLD_TIMEOUT_MS = 30_000; // /oracles is ~2MB and can be slow on cold local dev
+const PRICE_TIMEOUT_MS = 8_000;
+const ORACLE_DISK_CACHE = '/tmp/yosuku-predict-oracles-cache.json';
 
 interface OracleEntry {
   oracle_id: string;
@@ -20,32 +24,55 @@ let oracleInFlight: Promise<OracleEntry[]> | null = null;
 let priceInFlight: Promise<Record<string, unknown>> | null = null;
 
 function filterRelevant(all: OracleEntry[]): OracleEntry[] {
-  const cutoff = Date.now() - 2 * 60 * 60 * 1000;
-  return all.filter(o =>
-    o.status === 'active' ||
-    o.status === 'pending_settlement' ||
-    (o.status === 'settled' && (o.settled_at ?? o.expiry) > cutoff)
-  );
+  const now = Date.now();
+  const cutoff = now - 2 * 60 * 60 * 1000;
+  const activeGrace = now - 2 * 60_000;
+  const rank = (status: string) =>
+    status === 'active' ? 0 : status === 'pending_settlement' ? 1 : 2;
+
+  return all
+    .filter(o =>
+      (o.status === 'active' && o.expiry > activeGrace) ||
+      o.status === 'pending_settlement' ||
+      (o.status === 'settled' && (o.settled_at ?? o.expiry) > cutoff)
+    )
+    .sort((a, b) => {
+      const ar = rank(a.status);
+      const br = rank(b.status);
+      if (ar !== br) return ar - br;
+      return ar === 2
+        ? (b.settled_at ?? b.expiry) - (a.settled_at ?? a.expiry)
+        : a.expiry - b.expiry;
+    });
 }
 
 async function fetchOraclesFromUpstream(): Promise<OracleEntry[]> {
-  // Cold-cache failures surface straight to the browser as 502s, so absorb
-  // transient upstream blips here: bounded timeout + two retries with backoff.
-  let lastErr: unknown;
-  for (let attempt = 0; attempt < 3; attempt++) {
-    try {
-      const res = await fetch(`${PREDICT_BASE}/oracles`, { signal: AbortSignal.timeout(8000) });
-      if (!res.ok) throw new Error(`Upstream oracles: ${res.status}`);
-      const all: OracleEntry[] = await res.json();
-      const relevant = filterRelevant(all);
-      oracleCache = { data: relevant, ts: Date.now() };
-      return relevant;
-    } catch (err) {
-      lastErr = err;
-      if (attempt < 2) await new Promise((r) => setTimeout(r, 600 * (attempt + 1)));
-    }
+  // /oracles is large (~2MB). On local dev, three long retries can make the
+  // markets page look dead, so cold loads get one generous attempt. Warm loads
+  // are protected by stale-while-revalidate below.
+  const res = await fetch(`${PREDICT_BASE}/oracles`, {
+    headers: { accept: 'application/json' },
+    signal: AbortSignal.timeout(ORACLE_COLD_TIMEOUT_MS),
+  });
+  if (!res.ok) throw new Error(`Upstream oracles: ${res.status}`);
+  const all: OracleEntry[] = await res.json();
+  const relevant = filterRelevant(all);
+  oracleCache = { data: relevant, ts: Date.now() };
+  void writeFile(ORACLE_DISK_CACHE, JSON.stringify(relevant)).catch(() => {});
+  return relevant;
+}
+
+async function getDiskOracles(): Promise<OracleEntry[] | null> {
+  try {
+    const raw = await readFile(ORACLE_DISK_CACHE, 'utf8');
+    const parsed = JSON.parse(raw) as OracleEntry[];
+    const relevant = filterRelevant(parsed);
+    if (relevant.length === 0) return null;
+    oracleCache = { data: relevant, ts: Date.now() };
+    return relevant;
+  } catch {
+    return null;
   }
-  throw lastErr;
 }
 
 /** Stale-while-revalidate: return stale data instantly, refresh in background */
@@ -62,6 +89,16 @@ async function getOracles(now: number): Promise<OracleEntry[]> {
     return oracleCache.data;
   }
 
+  const disk = await getDiskOracles();
+  if (disk) {
+    if (!oracleInFlight) {
+      oracleInFlight = fetchOraclesFromUpstream()
+        .catch(() => disk)
+        .finally(() => { oracleInFlight = null; });
+    }
+    return disk;
+  }
+
   // Cold — must wait
   if (oracleInFlight) return oracleInFlight;
   oracleInFlight = fetchOraclesFromUpstream()
@@ -71,7 +108,10 @@ async function getOracles(now: number): Promise<OracleEntry[]> {
 
 async function fetchPrice(oracleId: string): Promise<unknown | null> {
   try {
-    const res = await fetch(`${PREDICT_BASE}/oracles/${oracleId}/prices/latest`, { signal: AbortSignal.timeout(6000) });
+    const res = await fetch(`${PREDICT_BASE}/oracles/${oracleId}/prices/latest`, {
+      headers: { accept: 'application/json' },
+      signal: AbortSignal.timeout(PRICE_TIMEOUT_MS),
+    });
     if (!res.ok) return null;
     return await res.json();
   } catch { return null; }
@@ -133,6 +173,10 @@ export async function GET(request: Request) {
           ? { oracles: oracleCache.data, prices: priceCache?.data ?? {} }
           : oracleCache.data
       );
+    }
+    const disk = await getDiskOracles();
+    if (disk) {
+      return NextResponse.json(withPrices ? { oracles: disk, prices: priceCache?.data ?? {} } : disk);
     }
     return NextResponse.json(withPrices ? { oracles: [], prices: {} } : [], { status: 502 });
   }

@@ -12,7 +12,7 @@ import TradePanel from '@/components/TradePanel';
 import CashOut from '@/components/CashOut';
 import Verdict from '@/components/Verdict';
 import { fetchTrades, type OracleData, type TradeData } from '@/lib/sui/predictApi';
-import { useOracleState } from '@/lib/sui/hooks';
+import { useOracleState, useOracles } from '@/lib/sui/hooks';
 import { useBtcPrice } from '@/lib/hooks/useBtcPrice';
 import { FLOAT_SCALING, DUSDC_MULTIPLIER } from '@/lib/sui/constants';
 import { Share2, Link2, Check } from 'lucide-react';
@@ -20,15 +20,33 @@ import PriceAlertsButton from '@/components/PriceAlerts';
 import { useKeyboardShortcuts } from '@/lib/hooks/useKeyboardShortcuts';
 import { checkAlerts, sendNotification } from '@/lib/priceAlerts';
 import Tooltip from '@/components/Tooltip';
-import { getTimeRemaining, nearestStrike, formatCountdown } from '@/lib/roundHelpers';
+import { getTimeRemaining, formatCountdown } from '@/lib/roundHelpers';
+import { getCanonicalMarketLine, normalizeMarketStrike } from '@/lib/marketLine';
 import { genCandles, drawPriceLine } from '@/lib/charts/canvasChart';
 import { fetchPriceHistory } from '@/lib/sui/predictApi';
+
+function parseSideParam(value: string | null): 'UP' | 'DOWN' {
+  return value === 'DOWN' ? 'DOWN' : 'UP';
+}
+
+function parseStrikeParam(value: string | null): number | null {
+  if (!value) return null;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function normalizeStrikeForOracle(strike: number | null, oracle: OracleData | null): number | null {
+  if (strike === null || !oracle || oracle.tick_size <= 0) return null;
+  return normalizeMarketStrike(strike, oracle);
+}
 
 export default function MarketDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: oracleId } = use(params);
   const router = useRouter();
   const searchParams = useSearchParams();
-  const defaultSide = (searchParams.get('side') as 'UP' | 'DOWN') || 'UP';
+  const sideParam = searchParams.get('side');
+  const strikeParam = searchParams.get('strike');
+  const defaultSide = parseSideParam(sideParam);
 
   const [trades, setTrades] = useState<TradeData[]>([]);
   const [selectedStrike, setSelectedStrike] = useState<number | null>(null);
@@ -42,24 +60,70 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
   // Price series cached per oracle so strike/price changes redraw the chart
   // without re-fetching /prices every poll.
   const chartSeriesRef = useRef<{ id: string; series: number[]; times: number[] } | null>(null);
+  const chartMotionRef = useRef<{ id: string; last: number } | null>(null);
   const [copied, setCopied] = useState(false);
   const [activeSide, setActiveSide] = useState<'UP' | 'DOWN'>(defaultSide);
 
+  const handleSideChange = useCallback((nextSide: 'UP' | 'DOWN') => {
+    setActiveSide(nextSide);
+    const next = new URLSearchParams(searchParams.toString());
+    next.set('side', nextSide);
+    const strike = selectedStrike ?? pinnedStrike;
+    if (strike !== null) next.set('strike', String(strike));
+    router.replace(`/markets/${oracleId}?${next.toString()}`, { scroll: false });
+  }, [oracleId, pinnedStrike, router, searchParams, selectedStrike]);
+
+  useEffect(() => {
+    setActiveSide(defaultSide);
+  }, [defaultSide]);
+
   // Keyboard shortcuts: u → UP, d → DOWN, Escape → go back
   useKeyboardShortcuts(useMemo(() => ({
-    'u': () => setActiveSide('UP'),
-    'd': () => setActiveSide('DOWN'),
+    'u': () => handleSideChange('UP'),
+    'd': () => handleSideChange('DOWN'),
     'Escape': () => router.push('/markets'),
-  }), [router]));
+  }), [handleSideChange, router]));
 
   // Single combined API call: oracle + prices + SVI
   const { state: oracleState, loading } = useOracleState(oracleId);
-  // Sub-second live BTC price (Pyth SSE) — the chart's moving tip so it tracks
+  const { settled, loading: oracleListLoading } = useOracles();
+  // Sub-second live BTC price stream — the chart's moving tip so it tracks
   // BTC in real time instead of the 15s oracle-state poll.
   const { price: livePrice } = useBtcPrice();
   const oracle = oracleState?.oracle ?? null;
   const prices = oracleState?.latest_price ?? null;
   const sviData = oracleState?.latest_svi ?? null;
+  const refPriceForLine = prices?.forward || prices?.spot || (livePrice ? livePrice * FLOAT_SCALING : null);
+  const canonicalLine = useMemo(
+    () => (oracle ? getCanonicalMarketLine({
+      oracle,
+      settledOracles: settled,
+      referencePrice: refPriceForLine,
+      waitForSettledOracles: true,
+      settledOraclesLoaded: !oracleListLoading,
+    }) : null),
+    [oracle, oracleListLoading, refPriceForLine, settled],
+  );
+  const canonicalStrike = canonicalLine?.source === 'grid-fallback' ? null : canonicalLine?.strike ?? null;
+  const urlStrike = useMemo(
+    () => normalizeStrikeForOracle(parseStrikeParam(strikeParam), oracle),
+    [oracle, strikeParam],
+  );
+
+  useEffect(() => {
+    if (urlStrike === null) return;
+    setPinnedStrike((prev) => (prev === urlStrike ? prev : urlStrike));
+    setSelectedStrike((prev) => (prev === urlStrike ? prev : urlStrike));
+  }, [urlStrike]);
+
+  const handleStrikeChange = useCallback((strike: number) => {
+    setSelectedStrike(strike);
+    setPinnedStrike(strike);
+    const next = new URLSearchParams(searchParams.toString());
+    next.set('strike', String(strike));
+    next.set('side', activeSide);
+    router.replace(`/markets/${oracleId}?${next.toString()}`, { scroll: false });
+  }, [activeSide, oracleId, router, searchParams]);
 
   // Load trades
   useEffect(() => {
@@ -88,13 +152,13 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
   useEffect(() => {
     if (!chartCanvasRef.current || !oracle) return;
     let cancelled = false;
+    let raf = 0;
     // Same strike the rest of the page shows — NOT the raw grid midpoint, which
     // can sit far from spot and squash the candles against the chart edge.
-    const ref = prices?.forward || prices?.spot;
-    const fallbackMid = ref
-      ? nearestStrike(ref, oracle.min_strike, oracle.tick_size)
-      : oracle.min_strike + oracle.tick_size * 25;
+    const ref = prices?.forward || prices?.spot || (livePrice ? livePrice * FLOAT_SCALING : null);
+    const fallbackMid = canonicalStrike ?? (ref ? normalizeMarketStrike(ref, oracle) : oracle.min_strike);
     const strikeD = (selectedStrike ?? pinnedStrike ?? fallbackMid) / FLOAT_SCALING;
+    const animateChart = oracle.status === 'active';
 
     const fmtTime = (ms: number) =>
       new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -118,7 +182,7 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
       }
 
       // Append the live BTC price so the line tracks BTC in real time instead of
-      // freezing on the first fetch. Pyth SSE ticks sub-second; falls back to the
+      // freezing on the first fetch. The live stream ticks sub-second; falls back to the
       // oracle spot. New points accumulate (capped).
       const liveSpot = livePrice || (prices?.spot ? prices.spot / FLOAT_SCALING : null);
       if (cached && liveSpot != null) {
@@ -145,22 +209,49 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
         const xLabels = t.length > 2
           ? [fmtTime(t[0]), fmtTime(t[Math.floor(t.length / 2)]), fmtTime(t[t.length - 1])]
           : undefined;
-        drawPriceLine(chartCanvasRef.current, cached.series, {
-          target: strikeD,
-          targetLabel: 'Target',
-          verdict: true,
-          gridLines: true,
-          axisRight: 58,
-          xLabels,
-          padX: 16,
-          padTop: 14,
-          padBot: 24,
-        });
+
+        const drawFrame = (now: number) => {
+          if (cancelled || !chartCanvasRef.current || !cached || cached.series.length < 2) return;
+
+          const targetLast = cached.series[cached.series.length - 1];
+          let motion = chartMotionRef.current?.id === oracleId
+            ? chartMotionRef.current
+            : { id: oracleId, last: targetLast };
+          const nextLast = motion.last + (targetLast - motion.last) * 0.16;
+          motion = {
+            id: oracleId,
+            last: Math.abs(nextLast - targetLast) < 0.01 ? targetLast : nextLast,
+          };
+          chartMotionRef.current = motion;
+
+          const renderSeries = cached.series.slice();
+          renderSeries[renderSeries.length - 1] = motion.last;
+          drawPriceLine(chartCanvasRef.current, renderSeries, {
+            target: strikeD,
+            targetLabel: 'Target',
+            verdict: true,
+            gridLines: true,
+            axisRight: 58,
+            xLabels,
+            padX: 16,
+            padTop: 14,
+            padBot: 24,
+            motion: animateChart,
+            now,
+          });
+
+          raf = window.requestAnimationFrame(drawFrame);
+        };
+
+        raf = window.requestAnimationFrame(drawFrame);
       }
     }
     renderChart();
-    return () => { cancelled = true; };
-  }, [prices, oracle, selectedStrike, pinnedStrike, oracleId, livePrice]);
+    return () => {
+      cancelled = true;
+      if (raf) window.cancelAnimationFrame(raf);
+    };
+  }, [canonicalStrike, prices, oracle, selectedStrike, pinnedStrike, oracleId, livePrice, settled]);
 
   // Check price alerts — kept above the early returns (Rules of Hooks)
   useEffect(() => {
@@ -178,10 +269,17 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
 
   // Pin the headline strike once, from the first price sample
   useEffect(() => {
-    if (pinnedStrike !== null || !oracle) return;
-    const ref = prices?.forward || prices?.spot;
-    if (ref) setPinnedStrike(nearestStrike(ref, oracle.min_strike, oracle.tick_size));
-  }, [prices, oracle, pinnedStrike]);
+    if (pinnedStrike !== null || !oracle || urlStrike !== null) return;
+    if (canonicalStrike === null) return;
+    setPinnedStrike(canonicalStrike);
+    setSelectedStrike(canonicalStrike);
+    if (!strikeParam) {
+      const next = new URLSearchParams(searchParams.toString());
+      next.set('strike', String(canonicalStrike));
+      next.set('side', activeSide);
+      router.replace(`/markets/${oracleId}?${next.toString()}`, { scroll: false });
+    }
+  }, [activeSide, canonicalStrike, oracle, oracleId, pinnedStrike, router, searchParams, strikeParam, urlStrike]);
 
   if (loading) {
     return (
@@ -225,12 +323,25 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
   const inDeadZone = !isSettled && (oracle.status === 'pending_settlement' || (isActive && timeLeft.expired));
   const isTradable = isActive && !timeLeft.expired;
 
-  const refPriceForGrid = prices?.forward || prices?.spot;
-  const midStrike = pinnedStrike ?? (refPriceForGrid
-    ? nearestStrike(refPriceForGrid, oracle.min_strike, oracle.tick_size)
-    : oracle.min_strike + oracle.tick_size * 25);
-  const midStrikeDollars = (selectedStrike ?? midStrike) / FLOAT_SCALING;
+  const midStrike = pinnedStrike ?? canonicalStrike;
+  if (midStrike === null) {
+    return (
+      <div className="min-h-screen relative">
+        <Marquee />
+        <Header />
+        <CustomCursor />
+        <GrainOverlay />
+        <main className="container pt-[140px] pb-12 text-center py-20">
+          <div className="w-6 h-6 border border-gray-600 border-t-white rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-gray-500 text-sm font-mono">Preparing market line...</p>
+        </main>
+      </div>
+    );
+  }
+  const activeStrike = selectedStrike ?? midStrike;
+  const midStrikeDollars = activeStrike / FLOAT_SCALING;
   const asset = oracle.underlying_asset || 'BTC';
+  const marketUrlPath = `/markets/${oracleId}?strike=${activeStrike}&side=${activeSide}`;
 
   const formatPrice = (n: number) =>
     '$' + n.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
@@ -341,7 +452,7 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
         <div className="flex items-center gap-2 mb-6">
           <button
             onClick={() => {
-              const url = `https://yosuku.xyz/markets/${oracleId}`;
+              const url = `https://yosuku.xyz${marketUrlPath}`;
               const text = `${asset} above ${formatPrice(midStrikeDollars)}? Trade on @yosuku_xyz`;
               window.open(`https://x.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`, '_blank');
             }}
@@ -352,7 +463,7 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
           </button>
           <button
             onClick={() => {
-              navigator.clipboard.writeText(`https://yosuku.xyz/markets/${oracleId}`);
+              navigator.clipboard.writeText(`https://yosuku.xyz${marketUrlPath}`);
               setCopied(true);
               setTimeout(() => setCopied(false), 2000);
             }}
@@ -375,7 +486,7 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
           <div className="flex items-center mb-8">
             <div className="border-l border-white/[0.12] pl-3.5">
               <span className="font-mono text-[9px] tracking-[0.16em] uppercase text-gray-600 flex items-center gap-1">
-                {asset} now <Tooltip text="Live Pyth oracle price." position="bottom" />
+                {asset} now <Tooltip text="Live BTC reference price for this market." position="bottom" />
               </span>
               <span className="font-mono text-lg font-semibold text-white">{formatPrice(spot)}</span>
             </div>
@@ -440,11 +551,13 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
               <div className="lg:sticky lg:top-[120px] space-y-4">
                 <CashOut oracleId={oracleId} expiry={oracle.expiry} isActive={isTradable} />
                 <TradePanel
-                  key={activeSide}
                   oracle={oracle}
                   spotPrice={prices?.spot}
                   forwardPrice={prices?.forward}
                   defaultSide={activeSide}
+                  initialStrike={activeStrike}
+                  onSideChange={handleSideChange}
+                  onStrikeChange={handleStrikeChange}
                 />
               </div>
             </div>
