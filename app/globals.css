@@ -3633,7 +3633,18 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
   .mobile-more-menu { display: grid; }
   .container { padding-inline: 18px; }
   .page-hero { padding: 140px 0 48px; }
-  .markets-grid { grid-template-columns: 1fr; }
+  .markets-grid { grid-template-columns: 1fr; gap: 12px; }
+  /* Trim the full-width "Live now" cards so each isn't a whole screenful: shorter
+     chart, no forced tall question, tighter paddings + smaller type. */
+  .mc-head { padding: 11px 14px; }
+  .mc-body { padding: 13px 14px 0; gap: 10px; }
+  .mc-question { font-size: 15px; min-height: 0; line-height: 1.25; }
+  .mc-spark { height: 70px; }
+  .mc-pricebar { margin: 6px 0; }
+  .mc-pricebar .big { font-size: 16px; }
+  .mc-foot { margin-top: 12px; }
+  .mc-side { padding: 11px 14px; }
+  .mc-side .price { font-size: 12px; }
   .filter-row { flex-direction: column; align-items: stretch; gap: 12px; }
   .filter-tabs { overflow-x: auto; }
   .search-box { width: 100%; }

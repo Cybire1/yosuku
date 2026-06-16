@@ -297,10 +297,6 @@ export function drawPriceLine(
   const xFor = (i: number) => padX + (i / (series.length - 1)) * (rightEdge - padX * 2);
   const yFor = (v: number) => padTop + (hi - v) * (h - padTop - padBot) / range;
   const pts = series.map((v, i) => ({ x: xFor(i), y: yFor(v) }));
-  const chartBottom = h - padBot;
-  const chartH = Math.max(1, chartBottom - padTop);
-  const pathRight = Math.max(padX + 1, rightEdge - padX);
-  const pathW = Math.max(1, pathRight - padX);
 
   // Faint gridlines + right-edge price labels
   if (opts.gridLines) {
@@ -318,18 +314,6 @@ export function drawPriceLine(
         ctx.fillText('$' + Math.round(v).toLocaleString(), rightEdge + 6, y + 3);
       }
     }
-  }
-
-  if (motion) {
-    const sweepX = padX + (((now / 2200) % 1) * pathW);
-    const sweep = ctx.createLinearGradient(sweepX - 90, 0, sweepX + 90, 0);
-    sweep.addColorStop(0, 'rgba(255,255,255,0)');
-    sweep.addColorStop(0.5, 'rgba(255,255,255,0.045)');
-    sweep.addColorStop(1, 'rgba(255,255,255,0)');
-    ctx.save();
-    ctx.fillStyle = sweep;
-    ctx.fillRect(padX, padTop, pathW, chartH);
-    ctx.restore();
   }
 
   // smoothed path (quadratic midpoints) — shared by fill + stroke
@@ -360,23 +344,12 @@ export function drawPriceLine(
   // Paint fill + line in one color
   const paint = (col: string) => {
     const grd = ctx.createLinearGradient(0, padTop, 0, h - padBot);
-    grd.addColorStop(0, hexA(col, motion ? 0.28 : 0.2));
+    grd.addColorStop(0, hexA(col, 0.2));
     grd.addColorStop(1, hexA(col, 0));
     ctx.fillStyle = grd;
     ctx.beginPath(); traceArea(); ctx.fill();
-    if (motion) {
-      ctx.save();
-      ctx.strokeStyle = hexA(col, 0.38 + pulse * 0.12);
-      ctx.lineWidth = 5.2;
-      ctx.lineJoin = 'round';
-      ctx.lineCap = 'round';
-      ctx.shadowColor = hexA(col, 0.7);
-      ctx.shadowBlur = 14 + pulse * 8;
-      ctx.beginPath(); tracePath(); ctx.stroke();
-      ctx.restore();
-    }
     ctx.strokeStyle = col;
-    ctx.lineWidth = motion ? 2.35 : 2;
+    ctx.lineWidth = 2;
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
     ctx.beginPath(); tracePath(); ctx.stroke();
@@ -405,34 +378,6 @@ export function drawPriceLine(
     paint(color);
   }
 
-  if (motion) {
-    const glintX = padX + (((now / 1450) % 1) * pathW);
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(Math.max(padX, glintX - 72), padTop, 144, chartH);
-    ctx.clip();
-    ctx.strokeStyle = 'rgba(255,255,255,0.55)';
-    ctx.lineWidth = 3.2;
-    ctx.lineJoin = 'round';
-    ctx.lineCap = 'round';
-    ctx.shadowColor = 'rgba(255,255,255,0.35)';
-    ctx.shadowBlur = 12;
-    ctx.beginPath(); tracePath(); ctx.stroke();
-    ctx.restore();
-
-    ctx.save();
-    const tailLeft = Math.max(padX, last.x - pathW * 0.18);
-    ctx.beginPath();
-    ctx.rect(tailLeft, padTop, Math.max(1, last.x - tailLeft + 8), chartH);
-    ctx.clip();
-    ctx.strokeStyle = hexA(dotCol, 0.28);
-    ctx.lineWidth = 8;
-    ctx.lineJoin = 'round';
-    ctx.lineCap = 'round';
-    ctx.beginPath(); tracePath(); ctx.stroke();
-    ctx.restore();
-  }
-
   // Target (strike) dashed line + pill — vermilion in verdict mode: the decision line
   if (opts.target != null) {
     const y = yFor(opts.target);
@@ -440,7 +385,6 @@ export function drawPriceLine(
     ctx.strokeStyle = verdict ? 'rgba(224, 77, 38, 0.75)' : 'rgba(255,255,255,0.32)';
     ctx.lineWidth = 1;
     ctx.setLineDash([5, 4]);
-    if (motion) ctx.lineDashOffset = -((now / 85) % 9);
     ctx.beginPath(); ctx.moveTo(padX, y); ctx.lineTo(rightEdge, y); ctx.stroke();
     ctx.restore();
 
