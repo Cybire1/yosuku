@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { Loader2, LogOut } from 'lucide-react';
-import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from '@mysten/dapp-kit';
+import { useCurrentAccount } from '@mysten/dapp-kit';
 import { useManager, useManagerBalance } from '@/lib/sui/hooks';
+import { useSmartSubmit } from '@/lib/sui/useSmartSubmit';
 import { redeemPositionTx } from '@/lib/sui/predictClient';
 import { fetchOnChainQuote } from '@/lib/sui/onchainQuote';
 import { loadPositions, removePosition, type LocalPosition } from '@/lib/roundHelpers';
@@ -30,8 +31,7 @@ interface QuotedPosition extends LocalPosition {
 export default function CashOut({ oracleId, expiry, isActive }: CashOutProps) {
   const account = useCurrentAccount();
   const address = account?.address ?? null;
-  const client = useSuiClient();
-  const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
+  const { submit } = useSmartSubmit();
   const { manager } = useManager();
   const { refresh: refreshManagerBalance } = useManagerBalance(manager?.manager_id ?? null);
   const { toast } = useToast();
@@ -73,16 +73,14 @@ export default function CashOut({ oracleId, expiry, isActive }: CashOutProps) {
     setBusy(p.timestamp);
     setError('');
     try {
-      const tx = redeemPositionTx(
+      await submit(() => redeemPositionTx(
         manager.manager_id,
         oracleId,
         BigInt(p.expiry),
         BigInt(p.strike),
         p.direction,
         BigInt(p.quantity),
-      );
-      const result = await signAndExecute({ transaction: tx });
-      await client.waitForTransaction({ digest: result.digest });
+      ));
       removePosition(p.oracleId, p.timestamp);
       if (p.exitValue !== null) recordPnl(p.exitValue - p.cost / DUSDC_MULTIPLIER);
       refreshManagerBalance();

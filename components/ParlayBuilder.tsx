@@ -16,7 +16,8 @@ import {
   Zap,
   Trophy,
 } from 'lucide-react';
-import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from '@mysten/dapp-kit';
+import { useCurrentAccount } from '@mysten/dapp-kit';
+import { useSmartSubmit } from '@/lib/sui/useSmartSubmit';
 import { useOracles, useDUSDCBalance } from '@/lib/sui/hooks';
 import type { OracleData } from '@/lib/sui/predictApi';
 import { FLOAT_SCALING, DUSDC_MULTIPLIER } from '@/lib/sui/constants';
@@ -61,8 +62,7 @@ const newKey = () => `leg-${++legSeq}-${Date.now()}`;
 export default function ParlayBuilder() {
   const account = useCurrentAccount();
   const address = account?.address ?? null;
-  const client = useSuiClient();
-  const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
+  const { submit } = useSmartSubmit();
   const { active, loading: oraclesLoading } = useOracles();
   const { balance: walletBalance, coins, refresh: refreshBalance } = useDUSDCBalance();
   const { toast } = useToast();
@@ -221,16 +221,14 @@ export default function ParlayBuilder() {
       if (walletBalance < Number(quote.stake)) {
         throw new Error('Not enough DUSDC in your wallet for the stake.');
       }
-      const tx = openParlayTx({
+      const { digest } = await submit(() => openParlayTx({
         coinIds: coins.map((c) => c.coinObjectId),
         stake: quote.stake,
         legs: legSpecs,
         probBps: quote.probBps,
         maxPayout: quote.maxPayout,
-      });
-      const result = await signAndExecute({ transaction: tx });
-      await client.waitForTransaction({ digest: result.digest });
-      setTxDigest(result.digest);
+      }));
+      setTxDigest(digest);
       setStep('success');
       refreshBalance();
       toast(
@@ -246,7 +244,7 @@ export default function ParlayBuilder() {
       setErrorDetail(friendly.detail);
       toast(friendly.title, 'error');
     }
-  }, [address, quote, coins, walletBalance, legSpecs, legs.length, stakeDisplay, payoutDisplay, signAndExecute, client, refreshBalance, toast]);
+  }, [address, quote, coins, walletBalance, legSpecs, legs.length, stakeDisplay, payoutDisplay, submit, refreshBalance, toast]);
 
   if (!address) {
     return (

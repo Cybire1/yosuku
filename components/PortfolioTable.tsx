@@ -9,7 +9,8 @@ import {
   Clock,
   Loader2,
 } from 'lucide-react';
-import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from '@mysten/dapp-kit';
+import { useCurrentAccount } from '@mysten/dapp-kit';
+import { useSmartSubmit } from '@/lib/sui/useSmartSubmit';
 import { useManager, usePositions, useManagerBalance, getPositionDirection, getPositionStrike, useSviPricing, useVaultStats } from '@/lib/sui/hooks';
 import { useOracles, useOraclePrices } from '@/lib/sui/hooks';
 import { redeemPositionTx, redeemRangePositionTx, redeemPermissionlessTx, redeemAllPermissionlessTx, withdrawFromManagerTx, type ClaimablePosition } from '@/lib/sui/predictClient';
@@ -21,8 +22,7 @@ import Countdown from './Countdown';
 export default function PortfolioTable() {
   const account = useCurrentAccount();
   const address = account?.address ?? null;
-  const client = useSuiClient();
-  const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
+  const { submit } = useSmartSubmit();
   const { manager } = useManager();
   const { positions, loading: positionsLoading, refresh: refreshPositions } = usePositions(manager?.manager_id ?? null);
   const { balance: managerBalance, refresh: refreshManagerBalance } = useManagerBalance(manager?.manager_id ?? null);
@@ -40,9 +40,7 @@ export default function PortfolioTable() {
     if (!manager || !address || managerBalance <= 0) return;
     setWithdrawing(true);
     try {
-      const tx = withdrawFromManagerTx(manager.manager_id, BigInt(managerBalance), address);
-      const res = await signAndExecute({ transaction: tx });
-      await client.waitForTransaction({ digest: res.digest });
+      await submit(() => withdrawFromManagerTx(manager.manager_id, BigInt(managerBalance), address));
       refreshManagerBalance();
     } catch (err) {
       console.error('Withdraw error:', err);
@@ -90,9 +88,7 @@ export default function PortfolioTable() {
     if (claimableWinners.length === 0) return;
     setClaimingAll(true);
     try {
-      const tx = redeemAllPermissionlessTx(claimableWinners);
-      const result = await signAndExecute({ transaction: tx });
-      await client.waitForTransaction({ digest: result.digest });
+      await submit(() => redeemAllPermissionlessTx(claimableWinners));
     } catch (err) {
       // abort 1 = already redeemed by the keeper — winnings are already in the
       // trading balance. Not an error; just refresh.
@@ -133,20 +129,18 @@ export default function PortfolioTable() {
       const redeemQty = quantity ?? BigInt(pos.quantity);
 
       if (direction === 'RANGE') {
-        const tx = redeemRangePositionTx(
+        await submit(() => redeemRangePositionTx(
           manager.manager_id,
           pos.oracle_id,
           BigInt(pos.expiry),
           BigInt(pos.lower_strike),
           BigInt(pos.higher_strike),
           redeemQty,
-        );
-        const result = await signAndExecute({ transaction: tx });
-        await client.waitForTransaction({ digest: result.digest });
+        ));
       } else {
         const strike = BigInt(getPositionStrike(pos.lower_strike, pos.higher_strike));
         // Settled → gas-negative permissionless redeem; live → owner redeem (early close).
-        const tx = settled
+        await submit(() => settled
           ? redeemPermissionlessTx({
               managerId: manager.manager_id,
               oracleId: pos.oracle_id,
@@ -162,9 +156,7 @@ export default function PortfolioTable() {
               strike,
               direction,
               redeemQty,
-            );
-        const result = await signAndExecute({ transaction: tx });
-        await client.waitForTransaction({ digest: result.digest });
+            ));
       }
       setExpandedKey(null);
     } catch (err) {

@@ -2,7 +2,8 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { Loader2, ArrowDownToLine, ArrowUpFromLine } from 'lucide-react';
-import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from '@mysten/dapp-kit';
+import { useCurrentAccount } from '@mysten/dapp-kit';
+import { useSmartSubmit } from '@/lib/sui/useSmartSubmit';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import Marquee from '@/components/Marquee';
@@ -23,8 +24,7 @@ type WithdrawStep = 'idle' | 'withdrawing' | 'success' | 'error';
 export default function PoolPage() {
   const account = useCurrentAccount();
   const address = account?.address ?? null;
-  const client = useSuiClient();
-  const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
+  const { submit } = useSmartSubmit();
 
   const { stats, loading: statsLoading, refresh: refreshStats } = useVaultStats();
   const { balance: walletBalance, coins: dusdcCoins, refresh: refreshDusdc } = useDUSDCBalance();
@@ -84,9 +84,7 @@ export default function PoolPage() {
     setErrorMsg('');
     try {
       const coinIds = dusdcCoins.map(c => c.coinObjectId);
-      const tx = supplyLpTx(coinIds, BigInt(supplyAmountMicro), address);
-      const result = await signAndExecute({ transaction: tx });
-      await client.waitForTransaction({ digest: result.digest });
+      await submit(() => supplyLpTx(coinIds, BigInt(supplyAmountMicro), address));
       setSupplyStep('success');
       toast(`Supplied ${supplyAmount} DUSDC to vault`, 'success');
       refreshDusdc();
@@ -100,7 +98,7 @@ export default function PoolPage() {
       setErrorMsg(msg);
       toast(`Supply failed: ${msg.slice(0, 100)}`, 'error');
     }
-  }, [address, supplyAmount, supplyAmountMicro, dusdcCoins, signAndExecute, client, refreshDusdc, refreshPlp, refreshStats, toast]);
+  }, [address, supplyAmount, supplyAmountMicro, dusdcCoins, submit, refreshDusdc, refreshPlp, refreshStats, toast]);
 
   const handleWithdraw = useCallback(async () => {
     if (!address || plpCoins.length === 0) return;
@@ -108,9 +106,7 @@ export default function PoolPage() {
     setErrorMsg('');
     try {
       const coinIds = plpCoins.map(c => c.coinObjectId);
-      const tx = withdrawAllPlpTx(coinIds, address);
-      const result = await signAndExecute({ transaction: tx });
-      await client.waitForTransaction({ digest: result.digest });
+      await submit(() => withdrawAllPlpTx(coinIds, address));
       setWithdrawStep('success');
       toast('Withdrew all PLP from vault', 'success');
       refreshDusdc();
@@ -124,7 +120,7 @@ export default function PoolPage() {
       setErrorMsg(msg);
       toast(`Withdraw failed: ${msg.slice(0, 100)}`, 'error');
     }
-  }, [address, plpCoins, signAndExecute, client, refreshDusdc, refreshPlp, refreshStats, toast]);
+  }, [address, plpCoins, submit, refreshDusdc, refreshPlp, refreshStats, toast]);
 
   const quickAmounts = [50, 100, 250, 500, 1000];
   const plpDisplay = plpBalance / DUSDC_MULTIPLIER;

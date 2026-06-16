@@ -4,7 +4,8 @@
 import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, TrendingUp, Activity, Loader } from 'lucide-react';
-import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from '@mysten/dapp-kit';
+import { useCurrentAccount, useSuiClient } from '@mysten/dapp-kit';
+import { useSmartSubmit } from '@/lib/sui/useSmartSubmit';
 import { useBtcPrice } from '@/lib/hooks/useBtcPrice';
 import {
   PRED_MULTIPLIER,
@@ -15,7 +16,6 @@ import {
 import { useDUSDCBalance, useManager } from '@/lib/sui/hooks';
 import { depositAndMintTx } from '@/lib/sui/predictClient';
 import { fetchDUSDCCoins } from '@/lib/sui/queries';
-import { executeWithRetry } from '@/lib/walletExecution';
 
 interface QuickBetProps {
   round: RoundState;
@@ -30,7 +30,7 @@ export default function QuickBet({ round, side, onClose, onSuccess }: QuickBetPr
   const account = useCurrentAccount();
   const address = account?.address ?? null;
   const client = useSuiClient();
-  const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
+  const { submit } = useSmartSubmit();
   const { manager } = useManager();
   const { balance } = useDUSDCBalance();
   const { price } = useBtcPrice();
@@ -80,23 +80,21 @@ export default function QuickBet({ round, side, onClose, onSuccess }: QuickBetPr
     setError('');
 
     try {
-      const coins = await fetchDUSDCCoins(client, address);
-      const coinIds = coins.map(c => c.coinObjectId);
+      await submit(async () => {
+        const coins = await fetchDUSDCCoins(client, address);
+        const coinIds = coins.map(c => c.coinObjectId);
 
-      const tx = depositAndMintTx({
-        managerId: manager.managerId,
-        coinIds,
-        amount: microAmount,
-        oracleId: round.oracleId || round.id.toString(),
-        expiry: round.expiry || 0,
-        strike: round.minStrike,
-        direction: side === 'YES' ? 'UP' : 'DOWN',
-        quantity: microAmount,
+        return depositAndMintTx({
+          managerId: manager.managerId,
+          coinIds,
+          amount: microAmount,
+          oracleId: round.oracleId || round.id.toString(),
+          expiry: round.expiry || 0,
+          strike: round.minStrike,
+          direction: side === 'YES' ? 'UP' : 'DOWN',
+          quantity: microAmount,
+        });
       });
-
-      await executeWithRetry(() =>
-        signAndExecute({ transaction: tx })
-      );
 
       // Save position to localStorage
       const positions = JSON.parse(localStorage.getItem('sui_positions') || '[]');
