@@ -55,6 +55,7 @@ But a primitive isn't a product. Out of the box there's **no consumer app, no SD
 | **Developers** | Read the contract yourself | **First TypeScript SDK** + **first MCP server** — quote, trade, build in a few lines |
 | **Agents** | No path | The **Bellkeeper** — an attested agent trading a contract-custodied vault, authority bounded *on-chain* |
 | **Social** | — | **Trade-from-X** — tweet a trade, the attested agent executes it from your own un-drainable vault |
+| **Markets** | One bell at a time | **Streak parlays** — stack 2–3 BTC bells into one ticket; the odds multiply, but every leg has to land |
 
 ## How it works
 
@@ -80,7 +81,7 @@ Composed, not bolted on — five primitives woven together with on-chain receipt
 | Primitive | How Yosuku uses it |
 |---|---|
 | **DeepBook Predict** | The core markets — `mint` / `redeem` / `mint_range`, SVI → N(d2) pricing, the PLP vault as counterparty. |
-| **Move** | Our moat — a contract-custodied agent vault that re-verifies the enclave attestation, re-checks hard caps, guards replay, and **force-pays the position owner**. Plus our `yolev` leverage layer (underwriting reserve + margin desk). |
+| **Move** | Our moat — a contract-custodied agent vault that re-verifies the enclave attestation, re-checks hard caps, guards replay, and **force-pays the position owner**. Plus our `yolev` layer — an underwriting reserve, a margin desk, and a **parlay reserve** (escrow-both-sides AND-combo where the first losing leg kills the ticket). |
 | **Nautilus (TEE)** | The Bellkeeper signs every decision in an enclave; the signature is verified **on-chain in the same tx** that places the trade. |
 | **Walrus + MemWal** | Verifiable agent memory + on-chain-pinned decision/audit receipts. |
 | **Seal** | Encrypts the agent's memory and strategy data over Walrus. |
@@ -94,6 +95,7 @@ Composed, not bolted on — five primitives woven together with on-chain receipt
 |---|---|
 | **Attested agent trade** — enclave signature verified on-chain, caps re-checked, position minted | [tx `9zN7Jac…` success](https://suiscan.xyz/testnet/tx/9zN7JacN5AdzKLRHRh5vDDocx5CTns6HqFSrfWEavAbj) |
 | **Trade-from-X, un-drainable** — agent fills your order but **can't divert** the proceeds | proven (user +0.953 DUSDC, agent ±0.000) |
+| **Parlays (multi-leg AND-combo)** — stack N bells, all must win; full lifecycle proven on-chain | [open](https://suiscan.xyz/testnet/tx/22RYaGccku5NprXZLDmtGEA8k7cWPyNyueHwjN4QCxiD) → resolve → [claim](https://suiscan.xyz/testnet/tx/5AmZGc2bp2hBGycVeMEdaJt3d14NTBByrkc6LSZcwJC1), plus the [early-kill](https://suiscan.xyz/testnet/tx/CC2V5dDEYmYMQHb7Ueb3UeBJwEMsHAgYj5GrYZovsdNj) |
 | **First SDK for DeepBook Predict** | [`@yosuku/deepbook-predict`](https://www.npmjs.com/package/@yosuku/deepbook-predict) |
 | **First MCP server** — let any LLM trade Predict | [`@yosuku/deepbook-predict-mcp`](https://www.npmjs.com/package/@yosuku/deepbook-predict-mcp) |
 
@@ -110,7 +112,7 @@ Connect with Google (zkLogin) or any Sui wallet → the faucet auto-surfaces tes
 
 ## Roadmap
 
-- **Now** — live on testnet: gasless consumer markets, the SDK + MCP, the attested agent (on-chain verified), trade-from-X, the leverage desk.
+- **Now** — live on testnet: gasless consumer markets, **streak parlays**, the SDK + MCP, the attested agent (on-chain verified), trade-from-X, the leverage desk.
 - **Next** — real Nitro PCRs (the attestation is verified on-chain today; the hardware measurement is one redeploy away), more assets, leverage GA.
 - **Later** — mainnet the day DeepBook Predict does; `@yosuku/deepbook-predict` as the primitive other builders ship on.
 
@@ -123,6 +125,8 @@ Connect with Google (zkLogin) or any Sui wallet → the faucet auto-surfaces tes
 |---|---|
 | DeepBook Predict package | `0xf5ea2b3749c65d6e56507cc35388719aadb28f9cab873696a2f8687f5c785138` |
 | DUSDC coin type | `0xe95040085976bfd54a1a07225cd46c8a2b4e8e2b6732f140a0fc49850ba73e1a::dusdc::DUSDC` |
+| yolev parlay package | `0xd950420d3b3ac026c6f3b242010bec2dd2f7cdab6a7d68fb00087516094cbc02` |
+| `ParlayReserve<DUSDC>` | `0x939724d6fc82af88530368b06f952af0b7277d0da51bd419659a3bb1686c0851` |
 
 **Limitations (we'd rather you know):**
 - **Testnet only** — DeepBook Predict is testnet today; mainnet IDs will change.
