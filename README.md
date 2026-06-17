@@ -1,6 +1,6 @@
 <div align="center">
 
-# 予測 · YOSUKU
+# YOSUKU
 
 ### Prediction markets, made usable.
 
