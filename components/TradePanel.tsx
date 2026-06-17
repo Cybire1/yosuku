@@ -24,7 +24,7 @@ import {
   mintPositionTx,
   mintRangePositionTx,
 } from '@/lib/sui/predictClient';
-import { defaultStrike, generateDisplayStrikeGrid, formatStrike, savePosition } from '@/lib/roundHelpers';
+import { defaultStrike, generateDisplayStrikeGrid, formatStrike, nearestStrike, savePosition } from '@/lib/roundHelpers';
 import { computeSviPrice, computeRangePrice, computeFeeBreakdown, type FeeBreakdown } from '@/lib/sui/sviPricing';
 import { fetchOnChainQuote, fetchOnChainRangeQuote, type OnChainQuote } from '@/lib/sui/onchainQuote';
 import { requestOpenRangeTx, requestOpenBinaryTx } from '@/lib/sui/leverageClient';
@@ -113,6 +113,18 @@ export default function TradePanel({
     setSelectedStrike(strike);
     onStrikeChange?.(strike);
   }, [onStrikeChange]);
+
+  // Continuous strike: a tappable numeric line the user can set to ANY price (kept legible
+  // as a normal binary — they're just moving the win/lose line). Commit snaps to the protocol
+  // tick grid; the existing on-chain quote effect re-prices on the committed strike.
+  const [strikeInput, setStrikeInput] = useState('');
+  useEffect(() => {
+    if (selectedStrike) setStrikeInput((selectedStrike / FLOAT_SCALING).toLocaleString('en-US'));
+  }, [selectedStrike]);
+  const commitStrike = useCallback((dollars: number) => {
+    if (!isFinite(dollars) || dollars <= 0 || oracle.tick_size <= 0) return;
+    chooseStrike(nearestStrike(Math.round(dollars * FLOAT_SCALING), oracle.min_strike, oracle.tick_size));
+  }, [chooseStrike, oracle.min_strike, oracle.tick_size]);
 
   useEffect(() => {
     if (initialStrike === null || initialStrike === selectedStrike) return;
@@ -579,20 +591,52 @@ export default function TradePanel({
           </div>
         ) : (
           <div>
-            <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 block mb-2">
-              Strike Price
-            </label>
-            <button
-              type="button"
-              onClick={() => setShowStrikeSelector(!showStrikeSelector)}
-              aria-expanded={showStrikeSelector}
-              className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-white/[0.03] border border-white/[0.08] hover:border-white/20 transition-colors"
-            >
-              <span className="text-white font-mono font-bold">
-                {selectedStrike ? formatStrike(selectedStrike) : 'Select strike'}
-              </span>
-              <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${showStrikeSelector ? 'rotate-180' : ''}`} />
-            </button>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500">
+                Your line
+              </label>
+              <button
+                type="button"
+                onClick={() => setShowStrikeSelector(!showStrikeSelector)}
+                aria-expanded={showStrikeSelector}
+                className="text-[10px] font-bold text-gray-500 hover:text-white transition-colors"
+              >
+                all strikes ▾
+              </button>
+            </div>
+            {/* Continuous strike — type ANY price; snaps to the protocol grid on commit */}
+            <div className="flex items-center gap-1.5 px-3 py-3 rounded-xl bg-white/[0.03] border border-white/[0.08] focus-within:border-white/25 transition-colors">
+              <span className="text-gray-500 font-mono text-lg">$</span>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={strikeInput}
+                onChange={(e) => setStrikeInput(e.target.value.replace(/[^0-9.,]/g, ''))}
+                onBlur={() => commitStrike(parseFloat(strikeInput.replace(/,/g, '')))}
+                onKeyDown={(e) => { if (e.key === 'Enter') { commitStrike(parseFloat(strikeInput.replace(/,/g, ''))); e.currentTarget.blur(); } }}
+                aria-label="Strike price"
+                className="flex-1 min-w-0 bg-transparent outline-none text-white font-mono font-bold text-lg tabular-nums"
+              />
+            </div>
+            {/* quick chips */}
+            <div className="flex gap-1.5 mt-2">
+              {(forwardPrice || spotPrice) && (
+                <button type="button" onClick={() => commitStrike((forwardPrice || spotPrice)! / FLOAT_SCALING)} className="flex-1 py-1.5 text-[10px] font-bold rounded-lg border border-white/5 bg-white/[0.02] text-gray-400 hover:text-white transition-colors">Spot</button>
+              )}
+              {(forwardPrice || spotPrice) && (
+                <button type="button" onClick={() => commitStrike(Math.round(((forwardPrice || spotPrice)! / FLOAT_SCALING) / 1000) * 1000)} className="flex-1 py-1.5 text-[10px] font-bold rounded-lg border border-white/5 bg-white/[0.02] text-gray-400 hover:text-white transition-colors">Round</button>
+              )}
+              <button type="button" disabled={!selectedStrike} onClick={() => selectedStrike && commitStrike(selectedStrike / FLOAT_SCALING - 1000)} className="flex-1 py-1.5 text-[10px] font-bold rounded-lg border border-white/5 bg-white/[0.02] text-gray-400 hover:text-white transition-colors disabled:opacity-40">−$1k</button>
+              <button type="button" disabled={!selectedStrike} onClick={() => selectedStrike && commitStrike(selectedStrike / FLOAT_SCALING + 1000)} className="flex-1 py-1.5 text-[10px] font-bold rounded-lg border border-white/5 bg-white/[0.02] text-gray-400 hover:text-white transition-colors disabled:opacity-40">+$1k</button>
+            </div>
+            {/* price-to-beat framing — keeps the binary mental model legible */}
+            {selectedStrike && (
+              <p className="text-[11px] text-gray-500 mt-2 leading-snug">
+                {oracle.underlying_asset || 'BTC'} must close{' '}
+                <span className={side === 'UP' ? 'text-new-mint' : 'text-rose-400'}>{side === 'UP' ? 'above' : 'below'}</span>{' '}
+                <span className="text-white font-mono">{formatStrike(selectedStrike)}</span> at the bell
+              </p>
+            )}
 
             <AnimatePresence>
               {showStrikeSelector && (
