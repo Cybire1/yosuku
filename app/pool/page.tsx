@@ -191,7 +191,7 @@ export default function PoolPage() {
                         </div>
                       </div>
                     </div>
-                    <div className="grid grid-cols-4 gap-4 pt-4" style={{ borderTop: '1px solid rgba(201,191,166,0.3)' }}>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4" style={{ borderTop: '1px solid rgba(201,191,166,0.3)' }}>
                       <div>
                         <span className="font-mono text-[8px] tracking-[0.14em] uppercase" style={{ color: '#6B6353' }}>Balance</span>
                         <div className="font-mono text-sm" style={{ color: '#1A1612' }}>
@@ -219,7 +219,7 @@ export default function PoolPage() {
                     </div>
                     {/* Enriched stats from API */}
                     {vaultSummary && (
-                      <div className="grid grid-cols-4 gap-4 pt-4 mt-4" style={{ borderTop: '1px solid rgba(201,191,166,0.15)' }}>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4 mt-4" style={{ borderTop: '1px solid rgba(201,191,166,0.15)' }}>
                         <div>
                           <span className="font-mono text-[8px] tracking-[0.14em] uppercase inline-flex items-center gap-1" style={{ color: '#6B6353' }}>Utilization <Tooltip text="Vault liability / balance ratio. Higher utilization means more capital is at risk." position="bottom" /></span>
                           <div className="font-mono text-sm" style={{ color: '#1A1612' }}>

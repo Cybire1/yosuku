@@ -306,7 +306,7 @@ export default function StrategiesPage() {
                         </div>
 
                         {/* live performance row */}
-                        <div className="grid grid-cols-4 gap-4 mb-5">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-5">
                           <div>
                             <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 block mb-1">Subs</span>
                             <span className="font-mono text-sm text-white tabular-nums">{card.subscribers}</span>
