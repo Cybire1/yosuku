@@ -94,6 +94,30 @@ export default function TradePanel({
   const [editingStop, setEditingStop] = useState(false);
   const [stopInput, setStopInput] = useState('');
 
+  // Simple vs Pro. Beginners get a plain-English question (no "strike", no
+  // leverage, no range); pros get the full machinery. Loaded from localStorage
+  // in an effect (not lazy init) to avoid an SSR/client hydration mismatch.
+  const [mode, setMode] = useState<'simple' | 'pro'>('simple');
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('yosuku_trade_mode');
+      if (saved === 'pro' || saved === 'simple') setMode(saved);
+    } catch { /* ignore */ }
+  }, []);
+  const applyMode = useCallback((m: 'simple' | 'pro') => {
+    setMode(m);
+    try { localStorage.setItem('yosuku_trade_mode', m); } catch { /* ignore */ }
+    setShowStrikeSelector(false);
+    setShowUpperStrikeSelector(false);
+    if (m === 'simple') {
+      setLeverage(1);
+      setSide((s) => {
+        if (s === 'RANGE') { onSideChange?.('UP'); return 'UP'; }
+        return s;
+      });
+    }
+  }, [onSideChange]);
+
   useEffect(() => {
     setSide(defaultSide);
   }, [defaultSide]);
@@ -167,6 +191,13 @@ export default function TradePanel({
     const p = computeSviPrice(sviData.params, selectedStrike, forwardPrice);
     return side === 'DOWN' ? 1 - p : p;
   }, [sviData, selectedStrike, rangeUpperStrike, forwardPrice, side]);
+
+  // Raw up-probability (fee-less) — used only for the Simple-mode per-side
+  // "chance" hint. The summary's "To win" remains the on-chain source of truth.
+  const upProb = useMemo(() => {
+    if (!sviData?.params || !forwardPrice || !selectedStrike) return null;
+    return computeSviPrice(sviData.params, selectedStrike, forwardPrice);
+  }, [sviData, forwardPrice, selectedStrike]);
 
   // Compute fee breakdown
   const feeBreakdown = useMemo((): FeeBreakdown | null => {
@@ -440,7 +471,27 @@ export default function TradePanel({
 
   return (
     <div className="rounded-2xl border border-white/[0.08] bg-neutral-900/60 overflow-hidden">
-      {/* Side selector */}
+      {/* Mode toggle — Simple (plain question) vs Pro (full machinery) */}
+      <div className="flex items-center justify-between px-4 pt-3 pb-2.5 border-b border-white/5">
+        <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-600">Place a bet</span>
+        <div className="inline-flex rounded-lg border border-white/10 bg-white/[0.02] p-0.5">
+          {(['simple', 'pro'] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => applyMode(m)}
+              aria-pressed={mode === m}
+              className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded-md transition-colors ${
+                mode === m ? 'bg-white/10 text-white' : 'text-gray-500 hover:text-gray-300'
+              }`}
+            >
+              {m === 'simple' ? 'Simple' : 'Pro'}
+            </button>
+          ))}
+        </div>
+      </div>
+      {/* Side selector (Pro: Up / Down / Range tabs) */}
+      {mode === 'pro' && (
       <div className="flex border-b border-white/5">
         <button
           type="button"
@@ -482,10 +533,109 @@ export default function TradePanel({
           Range
         </button>
       </div>
+      )}
 
       <div className="p-5 space-y-4">
-        {/* Strike selector(s) */}
-        {side === 'RANGE' ? (
+        {/* Bet builder — Simple shows a plain question; Pro shows strikes/range */}
+        {mode === 'simple' ? (
+          <div className="space-y-3">
+            {/* Plain-English question — no "strike", price baked in and pre-set */}
+            <div className="rounded-xl bg-white/[0.02] border border-white/5 px-4 py-3.5">
+              <p className="text-[10px] uppercase tracking-[0.2em] text-gray-600 font-bold mb-1.5">The call</p>
+              <p className="text-[15px] leading-snug text-gray-200">
+                Will {oracle.underlying_asset || 'Bitcoin'} be{' '}
+                <span className={side === 'UP' ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold'}>
+                  {side === 'UP' ? 'above' : 'below'}
+                </span>{' '}
+                <button
+                  type="button"
+                  onClick={() => setShowStrikeSelector((s) => !s)}
+                  className="text-white font-bold font-mono underline decoration-dotted decoration-white/40 underline-offset-4 hover:decoration-white transition-colors"
+                >
+                  {selectedStrike ? `$${(selectedStrike / FLOAT_SCALING).toLocaleString()}` : '—'}
+                </button>{' '}
+                when the bell rings?
+              </p>
+            </div>
+
+            {/* Higher / Lower — plain words, with the implied chance for each side */}
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => { setSide('UP'); onSideChange?.('UP'); }}
+                aria-pressed={side === 'UP'}
+                className={`flex flex-col items-center gap-0.5 py-3 rounded-xl border transition-all ${
+                  side === 'UP'
+                    ? 'border-emerald-400/60 bg-emerald-500/10 text-emerald-400'
+                    : 'border-white/5 bg-white/[0.02] text-gray-400 hover:text-white hover:border-white/10'
+                }`}
+              >
+                <span className="inline-flex items-center gap-1.5 text-sm font-bold"><TrendingUp className="w-4 h-4" /> Higher</span>
+                {upProb !== null && <span className="text-[10px] font-mono opacity-70">~{Math.round(upProb * 100)}% chance</span>}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setSide('DOWN'); onSideChange?.('DOWN'); }}
+                aria-pressed={side === 'DOWN'}
+                className={`flex flex-col items-center gap-0.5 py-3 rounded-xl border transition-all ${
+                  side === 'DOWN'
+                    ? 'border-rose-400/60 bg-rose-500/10 text-rose-400'
+                    : 'border-white/5 bg-white/[0.02] text-gray-400 hover:text-white hover:border-white/10'
+                }`}
+              >
+                <span className="inline-flex items-center gap-1.5 text-sm font-bold"><TrendingDown className="w-4 h-4" /> Lower</span>
+                {upProb !== null && <span className="text-[10px] font-mono opacity-70">~{Math.round((1 - upProb) * 100)}% chance</span>}
+              </button>
+            </div>
+
+            {/* Progressive disclosure: change the price (gentle, NOT the full ladder) */}
+            <button
+              type="button"
+              onClick={() => setShowStrikeSelector((s) => !s)}
+              aria-expanded={showStrikeSelector}
+              className="text-[11px] font-bold text-gray-500 hover:text-white transition-colors"
+            >
+              {showStrikeSelector ? 'Done' : 'Change the price'} ▾
+            </button>
+            <AnimatePresence>
+              {showStrikeSelector && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  className="overflow-hidden"
+                >
+                  <div className="rounded-xl bg-white/[0.03] border border-white/[0.08] p-3 space-y-2.5">
+                    <div className="flex items-center gap-1.5 px-3 py-2.5 rounded-lg bg-black/30 border border-white/10 focus-within:border-white/25 transition-colors">
+                      <span className="text-gray-500 font-mono text-lg">$</span>
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={strikeInput}
+                        onChange={(e) => setStrikeInput(e.target.value.replace(/[^0-9.,]/g, ''))}
+                        onBlur={() => commitStrike(parseFloat(strikeInput.replace(/,/g, '')))}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { commitStrike(parseFloat(strikeInput.replace(/,/g, ''))); e.currentTarget.blur(); } }}
+                        aria-label="Target price"
+                        className="flex-1 min-w-0 bg-transparent outline-none text-white font-mono font-bold text-lg tabular-nums"
+                      />
+                    </div>
+                    <div className="flex gap-1.5">
+                      {(forwardPrice || spotPrice) && (
+                        <button type="button" onClick={() => commitStrike((forwardPrice || spotPrice)! / FLOAT_SCALING)} className="flex-1 py-1.5 text-[10px] font-bold rounded-lg border border-white/5 bg-white/[0.02] text-gray-400 hover:text-white transition-colors">Now</button>
+                      )}
+                      {(forwardPrice || spotPrice) && (
+                        <button type="button" onClick={() => commitStrike(Math.round(((forwardPrice || spotPrice)! / FLOAT_SCALING) / 1000) * 1000)} className="flex-1 py-1.5 text-[10px] font-bold rounded-lg border border-white/5 bg-white/[0.02] text-gray-400 hover:text-white transition-colors">Round</button>
+                      )}
+                      <button type="button" disabled={!selectedStrike} onClick={() => selectedStrike && commitStrike(selectedStrike / FLOAT_SCALING - 1000)} className="flex-1 py-1.5 text-[10px] font-bold rounded-lg border border-white/5 bg-white/[0.02] text-gray-400 hover:text-white transition-colors disabled:opacity-40">−$1k</button>
+                      <button type="button" disabled={!selectedStrike} onClick={() => selectedStrike && commitStrike(selectedStrike / FLOAT_SCALING + 1000)} className="flex-1 py-1.5 text-[10px] font-bold rounded-lg border border-white/5 bg-white/[0.02] text-gray-400 hover:text-white transition-colors disabled:opacity-40">+$1k</button>
+                    </div>
+                    <p className="text-[10px] text-gray-600 leading-snug">Closer to today&apos;s price is safer but pays less. A bigger move pays more.</p>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        ) : side === 'RANGE' ? (
           <div className="grid grid-cols-2 gap-3">
             {/* Lower strike */}
             <div>
@@ -701,10 +851,12 @@ export default function TradePanel({
         <div>
           <div className="flex items-center justify-between mb-2">
             <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500">
-              Amount (DUSDC)
+              {mode === 'simple' ? 'Your stake' : 'Amount (DUSDC)'}
             </label>
             <span className="text-[10px] text-gray-600">
-              Wallet: {(walletBalance / DUSDC_MULTIPLIER).toFixed(2)} | Manager: {(managerBalance / DUSDC_MULTIPLIER).toFixed(2)}
+              {mode === 'simple'
+                ? `Balance: ${(Math.max(walletBalance, managerBalance) / DUSDC_MULTIPLIER).toFixed(2)} DUSDC`
+                : `Wallet: ${(walletBalance / DUSDC_MULTIPLIER).toFixed(2)} | Manager: ${(managerBalance / DUSDC_MULTIPLIER).toFixed(2)}`}
             </span>
           </div>
           <div className="relative">
@@ -742,7 +894,8 @@ export default function TradePanel({
           </div>
         </div>
 
-        {/* Leverage (yolev underwriting reserve) */}
+        {/* Leverage (yolev underwriting reserve) — Pro only */}
+        {mode === 'pro' && (
         <div className="mt-1">
           <div className="flex items-center justify-between mb-2">
             <span className="text-gray-500 text-xs inline-flex items-center gap-1">
@@ -775,6 +928,7 @@ export default function TradePanel({
             </div>
           )}
         </div>
+        )}
 
         {/* Trade summary */}
         <div className="rounded-xl bg-white/[0.02] border border-white/5 p-3 space-y-2">
@@ -913,6 +1067,8 @@ export default function TradePanel({
             'Select valid range'
           ) : side === 'RANGE' ? (
             `Buy Range — ${(amountMicro / DUSDC_MULTIPLIER).toFixed(2)} DUSDC`
+          ) : mode === 'simple' ? (
+            `Bet ${side === 'UP' ? 'Higher' : 'Lower'} — ${(amountMicro / DUSDC_MULTIPLIER).toFixed(2)} DUSDC`
           ) : (
             `Buy ${side === 'UP' ? 'Up' : 'Down'} — ${(amountMicro / DUSDC_MULTIPLIER).toFixed(2)} DUSDC`
           )}

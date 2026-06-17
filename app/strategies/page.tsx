@@ -381,10 +381,20 @@ export default function StrategiesPage() {
                         <span className="font-mono text-[11px] text-vermilion w-4 text-right shrink-0">{t.digest ? '↗' : ''}</span>
                       </div>
                     );
-                    return t.digest ? (
-                      <a key={i} href={SUISCAN_TX(t.digest)} target="_blank" rel="noreferrer" className="block">
+                    // Row opens the tx; the address inside is its own link. Clickable
+                    // div (not <a>) so we never nest <a> in <a> (hydration error).
+                    const txHref = t.digest ? SUISCAN_TX(t.digest) : null;
+                    return txHref ? (
+                      <div
+                        key={i}
+                        role="link"
+                        tabIndex={0}
+                        onClick={() => window.open(txHref, '_blank', 'noopener,noreferrer')}
+                        onKeyDown={(e) => { if (e.key === 'Enter') window.open(txHref, '_blank', 'noopener,noreferrer'); }}
+                        className="block cursor-pointer"
+                      >
                         {inner}
-                      </a>
+                      </div>
                     ) : (
                       <div key={i}>{inner}</div>
                     );

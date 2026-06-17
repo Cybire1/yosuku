@@ -143,11 +143,19 @@ export default function ParlayBuilder() {
   }, [btcBells, defaultStrikeFor, toast]);
 
   // Keep each draft leg's expiry in sync with its oracle (oracle list refreshes).
+  // Return the SAME `prev` reference when nothing actually changed — otherwise
+  // .map() always allocates a new array, setLegs always re-renders, and (paired
+  // with a churning btcBells) this effect re-fires forever ("Maximum update depth").
   useEffect(() => {
-    setLegs((prev) => prev.map((l) => {
-      const o = btcBells.find((b) => b.oracle_id === l.oracleId);
-      return o && o.expiry !== l.expiry ? { ...l, expiry: o.expiry } : l;
-    }));
+    setLegs((prev) => {
+      let changed = false;
+      const next = prev.map((l) => {
+        const o = btcBells.find((b) => b.oracle_id === l.oracleId);
+        if (o && o.expiry !== l.expiry) { changed = true; return { ...l, expiry: o.expiry }; }
+        return l;
+      });
+      return changed ? next : prev;
+    });
   }, [btcBells]);
 
   // ── validity ──

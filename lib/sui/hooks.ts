@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useCurrentAccount, useSuiClient } from '@mysten/dapp-kit';
 
 /** Polling that pauses when the tab is hidden and resumes when visible */
@@ -96,15 +96,22 @@ export function useOracles(pollInterval = 30_000) {
   useEffect(() => { refresh(); }, [refresh]);
   useVisibilityAwareInterval(refresh, pollInterval);
 
-  const active = oracles
-    .filter(o => o.status === 'active')
-    .sort((a, b) => a.expiry - b.expiry);
-  const settled = oracles
-    .filter(o => o.status === 'settled')
-    .sort((a, b) => (b.settled_at ?? b.expiry) - (a.settled_at ?? a.expiry));
-  const pendingSettlement = oracles
-    .filter(o => o.status === 'pending_settlement')
-    .sort((a, b) => a.expiry - b.expiry);
+  // Memoize the derived lists so they keep a STABLE reference across renders.
+  // Without this, every render produced a fresh `active` array → any memo/effect
+  // that depends on it (e.g. ParlayBuilder's btcBells) re-fired every render,
+  // which caused an infinite setState loop on /parlay ("Maximum update depth").
+  const active = useMemo(
+    () => oracles.filter(o => o.status === 'active').sort((a, b) => a.expiry - b.expiry),
+    [oracles],
+  );
+  const settled = useMemo(
+    () => oracles.filter(o => o.status === 'settled').sort((a, b) => (b.settled_at ?? b.expiry) - (a.settled_at ?? a.expiry)),
+    [oracles],
+  );
+  const pendingSettlement = useMemo(
+    () => oracles.filter(o => o.status === 'pending_settlement').sort((a, b) => a.expiry - b.expiry),
+    [oracles],
+  );
 
   return { oracles, active, settled, pendingSettlement, loading, error, refresh };
 }

@@ -25,7 +25,7 @@ export default function SectionHeader({ number, title, jp, desc, count, live, me
       </div>
       <div className="section-head-right">
         {live && (
-          <span className="live-pill"><span className="dot" />Live</span>
+          <span className="live-pill">Live</span>
         )}
         {meta && <span className="section-meta">{meta}</span>}
         {!meta && count !== undefined && (
