@@ -3716,9 +3716,7 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
 
   /* Stats: tighter on mobile */
   .stats { padding-top: 64px; padding-bottom: 64px; }
-  /* The 数 watermark bled off the right edge and crowded the right column at
-     2-up. It's purely decorative — hide it on mobile rather than clip it. */
-  .stats-jp { display: none; }
+  .stats-jp { font-size: 40vw; }
   .stats-grid { grid-template-columns: 1fr 1fr; gap: 0; row-gap: 32px; }
   .stat { padding: 20px 12px; }
   .stat-value { font-size: clamp(2rem, 10vw, 3rem); }
