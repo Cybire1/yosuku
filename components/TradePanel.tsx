@@ -397,7 +397,7 @@ export default function TradePanel({
       setTimeout(() => {
         setStep('idle');
         setAmount('10');
-      }, 3000);
+      }, 6000);
     } catch (err: unknown) {
       console.error('Trade error:', err);
       setStep('error');
@@ -903,22 +903,62 @@ export default function TradePanel({
           )}
         </AnimatePresence>
 
-        {/* Success tx link */}
+        {/* Success confirmation — visible, animated, with the win condition + payout */}
         <AnimatePresence>
-          {step === 'success' && txDigest && (
+          {step === 'success' && (
             <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
+              initial={{ opacity: 0, scale: 0.96, y: 6 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0 }}
+              transition={{ type: 'spring', stiffness: 320, damping: 24 }}
+              className="rounded-xl border border-new-mint/25 bg-new-mint/[0.06] p-4 text-center"
             >
-              <a
-                href={`https://suiscan.xyz/testnet/tx/${txDigest}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block text-center text-[11px] text-new-mint/60 hover:text-new-mint transition-colors"
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ delay: 0.05, type: 'spring', stiffness: 420, damping: 15 }}
+                className="w-9 h-9 mx-auto mb-2 rounded-full bg-new-mint/15 flex items-center justify-center"
               >
-                View on Suiscan
-              </a>
+                <Check className="w-5 h-5 text-new-mint" />
+              </motion.div>
+              {isLeveraged ? (
+                <>
+                  <p className="text-sm font-bold text-white">{leverage}× order placed</p>
+                  <p className="text-xs text-gray-400 mt-1">
+                    The keeper is opening your position — track it on{' '}
+                    <a href="/earn" className="text-new-mint hover:underline">Earn</a>.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm font-bold text-white">Position opened</p>
+                  <p className="text-xs text-gray-300 mt-1">
+                    {side} · {(amountMicro / DUSDC_MULTIPLIER).toFixed(2)} DUSDC on {oracle.underlying_asset || 'BTC'}
+                  </p>
+                  {positionQty > 0 && (
+                    <p className="text-xs text-new-mint mt-1">
+                      Wins {(positionQty / DUSDC_MULTIPLIER).toFixed(2)} DUSDC if {oracle.underlying_asset || 'BTC'}{' '}
+                      {side === 'UP' ? 'is above' : side === 'DOWN' ? 'is below' : 'settles in range of'}{' '}
+                      {selectedStrike ? `$${(selectedStrike / FLOAT_SCALING).toLocaleString()}` : 'the line'} at the bell
+                    </p>
+                  )}
+                </>
+              )}
+              <div className="flex items-center justify-center gap-4 mt-3">
+                {txDigest && (
+                  <a
+                    href={`https://suiscan.xyz/testnet/tx/${txDigest}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[11px] text-gray-400 hover:text-white transition-colors"
+                  >
+                    View on Suiscan ↗
+                  </a>
+                )}
+                <a href="/portfolio" className="text-[11px] text-gray-400 hover:text-white transition-colors">
+                  Portfolio →
+                </a>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
