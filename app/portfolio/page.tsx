@@ -145,7 +145,7 @@ export default function PortfolioPage() {
           <div className="space-y-8">
             {/* Ledger Plate — stats overview */}
             <div className="ledger-plate">
-              <div className="flex items-center justify-between mb-6">
+              <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
                 <div>
                   <span className="font-mono text-[9px] tracking-[0.16em] uppercase" style={{ color: '#6B6353' }}>
                     Account Overview
@@ -181,7 +181,7 @@ export default function PortfolioPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-6 gap-4 pt-4" style={{ borderTop: '1px solid rgba(201,191,166,0.3)' }}>
+              <div className="grid grid-cols-3 sm:grid-cols-6 gap-4 gap-y-5 pt-4" style={{ borderTop: '1px solid rgba(201,191,166,0.3)' }}>
                 <div>
                   <span className="font-mono text-[8px] tracking-[0.14em] uppercase" style={{ color: '#6B6353' }}>Wallet</span>
                   <div className="font-mono text-sm" style={{ color: '#1A1612' }}>{(walletBalance / DUSDC_MULTIPLIER).toFixed(2)}</div>
