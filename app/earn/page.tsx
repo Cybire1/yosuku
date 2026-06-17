@@ -84,8 +84,13 @@ export default function EarnPage() {
 
   async function doSupply() {
     if (!address) return;
-    const micro = BigInt(Math.floor(Number(amount) * 1_000_000));
+    const walletMicro = BigInt(coins.reduce((s, c) => s + Number(c.balance), 0));
+    let micro = BigInt(Math.floor(Number(amount) * 1_000_000));
     if (micro <= BigInt(0)) { setMsg('Enter an amount'); return; }
+    if (walletMicro <= BigInt(0)) { setMsg('No DUSDC in your wallet to supply — claim some from the faucet first.'); return; }
+    // clamp to the actual wallet balance: "Max" rounds to 2dp (can overshoot) and a user can
+    // over-type — either would make splitCoins fail with insufficient balance.
+    if (micro > walletMicro) micro = walletMicro;
     await run('supply', async () => { await submit(() => supplyTx(coins.map((c) => c.coinObjectId), micro, address)); setAmount(''); });
   }
   async function doWithdraw(id: string) {
@@ -197,7 +202,7 @@ export default function EarnPage() {
                       inputMode="decimal"
                       className="bg-transparent flex-1 outline-none font-mono text-2xl"
                     />
-                    <button onClick={() => setAmount(((coins.reduce((s, c) => s + Number(c.balance), 0)) / 1e6).toFixed(2))} className="font-mono text-[10px] uppercase tracking-wider text-vermilion hover:text-white transition-colors">Max</button>
+                    <button onClick={() => setAmount((Math.floor(coins.reduce((s, c) => s + Number(c.balance), 0) / 1e4) / 100).toFixed(2))} className="font-mono text-[10px] uppercase tracking-wider text-vermilion hover:text-white transition-colors">Max</button>
                     <span className="font-mono text-sm text-gray-500">DUSDC</span>
                   </div>
                   <button
