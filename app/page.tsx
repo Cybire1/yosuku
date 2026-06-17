@@ -477,13 +477,13 @@ export default function HomePage() {
           </div>
 
           <h1 className="hero-title">
-            <span className="l1">Read the room &amp;</span>
+            <span className="l1">Read the room</span>
             <span className="l2">before the room reads itself.</span>
           </h1>
 
           <div className="hero-cta-row">
             <Link href="/markets" className="btn btn-primary" data-cursor="hover">
-              Start betting {'\u2197'}
+              Launch app {'\u2197'}
             </Link>
             <a href="#how" className="btn btn-ghost" data-cursor="hover">
               How it works {'\u2193'}
