@@ -4,6 +4,7 @@ import { useCurrentAccount, useDisconnectWallet, ConnectButton } from '@mysten/d
 import { usePathname } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
 import {
+  Activity,
   BadgeDollarSign,
   BookOpen,
   Bot,
@@ -35,6 +36,7 @@ const PRIMARY_NAV: NavLink[] = [
 
 const SECONDARY_NAV: NavLink[] = [
   { name: 'Parlay', href: '/parlay', icon: ChartNoAxesCombined },
+  { name: 'Surface', href: '/surface', icon: Activity },
   { name: 'Pool', href: '/pool', icon: Coins },
   { name: 'Agents', href: '/agents', icon: Bot },
   { name: 'Leaderboard', href: '/leaderboard', icon: Trophy },
