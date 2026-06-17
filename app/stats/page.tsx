@@ -119,8 +119,18 @@ export default function StatsPage() {
                   <span className="font-mono text-[11px] text-vermilion w-4 text-right shrink-0">{r.digest ? '↗' : ''}</span>
                 </div>
               );
-              return r.digest ? (
-                <a key={i} href={SCAN_TX(r.digest)} target="_blank" rel="noreferrer" className="block">{inner}</a>
+              // Row opens the tx; the address inside is its own link. Use a
+              // clickable div (not <a>) so we never nest <a> in <a> (hydration error).
+              const txHref = r.digest ? SCAN_TX(r.digest) : null;
+              return txHref ? (
+                <div
+                  key={i}
+                  role="link"
+                  tabIndex={0}
+                  onClick={() => window.open(txHref, '_blank', 'noopener,noreferrer')}
+                  onKeyDown={(e) => { if (e.key === 'Enter') window.open(txHref, '_blank', 'noopener,noreferrer'); }}
+                  className="block cursor-pointer"
+                >{inner}</div>
               ) : (
                 <div key={i}>{inner}</div>
               );
