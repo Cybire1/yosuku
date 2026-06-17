@@ -3624,10 +3624,11 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
   .wallet-pill .addr-dot { width: 14px; height: 14px; }
   .wallet-pill .addr-dot::after { inset: 4px; }
   .header-right { gap: 8px; }
-  /* Keep the wallet entry point reachable on mobile — header is logo + connect.
-     Secondary actions (faucet link) yield the space. */
-  .header-right .btn-ghost,
-  .header-right .dusdc-pill { display: none; }
+  /* Mobile: keep the balance visible but minimal — show just the number + a tap-to-add
+     `+`, dropping the "DUSDC" word to fit the slim bar. The ghost link yields its space. */
+  .header-right .btn-ghost { display: none; }
+  .header-right .dusdc-pill { padding: 4px 9px; font-size: 11px; gap: 3px; }
+  .header-right .dusdc-pill .dusdc-unit { display: none; }
   .mobile-menu-toggle { display: none; }
   .mobile-bottom-nav { display: flex; }
   .mobile-more-menu { display: grid; }

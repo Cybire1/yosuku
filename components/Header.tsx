@@ -246,7 +246,7 @@ export default function Header() {
                 className="dusdc-pill flex items-center gap-1.5 font-mono text-[12px] px-3 py-1.5 rounded-full border border-white/10 hover:border-white/25 hover:bg-white/[0.03] text-gray-300 hover:text-white transition-colors"
               >
                 <span className="text-white font-semibold tabular-nums">{(dusdcRaw / 1e6).toFixed(2)}</span>
-                <span className="text-gray-500">DUSDC</span>
+                <span className="text-gray-500 dusdc-unit">DUSDC</span>
                 <span className="text-vermilion font-bold ml-0.5 text-[15px] leading-none">+</span>
               </button>
             )}
