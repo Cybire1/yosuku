@@ -3632,6 +3632,9 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
   .mobile-menu-toggle { display: none; }
   .mobile-bottom-nav { display: flex; }
   .mobile-more-menu { display: grid; }
+  /* Clear the fixed floating bottom-nav (~72px incl. its 16px offset) so page
+     content + footers never hide beneath it on phones. */
+  body { padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px)); }
   .container { padding-inline: 18px; }
   .page-hero { padding: 140px 0 48px; }
   .markets-grid { grid-template-columns: 1fr; gap: 12px; }

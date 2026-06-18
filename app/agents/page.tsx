@@ -103,7 +103,7 @@ export default function AgentsPage() {
 
             {/* 01: The desk — ranked agent rows */}
             <section>
-              <SectionHeader number="01" title="The desk" jp="番付" live meta={`${agents.length} agents`} />
+              <SectionHeader number="01" title="The desk" jp="番付" live={agents.length > 0} meta={`${agents.length} agents`} />
               {agents.length === 0 ? (
                 <div className="border border-white/[0.08] rounded bg-bg p-16 text-center">
                   <div className="w-16 h-16 mx-auto mb-6 border border-white/10 rounded-full flex items-center justify-center font-jp text-2xl text-gray-500">

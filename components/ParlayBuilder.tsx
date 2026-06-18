@@ -16,7 +16,7 @@ import {
   Zap,
   Trophy,
 } from 'lucide-react';
-import { useCurrentAccount } from '@mysten/dapp-kit';
+import { useCurrentAccount, ConnectButton } from '@mysten/dapp-kit';
 import { useSmartSubmit } from '@/lib/sui/useSmartSubmit';
 import { useOracles, useDUSDCBalance } from '@/lib/sui/hooks';
 import type { OracleData } from '@/lib/sui/predictApi';
@@ -259,7 +259,8 @@ export default function ParlayBuilder() {
       <div className="rounded-2xl border border-white/[0.08] bg-neutral-900/60 p-8 text-center">
         <Wallet className="w-8 h-8 text-gray-600 mx-auto mb-3" />
         <p className="text-sm text-gray-400 mb-1">Connect your wallet to build a parlay</p>
-        <p className="text-xs text-gray-600">Sui Wallet required</p>
+        <p className="text-xs text-gray-600 mb-4">Any Sui wallet — test funds are free</p>
+        <div className="flex justify-center"><ConnectButton /></div>
       </div>
     );
   }
@@ -267,7 +268,7 @@ export default function ParlayBuilder() {
   return (
     <div className="grid lg:grid-cols-[1fr_400px] gap-6 items-start">
       {/* ── Left: the leg builder (the ledger plate) ── */}
-      <div className="rounded-2xl border border-white/[0.08] bg-neutral-900/60 overflow-hidden">
+      <div className="rounded-2xl border border-white/[0.08] bg-neutral-900/60 relative z-10">
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/5">
           <div className="flex items-center gap-2.5">
             <Layers className="w-4 h-4 text-vermilion" />
@@ -602,6 +603,7 @@ function LegRow({
 }) {
   const [showBells, setShowBells] = useState(false);
   const [showStrikes, setShowStrikes] = useState(false);
+  const menuOpen = showBells || showStrikes;
   const { grid } = strikeGridFor(leg.oracleId);
   const displayedStrikes = useMemo(() => {
     if (leg.strike === null || grid.includes(leg.strike)) return grid;
@@ -619,7 +621,7 @@ function LegRow({
       initial={{ opacity: 0, height: 0 }}
       animate={{ opacity: 1, height: 'auto' }}
       exit={{ opacity: 0, height: 0 }}
-      className="rounded-xl border border-white/[0.06] bg-white/[0.015] overflow-hidden"
+      className={`rounded-xl border border-white/[0.06] bg-white/[0.015] relative ${menuOpen ? 'z-30 overflow-visible' : 'overflow-hidden'}`}
     >
       <div className="flex items-stretch">
         {/* numbered stamp — editorial 予測 style */}

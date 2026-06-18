@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { Loader2, ArrowDownToLine, ArrowUpFromLine } from 'lucide-react';
-import { useCurrentAccount } from '@mysten/dapp-kit';
+import { useCurrentAccount, ConnectButton } from '@mysten/dapp-kit';
 import { useSmartSubmit } from '@/lib/sui/useSmartSubmit';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
@@ -156,9 +156,13 @@ export default function PoolPage() {
               <ArrowDownToLine className="w-6 h-6 text-gray-500" />
             </div>
             <h2 className="font-display font-[700] text-xl text-white mb-2">Connect Wallet</h2>
-            <p className="text-gray-500 text-sm max-w-sm mx-auto">
+            <p className="text-gray-500 text-sm max-w-sm mx-auto mb-6">
               Connect your Sui wallet to supply liquidity and earn fees.
             </p>
+            <div className="flex flex-col items-center gap-3">
+              <ConnectButton />
+              <a href="/how-it-works" className="text-[11px] text-gray-600 hover:text-white transition-colors">New to Sui? Any wallet works — test funds are free →</a>
+            </div>
           </div>
         ) : (
           <div className="space-y-8">

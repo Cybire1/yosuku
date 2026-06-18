@@ -240,7 +240,7 @@ export default function StrategiesPage() {
           <div className="space-y-8">
             {/* 01: The strategies */}
             <section>
-              <SectionHeader number="01" title="The strategies" jp="戦略" live meta={`${strategies.length} listed`} />
+              <SectionHeader number="01" title="The strategies" jp="戦略" live={strategies.length > 0} meta={`${strategies.length} listed`} />
 
               {strategies.length === 0 ? (
                 <div className="border border-white/[0.08] rounded bg-bg p-16 text-center">

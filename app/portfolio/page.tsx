@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { useCurrentAccount } from '@mysten/dapp-kit';
+import { useCurrentAccount, ConnectButton } from '@mysten/dapp-kit';
 import { withdrawFromManagerTx } from '@/lib/sui/predictClient';
 import { useSmartSubmit } from '@/lib/sui/useSmartSubmit';
 import Header from '@/components/Header';
@@ -137,9 +137,13 @@ export default function PortfolioPage() {
               </svg>
             </div>
             <h2 className="font-display font-[700] text-xl text-white mb-2">Connect Wallet</h2>
-            <p className="text-gray-500 text-sm max-w-sm mx-auto">
+            <p className="text-gray-500 text-sm max-w-sm mx-auto mb-6">
               Connect your Sui wallet to view positions, balances, and trade history.
             </p>
+            <div className="flex flex-col items-center gap-3">
+              <ConnectButton />
+              <a href="/how-it-works" className="text-[11px] text-gray-600 hover:text-white transition-colors">New to Sui? Any wallet works — test funds are free →</a>
+            </div>
           </div>
         ) : (
           <div className="space-y-8">

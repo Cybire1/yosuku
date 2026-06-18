@@ -505,7 +505,7 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
                   {trades.slice(0, 30).map((trade, i) => (
                     <div key={i} className="flex items-center justify-between py-2 px-3 rounded hover:bg-white/[0.02] transition-colors text-xs">
                       <span className={`font-mono font-semibold ${trade.type === 'mint' ? 'text-vermilion' : 'text-gray-400'}`}>
-                        {trade.type === 'mint' ? '↑ MINT' : '↓ REDEEM'}
+                        {trade.type === 'mint' ? '↑ BET' : '↓ CASH OUT'}
                       </span>
                       <span className="font-mono text-gray-400">
                         {(trade.quantity / DUSDC_MULTIPLIER).toFixed(2)} DUSDC

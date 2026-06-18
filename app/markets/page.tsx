@@ -639,7 +639,7 @@ export default function MarketsPage() {
           {recentSettled.length > 0 && (
             <section className="markets-section settled" data-section="settled" style={{ paddingTop: '96px' }}>
               <SectionHeader
-                number="04"
+                number="03"
                 title="Recently settled"
                 jp="確定済"
                 desc="Last 60 minutes. Receipts on Suiscan, payouts in DUSDC."
