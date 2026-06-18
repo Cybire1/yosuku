@@ -154,7 +154,7 @@ export default function DocsPage() {
                 <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-white/[0.08] bg-white/[0.02] font-mono text-[11px] text-gray-400">
                   <span className="w-1.5 h-1.5 rounded-full bg-vermilion" />@yosuku/deepbook-predict
                 </span>
-                <span className="inline-flex items-center px-3 py-1.5 rounded-full border border-white/[0.08] bg-white/[0.02] font-mono text-[11px] text-gray-500">v0.2.0</span>
+                <span className="inline-flex items-center px-3 py-1.5 rounded-full border border-white/[0.08] bg-white/[0.02] font-mono text-[11px] text-gray-500">v0.3.0</span>
                 <a href="#verify" data-cursor="hover" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-vermilion/30 bg-vermilion/[0.06] font-mono text-[11px] text-vermilion hover:bg-vermilion/10 transition-colors">Verified on-chain ↓</a>
               </div>
             </header>
@@ -185,7 +185,7 @@ export default function DocsPage() {
                 { name: 'Tap', href: '/bell', body: 'One-tap UP/DOWN on the next bell. The ritual.' },
                 { name: 'Markets', href: '/markets', body: 'Every live strike, priced. Open a position at any level.' },
                 { name: 'Pool', href: '/pool', body: 'Be the house — supply liquidity, earn the spread.' },
-                { name: 'Strategies', href: '/market', body: 'Buy a strategist&apos;s playbook — verifiable, Seal-gated.' },
+                { name: 'Strategies', href: '/strategies', body: 'Buy a strategist&apos;s playbook — verifiable, Seal-gated.' },
               ]} />
             </Section>
 

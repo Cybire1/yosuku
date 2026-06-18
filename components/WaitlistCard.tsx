@@ -58,7 +58,7 @@ export default function WaitlistCard() {
         <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-gray-500">Mainnet waitlist · on-chain</span>
       </div>
       <h2 className="font-display text-2xl font-extrabold tracking-tight mb-1">
-        {state ? `${state.count.toLocaleString()} wallets in line` : 'Claim your spot'}
+        {state ? `${state.count.toLocaleString()} ${state.count === 1 ? 'wallet' : 'wallets'} in line` : 'Claim your spot'}
       </h2>
       <p className="text-gray-400 text-sm leading-relaxed mb-5 max-w-xl">
         Reserve early access for the mainnet launch. Your spot is a signed transaction recorded

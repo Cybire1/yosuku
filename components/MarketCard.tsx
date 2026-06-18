@@ -125,10 +125,16 @@ export default function MarketCard({ oracle, spotPrice, forwardPrice, seedStrike
           }),
         ]);
         if (!cancelled) {
-          setAskCents({
-            up: Math.round(up.mintCost * 100),
-            down: Math.round(down.mintCost * 100),
-          });
+          // Show Polymarket-style prices that SUM TO 100¢. The raw two-sided asks
+          // each carry the vault spread, so up.mintCost + down.mintCost > 1 — printing
+          // both bare reads as a broken market (e.g. 17¢ + 84¢ = 101¢). Normalise out
+          // the spread into an implied price (= win chance), then derive the other side
+          // as 100 − up so the pair always reads as clean complementary odds.
+          const total = up.mintCost + down.mintCost;
+          const upCents = total > 0
+            ? Math.max(1, Math.min(99, Math.round((up.mintCost / total) * 100)))
+            : Math.max(1, Math.min(99, Math.round(up.mintCost * 100)));
+          setAskCents({ up: upCents, down: 100 - upCents });
         }
       } catch {
         if (!cancelled) setAskCents(null);
@@ -301,7 +307,7 @@ export default function MarketCard({ oracle, spotPrice, forwardPrice, seedStrike
 
         {!isSettled && !isExpired && (
           <div className="mc-strip">
-            <span>{askCents ? 'LIVE · ON-CHAIN ASK' : 'EST · QUOTING'}</span>
+            <span>{askCents ? 'LIVE · ON-CHAIN ODDS' : 'EST · QUOTING'}</span>
             <span className="ramp">
               <span>UP</span>
               <span className="bar"><span className="fill" style={{ width: `${Math.min(99, Math.max(1, upAsk))}%` }} /></span>
@@ -315,12 +321,18 @@ export default function MarketCard({ oracle, spotPrice, forwardPrice, seedStrike
           </div>
         )}
 
-        {isSettled && oracle.settlement_price !== null && (
-          <div className="settled-result up">
-            <span className="arrow">↑</span>
-            Settled at {formatPrice(oracle.settlement_price / FLOAT_SCALING)}
-          </div>
-        )}
+        {isSettled && oracle.settlement_price !== null && (() => {
+          // Make the outcome explicit: UP wins if it closed above the line, else DOWN.
+          // A bettor shouldn't have to mentally compare two numbers to see who won.
+          const sp = oracle.settlement_price;
+          const upWon = hasRealStrike && midStrike !== null ? sp > midStrike : null;
+          return (
+            <div className={`settled-result ${upWon === false ? 'down' : 'up'}`}>
+              <span className="arrow">{upWon === false ? '↓' : '↑'}</span>
+              {upWon === null ? 'Settled' : upWon ? 'UP won' : 'DOWN won'} · {formatPrice(sp / FLOAT_SCALING)}
+            </div>
+          );
+        })()}
       </div>
 
       {/* Foot — bet buttons only while the round is actually tradable */}

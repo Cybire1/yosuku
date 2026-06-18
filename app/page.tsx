@@ -91,8 +91,8 @@ const FEATURES: FeatureItem[] = [
 
 const FAQ_DATA: FaqItem[] = [
   { q: 'What does YOSUKU settle on?', a: 'DeepBook Predict oracle markets on Sui. Every settlement is deterministic, verifiable on-chain, and independent of YOSUKU as an operator. The oracle reports; the contract executes.', tags: ['Oracle', 'Sui'], cat: 'Protocol' },
-  { q: 'How does YOSUKU make money?', a: 'Plain Predict trades pay the protocol spread baked into the quote. Optional yolev leverage pays a premium to the underwriting reserve that fronts extra notional.', tags: ['Fees', 'Transparency'], cat: 'Protocol' },
-  { q: 'Can I lose more than I stake?', a: 'No. Plain binaries are fixed-downside. With optional yolev leverage, the reserve fronts capital and is repaid first from wins, but your max loss is still your margin.', tags: ['Risk', 'Binary'], cat: 'Mechanics' },
+  { q: 'How does YOSUKU make money?', a: 'Plain Predict trades pay the protocol spread baked into the quote. Optional leverage pays a premium to the underwriting reserve that fronts extra notional.', tags: ['Fees', 'Transparency'], cat: 'Protocol' },
+  { q: 'Can I lose more than I stake?', a: 'No. Plain binaries are fixed-downside. With optional leverage, the reserve fronts capital and is repaid first from wins, but your max loss is still your margin.', tags: ['Risk', 'Binary'], cat: 'Mechanics' },
   { q: 'Why fifteen-minute windows?', a: 'Short enough to be engaging and testable, long enough for genuine price discovery. Fifteen minutes is the smallest window where oracle latency is negligible relative to the round duration.', tags: ['Design', 'Cadence'], cat: 'Mechanics' },
   { q: 'Is this available in my country?', a: 'YOSUKU is a decentralised protocol on Sui. There is no geo-blocking at the protocol level. However, you are responsible for compliance with your local regulations.', tags: ['Legal', 'Access'], cat: 'Access' },
 ];

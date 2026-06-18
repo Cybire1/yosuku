@@ -331,7 +331,7 @@ export default function EarnPage() {
           {msg && <p className={`text-center mt-8 text-[12px] font-mono ${msg.includes('✓') ? 'text-emerald-400' : 'text-rose-400'}`}>{msg}</p>}
 
           <p className="text-center font-mono text-[10px] text-gray-700 mt-16 tracking-wider">
-            yolev underwriting reserve · testnet · experimental
+            underwriting reserve · testnet preview
           </p>
         </div>
         <Footer />

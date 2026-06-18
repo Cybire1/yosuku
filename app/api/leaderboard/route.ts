@@ -119,12 +119,14 @@ export async function GET() {
     for (const pos of sortedRedeemed) {
       const trader = getTrader(pos.manager_id);
       const payout = pos.payout / DUSDC_DIVISOR;
-      const cost = pos.bid_price > 0 ? (pos.quantity / DUSDC_DIVISOR) * (pos.bid_price / 1_000_000_000) : 0;
       trader.totalPayout += payout;
       trader.redeemCount++;
 
-      // Track win streaks: a redeem with positive net payout is a win
-      if (payout > cost) {
+      // A binary position that paid out > 0 WON its round (losers pay 0). Defining a
+      // win this way keeps win-rate consistent with P&L: if net P&L is positive then
+      // totalPayout > 0, so at least one redeem paid out → win-rate can never read 0%
+      // while P&L is positive (the old bid-price cost basis produced that impossibility).
+      if (payout > 0) {
         trader.wins++;
         trader.currentStreak++;
         trader.bestStreak = Math.max(trader.bestStreak, trader.currentStreak);
@@ -140,7 +142,12 @@ export async function GET() {
         pnl: t.totalPayout - t.totalCost,
         tradeCount: t.mintCount + t.redeemCount,
       }))
-      .sort((a, b) => b.pnl - a.pnl)
+      // Deterministic order so desktop, mobile, and every cache instance agree on #1:
+      // P&L desc, then stable address tiebreakers for equal-P&L traders.
+      .sort((a, b) =>
+        (b.pnl - a.pnl) ||
+        (a.owner < b.owner ? -1 : a.owner > b.owner ? 1 : 0) ||
+        (a.manager_id < b.manager_id ? -1 : 1))
       .slice(0, 50);
 
     const rankings = ranked.map(t => ({

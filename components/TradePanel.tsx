@@ -12,7 +12,7 @@ import {
   ChevronDown,
   Wallet,
 } from 'lucide-react';
-import { useCurrentAccount } from '@mysten/dapp-kit';
+import { useCurrentAccount, ConnectButton } from '@mysten/dapp-kit';
 import type { OracleData } from '@/lib/sui/predictApi';
 import { FLOAT_SCALING, DUSDC_MULTIPLIER } from '@/lib/sui/constants';
 import { useManager, useDUSDCBalance, useManagerBalance, useSviPricing, useVaultStats } from '@/lib/sui/hooks';
@@ -464,7 +464,8 @@ export default function TradePanel({
       <div className="rounded-2xl border border-white/[0.08] bg-neutral-900/60 p-6 text-center">
         <Wallet className="w-8 h-8 text-gray-600 mx-auto mb-3" />
         <p className="text-sm text-gray-400 mb-1">Connect your wallet to trade</p>
-        <p className="text-xs text-gray-600">Sui Wallet required</p>
+        <p className="text-xs text-gray-600 mb-4">Any Sui wallet — test funds are free</p>
+        <div className="flex justify-center"><ConnectButton /></div>
       </div>
     );
   }
@@ -899,8 +900,8 @@ export default function TradePanel({
         <div className="mt-1">
           <div className="flex items-center justify-between mb-2">
             <span className="text-gray-500 text-xs inline-flex items-center gap-1">
-              Leverage <span className="text-[8px] font-bold uppercase tracking-wider text-vermilion/80 bg-vermilion/10 px-1 py-0.5 rounded">yolev</span>
-              <Tooltip text="The yolev reserve fronts the extra notional and charges a premium. Your max loss is your margin; if you win, settlement repays the reserve first and sends the remainder to you." position="bottom" />
+              Leverage <span className="text-[8px] font-bold uppercase tracking-wider text-vermilion/80 bg-vermilion/10 px-1 py-0.5 rounded">reserve</span>
+              <Tooltip text="The underwriting reserve fronts the extra notional and charges a premium. Your max loss is your margin; if you win, settlement repays the reserve first and sends the remainder to you." position="bottom" />
             </span>
             <span className="font-mono text-xs text-white">{leverage}×</span>
           </div>

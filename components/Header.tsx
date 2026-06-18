@@ -242,7 +242,7 @@ export default function Header() {
               <button
                 onClick={() => setShowFunds(true)}
                 data-cursor="hover"
-                title="Add test USDC"
+                title="DUSDC — free testnet dollars, not real money. Tap to add more."
                 className="dusdc-pill flex items-center gap-1.5 font-mono text-[12px] px-3 py-1.5 rounded-full border border-white/10 hover:border-white/25 hover:bg-white/[0.03] text-gray-300 hover:text-white transition-colors"
               >
                 <span className="text-white font-semibold tabular-nums">{(dusdcRaw / 1e6).toFixed(2)}</span>

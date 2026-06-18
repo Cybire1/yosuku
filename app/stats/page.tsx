@@ -72,7 +72,7 @@ export default function StatsPage() {
         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" style={{ boxShadow: '0 0 12px #34d399' }} />
         <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-gray-500">Live · testnet · verifiable on-chain</span>
       </div>
-      <h1 className="font-display text-4xl font-extrabold tracking-tight mb-1">Traction</h1>
+      <h1 className="font-display text-4xl font-extrabold tracking-tight mb-1">Proof</h1>
       <p className="text-gray-400 text-sm leading-relaxed mb-8 max-w-2xl">
         Every number below is a real event emitted by Yosuku&apos;s own smart contracts, read straight from
         the chain — nothing self-reported. Distinct wallets are the actual traders inside each event (the
@@ -88,8 +88,8 @@ export default function StatsPage() {
       ) : t ? (
         <>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-10">
-            <Stat label="Distinct wallets" value={fmt(t.distinctWallets)} />
             <Stat label="On-chain interactions" value={fmt(t.interactions)} />
+            <Stat label="Distinct wallets" value={fmt(t.distinctWallets)} />
             <Stat label="Tweet-trades" value={fmt(t.tweetTrades)} sub="un-drainable" />
             <Stat label="Volume" value={`${fmt(t.volumeDusdc)}`} sub="DUSDC notional" />
             <Stat label="Liquidations" value={fmt(t.liquidations)} sub="agent-executed" />
