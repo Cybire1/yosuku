@@ -23,9 +23,13 @@ export default function FirstRunGuide() {
   const pathname = usePathname();
   const [dismissed, setDismissed] = useState(true); // hidden until storage is read (no hydration flash)
   const [hasTraded, setHasTraded] = useState(false);
+  const [modeChosen, setModeChosen] = useState(true); // hidden until storage read — first-timers pick Simple/Pro first
 
   useEffect(() => {
-    try { setDismissed(localStorage.getItem(DISMISS_KEY) === '1'); } catch { /* ignore */ }
+    try {
+      setDismissed(localStorage.getItem(DISMISS_KEY) === '1');
+      setModeChosen(localStorage.getItem('yosuku_mode_chosen') === '1');
+    } catch { /* ignore */ }
   }, []);
 
   useEffect(() => {
@@ -40,11 +44,49 @@ export default function FirstRunGuide() {
     try { localStorage.setItem(DISMISS_KEY, '1'); } catch { /* ignore */ }
   };
 
+  // First-timer's first decision: pick the experience level so the whole trade UI
+  // matches them from the start. TradePanel reads yosuku_trade_mode on mount.
+  const chooseMode = (m: 'simple' | 'pro') => {
+    try {
+      localStorage.setItem('yosuku_trade_mode', m);
+      localStorage.setItem('yosuku_mode_chosen', '1');
+    } catch { /* ignore */ }
+    setModeChosen(true);
+  };
+
   // Don't crowd the trade surfaces — on a market detail page or the bell, the
   // user is already taking a side, so the "tap UP or DOWN" guide is just noise.
   const onTradeSurface = pathname === '/bell' || /^\/markets\/[^/]+/.test(pathname ?? '');
 
   if (dismissed || hasTraded || onTradeSurface) return null;
+
+  // Step 0 of onboarding — pick your level before anything else (no wallet needed).
+  if (!modeChosen) {
+    return (
+      <div className="fixed z-[60] left-1/2 -translate-x-1/2 bottom-[88px] md:bottom-6 w-[calc(100%-1.5rem)] max-w-md">
+        <div className="relative rounded-2xl border border-white/10 bg-[#0c0c0f]/95 backdrop-blur-md shadow-[0_8px_40px_rgba(0,0,0,0.5)] px-4 pt-3.5 pb-3.5">
+          <button onClick={dismiss} aria-label="Dismiss" className="absolute top-3 right-3 text-gray-600 hover:text-white transition-colors p-1">
+            <X className="w-3.5 h-3.5" />
+          </button>
+          <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-gray-500">
+            New here <span className="text-vermilion/70">·</span> one quick thing
+          </span>
+          <p className="text-white text-[14px] font-semibold mt-1.5 mb-3">How familiar are you with prediction markets?</p>
+          <div className="grid grid-cols-2 gap-2">
+            <button onClick={() => chooseMode('simple')} className="rounded-xl border border-white/10 bg-white/[0.03] hover:border-vermilion/40 hover:bg-white/[0.06] px-3 py-2.5 text-left transition-colors">
+              <span className="block text-[13px] font-bold text-white">New to this</span>
+              <span className="block text-[10.5px] text-gray-500 leading-snug mt-0.5">Plain questions — just Higher or Lower</span>
+            </button>
+            <button onClick={() => chooseMode('pro')} className="rounded-xl border border-white/10 bg-white/[0.03] hover:border-vermilion/40 hover:bg-white/[0.06] px-3 py-2.5 text-left transition-colors">
+              <span className="block text-[13px] font-bold text-white">I trade</span>
+              <span className="block text-[10.5px] text-gray-500 leading-snug mt-0.5">Strikes, leverage, the full panel</span>
+            </button>
+          </div>
+          <p className="text-[10px] text-gray-600 mt-2.5">Switch anytime with the Simple / Pro toggle.</p>
+        </div>
+      </div>
+    );
+  }
 
   const steps = [
     { label: 'Sign in', hint: 'Google or a Sui wallet', done: !!address },

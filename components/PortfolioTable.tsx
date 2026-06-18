@@ -23,7 +23,7 @@ export default function PortfolioTable() {
   const account = useCurrentAccount();
   const address = account?.address ?? null;
   const { submit } = useSmartSubmit();
-  const { manager } = useManager();
+  const { manager, loading: managerLoading } = useManager();
   const { positions, loading: positionsLoading, refresh: refreshPositions } = usePositions(manager?.manager_id ?? null);
   const { balance: managerBalance, refresh: refreshManagerBalance } = useManagerBalance(manager?.manager_id ?? null);
   const { oracles } = useOracles();
@@ -110,7 +110,11 @@ export default function PortfolioTable() {
     );
   }
 
-  if (positionsLoading) {
+  // Wait for the MANAGER to resolve too, not just the positions fetch. usePositions
+  // sets loading=false immediately when managerId is still null (manager mid-load),
+  // which used to flash the "No positions" empty state before the real data arrived
+  // — the "shows then removes" flicker.
+  if (managerLoading || positionsLoading) {
     return (
       <div className="text-center py-12">
         <Loader2 className="w-6 h-6 text-gray-600 mx-auto animate-spin" />
@@ -176,8 +180,8 @@ export default function PortfolioTable() {
     return (
       <div className="text-center py-12">
         <Clock className="w-8 h-8 text-gray-600 mx-auto mb-3" />
-        <p className="text-sm text-gray-400 mb-1">No open positions</p>
-        <p className="text-xs text-gray-600">Your active and settled positions will appear here</p>
+        <p className="text-sm text-gray-400 mb-1">No open positions right now</p>
+        <p className="text-xs text-gray-600 max-w-xs mx-auto leading-relaxed">Place a bet and it shows here live. When a round settles, winnings are auto-claimed to your trading balance above.</p>
       </div>
     );
   }

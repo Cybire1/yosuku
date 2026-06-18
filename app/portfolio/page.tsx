@@ -258,7 +258,7 @@ export default function PortfolioPage() {
             {/* Positions */}
             <section>
               <div className="flex items-center justify-between">
-                <SectionHeader number="02" title="Open Positions" jp="ポジション" count={totalPositions} />
+                <SectionHeader number="02" title="Your Positions" jp="ポジション" count={totalPositions} />
                 {manager?.manager_id && (
                   <button
                     onClick={async () => {

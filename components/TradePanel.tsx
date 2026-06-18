@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   TrendingUp,
@@ -33,7 +33,6 @@ import { useDailyStop } from '@/lib/dailyStop';
 import { humanizeTxError } from '@/lib/errorMessages';
 import { useSmartSubmit } from '@/lib/sui/useSmartSubmit';
 import Countdown from './Countdown';
-import AccountSetup from './AccountSetup';
 import TradeConfirmationModal from './TradeConfirmationModal';
 import Tooltip from './Tooltip';
 import { useToast } from './Toast';
@@ -117,6 +116,25 @@ export default function TradePanel({
       });
     }
   }, [onSideChange]);
+
+  // Auto-provision the trading account in the background the moment a connected
+  // user is on a market without one — so the first bet is a single tap and the
+  // "create account" step is never shown. Sponsored (gas-free), fires once, silent
+  // + non-blocking. If the user dismisses the signature, handleTrade still creates
+  // it inline as a fallback at trade time, so nothing breaks either way.
+  const provisioningRef = useRef(false);
+  useEffect(() => {
+    if (!address || manager || managerLoading || leverage !== 1 || provisioningRef.current) return;
+    provisioningRef.current = true;
+    (async () => {
+      try {
+        await submit(() => createManagerTx());
+        await refreshManager();
+      } catch {
+        provisioningRef.current = false; // let trade-time inline creation retry
+      }
+    })();
+  }, [address, manager, managerLoading, leverage, submit, refreshManager]);
 
   useEffect(() => {
     setSide(defaultSide);
@@ -1039,7 +1057,7 @@ export default function TradePanel({
           {step === 'creating-manager' ? (
             <span className="flex items-center justify-center gap-2">
               <Loader2 className="w-4 h-4 animate-spin" />
-              Setting up your account (1 of 2)...
+              Placing your bet…
             </span>
           ) : step === 'depositing' ? (
             <span className="flex items-center justify-center gap-2">
@@ -1049,7 +1067,7 @@ export default function TradePanel({
           ) : step === 'minting' ? (
             <span className="flex items-center justify-center gap-2">
               <Loader2 className="w-4 h-4 animate-spin" />
-              {isTwoStep ? 'Placing your trade (2 of 2)...' : 'Confirming trade...'}
+              Placing your bet…
             </span>
           ) : step === 'success' ? (
             <span className="flex items-center justify-center gap-2">
@@ -1164,10 +1182,8 @@ export default function TradePanel({
           )}
         </AnimatePresence>
 
-        {/* One-time account setup (sponsored when a gas station is configured) */}
-        {!managerLoading && !manager && address && leverage === 1 && (
-          <AccountSetup onReady={() => { refreshManager(); }} />
-        )}
+        {/* Trading account is auto-provisioned silently on market open (see the
+            auto-provision effect) — no visible "create account" step. */}
 
         {/* Daily loss stop — honest brakes on a 15-minute market */}
         <div className="flex items-center justify-between text-[11px] px-1">

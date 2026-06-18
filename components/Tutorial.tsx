@@ -11,6 +11,7 @@ interface TutorialStep {
   jp: string;
   description: string;
   actions?: { label: string; href: string }[];
+  choice?: boolean; // final step: pick Simple/Pro trade view
 }
 
 // A brief welcome that sets the mental model. The actual to-do list — sign in,
@@ -28,9 +29,15 @@ const steps: TutorialStep[] = [
     description: 'Every market asks one question: will BTC be above your line at the bell? Go UP for above, DOWN for below. Get it right and you are paid automatically. Gas is on us, and there is no seed phrase.',
   },
   {
-    title: 'Your first trade sets you up',
+    title: 'Setup is automatic',
     jp: '準備完了',
-    description: 'The three steps to your first bet stay in the corner until you are done. Your first trade also creates your on-chain account — one confirmation, a few seconds, once. After that it is one tap. Good luck on the floor.',
+    description: 'No seed phrase, no setup screen, no gas. We create and fund your on-chain account in the background — the three steps in the corner tick off as you go. Then it is one tap to bet.',
+  },
+  {
+    title: 'Pick your view',
+    jp: 'はじめる',
+    description: 'Switch anytime with the Simple / Pro toggle in the trade panel.',
+    choice: true,
   },
 ];
 
@@ -49,6 +56,17 @@ export default function Tutorial() {
   const dismiss = () => {
     setVisible(false);
     try { localStorage.setItem(STORAGE_KEY, '1'); } catch { /* ignore */ }
+  };
+
+  // The final onboarding decision: set the trade view to match the user's level so
+  // the whole panel opens right for them. TradePanel reads yosuku_trade_mode on mount;
+  // yosuku_mode_chosen tells the FirstRunGuide fallback the choice is already made.
+  const chooseMode = (m: 'simple' | 'pro') => {
+    try {
+      localStorage.setItem('yosuku_trade_mode', m);
+      localStorage.setItem('yosuku_mode_chosen', '1');
+    } catch { /* ignore */ }
+    dismiss();
   };
 
   // Never trap the user: Escape closes, and so does clicking the backdrop.
@@ -92,7 +110,23 @@ export default function Tutorial() {
           </div>
 
           <div className="px-8 py-5">
-            <p className="text-base text-gray-400 leading-relaxed">{current.description}</p>
+            {current.choice ? (
+              <>
+                <div className="grid grid-cols-2 gap-3 mb-4">
+                  <button onClick={() => chooseMode('simple')} className="rounded-xl border border-white/[0.12] bg-white/[0.03] hover:border-vermilion/50 hover:bg-white/[0.06] px-4 py-4 text-left transition-colors">
+                    <span className="block font-display font-bold text-white text-lg">New to this</span>
+                    <span className="block text-xs text-gray-500 mt-1 leading-snug">Plain questions — just tap Higher or Lower. We handle the rest.</span>
+                  </button>
+                  <button onClick={() => chooseMode('pro')} className="rounded-xl border border-white/[0.12] bg-white/[0.03] hover:border-vermilion/50 hover:bg-white/[0.06] px-4 py-4 text-left transition-colors">
+                    <span className="block font-display font-bold text-white text-lg">I trade</span>
+                    <span className="block text-xs text-gray-500 mt-1 leading-snug">Strikes, leverage, range markets — the full panel.</span>
+                  </button>
+                </div>
+                <p className="text-xs text-gray-600">{current.description}</p>
+              </>
+            ) : (
+              <p className="text-base text-gray-400 leading-relaxed">{current.description}</p>
+            )}
             {current.actions && (
               <div className="flex flex-wrap gap-2 mt-4">
                 {current.actions.map((a) => (
@@ -130,12 +164,14 @@ export default function Tutorial() {
               >
                 Skip
               </button>
-              <button
-                onClick={() => isLast ? dismiss() : setStep(step + 1)}
-                className="px-6 py-2.5 bg-vermilion text-white text-sm font-bold uppercase tracking-wider rounded-lg hover:bg-vermilion/90 transition-colors"
-              >
-                {isLast ? 'Get Started' : 'Next'}
-              </button>
+              {!current.choice && (
+                <button
+                  onClick={() => isLast ? dismiss() : setStep(step + 1)}
+                  className="px-6 py-2.5 bg-vermilion text-white text-sm font-bold uppercase tracking-wider rounded-lg hover:bg-vermilion/90 transition-colors"
+                >
+                  {isLast ? 'Get Started' : 'Next'}
+                </button>
+              )}
             </div>
           </div>
         </motion.div>
