@@ -1122,6 +1122,12 @@ export default function TradePanel({
               </button>
             ))}
           </div>
+          <div className="mt-2.5 flex items-start gap-2 rounded-xl border border-white/[0.06] bg-white/[0.025] px-3 py-2">
+            <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-new-mint" />
+            <p className="text-[11px] leading-relaxed text-gray-500">
+              <span className="font-semibold text-gray-300">One-signature top-up.</span> If Trading is short, this trade can pull only the difference from Wallet inside the same PTB.
+            </p>
+          </div>
         </div>
 
         {/* Leverage (yolev underwriting reserve) — Pro only */}

@@ -265,12 +265,22 @@ export default function Header() {
                 title="Tap to move funds between your wallet and your Trading Balance."
                 className="dusdc-pill flex items-center gap-1.5 font-mono text-[12px] px-3 py-1.5 rounded-full border border-white/10 hover:border-white/25 hover:bg-white/[0.03] text-gray-300 hover:text-white transition-colors"
               >
-                <span className="hidden lg:inline text-gray-500">Trading</span>
-                <span className="text-white font-semibold tabular-nums">{(tradingVaultBalance.available / 1e6).toFixed(2)}</span>
-                <span className="hidden sm:inline text-gray-700">·</span>
-                <span className="hidden sm:inline text-gray-500">Wallet</span>
-                <span className="text-white/80 font-semibold tabular-nums">{(dusdcRaw / 1e6).toFixed(2)}</span>
-                <span className="text-gray-500 dusdc-unit">DUSDC</span>
+                {/* Mobile: one clear total with a coin glyph — the labeled split reads as
+                    two bare numbers on a phone. */}
+                <span className="flex sm:hidden items-center gap-1.5">
+                  <Coins className="w-3.5 h-3.5 text-gray-500" />
+                  <span className="text-white font-semibold tabular-nums">{((tradingVaultBalance.available + dusdcRaw) / 1e6).toFixed(2)}</span>
+                  <span className="text-gray-500">DUSDC</span>
+                </span>
+                {/* sm+ : the labeled Trading · Wallet split. */}
+                <span className="hidden sm:flex items-center gap-1.5">
+                  <span className="text-gray-500">Trading</span>
+                  <span className="text-white font-semibold tabular-nums">{(tradingVaultBalance.available / 1e6).toFixed(2)}</span>
+                  <span className="text-gray-700">·</span>
+                  <span className="text-gray-500">Wallet</span>
+                  <span className="text-white/80 font-semibold tabular-nums">{(dusdcRaw / 1e6).toFixed(2)}</span>
+                  <span className="text-gray-500">DUSDC</span>
+                </span>
                 <span className="text-vermilion font-bold ml-0.5 text-[15px] leading-none">+</span>
               </button>
             )}

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useCurrentAccount } from '@mysten/dapp-kit';
-import { ArrowRight, Wallet, Layers, X } from 'lucide-react';
+import { ArrowRight, Bot, Layers, ShieldCheck, Wallet, X, Zap } from 'lucide-react';
 import { useSmartSubmit } from '@/lib/sui/useSmartSubmit';
 import { useDUSDCBalance, useTradingVaultBalance } from '@/lib/sui/hooks';
 import { depositTradingBalanceTx, withdrawTradingBalanceTx } from '@/lib/sui/tradingVaultClient';
@@ -124,6 +124,32 @@ export default function TradingBalanceModal({ onClose }: { onClose: () => void }
             <div className="flex items-center gap-1.5 text-gray-500"><Wallet className="h-3.5 w-3.5" /><span className="font-mono text-[10px] uppercase tracking-wider">Wallet</span></div>
             <div className="mt-1.5 font-display text-xl font-bold tabular-nums text-white/90">{fmt(walletDusdc)}</div>
             <div className="font-mono text-[10px] text-gray-600">loose test DUSDC</div>
+          </div>
+        </div>
+
+        <div className="mb-5 rounded-2xl border border-vermilion/20 bg-[linear-gradient(135deg,rgba(224,77,38,0.14),rgba(255,255,255,0.025))] p-4">
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5 rounded-full border border-vermilion/30 bg-vermilion/10 p-2 text-vermilion">
+              <Zap className="h-4 w-4" />
+            </div>
+            <div>
+              <div className="font-display text-sm font-bold text-white">Trading Balance makes Yosuku feel instant.</div>
+              <p className="mt-1 text-xs leading-relaxed text-gray-500">
+                Normal bets can still top up from Wallet inside the same PTB. Moving funds here is the fast lane for repeat bets, leverage, private routing, and agent strategies.
+              </p>
+            </div>
+          </div>
+          <div className="mt-3 grid grid-cols-3 gap-2">
+            {[
+              { icon: Zap, label: 'Fewer coin scans' },
+              { icon: ShieldCheck, label: 'Leverage ready' },
+              { icon: Bot, label: 'Agent ready' },
+            ].map(({ icon: Icon, label }) => (
+              <div key={label} className="rounded-xl border border-white/[0.07] bg-black/20 px-2.5 py-2">
+                <Icon className="mb-1 h-3.5 w-3.5 text-gray-400" />
+                <div className="font-mono text-[9px] uppercase tracking-[0.12em] text-gray-500">{label}</div>
+              </div>
+            ))}
           </div>
         </div>
 
