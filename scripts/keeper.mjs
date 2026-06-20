@@ -26,6 +26,10 @@ const DUSDC = '0xe95040085976bfd54a1a07225cd46c8a2b4e8e2b6732f140a0fc49850ba73e1
 const CLOCK = '0x6';
 const ORACLES_URL = 'https://predict-server.testnet.mystenlabs.com/oracles';
 const PREMIUM_BPS = 800, SIZE_BUFFER = 0.92, INTERVAL_MS = 20_000;
+const MAINTENANCE_BUFFER_BPS = 1_000; // 10% of reserve debt
+const MIN_MAINTENANCE_BUFFER = 20_000; // 0.02 DUSDC
+const KEEPER_FEE = 10_000; // 0.01 DUSDC liquidation cushion
+const LIQUIDATE_HEALTH_BPS = 10_000;
 
 const kp = Ed25519Keypair.fromSecretKey(decodeSuiPrivateKey(process.env.PK).secretKey);
 const me = kp.toSuiAddress();
@@ -41,8 +45,8 @@ const u64le = (arr) => { let v = 0n; for (let i = arr.length - 1; i >= 0; i--) v
 
 console.log('yolev keeper', me, '· every', INTERVAL_MS / 1000, 's');
 
-// live mint-cost quote for `qty` units (devInspect get_trade_amounts) → mintCost micro
-async function quoteMintMicro(p, qty) {
+// live quote for `qty` units (devInspect get_trade_amounts) → micro-DUSDC amounts
+async function quoteTradeMicro(p, qty) {
   const tx = new Transaction();
   const key = p.is_range
     ? tx.moveCall({ target: `${PREDICT}::range_key::new`, arguments: [tx.pure.id(p.oracle_id), tx.pure.u64(p.expiry), tx.pure.u64(p.lower_strike), tx.pure.u64(p.higher_strike)] })
@@ -51,7 +55,18 @@ async function quoteMintMicro(p, qty) {
   const bytes = await tx.build({ client, onlyTransactionKind: true });
   const dr = await rpc('sui_devInspectTransactionBlock', [me, Buffer.from(bytes).toString('base64'), null, null]);
   const rv = dr?.results?.[dr.results.length - 1]?.returnValues;
-  return rv ? Number(u64le(rv[0][0])) : 0; // first return = mint cost (micro)
+  return rv ? {
+    mintCost: Number(u64le(rv[0][0])),
+    redeemPayout: Number(u64le(rv[1][0])),
+  } : { mintCost: 0, redeemPayout: 0 };
+}
+
+function leverageHealth(p, redeemPayout) {
+  const debt = Number(p.fronted ?? 0);
+  const maintenance = Math.max(MIN_MAINTENANCE_BUFFER, Math.floor((debt * MAINTENANCE_BUFFER_BPS) / 10_000));
+  const required = debt + maintenance + KEEPER_FEE;
+  const healthBps = required > 0 ? Math.floor((redeemPayout * 10_000) / required) : 0;
+  return { debt, maintenance, required, healthBps };
 }
 
 function settleTx(id, p, isWin) {
@@ -73,6 +88,23 @@ function settleTx(id, p, isWin) {
   return tx;
 }
 
+function liquidationTx(id, p, redeemPayout) {
+  const tx = new Transaction();
+  const payout = Math.floor(redeemPayout);
+  if (p.is_range) {
+    const rk = tx.moveCall({ target: `${PREDICT}::range_key::new`, arguments: [tx.pure.id(p.oracle_id), tx.pure.u64(p.expiry), tx.pure.u64(p.lower_strike), tx.pure.u64(p.higher_strike)] });
+    tx.moveCall({ target: `${PREDICT}::predict::redeem_range`, typeArguments: [DUSDC], arguments: [tx.object(PREDICT_ID), tx.object(MGR), tx.object(p.oracle_id), rk, tx.pure.u64(p.quantity), tx.object(CLOCK)] });
+  } else {
+    const mk = tx.moveCall({ target: `${PREDICT}::market_key::${p.is_up ? 'up' : 'down'}`, arguments: [tx.pure.id(p.oracle_id), tx.pure.u64(p.expiry), tx.pure.u64(p.lower_strike)] });
+    tx.moveCall({ target: `${PREDICT}::predict::redeem`, typeArguments: [DUSDC], arguments: [tx.object(PREDICT_ID), tx.object(MGR), tx.object(p.oracle_id), mk, tx.pure.u64(p.quantity), tx.object(CLOCK)] });
+  }
+  const proceeds = payout > 0
+    ? tx.moveCall({ target: `${PREDICT}::predict_manager::withdraw`, typeArguments: [DUSDC], arguments: [tx.object(MGR), tx.pure.u64(payout)] })
+    : tx.moveCall({ target: '0x2::coin::zero', typeArguments: [DUSDC], arguments: [] });
+  tx.moveCall({ target: `${PKG}::underwrite::settle`, typeArguments: [DUSDC], arguments: [tx.object(RESERVE), tx.object(id), proceeds] });
+  return tx;
+}
+
 async function fillTx(order) {
   const m = Number(order.margin), lev = Number(order.leverage_bps);
   const fronted = Math.floor((m * lev) / 10_000) - m;
@@ -80,7 +112,7 @@ async function fillTx(order) {
   const notional = m * lev / 10_000 - premium; // micro deployed into the position
   // size the mint so the full notional is spent (quote per-unit price)
   const ref = Math.max(1_000_000, Math.floor(notional));
-  const mintCost = await quoteMintMicro(order, ref);
+  const { mintCost } = await quoteTradeMicro(order, ref);
   const pricePerUnit = mintCost > 0 ? mintCost / ref : 0.5;
   const quantity = pricePerUnit > 0 ? Math.max(1, Math.floor((notional * SIZE_BUFFER) / pricePerUnit)) : Math.floor(notional);
   const tx = new Transaction();
@@ -121,6 +153,26 @@ async function tick() {
   const positions = await liveObjects('OrderFilled', 'position');
   const oracles = await (await fetch(ORACLES_URL)).json();
   const omap = Object.fromEntries((Array.isArray(oracles) ? oracles : oracles.data || []).map((o) => [o.oracle_id, o]));
+
+  // 2a) LIQUIDATE positions whose live redeem value no longer safely covers reserve debt.
+  const live = positions.filter((p) => {
+    const o = omap[p.oracle_id];
+    return o && o.settlement_price == null && o.status !== 'settled' && Date.now() < Number(p.expiry);
+  });
+  for (const p of live) {
+    try {
+      const { redeemPayout } = await quoteTradeMicro(p, Number(p.quantity));
+      const h = leverageHealth(p, redeemPayout);
+      if (h.healthBps <= LIQUIDATE_HEALTH_BPS) {
+        console.log(`  liquidate ${p.id.slice(0, 10)} health ${(h.healthBps / 100).toFixed(1)}% redeem ${(redeemPayout / 1e6).toFixed(4)} → ${await submit(liquidationTx(p.id, p, redeemPayout))}`);
+      } else if (h.healthBps < 11_000) {
+        console.log(`  watch ${p.id.slice(0, 10)} health ${(h.healthBps / 100).toFixed(1)}% redeem ${(redeemPayout / 1e6).toFixed(4)} required ${(h.required / 1e6).toFixed(4)}`);
+      }
+    } catch (e) {
+      console.log(`  health skip ${p.id.slice(0, 10)} · ${String(e.message || e).split('\n')[0].slice(0, 80)}`);
+    }
+  }
+
   const ready = positions.filter((p) => { const o = omap[p.oracle_id]; return o && o.settlement_price != null && (o.status === 'settled' || Date.now() > Number(p.expiry)); });
   console.log(new Date().toISOString(), `orders ${orders.length} · positions ${positions.length} · ready ${ready.length}`);
   for (const p of ready) {

@@ -103,10 +103,10 @@ export default function MirrorPortfolioPanel({ refreshTrigger = 0 }: MirrorPortf
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
           <h3 className="text-xs font-black text-gray-500 uppercase tracking-[0.2em]">
-            Mirrored Market Positions
+            Mirror Preview Positions
           </h3>
           <p className="mt-1 text-sm text-gray-400">
-            Positions mirrored from public markets, tracked locally with settlement on Sui.
+            Positions mirrored from public markets and tracked locally for preview. They do not settle on Sui in this build.
           </p>
         </div>
       </div>
@@ -174,7 +174,7 @@ export default function MirrorPortfolioPanel({ refreshTrigger = 0 }: MirrorPortf
                   {position.claimed && (
                     <div className="inline-flex items-center gap-1 text-xs font-bold text-new-mint">
                       <Trophy className="h-3.5 w-3.5" />
-                      Claimed to private DUSDC
+                      Marked claimed locally
                     </div>
                   )}
 
@@ -199,10 +199,10 @@ export default function MirrorPortfolioPanel({ refreshTrigger = 0 }: MirrorPortf
                         disabled={settlingId === position.positionId}
                         className="rounded-xl border border-new-mint/20 bg-new-mint/10 px-4 py-2 text-xs font-bold uppercase tracking-[0.2em] text-new-mint transition-colors hover:bg-new-mint/15 disabled:opacity-50"
                       >
-                        {settlingId === position.positionId ? 'Claiming...' : 'Claim Privately'}
+                        {settlingId === position.positionId ? 'Marking...' : 'Mark Claimed'}
                       </button>
                       <p className="max-w-[240px] text-[11px] leading-relaxed text-gray-500">
-                        Winning claims mint a private DUSDC record in your wallet instead of increasing your public balance.
+                        This only updates the local preview state. No private DUSDC is minted in this build.
                       </p>
                     </div>
                   )}
@@ -224,10 +224,10 @@ export default function MirrorPortfolioPanel({ refreshTrigger = 0 }: MirrorPortf
                         disabled={settlingId === position.positionId}
                         className="rounded-xl border border-off-blue/20 bg-off-blue/10 px-4 py-2 text-xs font-bold uppercase tracking-[0.2em] text-off-blue transition-colors hover:bg-off-blue/15 disabled:opacity-50"
                       >
-                        {settlingId === position.positionId ? 'Refunding...' : 'Refund Privately'}
+                        {settlingId === position.positionId ? 'Marking...' : 'Mark Refunded'}
                       </button>
                       <p className="max-w-[240px] text-[11px] leading-relaxed text-gray-500">
-                        Cancelled markets return your stake as a private DUSDC record.
+                        This only updates the local preview state.
                       </p>
                     </div>
                   )}

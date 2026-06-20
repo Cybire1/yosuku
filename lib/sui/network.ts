@@ -33,6 +33,9 @@ export interface NetworkConfig {
   keeperAddress: string;
   strategyPackage: string; // yolev upgrade #2 — strategy + social_vault copy-trade
   socialVaultId: string;   // the shared no-divert social vault
+  tradingVaultPackage: string; // fresh Trading Balance package; separated from old underwrite package
+  marginDeskId: string;    // borrow-and-liquidate margin desk used by TradingVault
+  tradingVaultId: string;  // shared TradingVault<DUSDC>; set after deployment
   // ── DeepBook SPOT v3 (CLOB) — LIVE on mainnet today; usable for spot-routed flows ──
   deepbookSpotPackage: string;
   deepbookSpotRegistry: string;
@@ -57,6 +60,9 @@ const TESTNET: NetworkConfig = {
   keeperAddress: '0xaa50ec0fe985825bd45fcc65d301da096a487349d6993fe8f9305890284a7244',
   strategyPackage: '0x47d3c108b2165cb1190eefd0b67f73a386e8ca71b870f87a9afb096056795388',
   socialVaultId: '0xbe9e96fb8cb6be797c00529fc1f4fe1119192299579167140a084d946851e07b',
+  tradingVaultPackage: process.env.NEXT_PUBLIC_TRADING_VAULT_PACKAGE || '',
+  marginDeskId: process.env.NEXT_PUBLIC_MARGIN_DESK_ID || '',
+  tradingVaultId: process.env.NEXT_PUBLIC_TRADING_VAULT_ID || '',
   deepbookSpotPackage: '0x337f4f4f6567fcd778d5454f27c16c70e2f274cc6377ea6249ddf491482ef497',
   deepbookSpotRegistry: '0xaf16199a2dff736e9f07a845f23c5da6df6f756eddb631aed9d24a93efc4549d',
   graphqlUrl: 'https://graphql.testnet.sui.io/graphql',
@@ -83,6 +89,9 @@ const MAINNET: NetworkConfig = {
   keeperAddress: '0xaa50ec0fe985825bd45fcc65d301da096a487349d6993fe8f9305890284a7244',
   strategyPackage: '',
   socialVaultId: '',
+  tradingVaultPackage: '',
+  marginDeskId: '',
+  tradingVaultId: '',
   deepbookSpotPackage: '0x337f4f4f6567fcd778d5454f27c16c70e2f274cc6377ea6249ddf491482ef497', // LIVE
   deepbookSpotRegistry: '0xaf16199a2dff736e9f07a845f23c5da6df6f756eddb631aed9d24a93efc4549d', // LIVE
   graphqlUrl: 'https://graphql.mainnet.sui.io/graphql',

@@ -24,6 +24,7 @@ interface TradeConfirmationModalProps {
   leverage?: number;
   frontedAmount?: number; // micro DUSDC repaid to reserve first
   premiumAmount?: number; // micro DUSDC
+  privacyMode?: 'public' | 'private';
   expiry: number;
   onConfirm: () => void;
   onCancel: () => void;
@@ -49,6 +50,7 @@ export default function TradeConfirmationModal({
   leverage = 1,
   frontedAmount = 0,
   premiumAmount = 0,
+  privacyMode = 'public',
   expiry,
   onConfirm,
   onCancel,
@@ -143,6 +145,13 @@ export default function TradeConfirmationModal({
                   <Countdown expiryMs={expiry} className="text-sm" />
                 </span>
               </div>
+
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">Route</span>
+                <span className={privacyMode === 'private' ? 'text-new-mint font-mono font-bold' : 'text-white font-mono'}>
+                  {privacyMode === 'private' ? 'Private balance' : 'Public wallet'}
+                </span>
+              </div>
             </div>
 
             {/* Fee breakdown */}
@@ -218,7 +227,7 @@ export default function TradeConfirmationModal({
                 onClick={onConfirm}
                 className={`flex-1 py-3 rounded-xl text-sm font-bold uppercase tracking-wider transition-all ${config.btnClass}`}
               >
-                Confirm
+                {privacyMode === 'private' ? 'Confirm private' : 'Confirm'}
               </button>
             </div>
           </div>

@@ -57,11 +57,15 @@ export function useSmartSubmit() {
           await grpc.waitForTransaction({ digest: r.digest });
           return { digest: r.digest, sponsored: true };
         } catch (err) {
-          // Sponsor declined (policy gap), ran low on gas, timed out, or errored.
-          // A genuine on-chain failure (the tx itself reverts) would also fail under the
-          // wallet, so falling through is safe: a real abort surfaces the same error below,
-          // while a sponsor-side issue is recovered by paying from the wallet.
-          console.warn('[smart-submit] sponsor path failed, falling back to wallet:', err instanceof Error ? err.message : err);
+          const m = err instanceof Error ? err.message : String(err);
+          // Don't make the user sign a SECOND doomed popup. A genuine on-chain abort
+          // (MoveAbort — e.g. the round just closed) or a user rejection will fail/repeat
+          // under the wallet too, so surface it now. Only a SPONSOR-SIDE issue (sponsor
+          // unreachable, policy decline, low gas) should fall through to wallet payment.
+          if (/moveabort|move_?abort|vmverification|command\s+\d+\s+failed|rejected|user\s+reject/i.test(m)) {
+            throw err;
+          }
+          console.warn('[smart-submit] sponsor path failed, falling back to wallet:', m);
         }
       }
 

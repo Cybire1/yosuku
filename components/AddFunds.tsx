@@ -10,7 +10,7 @@ const short = (a: string) => `${a.slice(0, 8)}…${a.slice(-6)}`;
 
 /**
  * In-app "onramp" for testnet. A connected user taps once and gets test USDC
- * dripped to their account — no leaving the site, no wallet juggling. Falls
+ * dripped to their wallet — no leaving the site, no wallet juggling. Falls
  * back to the official DeepBook faucet when the instant drip is empty.
  */
 export default function AddFunds({ open, onClose, onFunded }: { open: boolean; onClose: () => void; onFunded?: () => void }) {
@@ -47,7 +47,7 @@ export default function AddFunds({ open, onClose, onFunded }: { open: boolean; o
       const d = await r.json();
       if (!r.ok || d.error) throw new Error(d.error || 'Faucet error');
       setState('done');
-      setMsg(d.alreadyFunded ? 'You already have test USDC — ready to trade.' : `${d.amount} test USDC added — ready to trade.`);
+      setMsg(d.alreadyFunded ? 'You already have wallet DUSDC — ready to trade.' : `${d.amount} test USDC added to your wallet.`);
       onFunded?.();
     } catch (e) {
       setState('error'); setMsg(String(e instanceof Error ? e.message : e));
@@ -79,7 +79,7 @@ export default function AddFunds({ open, onClose, onFunded }: { open: boolean; o
         </div>
         <h2 id="add-funds-title" className="font-display text-2xl font-extrabold tracking-tight mb-1">Get test USDC</h2>
         <p className="text-gray-400 text-sm leading-relaxed mb-6">
-          Yosuku runs on testnet — these are play chips, not real money. Tap once and they land in your account. One claim per day.
+          Yosuku runs on testnet — these are play chips, not real money. Tap once and they land in your wallet. When you bet, Yosuku moves only what is needed into your Trading Balance.
         </p>
 
         {!address ? (
@@ -105,7 +105,7 @@ export default function AddFunds({ open, onClose, onFunded }: { open: boolean; o
                 onClick={onClose}
                 className="block w-full text-center bg-vermilion text-white font-semibold rounded-full py-3 hover:bg-vermilion-d transition-colors"
               >
-                Place your first bet →
+                Trade from wallet →
               </Link>
             ) : (
               <button

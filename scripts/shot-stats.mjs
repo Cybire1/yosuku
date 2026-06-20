@@ -1,0 +1,11 @@
+import { chromium } from 'playwright';
+const b = await chromium.launch({ channel: 'chrome', headless: true });
+const ctx = await b.newContext({ viewport: { width: 390, height: 844 } });
+const page = await ctx.newPage();
+await page.goto('http://localhost:3000/', { waitUntil: 'domcontentloaded', timeout: 30000 });
+await page.waitForTimeout(2500);
+await page.evaluate(() => { const s = document.querySelector('.stats'); if (s) s.scrollIntoView({block:'start'}); });
+await page.waitForTimeout(1000);
+await page.screenshot({ path: '/tmp/yosuku-audit/stats-band-mobile.png' });
+await b.close();
+console.log('shot saved');

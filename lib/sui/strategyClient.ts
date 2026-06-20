@@ -13,7 +13,7 @@
 //   • getObject(strategyId)                       → current on-chain state (subscribers,
 //                                                    fee, caps, capsule/memory pointers)
 import { Transaction } from '@mysten/sui/transactions';
-import { gql, readClient } from './modernClients';
+import { gql, readClient, simulateReturnU64s } from './modernClients';
 import { DUSDC_TYPE, DUSDC_MULTIPLIER, DUSDC_DECIMALS } from './constants';
 import { NET } from './network';
 
@@ -29,7 +29,13 @@ export const SOCIAL_VAULT_ID = NET.socialVaultId;
 // typed at the new package id (the 0xf3c3c446 type returns 0 for these — verified).
 const STRATEGY_LISTED = `${STRATEGY_PKG}::strategy::StrategyListed`;
 const STRATEGY_SUBSCRIBED = `${STRATEGY_PKG}::strategy::StrategySubscribed`;
+const SOCIAL_SUBSCRIBED = `${STRATEGY_PKG}::social_vault::Subscribed`;
+const SOCIAL_UNSUBSCRIBED = `${STRATEGY_PKG}::social_vault::Unsubscribed`;
 const COPY_TRADED = `${STRATEGY_PKG}::social_vault::CopyTraded`;
+const ORDER_REQUESTED = `${STRATEGY_PKG}::margin::OrderRequested`;
+const POSITION_OPENED = `${STRATEGY_PKG}::margin::PositionOpened`;
+const POSITION_CLOSED = `${STRATEGY_PKG}::margin::Closed`;
+const POSITION_LIQUIDATED = `${STRATEGY_PKG}::margin::Liquidated`;
 
 const BPS = 10_000;
 
@@ -71,6 +77,146 @@ export interface StrategyCard {
   capitalCopied: number;   // DUSDC margin copied (subscriber capital deployed)
   distinctSubscribers: number;
   lastActive: number;      // ms epoch of most recent copy-trade (0 = none)
+  realizedTrades: number;
+  realizedReturned: number;
+  realizedPnl: number;
+  realizedRoi: number;
+  wins: number;
+  losses: number;
+  liquidations: number;
+}
+
+export interface StrategyLeaderboardRow extends StrategyCard {
+  rank: number;
+  score: number;
+  proofCount: number;
+  distributionLabel: string;
+}
+
+export interface StrategySubscription {
+  id: string;
+  vault: string;
+  subscriber: string;
+  agent: string;
+  strategy: string;
+  maxLeverageBps: number;
+  maxMargin: number;
+}
+
+const STRATEGIES_URL = 'https://yosuku.xyz/strategies';
+
+export function strategyProofCount(card: StrategyCard): number {
+  return card.copyTrades + (card.hasMemory ? 1 : 0) + (card.hasCapsule ? 1 : 0);
+}
+
+export function strategyScore(card: StrategyCard): number {
+  const activeBonus = card.lastActive > 0 ? Math.max(0, 12 - Math.floor((Date.now() - card.lastActive) / 86_400_000)) : 0;
+  const realizedBonus = card.realizedTrades > 0
+    ? card.realizedPnl * 20 + card.wins * 8 - card.losses * 4 - card.liquidations * 12
+    : 0;
+  return (
+    card.copyTrades * 12 +
+    card.distinctSubscribers * 10 +
+    card.subscribers * 6 +
+    card.capitalCopied * 5 +
+    card.volumeCopied * 2 +
+    (card.hasMemory ? 14 : 0) +
+    (card.hasCapsule ? 8 : 0) +
+    activeBonus +
+    realizedBonus
+  );
+}
+
+export function rankStrategies(cards: StrategyCard[]): StrategyLeaderboardRow[] {
+  return cards
+    .map((card) => {
+      const proofCount = strategyProofCount(card);
+      return {
+        ...card,
+        score: strategyScore(card),
+        proofCount,
+        distributionLabel: card.hasMemory
+          ? 'MemWal memory'
+          : card.copyTrades > 0
+            ? 'On-chain proof'
+            : 'Listed strategy',
+      };
+    })
+    .sort((a, b) => b.score - a.score || b.copyTrades - a.copyTrades || b.subscribers - a.subscribers)
+    .map((card, i) => ({ ...card, rank: i + 1 }));
+}
+
+export function buildStrategyShareText(card: StrategyCard, rank?: number): string {
+  const prefix = rank ? `#${rank} Yosuku strategy` : 'Yosuku strategy';
+  const memory = card.hasMemory ? 'MemWal memory attached' : 'strategy caps on-chain';
+  const proof = card.copyTrades > 0
+    ? `${card.copyTrades} copy-trades · ${fmtDusdc(card.volumeCopied)} DUSDC copied`
+    : 'listed with hard on-chain risk caps';
+  const realized = card.realizedTrades > 0
+    ? `Realized P&L ${card.realizedPnl >= 0 ? '+' : ''}${fmtDusdc(card.realizedPnl)} DUSDC across ${card.realizedTrades} exits.`
+    : 'Realized P&L appears as copied positions close.';
+  return [
+    `${prefix}: agent ${fmtAddr(card.agent)}`,
+    '',
+    proof,
+    realized,
+    `${card.subscribers} subscribers · max ${card.maxLeverage}x`,
+    memory,
+    '',
+    'Verified by Sui txs, not screenshots.',
+    'Copy it on Yosuku.',
+  ].join('\n');
+}
+
+export function buildCopyTradeShareText(t: CopyTrade, card?: StrategyCard): string {
+  const memory = card?.hasMemory ? 'Memory updated on MemWal/Walrus.' : 'Strategy track record updated on-chain.';
+  return [
+    'Yosuku copy-trade executed.',
+    '',
+    `Agent: ${fmtAddr(t.agent)}`,
+    `Notional: ${fmtDusdc(t.notional)} DUSDC`,
+    `Margin: ${fmtDusdc(t.margin)} DUSDC · ${t.leverageBps / BPS}x`,
+    memory,
+    t.digest ? `Proof: ${t.digest.slice(0, 10)}…${t.digest.slice(-6)}` : 'Proof: indexed on-chain',
+    '',
+    'Copy verified strategy memory on Yosuku.',
+  ].join('\n');
+}
+
+export function buildLeaderboardShareText(rows: StrategyLeaderboardRow[]): string {
+  const top = rows.slice(0, 3);
+  const lines = top.length
+    ? top.map((r) => {
+      const realized = r.realizedTrades > 0
+        ? ` · ${r.realizedPnl >= 0 ? '+' : ''}${fmtDusdc(r.realizedPnl)} P&L`
+        : '';
+      return `#${r.rank} agent ${fmtAddr(r.agent)} · ${r.copyTrades} trades${realized}`;
+    })
+    : ['No strategies listed yet.'];
+  return [
+    'Yosuku Strategy Leaderboard',
+    '',
+    ...lines,
+    '',
+    'Agents trade 15-min BTC markets. MemWal stores the memory. Sui verifies the proof.',
+    '',
+    'Copy a strategy on Yosuku.',
+  ].join('\n');
+}
+
+export function xIntentUrl(text: string, url = STRATEGIES_URL): string {
+  return `https://x.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`;
+}
+
+export async function fetchSocialVaultBalance(owner: string): Promise<number> {
+  const tx = new Transaction();
+  tx.moveCall({
+    target: `${STRATEGY_PKG}::social_vault::balance_of`,
+    typeArguments: [DUSDC_TYPE],
+    arguments: [tx.object(SOCIAL_VAULT_ID), tx.pure.address(owner)],
+  });
+  const [balance] = await simulateReturnU64s(tx, owner);
+  return Number(balance ?? BigInt(0));
 }
 
 /** A creator's executing agent, aggregated across its strategies. Ranked by the
@@ -133,9 +279,132 @@ function toCopyTrade(n: EvNode): CopyTrade {
   };
 }
 
+function toSubscription(n: EvNode): StrategySubscription {
+  const j = n.contents?.json ?? {};
+  return {
+    id: String(j.subscription ?? ''),
+    vault: String(j.vault ?? ''),
+    subscriber: String(j.subscriber ?? ''),
+    agent: String(j.agent ?? ''),
+    strategy: String(j.strategy ?? ''),
+    maxLeverageBps: num(j.max_leverage_bps),
+    maxMargin: num(j.max_margin) / DUSDC_MULTIPLIER,
+  };
+}
+
 /** All executed copy-trades, newest first. */
 export async function fetchCopyTrades(limit = 100): Promise<CopyTrade[]> {
   return (await queryEvents(COPY_TRADED, limit)).map(toCopyTrade);
+}
+
+interface StrategyRealized {
+  realizedTrades: number;
+  realizedReturned: number;
+  realizedMargin: number;
+  realizedPnl: number;
+  wins: number;
+  losses: number;
+  liquidations: number;
+}
+
+const emptyRealized = (): StrategyRealized => ({
+  realizedTrades: 0,
+  realizedReturned: 0,
+  realizedMargin: 0,
+  realizedPnl: 0,
+  wins: 0,
+  losses: 0,
+  liquidations: 0,
+});
+
+function addRealized(map: Map<string, StrategyRealized>, strategy: string, margin: number, returned: number, liquidated: boolean) {
+  const row = map.get(strategy) ?? emptyRealized();
+  const pnl = returned - margin;
+  row.realizedTrades += 1;
+  row.realizedReturned += returned;
+  row.realizedMargin += margin;
+  row.realizedPnl += pnl;
+  if (pnl > 0) row.wins += 1;
+  if (pnl < 0) row.losses += 1;
+  if (liquidated) row.liquidations += 1;
+  map.set(strategy, row);
+}
+
+async function fetchRealizedByStrategy(copyTrades: CopyTrade[]): Promise<Map<string, StrategyRealized>> {
+  const copiesByDigest = new Map<string, CopyTrade[]>();
+  for (const trade of copyTrades) {
+    if (!trade.digest) continue;
+    const rows = copiesByDigest.get(trade.digest) ?? [];
+    rows.push(trade);
+    copiesByDigest.set(trade.digest, rows);
+  }
+  if (copiesByDigest.size === 0) return new Map();
+
+  const [orders, opens, closes, liquidations] = await Promise.all([
+    queryEvents(ORDER_REQUESTED, 300),
+    queryEvents(POSITION_OPENED, 300),
+    queryEvents(POSITION_CLOSED, 300),
+    queryEvents(POSITION_LIQUIDATED, 300),
+  ]);
+
+  const orderToCopy = new Map<string, CopyTrade>();
+  for (const event of orders) {
+    const digest = event.transaction?.digest;
+    const copies = digest ? copiesByDigest.get(digest) : null;
+    if (!copies?.length) continue;
+    const j = event.contents?.json ?? {};
+    const trader = String(j.trader ?? '').toLowerCase();
+    const margin = num(j.margin) / DUSDC_MULTIPLIER;
+    const leverageBps = num(j.leverage_bps);
+    const match = copies.find(
+      (copy) =>
+        copy.subscriber.toLowerCase() === trader &&
+        Math.abs(copy.margin - margin) < 0.000001 &&
+        copy.leverageBps === leverageBps,
+    );
+    const order = String(j.order ?? '');
+    if (match && order) orderToCopy.set(order, match);
+  }
+
+  const positionToCopy = new Map<string, CopyTrade>();
+  for (const event of opens) {
+    const j = event.contents?.json ?? {};
+    const order = String(j.order ?? '');
+    const position = String(j.position ?? '');
+    const copy = orderToCopy.get(order);
+    if (copy && position) positionToCopy.set(position, copy);
+  }
+
+  const realized = new Map<string, StrategyRealized>();
+  for (const event of closes) {
+    const j = event.contents?.json ?? {};
+    const copy = positionToCopy.get(String(j.position ?? ''));
+    if (!copy) continue;
+    addRealized(realized, copy.strategy, copy.margin, num(j.returned) / DUSDC_MULTIPLIER, false);
+  }
+  for (const event of liquidations) {
+    const j = event.contents?.json ?? {};
+    const copy = positionToCopy.get(String(j.position ?? ''));
+    if (!copy) continue;
+    addRealized(realized, copy.strategy, copy.margin, num(j.returned) / DUSDC_MULTIPLIER, true);
+  }
+  return realized;
+}
+
+/** Live, uncancelled copy-trading permissions. Filter by owner for the connected wallet. */
+export async function fetchStrategySubscriptions(owner?: string, limit = 100): Promise<StrategySubscription[]> {
+  const [subs, cancels] = await Promise.all([
+    queryEvents(SOCIAL_SUBSCRIBED, limit),
+    queryEvents(SOCIAL_UNSUBSCRIBED, limit),
+  ]);
+  const cancelled = new Set(cancels.map((n) => String(n.contents?.json?.subscription ?? '')).filter(Boolean));
+  const byId = new Map<string, StrategySubscription>();
+  for (const sub of subs.map(toSubscription)) {
+    if (!sub.id || cancelled.has(sub.id)) continue;
+    if (owner && sub.subscriber.toLowerCase() !== owner.toLowerCase()) continue;
+    byId.set(sub.id, sub);
+  }
+  return Array.from(byId.values());
 }
 
 // ─── strategy catalogue ───
@@ -167,6 +436,7 @@ export async function fetchStrategies(): Promise<StrategyCard[]> {
 
   // 2. copy-trades, grouped by strategy, for live performance.
   const trades = await fetchCopyTrades(200);
+  const realizedByStrategy = await fetchRealizedByStrategy(trades);
   const byStrategy = new Map<string, CopyTrade[]>();
   for (const t of trades) {
     if (!byStrategy.has(t.strategy)) byStrategy.set(t.strategy, []);
@@ -181,6 +451,7 @@ export async function fetchStrategies(): Promise<StrategyCard[]> {
       if (!f) return null;
       const ts = byStrategy.get(id) ?? [];
       const subs = new Set(ts.map((t) => t.subscriber));
+      const realized = realizedByStrategy.get(id) ?? emptyRealized();
       const maxLeverageBps = Number(f.max_leverage_bps);
       return {
         id,
@@ -201,6 +472,13 @@ export async function fetchStrategies(): Promise<StrategyCard[]> {
         capitalCopied: ts.reduce((s, t) => s + t.margin, 0),
         distinctSubscribers: subs.size,
         lastActive: ts.reduce((m, t) => Math.max(m, t.ts), 0),
+        realizedTrades: realized.realizedTrades,
+        realizedReturned: realized.realizedReturned,
+        realizedPnl: realized.realizedPnl,
+        realizedRoi: realized.realizedMargin > 0 ? realized.realizedPnl / realized.realizedMargin : 0,
+        wins: realized.wins,
+        losses: realized.losses,
+        liquidations: realized.liquidations,
       };
     } catch {
       return null;
@@ -277,17 +555,70 @@ function mergedPrimary(tx: Transaction, coinIds: string[]) {
  * Subscription` (the on-chain consent record) + StrategySubscribed.
  */
 export function buildSubscribeTx(p: {
+  owner: string;
   strategyId: string;
   coinIds: string[];
   subFeeMicro: bigint;
 }): Transaction {
+  return buildFundAndSubscribeTx({ ...p, topUpMicro: BigInt(0) });
+}
+
+/**
+ * One clean PTB for the subscriber UX: optionally top up the shared social vault,
+ * then subscribe to the strategy in the same signature. The vault balance is the
+ * user's bounded copy-trading pool; the subscription's on-chain caps still come
+ * from the strategy listing.
+ */
+export function buildFundAndSubscribeTx(p: {
+  owner: string;
+  strategyId: string;
+  coinIds: string[];
+  topUpMicro: bigint;
+  subFeeMicro: bigint;
+}): Transaction {
   const tx = new Transaction();
-  // split exactly the fee; subscribe() refunds any excess back to the sender.
-  const [payment] = tx.splitCoins(mergedPrimary(tx, p.coinIds), [p.subFeeMicro]);
-  tx.moveCall({
+  let payment;
+
+  if (p.topUpMicro > BigInt(0) || p.subFeeMicro > BigInt(0)) {
+    const primary = mergedPrimary(tx, p.coinIds);
+
+    if (p.topUpMicro > BigInt(0) && p.subFeeMicro > BigInt(0)) {
+      const [depositCoin, feeCoin] = tx.splitCoins(primary, [p.topUpMicro, p.subFeeMicro]);
+      tx.moveCall({
+        target: `${STRATEGY_PKG}::social_vault::deposit`,
+        typeArguments: [DUSDC_TYPE],
+        arguments: [tx.object(SOCIAL_VAULT_ID), depositCoin],
+      });
+      payment = feeCoin;
+    } else if (p.topUpMicro > BigInt(0)) {
+      const [depositCoin] = tx.splitCoins(primary, [p.topUpMicro]);
+      tx.moveCall({
+        target: `${STRATEGY_PKG}::social_vault::deposit`,
+        typeArguments: [DUSDC_TYPE],
+        arguments: [tx.object(SOCIAL_VAULT_ID), depositCoin],
+      });
+      payment = tx.moveCall({ target: `0x2::coin::zero`, typeArguments: [DUSDC_TYPE] });
+    } else {
+      [payment] = tx.splitCoins(primary, [p.subFeeMicro]);
+    }
+  } else {
+    payment = tx.moveCall({ target: `0x2::coin::zero`, typeArguments: [DUSDC_TYPE] });
+  }
+
+  const refund = tx.moveCall({
     target: `${STRATEGY_PKG}::strategy::subscribe`,
     typeArguments: [DUSDC_TYPE],
     arguments: [tx.object(p.strategyId), tx.object(SOCIAL_VAULT_ID), payment],
+  });
+  tx.transferObjects([refund], tx.pure.address(p.owner));
+  return tx;
+}
+
+export function buildCancelSubscriptionTx(subscriptionId: string): Transaction {
+  const tx = new Transaction();
+  tx.moveCall({
+    target: `${STRATEGY_PKG}::social_vault::cancel_subscription`,
+    arguments: [tx.object(subscriptionId)],
   });
   return tx;
 }

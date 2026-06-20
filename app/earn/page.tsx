@@ -254,15 +254,32 @@ export default function EarnPage() {
               </div>
               <div className="space-y-2">
                 {myOrders.map((o) => (
-                  <div key={o.id} className="flex items-center justify-between rounded-xl border border-white/[0.06] px-4 py-3">
-                    <span className="font-mono text-sm text-gray-300"><span className="text-vermilion font-bold">{o.leverage.toFixed(0)}×</span> · {fmt(o.margin)} DUSDC margin {o.isRange ? '· range' : ''}</span>
-                    <button onClick={() => doCancel(o.id)} disabled={busy === 'x:' + o.id} className="font-mono text-xs text-gray-500 hover:text-white transition-colors disabled:opacity-50">
-                      {busy === 'x:' + o.id ? 'Cancelling…' : 'Cancel'}
+                  <div key={o.id} className="flex items-center justify-between rounded-xl border border-white/[0.06] px-4 py-3 gap-3">
+                    <div>
+                      <span className="font-mono text-sm text-gray-300"><span className="text-vermilion font-bold">{o.leverage.toFixed(0)}×</span> · {fmt(o.margin)} DUSDC margin {o.isRange ? '· range' : ''}</span>
+                      <p className={`font-mono text-[10px] mt-1 ${
+                        o.expiry && Number(o.expiry) < Date.now()
+                          ? 'text-rose-400'
+                          : o.createdAt && Date.now() - o.createdAt > 90_000
+                            ? 'text-amber-400'
+                            : 'text-gray-600'
+                      }`}>
+                        {o.source === 'local'
+                          ? 'syncing order id from transaction'
+                          : o.expiry && Number(o.expiry) < Date.now()
+                            ? 'round expired before fill - cancel to reclaim margin'
+                            : o.createdAt && Date.now() - o.createdAt > 90_000
+                              ? 'keeper delayed - margin remains escrowed'
+                              : 'queued for keeper fill'}
+                      </p>
+                    </div>
+                    <button onClick={() => doCancel(o.id)} disabled={busy === 'x:' + o.id || o.source === 'local'} className="font-mono text-xs text-gray-500 hover:text-white transition-colors disabled:opacity-50 shrink-0">
+                      {o.source === 'local' ? 'Syncing…' : busy === 'x:' + o.id ? 'Cancelling…' : 'Cancel'}
                     </button>
                   </div>
                 ))}
               </div>
-              <p className="font-mono text-[10px] text-gray-600 mt-3">Margin escrowed on-chain. The keeper fills within a few seconds — or Cancel to reclaim it instantly.</p>
+              <p className="font-mono text-[10px] text-gray-600 mt-3">Margin is escrowed on-chain. If the keeper is delayed or the round expires, Cancel reclaims it.</p>
             </div>
           )}
 

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useCurrentAccount, ConnectButton } from '@mysten/dapp-kit';
+import { BrainCircuit, Copy, Radio, Share2, Trophy } from 'lucide-react';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import Marquee from '@/components/Marquee';
@@ -13,16 +14,25 @@ import { useDUSDCBalance } from '@/lib/sui/hooks';
 import {
   fetchStrategies,
   fetchCopyTrades,
-  buildSubscribeTx,
+  fetchStrategySubscriptions,
+  buildFundAndSubscribeTx,
   buildListStrategyTx,
+  buildCancelSubscriptionTx,
+  buildCopyTradeShareText,
+  buildLeaderboardShareText,
+  buildStrategyShareText,
+  fetchSocialVaultBalance,
   fmtDusdc,
   fmtAddr,
   ago,
   glyphFromAddress,
+  rankStrategies,
   SUISCAN_TX,
   SUISCAN_ACC,
+  xIntentUrl,
   type StrategyCard,
   type CopyTrade,
+  type StrategySubscription,
 } from '@/lib/sui/strategyClient';
 import { DUSDC_MULTIPLIER } from '@/lib/sui/constants';
 import { getSponsorStatus, type SponsorStatus } from '@/lib/sponsor';
@@ -37,15 +47,67 @@ export default function StrategiesPage() {
 
   const [strategies, setStrategies] = useState<StrategyCard[]>([]);
   const [copyTrades, setCopyTrades] = useState<CopyTrade[]>([]);
+  const [subscriptions, setSubscriptions] = useState<StrategySubscription[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [sponsor, setSponsor] = useState<SponsorStatus | null>(null);
   const [subscribingId, setSubscribingId] = useState<string | null>(null);
+  const [cancelingId, setCancelingId] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [socialVaultBalance, setSocialVaultBalance] = useState(0);
+  const [targetBalances, setTargetBalances] = useState<Record<string, string>>({});
 
   // creator: "list a strategy" form
   const [showList, setShowList] = useState(false);
   const [listing, setListing] = useState(false);
-  const [form, setForm] = useState({ agent: '', maxLeverage: '3', maxMargin: '5', subFee: '0.1' });
+  const [form, setForm] = useState({ agent: '', memoryAccount: '', capsuleBlob: '', maxLeverage: '3', maxMargin: '5', subFee: '0.1' });
+
+  const leaderboard = rankStrategies(strategies);
+  const topRows = leaderboard.slice(0, 5);
+  const rankById = new Map(leaderboard.map((row) => [row.id, row.rank]));
+  const subscriptionByStrategy = new Map(subscriptions.map((sub) => [sub.strategy, sub]));
+  const ZERO_ADDR = '0x0000000000000000000000000000000000000000000000000000000000000000';
+
+  function postToX(text: string) {
+    window.open(xIntentUrl(text), '_blank', 'noopener,noreferrer');
+  }
+
+  const targetBalanceFor = (card: StrategyCard) => targetBalances[card.id] ?? '1';
+
+  const refreshSocialVaultBalance = useCallback(async () => {
+    if (!address) {
+      setSocialVaultBalance(0);
+      return;
+    }
+    try {
+      setSocialVaultBalance(await fetchSocialVaultBalance(address));
+    } catch {
+      setSocialVaultBalance(0);
+    }
+  }, [address]);
+
+  const refreshSubscriptions = useCallback(async () => {
+    if (!address) {
+      setSubscriptions([]);
+      return;
+    }
+    try {
+      setSubscriptions(await fetchStrategySubscriptions(address));
+    } catch {
+      setSubscriptions([]);
+    }
+  }, [address]);
+
+  async function copyPost(id: string, text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedId(id);
+      setTimeout(() => setCopiedId(null), 1400);
+      toast('Post copied', 'success');
+    } catch {
+      toast('Could not copy post text', 'error');
+    }
+  }
 
   // discover the gas station once; if up, subscribing is gas-free.
   useEffect(() => {
@@ -77,32 +139,81 @@ export default function StrategiesPage() {
     return () => clearInterval(id);
   }, [load]);
 
+  useEffect(() => {
+    refreshSocialVaultBalance();
+    refreshSubscriptions();
+    const id = setInterval(() => {
+      refreshSocialVaultBalance();
+      refreshSubscriptions();
+    }, 20_000);
+    return () => clearInterval(id);
+  }, [refreshSocialVaultBalance, refreshSubscriptions]);
+
   // Subscriber: pay the fee + authorize the agent to copy-trade your vault funds, under
   // the strategy's hard caps. Mirrors WaitlistCard.join(): sponsored path if the gas
   // station is up, wallet-pays fallback otherwise — both execute off JSON-RPC over gRPC.
   async function subscribe(card: StrategyCard) {
     if (!address) return;
-    if (dusdcCoins.length === 0) {
-      toast('No DUSDC in wallet — claim some from the faucet first', 'error');
+    const targetBalance = Number(targetBalanceFor(card).replace(',', '.'));
+    if (!Number.isFinite(targetBalance) || targetBalance <= 0) {
+      toast('Enter a copy balance above 0', 'error');
+      return;
+    }
+    const targetMicro = BigInt(Math.floor(targetBalance * DUSDC_MULTIPLIER));
+    const currentVaultMicro = BigInt(Math.floor(socialVaultBalance));
+    const topUpMicro = targetMicro > currentVaultMicro ? targetMicro - currentVaultMicro : BigInt(0);
+    const feeMicro = BigInt(Math.floor(card.subFee * DUSDC_MULTIPLIER));
+    const walletMicro = dusdcCoins.reduce((sum, c) => sum + c.balance, BigInt(0));
+    const neededMicro = topUpMicro + feeMicro;
+
+    if (walletMicro < neededMicro) {
+      toast(
+        `Wallet DUSDC too low — needs ${(Number(neededMicro) / DUSDC_MULTIPLIER).toFixed(2)} for top-up + fee`,
+        'error',
+      );
       return;
     }
     setSubscribingId(card.id);
     try {
       await submit(() =>
-        buildSubscribeTx({
+        buildFundAndSubscribeTx({
+          owner: address,
           strategyId: card.id,
           coinIds: dusdcCoins.map((c) => c.coinObjectId),
-          subFeeMicro: BigInt(Math.floor(card.subFee * DUSDC_MULTIPLIER)),
+          topUpMicro,
+          subFeeMicro: feeMicro,
         }),
       );
-      toast(`Subscribed to ${fmtAddr(card.agent)} — the agent can now copy-trade your vault`, 'success');
+      toast(
+        topUpMicro > BigInt(0)
+          ? `Funded copy balance and subscribed to ${fmtAddr(card.agent)}`
+          : `Subscribed to ${fmtAddr(card.agent)} — the agent can now copy-trade your vault`,
+        'success',
+      );
       await load();
+      refreshSocialVaultBalance();
+      refreshSubscriptions();
       refreshDusdc();
     } catch (e) {
       const msg = String(e instanceof Error ? e.message : e).slice(0, 140);
       toast(`Subscribe failed: ${msg}`, 'error');
     } finally {
       setSubscribingId(null);
+    }
+  }
+
+  async function cancelSubscription(sub: StrategySubscription) {
+    if (!address || cancelingId) return;
+    setCancelingId(sub.id);
+    try {
+      await submit(() => buildCancelSubscriptionTx(sub.id));
+      toast(`Paused future copies for ${fmtAddr(sub.agent)}`, 'success');
+      refreshSubscriptions();
+    } catch (e) {
+      const msg = String(e instanceof Error ? e.message : e).slice(0, 140);
+      toast(`Pause failed: ${msg}`, 'error');
+    } finally {
+      setCancelingId(null);
     }
   }
 
@@ -114,16 +225,28 @@ export default function StrategiesPage() {
     const maxMarginMicro = BigInt(Math.floor(parseFloat(form.maxMargin || '0') * DUSDC_MULTIPLIER));
     const subFeeMicro = BigInt(Math.floor(parseFloat(form.subFee || '0') * DUSDC_MULTIPLIER));
     const agent = form.agent.trim() || address;
+    const memoryAccount = form.memoryAccount.trim() || ZERO_ADDR;
+    let capsuleBlob = BigInt(0);
+    try {
+      capsuleBlob = BigInt(form.capsuleBlob.trim() || '0');
+    } catch {
+      toast('Walrus capsule blob must be a decimal u256, or blank', 'error');
+      return;
+    }
     if (maxLeverageBps < 10_000) { toast('Max leverage must be at least 1x', 'error'); return; }
     if (maxMarginMicro <= BigInt(0)) { toast('Max margin must be greater than 0', 'error'); return; }
     if (!/^0x[0-9a-fA-F]{64}$/.test(agent)) { toast('Agent must be a 0x… address', 'error'); return; }
+    if (memoryAccount !== ZERO_ADDR && !/^0x[0-9a-fA-F]{64}$/.test(memoryAccount)) {
+      toast('MemWal account must be a 0x… address, or blank', 'error');
+      return;
+    }
     setListing(true);
     try {
       await submit(() =>
         buildListStrategyTx({
           agent,
-          capsuleBlob: BigInt(0), // Seal playbook can be attached later via update_strategy
-          memoryAccount: '0x0',   // MemWal pointer optional
+          capsuleBlob,
+          memoryAccount,
           maxLeverageBps,
           maxMarginMicro,
           subFeeMicro,
@@ -156,14 +279,14 @@ export default function StrategiesPage() {
         </div>
 
         <h1 className="font-display font-[800] text-4xl text-white tracking-tight mb-2">
-          Strategy Exchange
+          Strategy Market
         </h1>
         <p className="font-jp text-gray-500 text-sm mb-6">戦略取引所</p>
 
         <p className="text-gray-400 text-sm leading-relaxed max-w-2xl mb-6">
-          A catalogue of investable prediction-market agent strategies. Subscribe to one and the
-          agent trades your funds under hard on-chain caps — and can never divert a cent: every
-          position it opens is owned by you and force-pays you on exit.
+          Agents use MCP to trade DeepBook Predict and MemWal to remember what happened.
+          Subscribe to a strategy memory, fund a capped vault, and every copied trade becomes
+          verifiable proof creators can post to X.
         </p>
 
         {/* Creator: list a strategy */}
@@ -182,8 +305,8 @@ export default function StrategiesPage() {
               <h3 className="font-display font-[700] text-sm text-white mb-1">Publish a strategy</h3>
               <p className="text-gray-500 text-xs leading-relaxed mb-5">
                 Your caps are the hard ceiling your agent is bound to on every subscriber&apos;s funds —
-                it can never exceed them, and never holds subscriber capital. A Seal playbook capsule
-                can be attached later.
+                it can never exceed them, and never holds subscriber capital. Attach a MemWal account
+                or Walrus/Seal capsule when you have one; blank fields publish as open provenance later.
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <label className="block">
@@ -202,6 +325,24 @@ export default function StrategiesPage() {
                     value={form.subFee}
                     onChange={(e) => setForm((f) => ({ ...f, subFee: e.target.value }))}
                     className="w-full px-3 py-2 rounded bg-white/[0.03] border border-white/[0.08] focus:border-white/20 text-white font-mono text-sm outline-none transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 block mb-1.5">MemWal account</span>
+                  <input
+                    value={form.memoryAccount}
+                    onChange={(e) => setForm((f) => ({ ...f, memoryAccount: e.target.value }))}
+                    placeholder="0x… optional"
+                    className="w-full px-3 py-2 rounded bg-white/[0.03] border border-white/[0.08] focus:border-white/20 text-white font-mono text-[12px] outline-none transition-colors"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 block mb-1.5">Walrus capsule blob</span>
+                  <input
+                    value={form.capsuleBlob}
+                    onChange={(e) => setForm((f) => ({ ...f, capsuleBlob: e.target.value }))}
+                    placeholder="u256 decimal · optional"
+                    className="w-full px-3 py-2 rounded bg-white/[0.03] border border-white/[0.08] focus:border-white/20 text-white font-mono text-[12px] outline-none transition-colors"
                   />
                 </label>
                 <label className="block">
@@ -238,9 +379,129 @@ export default function StrategiesPage() {
           <div className="font-mono text-sm text-gray-500 py-20 text-center">reading the chain…</div>
         ) : (
           <div className="space-y-8">
-            {/* 01: The strategies */}
+            {/* 01: Leaderboard + X distribution */}
             <section>
-              <SectionHeader number="01" title="The strategies" jp="戦略" live={strategies.length > 0} meta={`${strategies.length} listed`} />
+              <SectionHeader
+                number="01"
+                title="Strategy leaderboard"
+                jp="拡散"
+                live={topRows.length > 0}
+                meta={`${topRows.length} ranked`}
+              />
+
+              <div className="grid grid-cols-1 lg:grid-cols-[0.9fr_1.6fr] gap-5">
+                <div className="border border-white/[0.08] rounded bg-bg p-5">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-10 h-10 rounded-full border border-vermilion/30 bg-vermilion/10 flex items-center justify-center">
+                      <Radio className="w-4 h-4 text-vermilion" />
+                    </div>
+                    <div>
+                      <h3 className="font-display font-[700] text-white text-base">X proof post</h3>
+                      <p className="font-mono text-[10px] tracking-[0.16em] uppercase text-gray-500">human-approved distribution</p>
+                    </div>
+                  </div>
+                  <p className="text-gray-400 text-sm leading-relaxed mb-5">
+                    Turn the live leaderboard into a proof-backed X post. The post links back here;
+                    the proof still lives on Sui events and MemWal/Walrus pointers.
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => postToX(buildLeaderboardShareText(leaderboard))}
+                      className="inline-flex items-center justify-center gap-2 flex-1 py-3 rounded bg-white text-black text-sm font-semibold hover:bg-gray-200 transition-colors"
+                    >
+                      <Share2 className="w-4 h-4" />
+                      Post top strategies
+                    </button>
+                    <button
+                      onClick={() => copyPost('leaderboard', buildLeaderboardShareText(leaderboard))}
+                      className="inline-flex items-center justify-center gap-2 px-4 py-3 rounded border border-white/10 text-gray-300 hover:text-white hover:border-white/25 transition-colors"
+                      aria-label="Copy leaderboard post"
+                    >
+                      <Copy className="w-4 h-4" />
+                      <span className="sr-only">{copiedId === 'leaderboard' ? 'Copied' : 'Copy'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="border border-white/[0.08] rounded bg-bg divide-y divide-white/[0.05] overflow-hidden">
+                  {topRows.length === 0 ? (
+                    <div className="font-mono text-xs text-gray-600 px-5 py-8 text-center">no strategy proof yet</div>
+                  ) : (
+                    topRows.map((row) => {
+                      const shareText = buildStrategyShareText(row, row.rank);
+                      return (
+                        <div key={row.id} className="px-5 py-4 hover:bg-white/[0.02] transition-colors">
+                          <div className="flex items-start gap-4">
+                            <div className="w-10 h-10 shrink-0 rounded-full border border-white/10 flex items-center justify-center">
+                              {row.rank === 1 ? (
+                                <Trophy className="w-4 h-4 text-vermilion" />
+                              ) : (
+                                <span className="font-mono text-xs text-gray-400">#{row.rank}</span>
+                              )}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-2 mb-2">
+                                <a
+                                  href={SUISCAN_ACC(row.agent)}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="font-mono text-[13px] text-gray-200 hover:text-white transition-colors"
+                                >
+                                  agent {fmtAddr(row.agent)}
+                                </a>
+                                <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-gray-500 border border-white/10 rounded px-2 py-1">
+                                  {row.distributionLabel}
+                                </span>
+                                {row.hasMemory && (
+                                  <span className="inline-flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.16em] text-new-mint border border-new-mint/20 rounded px-2 py-1">
+                                    <BrainCircuit className="w-3 h-3" />
+                                    MemWal
+                                  </span>
+                                )}
+                              </div>
+                              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                                <MiniStat label="score" value={row.score.toFixed(0)} />
+                                <MiniStat label="proof" value={String(row.proofCount)} />
+                                <MiniStat label="trades" value={String(row.copyTrades)} />
+                                <MiniStat label="subs" value={String(row.subscribers)} />
+                                <MiniStat
+                                  label={row.realizedTrades > 0 ? 'realized' : 'copied'}
+                                  value={
+                                    row.realizedTrades > 0
+                                      ? `${row.realizedPnl >= 0 ? '+' : ''}${fmtDusdc(row.realizedPnl)}`
+                                      : fmtDusdc(row.volumeCopied)
+                                  }
+                                />
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <button
+                                onClick={() => copyPost(`strategy-${row.id}`, shareText)}
+                                className="w-9 h-9 rounded border border-white/10 text-gray-400 hover:text-white hover:border-white/25 transition-colors flex items-center justify-center"
+                                aria-label="Copy strategy proof post"
+                              >
+                                <Copy className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => postToX(shareText)}
+                                className="w-9 h-9 rounded bg-vermilion text-white hover:bg-vermilion-d transition-colors flex items-center justify-center"
+                                aria-label="Post strategy proof to X"
+                              >
+                                <Share2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            </section>
+
+            {/* 02: The strategies */}
+            <section>
+              <SectionHeader number="02" title="The strategies" jp="戦略" live={strategies.length > 0} meta={`${strategies.length} listed`} />
 
               {strategies.length === 0 ? (
                 <div className="border border-white/[0.08] rounded bg-bg p-16 text-center">
@@ -259,8 +520,23 @@ export default function StrategiesPage() {
                   {strategies.map((card) => {
                     const busy = subscribingId === card.id;
                     const free = card.subFee === 0 && !!sponsor;
+                    const rank = rankById.get(card.id);
+                    const activeSub = subscriptionByStrategy.get(card.id);
+                    const shareText = buildStrategyShareText(card, rank);
+                    const targetText = targetBalanceFor(card);
+                    const targetBalance = Number(targetText.replace(',', '.'));
+                    const validTarget = Number.isFinite(targetBalance) && targetBalance > 0;
+                    const currentVaultDusdc = socialVaultBalance / DUSDC_MULTIPLIER;
+                    const topUpDusdc = validTarget ? Math.max(0, targetBalance - currentVaultDusdc) : 0;
+                    const walletNeedDusdc = topUpDusdc + card.subFee;
+                    const copyCapacity = validTarget ? Math.min(targetBalance, card.maxMargin) : 0;
+                    const cta = topUpDusdc > 0.000001
+                      ? `Fund ${fmtDusdc(topUpDusdc)} + subscribe →`
+                      : free
+                        ? 'Subscribe — free →'
+                        : `Subscribe · ${fmtDusdc(card.subFee)} DUSDC`;
                     return (
-                      <div key={card.id} className="border border-white/[0.08] rounded bg-bg p-5 flex flex-col">
+                      <div key={card.id} id={`strategy-${card.id}`} className="border border-white/[0.08] rounded bg-bg p-5 flex flex-col">
                         {/* top row: avatar glyph + agent address + capability chips */}
                         <div className="flex items-center gap-3 mb-5">
                           <div className="w-10 h-10 shrink-0 border border-white/10 rounded-full flex items-center justify-center">
@@ -286,6 +562,24 @@ export default function StrategiesPage() {
                                 MemWal memory
                               </span>
                             )}
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => copyPost(`card-${card.id}`, shareText)}
+                              className="w-8 h-8 rounded border border-white/10 text-gray-500 hover:text-white hover:border-white/25 transition-colors flex items-center justify-center"
+                              aria-label="Copy strategy post"
+                              title={copiedId === `card-${card.id}` ? 'Copied' : 'Copy post'}
+                            >
+                              <Copy className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => postToX(shareText)}
+                              className="w-8 h-8 rounded border border-vermilion/35 text-vermilion hover:bg-vermilion/10 transition-colors flex items-center justify-center"
+                              aria-label="Post strategy to X"
+                              title="Post to X"
+                            >
+                              <Share2 className="w-3.5 h-3.5" />
+                            </button>
                           </div>
                         </div>
 
@@ -316,8 +610,14 @@ export default function StrategiesPage() {
                             <span className="font-mono text-sm text-white tabular-nums">{card.copyTrades}</span>
                           </div>
                           <div>
-                            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 block mb-1">Vol copied</span>
-                            <span className="font-mono text-sm text-white tabular-nums">{fmtDusdc(card.volumeCopied)}</span>
+                            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 block mb-1">
+                              {card.realizedTrades > 0 ? 'Realized P&L' : 'Vol copied'}
+                            </span>
+                            <span className="font-mono text-sm text-white tabular-nums">
+                              {card.realizedTrades > 0
+                                ? `${card.realizedPnl >= 0 ? '+' : ''}${fmtDusdc(card.realizedPnl)}`
+                                : fmtDusdc(card.volumeCopied)}
+                            </span>
                           </div>
                           <div>
                             <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 block mb-1">Last active</span>
@@ -325,21 +625,75 @@ export default function StrategiesPage() {
                           </div>
                         </div>
 
+                        <div className="border border-new-mint/20 bg-new-mint/[0.04] rounded p-4 mb-5">
+                          <div className="flex items-start justify-between gap-4 mb-3">
+                            <div>
+                              <h3 className="font-display font-[700] text-sm text-white mb-1">Copy balance</h3>
+                              <p className="font-mono text-[9px] tracking-[0.16em] uppercase text-gray-500">
+                                shared vault · withdraw anytime
+                              </p>
+                            </div>
+                            <span className="shrink-0 font-mono text-[9px] tracking-[0.16em] uppercase text-new-mint border border-new-mint/20 rounded-full px-2.5 py-1">
+                              auto capped
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 rounded border border-white/[0.08] bg-black/20 px-3 py-2 mb-3">
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.1"
+                              value={targetText}
+                              onChange={(e) => setTargetBalances((m) => ({ ...m, [card.id]: e.target.value }))}
+                              className="flex-1 bg-transparent outline-none text-white font-mono text-lg tabular-nums [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            />
+                            <span className="font-mono text-[11px] text-gray-500 tracking-[0.14em]">DUSDC</span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 mb-3">
+                            <MiniStat label="vault now" value={`${fmtDusdc(currentVaultDusdc)} DUSDC`} />
+                            <MiniStat label="top-up now" value={validTarget ? `${fmtDusdc(topUpDusdc)} DUSDC` : '—'} />
+                            <MiniStat label="wallet need" value={`${fmtDusdc(walletNeedDusdc)} DUSDC`} />
+                            <MiniStat label="capacity" value={validTarget ? `${fmtDusdc(copyCapacity)} DUSDC` : '—'} />
+                          </div>
+                          <p className="text-[12px] leading-relaxed text-gray-500">
+                            The agent can only spend your social-vault balance and cannot exceed this strategy&apos;s
+                            on-chain caps: {fmtDusdc(card.maxMargin)} DUSDC per copied trade, max {card.maxLeverage}x.
+                          </p>
+                        </div>
+
                         {/* subscribe action */}
                         <div className="mt-auto">
                           {!address ? (
                             <ConnectButton />
+                          ) : activeSub ? (
+                            <div className="border border-new-mint/25 bg-new-mint/[0.06] rounded p-3">
+                              <div className="flex items-start justify-between gap-3">
+                                <div>
+                                  <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-new-mint mb-1">
+                                    subscribed
+                                  </p>
+                                  <p className="text-[12px] text-gray-400 leading-relaxed">
+                                    Future copies are active under {fmtDusdc(activeSub.maxMargin)} DUSDC / trade,
+                                    max {activeSub.maxLeverageBps / 10_000}x.
+                                  </p>
+                                </div>
+                                <button
+                                  onClick={() => cancelSubscription(activeSub)}
+                                  disabled={cancelingId === activeSub.id}
+                                  className="shrink-0 px-3 py-2 rounded border border-white/10 text-gray-300 hover:text-white hover:border-white/25 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-mono text-[10px] uppercase tracking-[0.14em]"
+                                >
+                                  {cancelingId === activeSub.id ? 'pausing…' : 'pause'}
+                                </button>
+                              </div>
+                            </div>
                           ) : (
                             <button
                               onClick={() => subscribe(card)}
-                              disabled={busy}
+                              disabled={busy || !validTarget}
                               className="w-full py-3 rounded text-sm font-semibold bg-vermilion hover:bg-vermilion-d text-white transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                             >
                               {busy
                                 ? 'subscribing…'
-                                : free
-                                  ? 'Subscribe — free →'
-                                  : `Subscribe · ${fmtDusdc(card.subFee)} DUSDC`}
+                                : cta}
                             </button>
                           )}
                         </div>
@@ -350,14 +704,16 @@ export default function StrategiesPage() {
               )}
             </section>
 
-            {/* 02: Recent copy-trades */}
+            {/* 03: Recent copy-trades */}
             <section>
-              <SectionHeader number="02" title="Recent copy-trades" jp="コピー取引" meta={`${copyTrades.length}`} />
+              <SectionHeader number="03" title="Recent copy-trades" jp="コピー取引" meta={`${copyTrades.length}`} />
               <div className="border border-white/[0.08] rounded bg-bg divide-y divide-white/[0.05] overflow-hidden">
                 {copyTrades.length === 0 ? (
                   <div className="font-mono text-xs text-gray-600 px-5 py-8 text-center">no copy-trades indexed yet</div>
                 ) : (
                   copyTrades.map((t, i) => {
+                    const strategy = strategies.find((s) => s.id === t.strategy);
+                    const shareText = buildCopyTradeShareText(t, strategy);
                     const inner = (
                       <div className="flex items-center gap-3 px-5 py-3 hover:bg-white/[0.02] transition-colors">
                         <span
@@ -378,6 +734,28 @@ export default function StrategiesPage() {
                         <span className="font-mono text-[12px] text-gray-300 tabular-nums">{fmtDusdc(t.notional)} DUSDC</span>
                         <span className="font-mono text-[11px] text-gray-500 w-12 text-right shrink-0 tabular-nums">{t.leverageBps / 10000}x</span>
                         <span className="font-mono text-[11px] text-gray-600 w-16 text-right shrink-0">{ago(t.ts)}</span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            copyPost(`trade-${i}`, shareText);
+                          }}
+                          className="w-7 h-7 rounded border border-white/10 text-gray-600 hover:text-white hover:border-white/25 transition-colors flex items-center justify-center"
+                          aria-label="Copy copy-trade proof post"
+                          title={copiedId === `trade-${i}` ? 'Copied' : 'Copy post'}
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            postToX(shareText);
+                          }}
+                          className="w-7 h-7 rounded border border-vermilion/30 text-vermilion/80 hover:text-vermilion hover:bg-vermilion/10 transition-colors flex items-center justify-center"
+                          aria-label="Post copy-trade proof to X"
+                          title="Post to X"
+                        >
+                          <Share2 className="w-3.5 h-3.5" />
+                        </button>
                         <span className="font-mono text-[11px] text-vermilion w-4 text-right shrink-0">{t.digest ? '↗' : ''}</span>
                       </div>
                     );
@@ -407,6 +785,19 @@ export default function StrategiesPage() {
 
         <Footer />
       </main>
+    </div>
+  );
+}
+
+function MiniStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <span className="text-[9px] font-bold uppercase tracking-[0.18em] text-gray-600 block mb-1">
+        {label}
+      </span>
+      <span className="font-mono text-[12px] text-white tabular-nums">
+        {value}
+      </span>
     </div>
   );
 }

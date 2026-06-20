@@ -34,7 +34,7 @@ export default function PrivateRoomsPanel({
           <h3 className="text-lg font-bold text-white">Private Rooms</h3>
         </div>
         <p className="text-sm text-gray-400">
-          Invite-only rooms hide curated mirrored markets behind room access, so sensitive consensus stays inside the group.
+          Invite-only rooms gate curated mirror previews behind room access, so teams can test private discovery flows without exposing them publicly.
         </p>
       </div>
 

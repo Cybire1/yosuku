@@ -30,6 +30,11 @@ export const RESERVE_ID = NET.reserveId;
 export const LEVERAGE_MANAGER_ID = NET.leverageManagerId;
 // the settlement keeper EOA (owns the leverage manager; runs the settle crank).
 export const KEEPER_ADDRESS = NET.keeperAddress;
+// borrow-and-liquidate desk + prefunded Trading Balance vault. Empty until the
+// TradingVault upgrade is published and the shared object is created on testnet.
+export const TRADING_VAULT_PACKAGE = NET.tradingVaultPackage;
+export const MARGIN_DESK_ID = NET.marginDeskId;
+export const TRADING_VAULT_ID = NET.tradingVaultId;
 
 // DeepBook spot v3 (CLOB) — LIVE on mainnet; available for spot-routed / spot-collateral flows.
 export const DEEPBOOK_SPOT_PACKAGE = NET.deepbookSpotPackage;

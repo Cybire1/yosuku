@@ -51,17 +51,17 @@ export default function MirrorQueuePanel({
           <div className="mb-2 flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.24em] text-gray-300">
               <ArrowRightLeft className="h-3 w-3 text-new-mint" />
-              Autonomous Mirror Queue
+              Mirror Preview Queue
             </span>
-            <span className="inline-flex items-center gap-2 rounded-full border border-new-mint/15 bg-new-mint/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.24em] text-new-mint">
+            <span className="inline-flex items-center gap-2 rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.24em] text-amber-300">
               <EyeOff className="h-3 w-3" />
-              Public discovery, on-chain execution
+              Public discovery, local preview
             </span>
           </div>
           <h3 className="text-lg font-bold text-white">Polymarket markets normalized for Sui</h3>
           <p className="mt-1 text-sm text-gray-400">
-            Live public markets are translated into deterministic mirror metadata, fixed-odds quote inputs, and source hashes
-            the backend can create on-chain.
+            Live public markets are translated into deterministic mirror metadata, fixed-odds quote inputs, and source hashes for preview.
+            This build does not settle mirrored positions on Sui.
           </p>
         </div>
 
@@ -79,7 +79,7 @@ export default function MirrorQueuePanel({
               ? 'border-new-mint/20 bg-new-mint/10 text-new-mint'
               : 'border-white/8 bg-white/[0.03] text-gray-400'
           }`}>
-            {createOnChain ? 'Auto-create enabled' : 'Catalog mode'}
+            {createOnChain ? 'Preview sync enabled' : 'Catalog mode'}
           </span>
         </div>
       </div>
@@ -124,7 +124,7 @@ export default function MirrorQueuePanel({
                       ? 'border-off-blue/15 bg-off-blue/10 text-off-blue'
                       : 'border-white/8 bg-white/[0.03] text-gray-400'
                   }`}>
-                    {market.onChainCreated ? 'Live on Sui' : 'Queued'}
+                    {market.onChainCreated ? 'Preview ready' : 'Queued'}
                   </span>
                 </div>
 
@@ -143,7 +143,7 @@ export default function MirrorQueuePanel({
                   </div>
 
                   <div className="rounded-2xl border border-white/6 bg-white/[0.03] p-3">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-gray-500">Sui quote</p>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-gray-500">Preview quote</p>
                     <div className="mt-2 flex items-center justify-between text-sm font-bold">
                       <span className="text-new-mint">{formatMultiplier(market.yesMultiplierBps)}</span>
                       <span className="text-off-red">{formatMultiplier(market.noMultiplierBps)}</span>
@@ -174,7 +174,7 @@ export default function MirrorQueuePanel({
                       : 'border-white/8 bg-white/[0.03] text-gray-300 hover:text-white'
                   }`}
                 >
-                  {market.onChainCreated ? 'Trade on Sui' : 'Inspect mirror'}
+                  {market.onChainCreated ? 'Inspect preview' : 'Inspect mirror'}
                 </button>
                 <Link
                   href={`/markets/${market.marketId}`}

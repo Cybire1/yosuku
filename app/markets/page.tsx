@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useCurrentAccount } from '@mysten/dapp-kit';
 import { useOracles } from '@/lib/sui/hooks';
 import { type PriceData } from '@/lib/sui/predictApi';
@@ -33,6 +34,8 @@ function computeQuickProb(p: PriceData, marketStrike: number, expiry: number, no
   const z = diff / (sigma || 0.01);
   return Math.max(1, Math.min(99, 100 / (1 + Math.exp(-1.7 * z))));
 }
+
+const LIVE_HORIZON_LABELS = ['15-min', '30-min', '45-min', '1-hr'] as const;
 
 // Later rounds per asset, as live countdown chips. One shared 1s ticker.
 function BellChips({ rows }: { rows: ReadonlyArray<readonly [string, { oracle_id: string; expiry: number }[]]> }) {
@@ -72,6 +75,7 @@ function BellChips({ rows }: { rows: ReadonlyArray<readonly [string, { oracle_id
 export default function MarketsPage() {
   const account = useCurrentAccount();
   const address = account?.address ?? null;
+  const router = useRouter();
   const { active, settled, loading, error } = useOracles();
   const [prices, setPrices] = useState<Record<string, PriceData>>({});
   const { price: btcPrice } = useBtcPrice();
@@ -303,9 +307,8 @@ export default function MarketsPage() {
     return result;
   }, [filter, searchQuery, sortBy, prices, favorites, nowMs, settled, btcPrice]);
 
-  // One card per asset — the next bell. The oracle operator ladders rounds
-  // every 15 minutes, so rendering every oracle is a wall of near-identical
-  // questions; later expiries collapse into time chips instead.
+  // Show the next four tradable bells as the active ladder. Predict still runs
+  // 15-minute rounds; the labels describe how far out each round closes.
   const filteredActive = useMemo(() => filterOracles(active), [filterOracles, active]);
   const byAsset = useMemo(() => {
     const m = new Map<string, typeof active>();
@@ -317,15 +320,20 @@ export default function MarketsPage() {
     for (const list of m.values()) list.sort((a, b) => a.expiry - b.expiry);
     return m;
   }, [filteredActive]);
-  // Computed per render (the 1s clock tick re-renders) so the live card
+  // Computed per render (the 1s clock tick re-renders) so the live ladder
   // rotates to the next round the moment one expires — never stuck on
   // "Expired" while the oracle waits for its settlement print.
-  const nextBell = Array.from(byAsset.values())
-    .map(list => list.find(o => o.expiry > nowMs))
-    .filter((o): o is NonNullable<typeof o> => Boolean(o))
-    .sort((a, b) => a.expiry - b.expiry);
+  const liveLadder = [...filteredActive]
+    .filter(o => o.expiry > nowMs)
+    .sort((a, b) => a.expiry - b.expiry)
+    .slice(0, LIVE_HORIZON_LABELS.length)
+    .map((oracle, index) => ({
+      oracle,
+      horizonLabel: LIVE_HORIZON_LABELS[index] ?? `${(index + 1) * 15}-min`,
+    }));
+  const liveLadderIds = new Set(liveLadder.map(({ oracle }) => oracle.oracle_id));
   const laterBells = Array.from(byAsset.entries())
-    .map(([asset, list]) => [asset, list.filter(o => o.expiry > nowMs).slice(1)] as const)
+    .map(([asset, list]) => [asset, list.filter(o => o.expiry > nowMs && !liveLadderIds.has(o.oracle_id))] as const)
     .filter(([, list]) => list.length > 0);
 
   // Close sort dropdown on outside click
@@ -401,7 +409,16 @@ export default function MarketsPage() {
             </div>
 
             {/* Hero chart */}
-            <div className="hero-chart">
+            <div
+              className="hero-chart"
+              role={heroOracle ? 'link' : undefined}
+              tabIndex={heroOracle ? 0 : undefined}
+              aria-label={heroOracle ? 'Open this market' : undefined}
+              data-cursor={heroOracle ? 'hover' : undefined}
+              style={{ cursor: heroOracle ? 'pointer' : undefined }}
+              onClick={() => { if (heroOracle) router.push(`/markets/${heroOracle.id}`); }}
+              onKeyDown={(e) => { if (e.key === 'Enter' && heroOracle) router.push(`/markets/${heroOracle.id}`); }}
+            >
               <div className="hero-chart-head">
                 <div className="left">
                   <span className="glyph">₿</span>
@@ -412,9 +429,9 @@ export default function MarketsPage() {
                     <div className="pair-meta">
                       {heroOracle ? (
                         <>
-                          <span className="meta-soft">Tap a side below · </span>
-                          closes in {formatCountdown(getTimeRemaining(heroOracle.expiry))}
-                          <span className="meta-soft"> · settled by oracle</span>
+                          <span className="meta-soft">Tap UP or DOWN · closes in </span>
+                          {formatCountdown(getTimeRemaining(heroOracle.expiry))}
+                          <span className="meta-soft"> · oracle-settled</span>
                         </>
                       ) : 'spot · live stream · 1m candles'}
                     </div>
@@ -427,7 +444,7 @@ export default function MarketsPage() {
                     </span>
                     <span className="delta">{heroChartDelta || '\u2014'}</span>
                   </div>
-                  <div className="pair-meta meta-soft" style={{ fontSize: '9px' }}>live oracle price · updates each tick</div>
+                  <div className="pair-meta meta-soft" style={{ fontSize: '9px' }}>live oracle price</div>
                 </div>
               </div>
               <canvas ref={heroCanvasRef} />
@@ -435,10 +452,10 @@ export default function MarketsPage() {
                 <span>WINNING SIDE PAYS $1 · PRICE-ORACLE SETTLED</span>
                 {heroOracle ? (
                   <span className="hero-bet">
-                    <Link href={`/markets/${heroOracle.id}?strike=${heroOracle.strike}&side=UP`} className="hero-bet-btn up" data-cursor="up">
+                    <Link onClick={(e) => e.stopPropagation()} href={`/markets/${heroOracle.id}?strike=${heroOracle.strike}&side=UP`} className="hero-bet-btn up" data-cursor="up">
                       UP <span className="c">{heroYesProb ?? '—'}¢</span>
                     </Link>
-                    <Link href={`/markets/${heroOracle.id}?strike=${heroOracle.strike}&side=DOWN`} className="hero-bet-btn down" data-cursor="hover">
+                    <Link onClick={(e) => e.stopPropagation()} href={`/markets/${heroOracle.id}?strike=${heroOracle.strike}&side=DOWN`} className="hero-bet-btn down" data-cursor="hover">
                       DOWN <span className="c">{heroYesProb !== null ? 100 - heroYesProb : '—'}¢</span>
                     </Link>
                   </span>
@@ -587,18 +604,18 @@ export default function MarketsPage() {
             </div>
           )}
 
-          {/* Next bell — one card per asset */}
-          {nextBell.length > 0 && (
+          {/* Live ladder — next four tradable bells */}
+          {liveLadder.length > 0 && (
             <section className="markets-section" data-section="closing">
               <SectionHeader
                 number="01"
                 title="Live now"
                 jp="開催中"
                 live
-                meta={`${nextBell.length} ${nextBell.length === 1 ? 'market' : 'markets'}`}
+                meta={`${liveLadder.length} ${liveLadder.length === 1 ? 'horizon' : 'horizons'} · 15 / 30 / 45 / 60 min`}
               />
-              <div className="markets-grid">
-                {nextBell.map((oracle) => {
+              <div className="markets-grid markets-grid-live">
+                {liveLadder.map(({ oracle, horizonLabel }) => {
                   const price = prices[oracle.oracle_id];
                   const referencePrice = price?.forward || price?.spot || (btcPrice ? btcPrice * FLOAT_SCALING : null);
                   const line = getCanonicalMarketLine({
@@ -613,6 +630,7 @@ export default function MarketsPage() {
                     spotPrice={price?.spot}
                     forwardPrice={price?.forward}
                     seedStrike={line?.source === 'grid-fallback' ? null : line?.strike}
+                    horizonLabel={horizonLabel}
                     isFavorite={favorites.has(oracle.oracle_id)}
                     onToggleFavorite={handleToggleFavorite}
                   />

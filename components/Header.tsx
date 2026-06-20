@@ -15,11 +15,15 @@ import {
   MoreHorizontal,
   Trophy,
   WalletCards,
+  Zap,
   type LucideIcon,
 } from 'lucide-react';
 import AddFunds from './AddFunds';
 import FirstRunGuide from './FirstRunGuide';
-import { useDUSDCBalance } from '@/lib/sui/hooks';
+import CreditWelcome from './CreditWelcome';
+import TradingBalanceModal from './TradingBalanceModal';
+import { useToast } from './Toast';
+import { useDUSDCBalance, useTradingVaultBalance } from '@/lib/sui/hooks';
 
 type NavLink = {
   name: string;
@@ -29,6 +33,7 @@ type NavLink = {
 
 const PRIMARY_NAV: NavLink[] = [
   { name: 'Markets', href: '/markets' },
+  { name: 'Feed', href: '/feed' },
   { name: 'Earn', href: '/earn' },
   { name: 'Strategies', href: '/strategies' },
   { name: 'Portfolio', href: '/portfolio' },
@@ -48,6 +53,7 @@ const AUTO_FUND_AT = 1_000_000; // 1 DUSDC (6 decimals)
 
 const MOBILE_NAV: NavLink[] = [
   { name: 'Markets', href: '/markets', icon: ChartLine },
+  { name: 'Feed', href: '/feed', icon: Zap },
   { name: 'Earn', href: '/earn', icon: BadgeDollarSign },
   { name: 'Strategies', href: '/strategies', icon: Bot },
   { name: 'Portfolio', href: '/portfolio', icon: WalletCards },
@@ -62,13 +68,15 @@ export default function Header() {
   const [showMenu, setShowMenu] = useState(false);
   const [showMore, setShowMore] = useState(false);
   const [showFunds, setShowFunds] = useState(false);
+  const [showBalance, setShowBalance] = useState(false);
   const { balance: dusdcRaw, loading: dusdcLoading, refresh: refreshDusdc } = useDUSDCBalance();
+  const { balance: tradingVaultBalance, refresh: refreshTrading } = useTradingVaultBalance();
   const autoFundingRef = useRef(false);   // in-flight guard (avoid concurrent drips)
   const lowEpisodeRef = useRef(false);    // already auto-funded for the current low episode
   const moreMenuRef = useRef<HTMLDivElement>(null);
   const mobileMoreMenuRef = useRef<HTMLDivElement>(null);
   const walletMenuRef = useRef<HTMLDivElement>(null);
-  const [autoFundMsg, setAutoFundMsg] = useState<string | null>(null);
+  const { toast } = useToast();
 
   useEffect(() => {
     setMounted(true);
@@ -144,20 +152,32 @@ export default function Header() {
         if (r.ok && !d.error) {
           refreshDusdc();
           if (!d.alreadyFunded) {
-            setAutoFundMsg(`${d.amount ?? 2} test USDC added automatically`);
-            setTimeout(() => setAutoFundMsg(null), 4000);
+            const amount = d.amount ?? 2;
+            // The FIRST silent credit for an address is the "you're funded" moment —
+            // a prominent celebratory card (CreditWelcome) so a new user actually sees
+            // it happen. Routine top-ups after that use a quiet toast, not a takeover.
+            let firstTime = false;
+            try {
+              const wk = `yosuku:welcomed:${address}`;
+              firstTime = !localStorage.getItem(wk);
+              if (firstTime) localStorage.setItem(wk, '1');
+            } catch { /* localStorage unavailable — fall back to a toast */ }
+            if (firstTime) {
+              window.dispatchEvent(new CustomEvent('yosuku:credited', { detail: { amount, firstTime: true } }));
+            } else {
+              toast(`${amount} test USDC added to your wallet automatically`, 'success');
+            }
           }
         } else {
           // rate-limited / empty — a quiet cue, NOT a forced modal on every page.
-          setAutoFundMsg('Faucet busy — tap your balance to add test USDC');
-          setTimeout(() => setAutoFundMsg(null), 5000);
+          toast('Faucet busy — tap your balance to add test USDC', 'info');
         }
       } catch { /* network hiccup — clear cooldown so the next balance tick can retry */
         try { localStorage.removeItem(cdKey); } catch { /* ignore */ }
         lowEpisodeRef.current = false;
       } finally { autoFundingRef.current = false; }
     })();
-  }, [mounted, address, dusdcLoading, dusdcRaw, refreshDusdc]);
+  }, [mounted, address, dusdcLoading, dusdcRaw, refreshDusdc, toast]);
 
   const shortAddr = address
     ? `${address.slice(0, 6)}…${address.slice(-4)}`
@@ -240,12 +260,16 @@ export default function Header() {
           <div className="header-right">
             {mounted && address && (
               <button
-                onClick={() => setShowFunds(true)}
+                onClick={() => setShowBalance(true)}
                 data-cursor="hover"
-                title="DUSDC — free testnet dollars, not real money. Tap to add more."
+                title="Tap to move funds between your wallet and your Trading Balance."
                 className="dusdc-pill flex items-center gap-1.5 font-mono text-[12px] px-3 py-1.5 rounded-full border border-white/10 hover:border-white/25 hover:bg-white/[0.03] text-gray-300 hover:text-white transition-colors"
               >
-                <span className="text-white font-semibold tabular-nums">{(dusdcRaw / 1e6).toFixed(2)}</span>
+                <span className="hidden lg:inline text-gray-500">Trading</span>
+                <span className="text-white font-semibold tabular-nums">{(tradingVaultBalance.available / 1e6).toFixed(2)}</span>
+                <span className="hidden sm:inline text-gray-700">·</span>
+                <span className="hidden sm:inline text-gray-500">Wallet</span>
+                <span className="text-white/80 font-semibold tabular-nums">{(dusdcRaw / 1e6).toFixed(2)}</span>
                 <span className="text-gray-500 dusdc-unit">DUSDC</span>
                 <span className="text-vermilion font-bold ml-0.5 text-[15px] leading-none">+</span>
               </button>
@@ -271,6 +295,16 @@ export default function Header() {
                     </button>
                     {showMenu && (
                       <div className="absolute right-0 top-full mt-2 z-50 border border-white/10 rounded bg-bg backdrop-blur-md min-w-[160px] py-1" role="menu">
+                        <div className="px-4 py-3 border-b border-white/[0.06]">
+                          <div className="flex items-center justify-between gap-4 font-mono text-[11px]">
+                            <span className="text-gray-500">Trading</span>
+                            <span className="text-white tabular-nums">{(tradingVaultBalance.available / 1e6).toFixed(2)}</span>
+                          </div>
+                          <div className="flex items-center justify-between gap-4 font-mono text-[11px] mt-1">
+                            <span className="text-gray-500">Wallet</span>
+                            <span className="text-white/80 tabular-nums">{(dusdcRaw / 1e6).toFixed(2)}</span>
+                          </div>
+                        </div>
                         <a
                           href="/portfolio"
                           className="block px-4 py-2 text-xs font-mono text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
@@ -350,15 +384,11 @@ export default function Header() {
         )}
       </div>
 
-      {autoFundMsg && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[120] flex items-center gap-2 border border-white/10 rounded-full bg-[#0d0d10]/95 backdrop-blur px-4 py-2 shadow-2xl">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" style={{ boxShadow: '0 0 10px #34d399' }} />
-          <span className="font-mono text-[12px] text-gray-200">{autoFundMsg}</span>
-        </div>
-      )}
+      <CreditWelcome />
 
       <FirstRunGuide />
-      <AddFunds open={showFunds} onClose={() => setShowFunds(false)} onFunded={refreshDusdc} />
+      <AddFunds open={showFunds} onClose={() => setShowFunds(false)} onFunded={() => { refreshDusdc(); refreshTrading(); }} />
+      {showBalance && <TradingBalanceModal onClose={() => { setShowBalance(false); refreshDusdc(); refreshTrading(); }} />}
     </>
   );
 }
