@@ -37,7 +37,7 @@ const steps: TutorialStep[] = [
   {
     title: 'Your Trading Balance',
     jp: '取引残高',
-    description: 'Think of it as your Yosuku account. Test DUSDC can sit there between trades, winnings and cashouts land there first, and idle funds can be withdrawn back to your wallet anytime. The benefit is speed: once funded, bets and leverage can move without making you manage loose coins every time.',
+    description: 'Think of it as your Yosuku account, not a second wallet. A normal trade can top up from your wallet in the same PTB, but funds kept in Trading make repeat bets, leverage, private routes, and agent strategies feel instant. Winnings and cashouts land there first, and idle funds can be withdrawn anytime.',
   },
   {
     title: 'Pick your view',

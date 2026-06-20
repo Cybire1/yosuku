@@ -486,10 +486,12 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
           </div>
         )}
 
-        {/* Main content */}
+        {/* Main content. On mobile the bet panel comes FIRST (a consumer wants to see
+            where to bet, not scroll past the chart + trade history) — `order` flips it
+            back to chart-left / panel-right on desktop. */}
         <div className="flex flex-col lg:flex-row gap-6">
           {/* Left: chart + trades + strikes */}
-          <div className="flex-1 min-w-0 space-y-6">
+          <div className="flex-1 min-w-0 space-y-6 order-2 lg:order-1">
             {/* Canvas chart */}
             <div className="relative border border-white/[0.08] rounded bg-bg overflow-hidden" style={{ height: '320px' }}>
               <div className="absolute top-0 left-0 right-0 flex justify-between items-center px-5 py-3 border-b border-white/5 z-[2] bg-bg/50 font-mono text-[10px] text-gray-500">
@@ -530,7 +532,7 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
 
           {/* Right: trade panel */}
           {inDeadZone && (
-            <div className="w-full lg:w-[380px] flex-shrink-0">
+            <div className="w-full lg:w-[380px] flex-shrink-0 order-1 lg:order-2">
               <div className="lg:sticky lg:top-[120px] rounded-2xl border border-white/[0.08] bg-neutral-900/60 p-6 text-center">
                 <p className="font-mono text-[10px] tracking-[0.16em] uppercase text-gray-500 mb-2">Trading closed</p>
                 <p className="text-sm text-gray-400 leading-relaxed">
@@ -548,7 +550,7 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
             </div>
           )}
           {isTradable && (
-            <div className="w-full lg:w-[380px] flex-shrink-0">
+            <div className="w-full lg:w-[380px] flex-shrink-0 order-1 lg:order-2">
               <div className="lg:sticky lg:top-[120px] space-y-4">
                 <CashOut oracleId={oracleId} expiry={oracle.expiry} isActive={isTradable} />
                 <TradePanel
