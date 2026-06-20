@@ -1035,12 +1035,12 @@ body.urgent::before {
 }
 .mc-countdown {
   font-family: var(--font-mono);
-  font-size: 12px; color: var(--gray-300); letter-spacing: -0.02em;
+  font-size: 12px; color: var(--vermilion); letter-spacing: -0.02em;
   display: inline-flex; align-items: center; gap: 6px;
 }
 .mc-countdown .clock-dot {
   width: 5px; height: 5px; border-radius: 50%;
-  background: var(--gray-400);
+  background: var(--vermilion);
 }
 .mc-countdown.urgent { color: var(--vermilion); }
 .mc-countdown.urgent .clock-dot { background: var(--vermilion); animation: pulseDot 0.9s var(--ease) infinite; }
@@ -2329,6 +2329,13 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
 }
 .hero-title .l1 { display: block; }
 .hero-title .l2 { display: block; font-style: italic; font-weight: 400; font-family: 'Noto Serif JP', Georgia, serif; color: var(--gray-300); letter-spacing: -0.02em; }
+.hero-title .l2.product {
+  font-family: var(--font-display);
+  font-style: normal;
+  font-weight: 800;
+  color: var(--white);
+  letter-spacing: -0.05em;
+}
 .hero-title .l2 em { font-style: italic; color: var(--white); border-bottom: 1px solid rgba(255,255,255,0.4); padding-bottom: 0.05em; }
 .hero-title .amp { font-family: 'Noto Serif JP', Georgia, serif; font-weight: 400; font-style: italic; color: var(--gray-500); }
 
@@ -2336,7 +2343,7 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
   position: relative; z-index: 2;
   color: var(--gray-400);
   font-size: 16px; max-width: 38ch;
-  margin: 0 0 40px; line-height: 1.55;
+  margin: -14px 0 32px; line-height: 1.55;
 }
 .hero-cta-row {
   position: relative; z-index: 2;
