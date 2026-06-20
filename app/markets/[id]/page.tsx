@@ -8,6 +8,7 @@ import Marquee from '@/components/Marquee';
 import GrainOverlay from '@/components/GrainOverlay';
 import CustomCursor from '@/components/CustomCursor';
 import TheBell from '@/components/TheBell';
+import TradeFlow from '@/components/TradeFlow';
 import TradePanel from '@/components/TradePanel';
 import CashOut from '@/components/CashOut';
 import Verdict from '@/components/Verdict';
@@ -15,8 +16,6 @@ import { fetchTrades, type OracleData, type TradeData } from '@/lib/sui/predictA
 import { useOracleState, useOracles } from '@/lib/sui/hooks';
 import { useBtcPrice } from '@/lib/hooks/useBtcPrice';
 import { FLOAT_SCALING, DUSDC_MULTIPLIER } from '@/lib/sui/constants';
-import { Share2, Link2, Check } from 'lucide-react';
-import PriceAlertsButton from '@/components/PriceAlerts';
 import { useKeyboardShortcuts } from '@/lib/hooks/useKeyboardShortcuts';
 import { checkAlerts, sendNotification } from '@/lib/priceAlerts';
 import Tooltip from '@/components/Tooltip';
@@ -60,7 +59,6 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
   // Price series cached per oracle so strike/price changes redraw the chart
   // without re-fetching /prices every poll.
   const chartSeriesRef = useRef<{ id: string; series: number[]; times: number[] } | null>(null);
-  const [copied, setCopied] = useState(false);
   const [activeSide, setActiveSide] = useState<'UP' | 'DOWN'>(defaultSide);
 
   const handleSideChange = useCallback((nextSide: 'UP' | 'DOWN') => {
@@ -327,7 +325,6 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
   const activeStrike = selectedStrike ?? midStrike;
   const midStrikeDollars = activeStrike / FLOAT_SCALING;
   const asset = oracle.underlying_asset || 'BTC';
-  const marketUrlPath = `/markets/${oracleId}?strike=${activeStrike}&side=${activeSide}`;
 
   // When this round has closed, point the user at the next LIVE round for the same asset
   // (active is sorted soonest-first and filtered to expiry > now) so the detail page —
@@ -441,33 +438,6 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
           )}
         </div>
 
-        {/* Share buttons */}
-        <div className="flex items-center gap-2 mb-6">
-          <button
-            onClick={() => {
-              const url = `https://yosuku.xyz${marketUrlPath}`;
-              const text = `${asset} above ${formatPrice(midStrikeDollars)}? Trade on @yosuku_xyz`;
-              window.open(`https://x.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`, '_blank');
-            }}
-            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-white/10 bg-white/[0.03] text-gray-400 hover:text-white hover:border-white/20 transition-all text-xs font-medium"
-          >
-            <Share2 style={{ width: 12, height: 12 }} />
-            Share
-          </button>
-          <button
-            onClick={() => {
-              navigator.clipboard.writeText(`https://yosuku.xyz${marketUrlPath}`);
-              setCopied(true);
-              setTimeout(() => setCopied(false), 2000);
-            }}
-            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-white/10 bg-white/[0.03] text-gray-400 hover:text-white hover:border-white/20 transition-all text-xs font-medium"
-          >
-            {copied ? <Check style={{ width: 12, height: 12, color: '#34D399' }} /> : <Link2 style={{ width: 12, height: 12 }} />}
-            {copied ? 'Copied!' : 'Copy Link'}
-          </button>
-          <PriceAlertsButton asset={asset} currentPrice={spot} />
-        </div>
-
         {/* One settled experience: personal result + claim (or neutral outcome
             for non-holders) + the next-round loop — all inside Verdict. */}
         {isSettled && <Verdict oracle={oracle} />}
@@ -499,6 +469,7 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
                 <span>Price to beat {formatPrice(midStrikeDollars)}</span>
               </div>
               <canvas ref={chartCanvasRef} className="absolute inset-x-0 top-10 bottom-0 w-full h-[calc(100%-40px)]" />
+              {isActive && <TradeFlow trades={trades} />}
             </div>
 
 

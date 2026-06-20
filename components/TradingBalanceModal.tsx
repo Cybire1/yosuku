@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useCurrentAccount } from '@mysten/dapp-kit';
-import { ArrowRight, Bot, Layers, ShieldCheck, Wallet, X, Zap } from 'lucide-react';
+import { ArrowRight, Layers, Wallet, X } from 'lucide-react';
 import { useSmartSubmit } from '@/lib/sui/useSmartSubmit';
 import { useDUSDCBalance, useTradingVaultBalance } from '@/lib/sui/hooks';
 import { depositTradingBalanceTx, withdrawTradingBalanceTx } from '@/lib/sui/tradingVaultClient';
@@ -92,7 +92,7 @@ export default function TradingBalanceModal({ onClose }: { onClose: () => void }
     <div className="fixed inset-0 z-[110] flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
       <div
-        className="relative w-full max-w-md rounded-2xl border border-white/10 bg-[#0d0d10] p-6 shadow-2xl"
+        className="relative w-full max-w-[380px] rounded-2xl border border-white/10 bg-[#0d0d10] p-5 shadow-2xl"
         role="dialog"
         aria-modal="true"
         aria-labelledby="balance-title"
@@ -107,54 +107,22 @@ export default function TradingBalanceModal({ onClose }: { onClose: () => void }
           <X className="h-4 w-4" />
         </button>
 
-        <div className="flex items-center gap-2 mb-1">
-          <span className="w-1.5 h-1.5 rounded-full bg-vermilion" style={{ boxShadow: '0 0 12px var(--vermilion)' }} />
-          <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-gray-500">Move funds</span>
-        </div>
-        <h2 id="balance-title" className="font-display text-2xl font-extrabold tracking-tight mb-4">Your balances</h2>
+        <h2 id="balance-title" className="font-display text-lg font-bold tracking-tight mb-3.5">Move funds</h2>
 
-        {/* balances */}
-        <div className="grid grid-cols-2 gap-3 mb-5">
-          <div className={`rounded-xl border p-3.5 transition-colors ${tab === 'withdraw' ? 'border-vermilion/40 bg-vermilion/[0.05]' : 'border-white/[0.08] bg-white/[0.02]'}`}>
+        {/* balances — label + amount, nothing more */}
+        <div className="grid grid-cols-2 gap-2.5 mb-3.5">
+          <div className={`rounded-lg border px-3 py-2 transition-colors ${tab === 'withdraw' ? 'border-vermilion/40 bg-vermilion/[0.05]' : 'border-white/[0.08] bg-white/[0.02]'}`}>
             <div className="flex items-center gap-1.5 text-gray-500"><Layers className="h-3.5 w-3.5" /><span className="font-mono text-[10px] uppercase tracking-wider">Trading</span></div>
-            <div className="mt-1.5 font-display text-xl font-bold tabular-nums text-white">{fmt(tradingDusdc)}</div>
-            <div className="font-mono text-[10px] text-gray-600">inside Yosuku · ready to bet</div>
+            <div className="mt-0.5 font-display text-base font-bold tabular-nums text-white">{fmt(tradingDusdc)}</div>
           </div>
-          <div className={`rounded-xl border p-3.5 transition-colors ${tab === 'deposit' ? 'border-vermilion/40 bg-vermilion/[0.05]' : 'border-white/[0.08] bg-white/[0.02]'}`}>
+          <div className={`rounded-lg border px-3 py-2 transition-colors ${tab === 'deposit' ? 'border-vermilion/40 bg-vermilion/[0.05]' : 'border-white/[0.08] bg-white/[0.02]'}`}>
             <div className="flex items-center gap-1.5 text-gray-500"><Wallet className="h-3.5 w-3.5" /><span className="font-mono text-[10px] uppercase tracking-wider">Wallet</span></div>
-            <div className="mt-1.5 font-display text-xl font-bold tabular-nums text-white/90">{fmt(walletDusdc)}</div>
-            <div className="font-mono text-[10px] text-gray-600">loose test DUSDC</div>
-          </div>
-        </div>
-
-        <div className="mb-5 rounded-2xl border border-vermilion/20 bg-[linear-gradient(135deg,rgba(224,77,38,0.14),rgba(255,255,255,0.025))] p-4">
-          <div className="flex items-start gap-3">
-            <div className="mt-0.5 rounded-full border border-vermilion/30 bg-vermilion/10 p-2 text-vermilion">
-              <Zap className="h-4 w-4" />
-            </div>
-            <div>
-              <div className="font-display text-sm font-bold text-white">Trading Balance makes Yosuku feel instant.</div>
-              <p className="mt-1 text-xs leading-relaxed text-gray-500">
-                Normal bets can still top up from Wallet inside the same PTB. Moving funds here is the fast lane for repeat bets, leverage, private routing, and agent strategies.
-              </p>
-            </div>
-          </div>
-          <div className="mt-3 grid grid-cols-3 gap-2">
-            {[
-              { icon: Zap, label: 'Fewer coin scans' },
-              { icon: ShieldCheck, label: 'Leverage ready' },
-              { icon: Bot, label: 'Agent ready' },
-            ].map(({ icon: Icon, label }) => (
-              <div key={label} className="rounded-xl border border-white/[0.07] bg-black/20 px-2.5 py-2">
-                <Icon className="mb-1 h-3.5 w-3.5 text-gray-400" />
-                <div className="font-mono text-[9px] uppercase tracking-[0.12em] text-gray-500">{label}</div>
-              </div>
-            ))}
+            <div className="mt-0.5 font-display text-base font-bold tabular-nums text-white/90">{fmt(walletDusdc)}</div>
           </div>
         </div>
 
         {/* direction toggle */}
-        <div className="flex rounded-full border border-white/[0.08] bg-white/[0.02] p-1 mb-4">
+        <div className="flex rounded-full border border-white/[0.08] bg-white/[0.02] p-1 mb-3">
           {(['deposit', 'withdraw'] as const).map((t) => (
             <button
               key={t}
@@ -169,7 +137,7 @@ export default function TradingBalanceModal({ onClose }: { onClose: () => void }
         </div>
 
         {/* amount */}
-        <div className="rounded-xl border border-white/[0.08] bg-black/30 px-4 py-3">
+        <div className="rounded-xl border border-white/[0.08] bg-black/30 px-4 py-2.5">
           <div className="flex items-center justify-between">
             <input
               autoFocus
@@ -202,7 +170,7 @@ export default function TradingBalanceModal({ onClose }: { onClose: () => void }
         <button
           onClick={run}
           disabled={!canSubmit}
-          className="mt-4 w-full rounded-full bg-vermilion py-3 font-semibold text-white transition-colors hover:bg-vermilion-d disabled:cursor-not-allowed disabled:opacity-40"
+          className="mt-3 w-full rounded-full bg-vermilion py-3 font-semibold text-white transition-colors hover:bg-vermilion-d disabled:cursor-not-allowed disabled:opacity-40"
         >
           {busy ? 'Confirming…' : tab === 'deposit' ? 'Move to Trading Balance →' : 'Withdraw to Wallet →'}
         </button>

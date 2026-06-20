@@ -65,7 +65,7 @@ export default function FirstRunGuide() {
   // trade surface because the choice changes the trade panel itself. Closing it "skips"
   // to the friendly default and lets the rest of the funnel continue.
   if (!modeChosen && address) {
-    const skip = () => chooseMode('simple');
+    const skip = () => chooseMode('pro');
     return (
       <div
         className="fixed inset-0 z-[130] flex items-center justify-center p-4"

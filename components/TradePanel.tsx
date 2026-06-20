@@ -133,9 +133,11 @@ export default function TradePanel({
   const roundClosing = nowMs > 0 && nowMs >= Number(oracle.expiry) - CLOSING_MARGIN_MS;
 
   // Simple vs Pro. Beginners get a plain-English question (no "strike", no
-  // leverage, no range); pros get the full machinery. Loaded from localStorage
-  // in an effect (not lazy init) to avoid an SSR/client hydration mismatch.
-  const [mode, setMode] = useState<'simple' | 'pro'>('simple');
+  // leverage, no range); pros get the full machinery. Default is Pro so the full
+  // feature set (leverage/strikes/range) is visible out of the box — a saved
+  // preference still wins. Loaded from localStorage in an effect (not lazy init)
+  // to avoid an SSR/client hydration mismatch.
+  const [mode, setMode] = useState<'simple' | 'pro'>('pro');
   useEffect(() => {
     try {
       const saved = localStorage.getItem('yosuku_trade_mode');
@@ -411,13 +413,13 @@ export default function TradePanel({
       : leverage > 1
         ? 'Private mode is not available for leveraged trades yet.'
         : privateStatus.maxStakeDusdc && amountMicro > privateStatus.maxStakeDusdc * DUSDC_MULTIPLIER
-          ? `Private beta max is ${privateStatus.maxStakeDusdc.toFixed(2)} DUSDC per ticket.`
+          ? `Beta limit: ${privateStatus.maxStakeDusdc.toFixed(2)} DUSDC max per private ticket.`
         : !privateStatus.ready
           ? privateStatus.reasons[0] ?? 'Private route is not ready.'
           : '';
   const privateRouteReady = privacyMode === 'public' || privateRouteIssue === '';
-  const privateRouteButtonLabel = privateRouteIssue.startsWith('Private beta max')
-    ? privateRouteIssue.replace(' per ticket.', '')
+  const privateRouteButtonLabel = privateRouteIssue.startsWith('Beta limit')
+    ? privateRouteIssue.replace(' max per private ticket.', '')
     : 'Private route not ready';
   // Estimated cost of the sized position (per-unit price read on-chain × our quantity).
   const estTradeCost = pricePerUnit > 0
@@ -702,7 +704,7 @@ export default function TradePanel({
   return (
     <div className="rounded-2xl border border-white/[0.08] bg-neutral-900/60 overflow-hidden">
       {/* Mode toggle — Simple (plain question) vs Pro (full machinery) */}
-      <div className="flex items-center justify-between px-4 pt-3 pb-2.5 border-b border-white/5">
+      <div className="flex items-center justify-between px-4 pt-2.5 pb-2 border-b border-white/5">
         <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-600">Place a bet</span>
         <div className="inline-flex rounded-lg border border-white/10 bg-white/[0.02] p-0.5">
           {(['simple', 'pro'] as const).map((m) => (
@@ -765,14 +767,14 @@ export default function TradePanel({
       </div>
       )}
 
-      <div className="p-5 space-y-4">
+      <div className="p-4 space-y-3">
         {/* Bet builder — Simple shows a plain question; Pro shows strikes/range */}
         {mode === 'simple' ? (
-          <div className="space-y-3">
+          <div className="space-y-2.5">
             {/* Plain-English question — no "strike", price baked in and pre-set */}
-            <div className="rounded-xl bg-white/[0.02] border border-white/5 px-4 py-3.5">
-              <p className="text-[10px] uppercase tracking-[0.2em] text-gray-600 font-bold mb-1.5">The call</p>
-              <p className="text-[15px] leading-snug text-gray-200">
+            <div className="rounded-xl bg-white/[0.02] border border-white/5 px-3.5 py-2.5">
+              <p className="text-[9px] uppercase tracking-[0.18em] text-gray-600 font-bold mb-1">The call</p>
+              <p className="text-[14px] leading-snug text-gray-200">
                 Will {oracle.underlying_asset || 'Bitcoin'} be{' '}
                 <span className={side === 'UP' ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold'}>
                   {side === 'UP' ? 'above' : 'below'}
@@ -794,26 +796,26 @@ export default function TradePanel({
                 type="button"
                 onClick={() => { setSide('UP'); onSideChange?.('UP'); }}
                 aria-pressed={side === 'UP'}
-                className={`flex flex-col items-center gap-0.5 py-3 rounded-xl border transition-all ${
+                className={`flex flex-col items-center gap-0.5 py-2.5 rounded-xl border transition-all ${
                   side === 'UP'
                     ? 'border-emerald-400/60 bg-emerald-500/10 text-emerald-400'
                     : 'border-white/5 bg-white/[0.02] text-gray-400 hover:text-white hover:border-white/10'
                 }`}
               >
-                <span className="inline-flex items-center gap-1.5 text-sm font-bold"><TrendingUp className="w-4 h-4" /> Higher</span>
+                <span className="inline-flex items-center gap-1.5 text-[13px] font-bold"><TrendingUp className="w-4 h-4" /> Higher</span>
                 {upProb !== null && <span className="text-[10px] font-mono opacity-70">~{Math.round(upProb * 100)}% chance</span>}
               </button>
               <button
                 type="button"
                 onClick={() => { setSide('DOWN'); onSideChange?.('DOWN'); }}
                 aria-pressed={side === 'DOWN'}
-                className={`flex flex-col items-center gap-0.5 py-3 rounded-xl border transition-all ${
+                className={`flex flex-col items-center gap-0.5 py-2.5 rounded-xl border transition-all ${
                   side === 'DOWN'
                     ? 'border-rose-400/60 bg-rose-500/10 text-rose-400'
                     : 'border-white/5 bg-white/[0.02] text-gray-400 hover:text-white hover:border-white/10'
                 }`}
               >
-                <span className="inline-flex items-center gap-1.5 text-sm font-bold"><TrendingDown className="w-4 h-4" /> Lower</span>
+                <span className="inline-flex items-center gap-1.5 text-[13px] font-bold"><TrendingDown className="w-4 h-4" /> Lower</span>
                 {upProb !== null && <span className="text-[10px] font-mono opacity-70">~{Math.round((1 - upProb) * 100)}% chance</span>}
               </button>
             </div>
@@ -823,7 +825,7 @@ export default function TradePanel({
               type="button"
               onClick={() => setShowStrikeSelector((s) => !s)}
               aria-expanded={showStrikeSelector}
-              className="text-[11px] font-bold text-gray-500 hover:text-white transition-colors"
+              className="text-[10px] font-bold text-gray-500 hover:text-white transition-colors"
             >
               {showStrikeSelector ? 'Done' : 'Change the price'} ▾
             </button>
@@ -1079,7 +1081,7 @@ export default function TradePanel({
 
         {/* Amount input */}
         <div>
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center justify-between mb-1.5">
             <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500">
               {mode === 'simple' ? 'Your stake' : 'Amount (DUSDC)'}
             </label>
@@ -1097,7 +1099,7 @@ export default function TradePanel({
               placeholder="0.00"
               min="0"
               step="1"
-              className="w-full px-4 py-3 rounded-xl bg-white/[0.03] border border-white/[0.08] focus:border-white/20 text-white font-mono text-lg outline-none transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              className="w-full px-4 py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.08] focus:border-white/20 text-white font-mono text-base outline-none transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
             />
             <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-500">
               DUSDC
@@ -1105,14 +1107,14 @@ export default function TradePanel({
           </div>
 
           {/* Quick amount buttons */}
-          <div className="flex gap-2 mt-2">
+          <div className="flex gap-1.5 mt-1.5">
             {quickAmounts.map((qa) => (
               <button
                 key={qa}
                 type="button"
                 onClick={() => setAmount(String(qa))}
                 aria-pressed={amount === String(qa)}
-                className={`flex-1 py-1.5 text-xs font-bold rounded-lg border transition-colors ${
+                className={`flex-1 py-1.5 text-[11px] font-bold rounded-lg border transition-colors ${
                   amount === String(qa)
                     ? 'border-white/20 bg-white/10 text-white'
                     : 'border-white/5 bg-white/[0.02] text-gray-500 hover:text-gray-300'
@@ -1122,17 +1124,11 @@ export default function TradePanel({
               </button>
             ))}
           </div>
-          <div className="mt-2.5 flex items-start gap-2 rounded-xl border border-white/[0.06] bg-white/[0.025] px-3 py-2">
-            <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-new-mint" />
-            <p className="text-[11px] leading-relaxed text-gray-500">
-              <span className="font-semibold text-gray-300">One-signature top-up.</span> If Trading is short, this trade can pull only the difference from Wallet inside the same PTB.
-            </p>
-          </div>
         </div>
 
         {/* Leverage (yolev underwriting reserve) — Pro only */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between mb-2">
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between mb-1.5">
             <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500">
               Privacy
             </label>
@@ -1142,21 +1138,23 @@ export default function TradePanel({
           </div>
           <IncognitoToggle mode={privacyMode} onChange={applyPrivacyMode} />
           {privacyMode === 'private' && (
-            <div className="rounded-xl bg-new-mint/[0.04] border border-new-mint/15 p-3">
+            <div className="rounded-xl bg-new-mint/[0.04] border border-new-mint/15 p-2.5">
               <div className="flex items-start gap-2">
                 {privateStatus.ready ? (
                   <ShieldCheck className="w-4 h-4 text-new-mint mt-0.5 shrink-0" />
                 ) : (
                   <LockKeyhole className="w-4 h-4 text-gray-500 mt-0.5 shrink-0" />
                 )}
-                <p className="text-[11px] leading-relaxed text-gray-400">
+                <p className="text-[11px] leading-snug text-gray-400">
                   {privateStatus.mode === 'unconfigured'
                     ? 'The private route is offline right now — try again shortly.'
                     : 'Your wallet stays off this trade. Winnings land in your Private Balance, and you choose when to withdraw.'}
                 </p>
               </div>
               {privateRouteIssue && (
-                <p className="text-[11px] text-rose-400 leading-relaxed mt-2">{privateRouteIssue}</p>
+                <p className="mt-2 inline-flex rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 font-mono text-[10px] leading-none text-gray-400">
+                  {privateRouteIssue}
+                </p>
               )}
             </div>
           )}
@@ -1223,15 +1221,17 @@ export default function TradePanel({
         )}
 
         {/* Trade summary */}
-        <div className="rounded-xl bg-white/[0.02] border border-white/5 p-3 space-y-2">
-          <div className="flex justify-between text-xs">
-            <span className="text-gray-500">Direction</span>
-            <span className={`font-bold ${
-              side === 'UP' ? 'text-emerald-400' : side === 'DOWN' ? 'text-rose-400' : 'text-amber-400'
-            }`}>
-              {side === 'UP' ? 'UP' : side === 'DOWN' ? 'DOWN' : 'RANGE'}
-            </span>
-          </div>
+        <div className="rounded-xl bg-white/[0.02] border border-white/5 p-2.5 space-y-1.5">
+          {mode === 'pro' && (
+            <div className="flex justify-between text-xs">
+              <span className="text-gray-500">Direction</span>
+              <span className={`font-bold ${
+                side === 'UP' ? 'text-emerald-400' : side === 'DOWN' ? 'text-rose-400' : 'text-amber-400'
+              }`}>
+                {side === 'UP' ? 'UP' : side === 'DOWN' ? 'DOWN' : 'RANGE'}
+              </span>
+            </div>
+          )}
           {/* "Your line" intentionally omitted here — it just repeats the strike
               selector above. Keep the summary to numbers the bettor can't see
               elsewhere: pay, win, odds, countdown. */}
@@ -1240,18 +1240,18 @@ export default function TradePanel({
               position is sized to use it; any sub-unit remainder stays in your
               balance, reusable — never a hidden deduction. */}
           {/* Earnings hero — the one number a consumer actually cares about. */}
-          <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/[0.07] p-4 text-center">
-            <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-emerald-400/70">
+          <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/[0.07] px-3 py-2.5 text-center">
+            <div className="font-mono text-[9px] uppercase tracking-[0.18em] text-emerald-400/70">
               {isLeveraged ? 'You could collect' : 'You could win'}
             </div>
             {quoteLoading ? (
-              <div className="font-display text-3xl font-extrabold text-emerald-400/50 mt-1.5">…</div>
+              <div className="font-display text-xl font-extrabold text-emerald-400/50 mt-0.5">…</div>
             ) : isValidAmount && onChainQuote ? (
               <>
-                <div className="font-display text-[34px] leading-none font-extrabold text-emerald-400 tabular-nums mt-1.5">
-                  {(maxCollectMicro / DUSDC_MULTIPLIER).toFixed(2)} <span className="text-xl">DUSDC</span>
+                <div className="font-display text-[22px] leading-none font-extrabold text-emerald-400 tabular-nums mt-0.5">
+                  {(maxCollectMicro / DUSDC_MULTIPLIER).toFixed(2)} <span className="text-xs">DUSDC</span>
                 </div>
-                <div className="font-mono text-[11px] text-gray-400 mt-2">
+                <div className="font-mono text-[10px] text-gray-400 mt-1">
                   {(() => {
                     const pay = amountMicro / DUSDC_MULTIPLIER;
                     const win = maxCollectMicro / DUSDC_MULTIPLIER;
@@ -1262,11 +1262,11 @@ export default function TradePanel({
                 </div>
               </>
             ) : quoteError ? (
-              <button onClick={() => setQuoteRetry((k) => k + 1)} className="mt-2 text-[12px] text-rose-400/90 underline underline-offset-2 hover:text-rose-300">
+              <button onClick={() => setQuoteRetry((k) => k + 1)} className="mt-1 text-[12px] text-rose-400/90 underline underline-offset-2 hover:text-rose-300">
                 quote unavailable — retry
               </button>
             ) : (
-              <div className="font-display text-3xl font-extrabold text-gray-700 mt-1.5">—</div>
+              <div className="font-display text-xl font-extrabold text-gray-700 mt-0.5">—</div>
             )}
           </div>
           <div className="flex justify-between items-baseline">
@@ -1278,11 +1278,6 @@ export default function TradePanel({
               {isValidAmount ? `${(amountMicro / DUSDC_MULTIPLIER).toFixed(2)} DUSDC` : '—'}
             </span>
           </div>
-          {askOutOfBounds && (
-            <div className="rounded-lg border border-amber-500/15 bg-amber-500/[0.06] px-3 py-2 text-[11px] leading-relaxed text-amber-200/80">
-              This side is priced outside DeepBook Predict&apos;s mint range. Pick a less certain strike or take the other side.
-            </div>
-          )}
           {leveragedRightSideLosesMoney && (
             <div className="rounded-lg border border-rose-500/15 bg-rose-500/[0.06] px-3 py-2 text-[11px] leading-relaxed text-rose-200/80">
               Leverage is disabled here because a correct trade would collect less than your margin after reserve repayment.
@@ -1339,7 +1334,7 @@ export default function TradePanel({
             setShowConfirmModal(true);
           }}
           disabled={!isValidAmount || !selectedStrike || step !== 'idle' || !hasEnoughBalance || !isRangeValid || stopHit || !hasLiveQuote || !privateRouteReady || roundClosing || tradeRiskBlocked}
-          className={`w-full py-4 rounded-xl text-sm font-bold uppercase tracking-wider transition-all disabled:cursor-not-allowed ${
+          className={`w-full py-3.5 rounded-xl text-sm font-bold uppercase tracking-wider transition-all disabled:cursor-not-allowed ${
             // Success is ALWAYS green — never inherit the DOWN-red, or a confirmed trade
             // reads as an error (a red "TRADE CONFIRMED!" looks like a failure).
             step === 'success'
@@ -1519,7 +1514,7 @@ export default function TradePanel({
             auto-provision effect) — no visible "create account" step. */}
 
         {/* Daily loss stop — honest brakes on a 15-minute market */}
-        <div className="flex items-center justify-between text-[11px] px-1">
+        <div className="flex items-center justify-between text-[10px] px-1">
           <span className="text-gray-600">
             Daily stop{dailyStopLimit !== null && (
               <span className={stopHit ? 'text-loss font-semibold' : 'text-gray-500'}>
