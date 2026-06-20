@@ -2,7 +2,7 @@
 
 # YOSUKU 
 
-### Prediction markets, made usable.
+### Prediction markets, made usable. 
 
 A consumer front door, a developer SDK, and an autonomous attested agent — all on **[DeepBook Predict](https://docs.sui.io/onchain-finance/deepbook-predict)**.
 
