@@ -4,13 +4,18 @@ import { useState, useEffect, useCallback } from 'react';
 import { useCurrentAccount } from '@mysten/dapp-kit';
 import { readClient } from './modernClients';
 import { RESERVE_ID, DUSDC_MULTIPLIER } from './constants';
+import { loadLocalLeverageOrders } from '../leverageLocal';
+import { fetchOnChainQuote, fetchOnChainRangeQuote } from './onchainQuote';
 import {
+  computeLeverageHealth,
   computeReserveStats,
   supplyPositionValue,
+  unknownLeverageHealth,
   SUPPLY_POSITION_TYPE,
   ORDER_REQUESTED_EVENT,
   ORDER_FILLED_EVENT,
   type ReserveStats,
+  type LeverageHealth,
   type PositionData,
   type OrderData,
 } from './leverageClient';
@@ -79,10 +84,10 @@ export function useMySupply(stats: ReserveStats | null, pollMs = 15_000) {
 // collect ids from an event type's field where the event's `trader` is the wallet,
 // then fetch the objects that still exist (live orders / positions).
 async function liveByEvent(eventType: string, idField: string, trader: string): Promise<Fields[]> {
-  const ev = await readClient.queryEvents({ query: { MoveEventType: eventType }, limit: 200, order: 'descending' });
+  const ev = await readClient.queryEvents({ query: { MoveEventType: eventType }, limit: 1000, order: 'descending' });
   const ids = [...new Set(ev.data
     .map((e) => e.parsedJson as Record<string, unknown> | undefined)
-    .filter((j) => j && String(j.trader) === trader)
+    .filter((j) => j && String(j.trader).toLowerCase() === trader.toLowerCase())
     .map((j) => String(j![idField])))];
   if (ids.length === 0) return [];
   const objs = await readClient.multiGetObjects({ ids, options: { showContent: true } });
@@ -138,16 +143,78 @@ export function useMyOrders(pollMs = 6_000) {
   const refresh = useCallback(async () => {
     if (!address) { setOrders([]); return; }
     try {
-      const rows = await liveByEvent(ORDER_REQUESTED_EVENT, 'order', address);
-      setOrders(rows.map((f): OrderData => ({
+      const [rows, filledRows] = await Promise.all([
+        liveByEvent(ORDER_REQUESTED_EVENT, 'order', address),
+        liveByEvent(ORDER_FILLED_EVENT, 'position', address),
+      ]);
+      const chainOrders = rows.map((f): OrderData => ({
         id: String(f._id),
         trader: String(f.trader),
         margin: Number(f.margin) / DUSDC_MULTIPLIER,
         leverage: Number(f.leverage_bps) / 10_000,
         oracleId: String(f.oracle_id),
         isRange: Boolean(f.is_range),
+        isUp: Boolean(f.is_up),
+        lowerStrike: BigInt(String(f.lower_strike ?? 0)),
+        higherStrike: BigInt(String(f.higher_strike ?? 0)),
+        expiry: BigInt(String(f.expiry ?? 0)),
+        createdAt: Number(f.created_ms ?? 0),
+        source: 'chain',
+      }));
+      const localOrders = loadLocalLeverageOrders(address).map((o): OrderData => ({
+        id: o.id,
+        trader: o.trader,
+        margin: o.margin,
+        leverage: o.leverage,
+        oracleId: o.oracleId,
+        isRange: o.isRange,
+        isUp: o.isUp,
+        lowerStrike: BigInt(o.lowerStrike),
+        higherStrike: BigInt(o.higherStrike),
+        expiry: BigInt(o.expiry),
+        createdAt: o.createdAt,
+        txDigest: o.txDigest,
+        source: 'local',
+      }));
+      const chainMatchesLocal = (local: OrderData) => chainOrders.some((order) =>
+        order.oracleId === local.oracleId &&
+        order.isRange === local.isRange &&
+        order.isUp === local.isUp &&
+        Math.abs(order.margin - local.margin) < 0.000001 &&
+        Math.abs(order.leverage - local.leverage) < 0.000001 &&
+        (!order.createdAt || !local.createdAt || Math.abs(order.createdAt - local.createdAt) < 180_000)
+      );
+      const filledMatchesLocal = (local: OrderData) => filledRows.some((position) => {
+        const margin = Number(position.margin) / DUSDC_MULTIPLIER;
+        const fronted = Number(position.fronted) / DUSDC_MULTIPLIER;
+        const leverage = margin > 0 ? (margin + fronted) / margin : 0;
+        return String(position.oracle_id) === local.oracleId &&
+          Boolean(position.is_range) === local.isRange &&
+          Boolean(position.is_up) === local.isUp &&
+          Math.abs(margin - local.margin) < 0.000001 &&
+          Math.abs(leverage - local.leverage) < 0.000001;
+      });
+      setOrders([
+        ...chainOrders,
+        ...localOrders.filter((order) => !chainMatchesLocal(order) && !filledMatchesLocal(order)),
+      ]);
+    } catch {
+      setOrders(loadLocalLeverageOrders(address).map((o): OrderData => ({
+        id: o.id,
+        trader: o.trader,
+        margin: o.margin,
+        leverage: o.leverage,
+        oracleId: o.oracleId,
+        isRange: o.isRange,
+        isUp: o.isUp,
+        lowerStrike: BigInt(o.lowerStrike),
+        higherStrike: BigInt(o.higherStrike),
+        expiry: BigInt(o.expiry),
+        createdAt: o.createdAt,
+        txDigest: o.txDigest,
+        source: 'local',
       })));
-    } catch { /* ignore */ }
+    }
   }, [address]);
   useEffect(() => {
     refresh();
@@ -155,4 +222,50 @@ export function useMyOrders(pollMs = 6_000) {
     return () => clearInterval(t);
   }, [refresh, pollMs]);
   return { orders, refresh, address };
+}
+
+/** Live health for filled leverage positions, priced by the protocol redeem quote. */
+export function useLeverageHealth(positions: PositionData[], pollMs = 12_000) {
+  const [healthByPosition, setHealthByPosition] = useState<Record<string, LeverageHealth>>({});
+
+  const refresh = useCallback(async () => {
+    if (positions.length === 0) {
+      setHealthByPosition({});
+      return;
+    }
+
+    const entries = await Promise.all(positions.map(async (position) => {
+      try {
+        const quote = position.isRange
+          ? await fetchOnChainRangeQuote({
+            oracleId: position.oracleId,
+            expiry: position.expiry,
+            lower: position.lowerStrike,
+            higher: position.higherStrike,
+            quantity: position.quantity,
+          })
+          : await fetchOnChainQuote({
+            oracleId: position.oracleId,
+            expiry: position.expiry,
+            strike: position.lowerStrike,
+            isUp: position.isUp,
+            quantity: position.quantity,
+          });
+        return [position.id, computeLeverageHealth(position, quote.redeemPayout)] as const;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return [position.id, unknownLeverageHealth(position, message)] as const;
+      }
+    }));
+
+    setHealthByPosition(Object.fromEntries(entries));
+  }, [positions]);
+
+  useEffect(() => {
+    refresh();
+    const t = setInterval(refresh, pollMs);
+    return () => clearInterval(t);
+  }, [refresh, pollMs]);
+
+  return { healthByPosition, refresh };
 }

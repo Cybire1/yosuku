@@ -88,7 +88,7 @@ export default function MirrorMarketCard({
   const expanded = selected && Boolean(activeSide);
   const microAmount = Math.floor(parseFloat(amount || '0') * 1_000_000);
   const payout = useMemo(() => getMirrorPayout(market, chosenSide, microAmount), [market, chosenSide, microAmount]);
-  const canTrade = Boolean(market.onChainCreated && !market.onChainResolved && market.vaultAddress);
+  const canTrade = false;
   const change24hLabel = formatProbabilityChange(market.yesPriceChange24h);
   const change1wLabel = formatProbabilityChange(market.yesPriceChange1w);
 
@@ -161,11 +161,11 @@ export default function MirrorMarketCard({
         <span
           className={`rounded-full border px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.24em] ${
             market.onChainCreated
-              ? 'border-new-mint/20 bg-new-mint/10 text-new-mint'
+              ? 'border-amber-400/20 bg-amber-400/10 text-amber-300'
               : 'border-white/8 bg-white/[0.03] text-gray-400'
           }`}
         >
-          {market.onChainCreated ? 'Live' : 'Queued'}
+          {market.onChainCreated ? 'Preview' : 'Queued'}
         </span>
       </div>
 
@@ -251,7 +251,7 @@ export default function MirrorMarketCard({
       {expanded && (
         <div className="mt-4 rounded-[1.25rem] border border-white/8 bg-white/[0.035] p-4">
           <div className="mb-2 flex items-center justify-between text-xs text-gray-500">
-            <span>Amount</span>
+            <span>Preview amount</span>
             <span className="font-semibold text-white">{formatPred(balance)} DUSDC</span>
           </div>
 
@@ -265,9 +265,13 @@ export default function MirrorMarketCard({
           />
 
           <div className="mt-3 flex items-center justify-between text-xs">
-            <span className="text-gray-500">Locked payout</span>
+            <span className="text-gray-500">Preview payout</span>
             <span className="font-bold text-white">{formatPred(payout)} DUSDC</span>
           </div>
+
+          <p className="mt-3 rounded-xl border border-amber-400/20 bg-amber-400/10 px-3 py-2 text-xs leading-relaxed text-amber-200">
+            Mirror markets are local previews in this build. No DUSDC leaves your wallet and no Sui settlement is performed here.
+          </p>
 
           {error && (
             <div className="mt-3 rounded-xl border border-off-red/20 bg-off-red/10 px-3 py-2 text-xs text-off-red">
@@ -281,7 +285,7 @@ export default function MirrorMarketCard({
             className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-white px-3 py-3 text-[11px] font-bold uppercase tracking-[0.2em] text-black disabled:cursor-not-allowed disabled:opacity-40"
           >
             {loading ? <Loader className="h-4 w-4 animate-spin" /> : <Wallet className="h-4 w-4" />}
-            {loading ? 'Submitting...' : `Trade ${chosenSide === 'YES' ? yesLabel : noLabel}`}
+            {loading ? 'Submitting...' : 'Preview only'}
           </button>
         </div>
       )}

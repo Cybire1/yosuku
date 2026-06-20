@@ -85,7 +85,7 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
 
   // Single combined API call: oracle + prices + SVI
   const { state: oracleState, loading } = useOracleState(oracleId);
-  const { settled, loading: oracleListLoading } = useOracles();
+  const { active, settled, loading: oracleListLoading } = useOracles();
   // Sub-second live BTC price stream — the chart's moving tip so it tracks
   // BTC in real time instead of the 15s oracle-state poll.
   const { price: livePrice } = useBtcPrice();
@@ -329,6 +329,13 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
   const asset = oracle.underlying_asset || 'BTC';
   const marketUrlPath = `/markets/${oracleId}?strike=${activeStrike}&side=${activeSide}`;
 
+  // When this round has closed, point the user at the next LIVE round for the same asset
+  // (active is sorted soonest-first and filtered to expiry > now) so the detail page —
+  // pinned to one oracleId — never strands them on a dead market.
+  const nextRound = (inDeadZone || isSettled)
+    ? active.find(o => (o.underlying_asset || 'BTC') === asset && o.oracle_id !== oracle.oracle_id) ?? null
+    : null;
+
   const formatPrice = (n: number) =>
     '$' + n.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
@@ -529,6 +536,14 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
                 <p className="text-sm text-gray-400 leading-relaxed">
                   The bell has rung. The final price lands in a moment — if you won, your payout drops straight into your balance.
                 </p>
+                {nextRound && (
+                  <button
+                    onClick={() => router.push(`/markets/${nextRound.oracle_id}`)}
+                    className="mt-5 w-full bg-vermilion hover:bg-vermilion-d text-white font-bold rounded-xl py-3 text-sm transition-colors"
+                  >
+                    Go to the next bell →
+                  </button>
+                )}
               </div>
             </div>
           )}

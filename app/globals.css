@@ -347,6 +347,10 @@ body.urgent::before {
 
 .container { max-width: 1320px; margin: 0 auto; padding-inline: 32px; }
 
+/* hide scrollbar for the immersive vertical feed (snap scroll still works) */
+.no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
 /* ───────── Bell — sticky round timer ───────── */
 .bell {
   position: fixed;
@@ -435,6 +439,8 @@ body.urgent::before {
   gap: 56px;
   align-items: end;
 }
+/* Lift the headline off the very bottom so it sits a touch higher than the chart's base. */
+.hero-grid .hero-left { margin-bottom: 36px; }
 .hero-left .eyebrow {
   font-family: var(--font-mono);
   font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase;
@@ -510,8 +516,9 @@ body.urgent::before {
   display: flex; align-items: center; justify-content: center;
   font-family: var(--font-mono); font-size: 11px; color: var(--white);
 }
-.hero-chart-head .pair { font-family: var(--font-display); font-size: 13px; font-weight: 600; letter-spacing: 0.06em; color: var(--white); }
-.hero-chart-head .pair-meta { font-family: var(--font-mono); font-size: 10px; color: var(--gray-500); letter-spacing: 0.04em; }
+.hero-chart-head .pair { font-family: var(--font-display); font-size: 17px; font-weight: 700; letter-spacing: 0.005em; color: var(--white); line-height: 1.15; }
+.hero-chart-head .pair-meta { font-family: var(--font-mono); font-size: 10.5px; color: var(--gray-400); letter-spacing: 0.03em; white-space: nowrap; margin-top: 3px; }
+.hero-chart-head .pair-meta .meta-soft { color: var(--gray-600); }
 .hero-chart-head .price { font-family: var(--font-mono); font-size: 18px; font-weight: 600; color: var(--white); letter-spacing: -0.02em; }
 .hero-chart-head .delta { font-family: var(--font-mono); font-size: 11px; color: var(--vermilion); margin-left: 6px; }
 
@@ -973,6 +980,9 @@ body.urgent::before {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 16px;
+}
+.markets-grid-live {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 /* ───────── Market card ───────── */

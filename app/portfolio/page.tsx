@@ -3,8 +3,14 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCurrentAccount, ConnectButton } from '@mysten/dapp-kit';
-import { withdrawFromManagerTx } from '@/lib/sui/predictClient';
 import { useSmartSubmit } from '@/lib/sui/useSmartSubmit';
+import {
+  depositTradingBalanceTx,
+  moveTradingToPrivateTx,
+  sweepManagerToTradingBalanceTx,
+  withdrawPrivateTradingBalanceTx,
+  withdrawTradingBalanceTx,
+} from '@/lib/sui/tradingVaultClient';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import Marquee from '@/components/Marquee';
@@ -12,9 +18,10 @@ import GrainOverlay from '@/components/GrainOverlay';
 import CustomCursor from '@/components/CustomCursor';
 import SectionHeader from '@/components/SectionHeader';
 import PortfolioTable from '@/components/PortfolioTable';
-import TokenBalance from '@/components/TokenBalance';
-import { useManager, useDUSDCBalance, useManagerBalance, usePositions, useManagerSummary, useManagerPnL, usePLPBalance } from '@/lib/sui/hooks';
-import { DUSDC_MULTIPLIER } from '@/lib/sui/constants';
+import { useManager, useDUSDCBalance, useManagerBalance, usePositions, useManagerSummary, useManagerPnL, usePLPBalance, useTradingVaultBalance } from '@/lib/sui/hooks';
+import { DUSDC_MULTIPLIER, FLOAT_SCALING } from '@/lib/sui/constants';
+import { useLeverageHealth, useMyOrders, useMyPositions } from '@/lib/sui/leverageHooks';
+import { cancelOrderTx, type LeverageHealth, type OrderData, type PositionData as LeveragePositionData } from '@/lib/sui/leverageClient';
 import { fetchReputation, type ReputationData } from '@/lib/predictionContract';
 import { drawEquityCurve } from '@/lib/charts/canvasChart';
 import Tooltip from '@/components/Tooltip';
@@ -23,6 +30,8 @@ import { fetchManagerPositionsSummary } from '@/lib/sui/predictApi';
 import { positionsToCSV, downloadCSV } from '@/lib/csvExport';
 import { computeBadges } from '@/lib/badges';
 import BadgeDisplay from '@/components/BadgeDisplay';
+import { loadPrivateBetTickets, privateBalanceDusdc, type PrivateBetTicket } from '@/lib/privateBet';
+import { computeTradingAccountSnapshot } from '@/lib/tradingAccount';
 
 export default function PortfolioPage() {
   const router = useRouter();
@@ -30,27 +39,109 @@ export default function PortfolioPage() {
   const address = account?.address ?? null;
   const [mounted, setMounted] = useState(false);
   const [reputation, setReputation] = useState<ReputationData | null>(null);
+  const [privateTickets, setPrivateTickets] = useState<PrivateBetTicket[]>([]);
   const equityRef = useRef<HTMLCanvasElement>(null);
 
   const { manager, loading: managerLoading } = useManager();
-  const { balance: walletBalance } = useDUSDCBalance();
+  const { balance: walletBalance, coins: walletCoins, refresh: refreshWalletBalance } = useDUSDCBalance();
   const { balance: managerBalance, refresh: refreshManagerBalance } = useManagerBalance(manager?.manager_id ?? null);
+  const { balance: tradingVaultBalance, loading: tradingVaultLoading, refresh: refreshTradingVaultBalance, configured: tradingVaultConfigured } = useTradingVaultBalance();
   const { submit } = useSmartSubmit();
-  const [withdrawing, setWithdrawing] = useState(false);
+  const [sweepingManager, setSweepingManager] = useState(false);
+  const [vaultAmount, setVaultAmount] = useState('1');
+  const [vaultBusy, setVaultBusy] = useState<'deposit' | 'withdraw' | 'to-private' | 'withdraw-private' | null>(null);
 
-  const handleWithdraw = async () => {
+  const handleSweepManagerBalance = async () => {
     if (!manager || !address || managerBalance <= 0) return;
-    setWithdrawing(true);
+    setSweepingManager(true);
     try {
-      await submit(() => withdrawFromManagerTx(manager.manager_id, BigInt(managerBalance), address));
-      refreshManagerBalance();
+      await submit(() => sweepManagerToTradingBalanceTx({
+        managerId: manager.manager_id,
+        amount: BigInt(managerBalance),
+        owner: address,
+      }));
+      refreshBalances();
     } catch (err) {
-      console.error('Withdraw error:', err);
+      console.error('Manager sweep error:', err);
     } finally {
-      setWithdrawing(false);
+      setSweepingManager(false);
+    }
+  };
+
+  const parsedVaultAmount = Math.max(0, Math.floor((Number(vaultAmount) || 0) * DUSDC_MULTIPLIER));
+  const vaultAmountMicro = BigInt(parsedVaultAmount);
+
+  const refreshBalances = () => {
+    refreshWalletBalance();
+    refreshManagerBalance();
+    refreshTradingVaultBalance();
+  };
+
+  const handleVaultDeposit = async () => {
+    if (!address || vaultAmountMicro <= BigInt(0) || walletCoins.length === 0) return;
+    setVaultBusy('deposit');
+    try {
+      await submit(() => depositTradingBalanceTx({
+        coinIds: walletCoins.map((coin) => coin.coinObjectId),
+        amount: vaultAmountMicro,
+      }));
+      refreshBalances();
+    } catch (err) {
+      console.error('TradingVault deposit error:', err);
+    } finally {
+      setVaultBusy(null);
+    }
+  };
+
+  const handleVaultWithdraw = async () => {
+    if (!address || tradingVaultBalance.available <= 0) return;
+    setVaultBusy('withdraw');
+    try {
+      await submit(() => withdrawTradingBalanceTx({
+        amount: BigInt(tradingVaultBalance.available),
+        owner: address,
+      }));
+      refreshBalances();
+    } catch (err) {
+      console.error('TradingVault withdraw error:', err);
+    } finally {
+      setVaultBusy(null);
+    }
+  };
+
+  const handleVaultMovePrivate = async () => {
+    if (!address || vaultAmountMicro <= BigInt(0)) return;
+    setVaultBusy('to-private');
+    try {
+      await submit(() => moveTradingToPrivateTx(vaultAmountMicro));
+      refreshBalances();
+    } catch (err) {
+      console.error('TradingVault move private error:', err);
+    } finally {
+      setVaultBusy(null);
+    }
+  };
+
+  const handleVaultWithdrawPrivate = async () => {
+    if (!address || tradingVaultBalance.privateAvailable <= 0) return;
+    setVaultBusy('withdraw-private');
+    try {
+      await submit(() => withdrawPrivateTradingBalanceTx({
+        amount: BigInt(tradingVaultBalance.privateAvailable),
+        owner: address,
+      }));
+      refreshBalances();
+    } catch (err) {
+      console.error('TradingVault private withdraw error:', err);
+    } finally {
+      setVaultBusy(null);
     }
   };
   const { positions, loading: positionsLoading } = usePositions(manager?.manager_id ?? null);
+  const { orders: leverageOrders, refresh: refreshLeverageOrders } = useMyOrders();
+  const { positions: leveragePositions } = useMyPositions();
+  const { healthByPosition } = useLeverageHealth(leveragePositions);
+  const [leverageBusy, setLeverageBusy] = useState<string | null>(null);
 
   // API-driven manager summary and P&L
   const { summary: managerSummary } = useManagerSummary(manager?.manager_id ?? null);
@@ -58,6 +149,21 @@ export default function PortfolioPage() {
   const { balance: plpBalance } = usePLPBalance();
 
   useEffect(() => { setMounted(true); }, []);
+
+  useEffect(() => {
+    if (!address) {
+      setPrivateTickets([]);
+      return;
+    }
+    const refreshPrivateTickets = () => setPrivateTickets(loadPrivateBetTickets(address));
+    refreshPrivateTickets();
+    const id = window.setInterval(refreshPrivateTickets, 4_000);
+    window.addEventListener('storage', refreshPrivateTickets);
+    return () => {
+      window.clearInterval(id);
+      window.removeEventListener('storage', refreshPrivateTickets);
+    };
+  }, [address]);
 
   useEffect(() => {
     if (address) {
@@ -70,7 +176,47 @@ export default function PortfolioPage() {
   // Use API-driven unrealized P&L, fallback to 0
   const totalUnrealizedPnL = managerSummary?.unrealized_pnl ?? 0;
   const realizedPnL = managerSummary?.realized_pnl ?? 0;
-  const accountValue = managerSummary?.account_value ?? 0;
+  const walletDusdc = walletBalance / DUSDC_MULTIPLIER;
+  const vaultAvailableDusdc = tradingVaultBalance.available / DUSDC_MULTIPLIER;
+  const vaultPrivateDusdc = tradingVaultBalance.privateAvailable / DUSDC_MULTIPLIER;
+  const vaultAgentDusdc = tradingVaultBalance.agentAvailable / DUSDC_MULTIPLIER;
+  const vaultLockedMarginDusdc = tradingVaultBalance.lockedMargin / DUSDC_MULTIPLIER;
+  const tradingAvailableDusdc = (managerBalance + tradingVaultBalance.available) / DUSDC_MULTIPLIER;
+  const managerAccountValueDusdc = managerSummary
+    ? managerSummary.account_value / DUSDC_MULTIPLIER
+    : managerBalance / DUSDC_MULTIPLIER;
+  const tradingAccountValueDusdc = managerAccountValueDusdc + (tradingVaultBalance.accountValue / DUSDC_MULTIPLIER);
+  const privateBalance = privateBalanceDusdc(privateTickets) + vaultPrivateDusdc;
+  const leverageEscrowDusdc = leverageOrders.reduce((sum, order) => sum + order.margin, 0) + vaultLockedMarginDusdc;
+  const leverageEquityDusdc = leveragePositions.reduce((sum, position) => {
+    const health = healthByPosition[position.id];
+    return sum + Math.max(0, health?.equity ?? position.margin);
+  }, 0);
+  const accountSnapshot = computeTradingAccountSnapshot({
+    walletDusdc,
+    tradingAvailableDusdc,
+    tradingAccountValueDusdc,
+    privateBalanceDusdc: privateBalance,
+    leverageEscrowDusdc,
+    leverageEquityDusdc,
+    agentAllocationDusdc: vaultAgentDusdc,
+  });
+
+  const handleCancelLeverageOrder = async (order: OrderData) => {
+    if (!address || order.source === 'local' || order.id.startsWith('local:')) return;
+    setLeverageBusy(order.id);
+    try {
+      await submit(() => cancelOrderTx(order.id, address));
+      setTimeout(() => {
+        refreshLeverageOrders();
+        refreshManagerBalance();
+      }, 1200);
+    } catch (err) {
+      console.error('Leverage cancel error:', err);
+    } finally {
+      setLeverageBusy(null);
+    }
+  };
 
   // Draw equity curve from API P&L time series
   useEffect(() => {
@@ -84,12 +230,12 @@ export default function PortfolioPage() {
       drawEquityCurve(equityRef.current!, curveData);
     } else {
       // Fallback: flat line at current total
-      const total = (walletBalance + managerBalance) / DUSDC_MULTIPLIER;
+      const total = (walletBalance + managerBalance + tradingVaultBalance.accountValue) / DUSDC_MULTIPLIER;
       drawEquityCurve(equityRef.current!, [total, total]);
     }
-  }, [walletBalance, managerBalance, address, pnlData]);
+  }, [walletBalance, managerBalance, tradingVaultBalance.accountValue, address, pnlData]);
 
-  const totalPositions = positions.length;
+  const totalPositions = positions.length + leverageOrders.length + leveragePositions.length;
 
   // Badges from position summaries
   const [positionSummaries, setPositionSummaries] = useState<import('@/lib/sui/predictApi').ManagerPositionSummary[]>([]);
@@ -152,15 +298,15 @@ export default function PortfolioPage() {
               <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
                 <div>
                   <span className="font-mono text-[9px] tracking-[0.16em] uppercase" style={{ color: '#6B6353' }}>
-                    Account Overview
+                    Yosuku Balance
                   </span>
                   <div className="font-mono text-3xl font-semibold mt-1" style={{ color: '#1A1612' }}>
-                    {managerSummary
-                      ? (managerSummary.account_value / DUSDC_MULTIPLIER).toFixed(2)
-                      : ((walletBalance + managerBalance) / DUSDC_MULTIPLIER).toFixed(2)
-                    }
+                    {accountSnapshot.yosukuBalanceDusdc.toFixed(2)}
                     <span className="text-sm ml-2" style={{ color: '#6B6353' }}>DUSDC</span>
                   </div>
+                  <p className="font-mono text-[10px] mt-1" style={{ color: '#6B6353' }}>
+                    trading + private + leverage funds inside Yosuku · total with wallet {accountSnapshot.totalVisibleDusdc.toFixed(2)}
+                  </p>
                 </div>
                 <div className="flex items-center gap-5">
                   <div className="text-right">
@@ -173,33 +319,57 @@ export default function PortfolioPage() {
                   </div>
                   {managerBalance > 0 && (
                     <button
-                      onClick={handleWithdraw}
-                      disabled={withdrawing}
+                      onClick={handleSweepManagerBalance}
+                      disabled={sweepingManager}
                       className="rounded-xl bg-black text-white font-bold text-sm px-5 py-3 hover:bg-black/85 transition-colors disabled:opacity-50 flex items-center gap-2 whitespace-nowrap shadow-[0_2px_12px_rgba(0,0,0,0.15)]"
                     >
-                      {withdrawing
-                        ? 'Withdrawing…'
-                        : <>Withdraw {(managerBalance / DUSDC_MULTIPLIER).toFixed(2)} to wallet <span className="text-base leading-none">↑</span></>}
+                      {sweepingManager
+                        ? 'Moving…'
+                        : <>Move {(managerBalance / DUSDC_MULTIPLIER).toFixed(2)} legacy DUSDC to Trading <span className="text-base leading-none">→</span></>}
                     </button>
                   )}
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 sm:grid-cols-6 gap-4 gap-y-5 pt-4" style={{ borderTop: '1px solid rgba(201,191,166,0.3)' }}>
+              <div className="grid grid-cols-2 sm:grid-cols-5 lg:grid-cols-10 gap-4 gap-y-5 pt-4" style={{ borderTop: '1px solid rgba(201,191,166,0.3)' }}>
                 <div>
                   <span className="font-mono text-[8px] tracking-[0.14em] uppercase" style={{ color: '#6B6353' }}>Wallet</span>
-                  <div className="font-mono text-sm" style={{ color: '#1A1612' }}>{(walletBalance / DUSDC_MULTIPLIER).toFixed(2)}</div>
+                  <div className="font-mono text-sm" style={{ color: '#1A1612' }}>{accountSnapshot.walletDusdc.toFixed(2)}</div>
                 </div>
                 <div>
-                  <span className="font-mono text-[8px] tracking-[0.14em] uppercase" style={{ color: '#6B6353' }}>Trading</span>
+                  <span className="font-mono text-[8px] tracking-[0.14em] uppercase" style={{ color: '#6B6353' }}>Available</span>
                   <div className="font-mono text-sm" style={{ color: '#1A1612' }}>
-                    {(managerBalance / DUSDC_MULTIPLIER).toFixed(2)}
+                    {accountSnapshot.tradingAvailableDusdc.toFixed(2)}
+                  </div>
+                </div>
+                <div>
+                  <span className="font-mono text-[8px] tracking-[0.14em] uppercase" style={{ color: '#6B6353' }}>In trades</span>
+                  <div className="font-mono text-sm" style={{ color: accountSnapshot.normalOpenValueDusdc > 0 ? '#E04D26' : '#1A1612' }}>
+                    {accountSnapshot.normalOpenValueDusdc.toFixed(2)}
+                  </div>
+                </div>
+                <div>
+                  <span className="font-mono text-[8px] tracking-[0.14em] uppercase" style={{ color: '#6B6353' }}>Private</span>
+                  <div className="font-mono text-sm" style={{ color: accountSnapshot.privateBalanceDusdc > 0 ? '#059669' : '#1A1612' }}>
+                    {accountSnapshot.privateBalanceDusdc.toFixed(2)}
+                  </div>
+                </div>
+                <div>
+                  <span className="font-mono text-[8px] tracking-[0.14em] uppercase" style={{ color: '#6B6353' }}>Leverage</span>
+                  <div className="font-mono text-sm" style={{ color: accountSnapshot.leverageValueDusdc > 0 ? '#E04D26' : '#1A1612' }}>
+                    {accountSnapshot.leverageValueDusdc.toFixed(2)}
+                  </div>
+                </div>
+                <div>
+                  <span className="font-mono text-[8px] tracking-[0.14em] uppercase" style={{ color: '#6B6353' }}>Agent</span>
+                  <div className="font-mono text-sm" style={{ color: accountSnapshot.agentAllocationDusdc > 0 ? '#E04D26' : '#1A1612' }}>
+                    {accountSnapshot.agentAllocationDusdc > 0 ? accountSnapshot.agentAllocationDusdc.toFixed(2) : '—'}
                   </div>
                 </div>
                 <div>
                   <span className="font-mono text-[8px] tracking-[0.14em] uppercase" style={{ color: '#6B6353' }}>Positions</span>
                   <div className="font-mono text-sm" style={{ color: '#1A1612' }}>
-                    {managerSummary?.open_positions ?? totalPositions}
+                    {(managerSummary?.open_positions ?? positions.length) + leverageOrders.length + leveragePositions.length}
                   </div>
                 </div>
                 <div>
@@ -219,6 +389,65 @@ export default function PortfolioPage() {
                   <div className="font-mono text-sm" style={{ color: '#1A1612' }}>{address.slice(0, 8)}…</div>
                 </div>
               </div>
+
+              {tradingVaultConfigured && (
+                <div className="mt-6 pt-5" style={{ borderTop: '1px solid rgba(201,191,166,0.3)' }}>
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                    <div>
+                      <span className="font-mono text-[8px] tracking-[0.14em] uppercase" style={{ color: '#6B6353' }}>
+                        TradingVault live
+                      </span>
+                      <p className="font-mono text-[10px] mt-1 max-w-2xl" style={{ color: '#6B6353' }}>
+                        New contract path: wallet deposits fund Trading Balance, public bets debit it, private funds can sit in Private Balance, and withdrawals come back to your wallet.
+                      </p>
+                    </div>
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.1"
+                        value={vaultAmount}
+                        onChange={(event) => setVaultAmount(event.target.value)}
+                        className="h-11 w-full sm:w-32 rounded-xl border border-black/10 bg-white px-3 font-mono text-sm text-black outline-none focus:border-black/30"
+                        aria-label="Trading Balance amount"
+                      />
+                      <div className="grid grid-cols-2 gap-2 sm:flex">
+                        <button
+                          onClick={handleVaultDeposit}
+                          disabled={vaultBusy !== null || vaultAmountMicro <= BigInt(0) || walletBalance < parsedVaultAmount}
+                          className="h-11 rounded-xl bg-black px-4 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-white transition-colors hover:bg-black/85 disabled:opacity-40"
+                        >
+                          {vaultBusy === 'deposit' ? 'Depositing' : 'Deposit'}
+                        </button>
+                        <button
+                          onClick={handleVaultWithdraw}
+                          disabled={vaultBusy !== null || tradingVaultBalance.available <= 0}
+                          className="h-11 rounded-xl border border-black/10 px-4 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-black transition-colors hover:bg-black/5 disabled:opacity-40"
+                        >
+                          {vaultBusy === 'withdraw' ? 'Withdrawing' : 'Withdraw'}
+                        </button>
+                        <button
+                          onClick={handleVaultMovePrivate}
+                          disabled={vaultBusy !== null || vaultAmountMicro <= BigInt(0) || tradingVaultBalance.available < parsedVaultAmount}
+                          className="h-11 rounded-xl border border-emerald-700/20 px-4 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-emerald-700 transition-colors hover:bg-emerald-500/10 disabled:opacity-40"
+                        >
+                          {vaultBusy === 'to-private' ? 'Moving' : 'To Private'}
+                        </button>
+                        <button
+                          onClick={handleVaultWithdrawPrivate}
+                          disabled={vaultBusy !== null || tradingVaultBalance.privateAvailable <= 0}
+                          className="h-11 rounded-xl border border-emerald-700/20 px-4 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-emerald-700 transition-colors hover:bg-emerald-500/10 disabled:opacity-40"
+                        >
+                          {vaultBusy === 'withdraw-private' ? 'Withdrawing' : 'Withdraw Private'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  {tradingVaultLoading && (
+                    <p className="font-mono text-[10px] mt-3" style={{ color: '#6B6353' }}>Reading TradingVault…</p>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Equity Curve */}
@@ -228,6 +457,24 @@ export default function PortfolioPage() {
                 <canvas ref={equityRef} className="w-full h-[200px]" />
               </div>
             </section>
+
+            {(leverageOrders.length > 0 || leveragePositions.length > 0) && (
+              <section>
+                <SectionHeader
+                  number="02"
+                  title="Leveraged Trades"
+                  jp="レバレッジ"
+                  meta={`${leverageOrders.length + leveragePositions.length} item${leverageOrders.length + leveragePositions.length === 1 ? '' : 's'}`}
+                />
+                <LeveragePortfolioPanel
+                  orders={leverageOrders}
+                  positions={leveragePositions}
+                  healthByPosition={healthByPosition}
+                  busy={leverageBusy}
+                  onCancel={handleCancelLeverageOrder}
+                />
+              </section>
+            )}
 
             {/* Manager info */}
             {manager && (
@@ -258,7 +505,7 @@ export default function PortfolioPage() {
             {/* Positions */}
             <section>
               <div className="flex items-center justify-between">
-                <SectionHeader number="02" title="Your Positions" jp="ポジション" count={totalPositions} />
+                <SectionHeader number={leverageOrders.length || leveragePositions.length ? '03' : '02'} title="Your Positions" jp="ポジション" count={positions.length} />
                 {manager?.manager_id && (
                   <button
                     onClick={async () => {
@@ -282,7 +529,7 @@ export default function PortfolioPage() {
             {/* Badges */}
             {address && (
               <section>
-                <SectionHeader number="03" title="Achievements" jp="実績" />
+                <SectionHeader number={leverageOrders.length || leveragePositions.length ? '04' : '03'} title="Achievements" jp="実績" />
                 <div>
                   <BadgeDisplay badges={badges} />
                 </div>
@@ -306,6 +553,208 @@ export default function PortfolioPage() {
 
         <Footer />
       </main>
+    </div>
+  );
+}
+
+function formatStrikeValue(strike?: bigint) {
+  if (!strike || strike <= BigInt(0)) return 'market';
+  return `$${(Number(strike) / FLOAT_SCALING).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+}
+
+function LeveragePortfolioPanel({
+  orders,
+  positions,
+  healthByPosition,
+  busy,
+  onCancel,
+}: {
+  orders: OrderData[];
+  positions: LeveragePositionData[];
+  healthByPosition: Record<string, LeverageHealth>;
+  busy: string | null;
+  onCancel: (order: OrderData) => void;
+}) {
+  return (
+    <div className="border border-vermilion/20 rounded bg-vermilion/[0.035] p-5 space-y-4">
+      {orders.length > 0 && (
+        <div className="space-y-2.5">
+          <div className="flex items-center justify-between">
+            <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-vermilion">
+              Margin escrowed
+            </span>
+            <span className="font-mono text-[10px] text-gray-600">
+              waiting for keeper fill
+            </span>
+          </div>
+          {orders.map((order) => {
+            const syncing = order.source === 'local' || order.id.startsWith('local:');
+            const expired = order.expiry ? Number(order.expiry) < Date.now() : false;
+            const stale = order.createdAt ? Date.now() - order.createdAt > 90_000 : false;
+            return (
+              <div key={order.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/[0.06] bg-black/20 px-4 py-3">
+                <div>
+                  <div className="font-mono text-sm text-white">
+                    <span className="text-vermilion font-bold">{order.leverage.toFixed(0)}x</span>
+                    {' '}{order.isRange ? 'RANGE' : order.isUp ? 'UP' : 'DOWN'}
+                    <span className="text-gray-500"> · {order.margin.toFixed(2)} DUSDC margin</span>
+                  </div>
+                  <div className="font-mono text-[10px] text-gray-600 mt-1">
+                    {formatStrikeValue(order.lowerStrike)}
+                    {order.isRange && order.higherStrike ? ` - ${formatStrikeValue(order.higherStrike)}` : ''}
+                    {syncing && order.txDigest ? (
+                      <>
+                        {' '}· syncing from tx{' '}
+                        <a
+                          href={`https://suiscan.xyz/testnet/tx/${order.txDigest}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-vermilion/70 hover:text-vermilion"
+                        >
+                          {order.txDigest.slice(0, 6)}...{order.txDigest.slice(-4)}
+                        </a>
+                      </>
+                    ) : null}
+                  </div>
+                  <div className={`font-mono text-[10px] mt-1 ${expired ? 'text-rose-400' : stale ? 'text-amber-400' : 'text-gray-600'}`}>
+                    {expired ? 'round expired before fill - cancel to reclaim margin' : stale ? 'keeper delayed - margin is still escrowed' : 'queued for keeper fill'}
+                  </div>
+                </div>
+                {syncing ? (
+                  <span className="font-mono text-[10px] text-gray-500 rounded-full border border-white/10 px-3 py-1.5">
+                    syncing order id
+                  </span>
+                ) : (
+                  <button
+                    onClick={() => onCancel(order)}
+                    disabled={busy === order.id}
+                    className="font-mono text-[10px] uppercase tracking-[0.14em] rounded-full border border-vermilion/30 px-3 py-1.5 text-vermilion hover:bg-vermilion/10 disabled:opacity-50"
+                  >
+                    {busy === order.id ? 'Cancelling...' : 'Cancel escrow'}
+                  </button>
+                )}
+              </div>
+            );
+          })}
+          <p className="font-mono text-[10px] text-gray-600 leading-relaxed">
+            Your DUSDC is inside an on-chain OpenOrder. If the keeper is delayed, canceling reclaims the escrowed margin.
+          </p>
+        </div>
+      )}
+
+      {positions.length > 0 && (
+        <div className="space-y-2.5">
+          <div className="flex items-center justify-between">
+            <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-gray-500">
+              Filled leverage positions
+            </span>
+            <span className="font-mono text-[10px] text-gray-600">
+              custodied by protocol manager
+            </span>
+          </div>
+          {positions.map((position) => {
+            const health = healthByPosition[position.id];
+            const pnl = health?.equity == null ? null : health.equity - position.margin;
+            return (
+              <div key={position.id} className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <div className="font-mono text-sm text-white">
+                      <span className="text-vermilion font-bold">{position.leverage.toFixed(0)}x</span>
+                      {' '}{position.isRange ? 'RANGE' : position.isUp ? 'UP' : 'DOWN'}
+                      <span className="text-gray-500"> · {position.notional.toFixed(2)} DUSDC exposure</span>
+                    </div>
+                    <div className="font-mono text-[10px] text-gray-600 mt-1">
+                      {position.margin.toFixed(2)} DUSDC margin · {formatStrikeValue(position.lowerStrike)}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <HealthBadge health={health} />
+                    <a
+                      href={`https://suiscan.xyz/testnet/object/${position.id}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="font-mono text-[10px] uppercase tracking-[0.14em] rounded-full border border-white/10 px-3 py-1.5 text-gray-500 hover:text-white"
+                    >
+                      View object
+                    </a>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
+                  <RiskStat label="Your value" value={health?.equity == null ? 'quoting' : `${health.equity.toFixed(2)} DUSDC`} tone="white" />
+                  <RiskStat label="Cashout" value={health?.redeemValue == null ? 'quoting' : `${health.redeemValue.toFixed(2)} DUSDC`} tone="muted" />
+                  <RiskStat
+                    label="Live P&L"
+                    value={pnl == null ? 'quoting' : `${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)} DUSDC`}
+                    tone={pnl != null && pnl < 0 ? 'bad' : 'good'}
+                  />
+                  <RiskStat
+                    label="Health"
+                    value={health?.healthBps == null ? 'quoting' : `${(health.healthBps / 100).toFixed(0)}%`}
+                    tone={health?.status === 'liquidatable' ? 'bad' : health?.status === 'watch' ? 'warn' : 'good'}
+                  />
+                </div>
+                <details className="mt-3 rounded-lg border border-white/[0.06] bg-black/20 px-3 py-2">
+                  <summary className="cursor-pointer list-none font-mono text-[10px] uppercase tracking-[0.14em] text-gray-600">
+                    Advanced leverage details
+                  </summary>
+                  <p className="font-mono text-[10px] text-gray-600 mt-2 leading-relaxed">
+                    Reserve debt {position.fronted.toFixed(2)} DUSDC. Health uses live Predict redeem value against reserve debt plus maintenance buffer. Keeper liquidates when health reaches 100%.
+                  </p>
+                </details>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function HealthBadge({ health }: { health?: LeverageHealth }) {
+  const label = !health || health.status === 'unknown'
+    ? 'QUOTING'
+    : health.status === 'liquidatable'
+      ? 'LIQUIDATE'
+      : health.status === 'watch'
+        ? 'WATCH'
+        : 'HEALTHY';
+  const cls = !health || health.status === 'unknown'
+    ? 'border-white/10 text-gray-500'
+    : health.status === 'liquidatable'
+      ? 'border-rose-500/30 text-rose-300 bg-rose-500/10'
+      : health.status === 'watch'
+        ? 'border-amber-400/30 text-amber-300 bg-amber-400/10'
+        : 'border-emerald-400/30 text-emerald-300 bg-emerald-400/10';
+  return (
+    <span className={`font-mono text-[10px] uppercase tracking-[0.14em] rounded-full border px-3 py-1.5 ${cls}`}>
+      {label}
+    </span>
+  );
+}
+
+function RiskStat({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone: 'white' | 'muted' | 'good' | 'warn' | 'bad';
+}) {
+  const color = tone === 'good'
+    ? 'text-emerald-300'
+    : tone === 'warn'
+      ? 'text-amber-300'
+      : tone === 'bad'
+        ? 'text-rose-300'
+        : tone === 'white'
+          ? 'text-white'
+          : 'text-gray-500';
+  return (
+    <div className="rounded-lg border border-white/[0.05] bg-black/20 px-3 py-2">
+      <div className="font-mono text-[8px] uppercase tracking-[0.16em] text-gray-600">{label}</div>
+      <div className={`font-mono text-xs mt-1 ${color}`}>{value}</div>
     </div>
   );
 }

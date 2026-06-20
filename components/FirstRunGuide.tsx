@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
+import { motion } from 'framer-motion';
 import { Check, X, ArrowRight } from 'lucide-react';
 import { useCurrentAccount } from '@mysten/dapp-kit';
 import { useDUSDCBalance } from '@/lib/sui/hooks';
@@ -54,43 +55,96 @@ export default function FirstRunGuide() {
     setModeChosen(true);
   };
 
-  // Don't crowd the trade surfaces — on a market detail page or the bell, the
-  // user is already taking a side, so the "tap UP or DOWN" guide is just noise.
-  const onTradeSurface = pathname === '/bell' || /^\/markets\/[^/]+/.test(pathname ?? '');
+  if (dismissed || hasTraded) return null;
 
-  if (dismissed || hasTraded || onTradeSurface) return null;
-
-  // Step 0 of onboarding — pick your level before anything else (no wallet needed).
-  if (!modeChosen) {
+  // Step 0 of onboarding — pick your level. Shown only AFTER the wallet is connected:
+  // before that, the welcome Tutorial (which ends on the Connect step) is the first-run
+  // surface, so we never stack a second modal on a not-yet-connected visitor. This is the
+  // fallback for anyone who skipped the Tutorial without choosing. It's a prominent,
+  // centered modal (not a slim bar a first-timer slides past), and it appears even on a
+  // trade surface because the choice changes the trade panel itself. Closing it "skips"
+  // to the friendly default and lets the rest of the funnel continue.
+  if (!modeChosen && address) {
+    const skip = () => chooseMode('simple');
     return (
-      <div className="fixed z-[60] left-1/2 -translate-x-1/2 bottom-[88px] md:bottom-6 w-[calc(100%-1.5rem)] max-w-md">
-        <div className="relative rounded-2xl border border-white/10 bg-[#0c0c0f]/95 backdrop-blur-md shadow-[0_8px_40px_rgba(0,0,0,0.5)] px-4 pt-3.5 pb-3.5">
-          <button onClick={dismiss} aria-label="Dismiss" className="absolute top-3 right-3 text-gray-600 hover:text-white transition-colors p-1">
-            <X className="w-3.5 h-3.5" />
+      <div
+        className="fixed inset-0 z-[130] flex items-center justify-center p-4"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="firstrun-title"
+      >
+        <motion.div
+          className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          onClick={skip}
+        />
+        <motion.div
+          initial={{ opacity: 0, y: 16, scale: 0.96 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ type: 'spring', damping: 24, stiffness: 320 }}
+          className="relative w-full max-w-md rounded-2xl border border-white/10 bg-[#0c0c0f] shadow-[0_24px_80px_rgba(0,0,0,0.7)] px-6 pt-6 pb-5"
+        >
+          <button
+            type="button"
+            onClick={skip}
+            aria-label="Skip"
+            className="absolute top-4 right-4 rounded-full p-1 text-gray-600 hover:text-white transition-colors"
+          >
+            <X className="w-4 h-4" />
           </button>
-          <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-gray-500">
-            New here <span className="text-vermilion/70">·</span> one quick thing
-          </span>
-          <p className="text-white text-[14px] font-semibold mt-1.5 mb-3">How familiar are you with prediction markets?</p>
-          <div className="grid grid-cols-2 gap-2">
-            <button onClick={() => chooseMode('simple')} className="rounded-xl border border-white/10 bg-white/[0.03] hover:border-vermilion/40 hover:bg-white/[0.06] px-3 py-2.5 text-left transition-colors">
-              <span className="block text-[13px] font-bold text-white">New to this</span>
-              <span className="block text-[10.5px] text-gray-500 leading-snug mt-0.5">Plain questions — just Higher or Lower</span>
+
+          <div className="flex items-center gap-2 mb-4">
+            <span className="w-1.5 h-1.5 rounded-full bg-vermilion" style={{ boxShadow: '0 0 12px var(--vermilion)' }} />
+            <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-gray-500">
+              Welcome to Yosuku · one quick thing
+            </span>
+          </div>
+
+          <h2 id="firstrun-title" className="font-display text-[22px] font-extrabold tracking-tight text-white leading-tight mb-1.5">
+            How familiar are you with prediction markets?
+          </h2>
+          <p className="text-gray-400 text-[13px] leading-relaxed mb-5">
+            This just sets how much detail you see — you can switch anytime with the Simple / Pro toggle.
+          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            <button onClick={() => chooseMode('simple')} className="group rounded-xl border border-white/10 bg-white/[0.03] hover:border-vermilion/50 hover:bg-vermilion/[0.06] px-4 py-3.5 text-left transition-all">
+              <span className="block text-[15px] font-bold text-white">New to this</span>
+              <span className="block text-[12px] text-gray-400 leading-snug mt-1">Plain questions — just Higher or Lower</span>
+              <span className="mt-2 inline-flex items-center gap-1 text-[11px] font-mono text-vermilion opacity-0 group-hover:opacity-100 transition-opacity">
+                Start simple <ArrowRight className="w-3 h-3" />
+              </span>
             </button>
-            <button onClick={() => chooseMode('pro')} className="rounded-xl border border-white/10 bg-white/[0.03] hover:border-vermilion/40 hover:bg-white/[0.06] px-3 py-2.5 text-left transition-colors">
-              <span className="block text-[13px] font-bold text-white">I trade</span>
-              <span className="block text-[10.5px] text-gray-500 leading-snug mt-0.5">Strikes, leverage, the full panel</span>
+            <button onClick={() => chooseMode('pro')} className="group rounded-xl border border-white/10 bg-white/[0.03] hover:border-vermilion/50 hover:bg-vermilion/[0.06] px-4 py-3.5 text-left transition-all">
+              <span className="block text-[15px] font-bold text-white">I trade</span>
+              <span className="block text-[12px] text-gray-400 leading-snug mt-1">Strikes, leverage, the full panel</span>
+              <span className="mt-2 inline-flex items-center gap-1 text-[11px] font-mono text-vermilion opacity-0 group-hover:opacity-100 transition-opacity">
+                Go pro <ArrowRight className="w-3 h-3" />
+              </span>
             </button>
           </div>
-          <p className="text-[10px] text-gray-600 mt-2.5">Switch anytime with the Simple / Pro toggle.</p>
-        </div>
+
+          <button
+            type="button"
+            onClick={skip}
+            className="block w-full text-center mt-4 text-[11px] font-mono text-gray-600 hover:text-gray-400 transition-colors"
+          >
+            Skip — I&apos;ll decide later
+          </button>
+        </motion.div>
       </div>
     );
   }
 
+  // Don't crowd the trade surfaces — on a market detail page or the bell, the
+  // user is already taking a side, so the "tap UP or DOWN" guide is just noise.
+  const onTradeSurface = pathname === '/bell' || /^\/markets\/[^/]+/.test(pathname ?? '');
+  if (onTradeSurface) return null;
+
   const steps = [
     { label: 'Sign in', hint: 'Google or a Sui wallet', done: !!address },
-    { label: 'Get test funds', hint: 'free DUSDC, no real money', done: balance > 0, tappable: true,
+    { label: 'Get wallet funds', hint: 'free DUSDC, no real money', done: balance > 0, tappable: true,
       action: () => window.dispatchEvent(new CustomEvent('yosuku:open-funds')) },
     { label: 'Take a side', hint: 'tap UP or DOWN on a market', done: false },
   ];

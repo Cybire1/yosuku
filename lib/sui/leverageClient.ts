@@ -176,6 +176,13 @@ export interface OrderData {
   leverage: number;   // leverageBps / 10000
   oracleId: string;
   isRange: boolean;
+  isUp?: boolean;
+  lowerStrike?: bigint;
+  higherStrike?: bigint;
+  expiry?: bigint;
+  createdAt?: number;
+  txDigest?: string;
+  source?: 'chain' | 'local';
 }
 
 /** The underwritten position record stored on-chain (a shared object). */
@@ -195,6 +202,88 @@ export interface PositionData {
   higherStrike: bigint;
   isUp: boolean;
   quantity: bigint;
+}
+
+export type LeverageHealthStatus = 'safe' | 'watch' | 'liquidatable' | 'unknown';
+
+export interface LeverageHealth {
+  positionId: string;
+  status: LeverageHealthStatus;
+  redeemValue: number | null;      // DUSDC recoverable by live Predict redeem
+  debt: number;                    // DUSDC reserve principal to repay
+  maintenanceBuffer: number;       // DUSDC extra safety buffer
+  keeperFee: number;               // DUSDC operator incentive / slippage cushion
+  requiredRepay: number;           // debt + buffer + keeper fee
+  equity: number | null;           // redeemValue - debt
+  healthBps: number | null;        // redeemValue / requiredRepay * 10_000
+  updatedAt: number;
+  error?: string;
+}
+
+export const DEFAULT_MAINTENANCE_BUFFER_BPS = 1_000; // 10% of reserve debt
+export const DEFAULT_MIN_MAINTENANCE_BUFFER_DUSDC = 0.02;
+export const DEFAULT_KEEPER_FEE_DUSDC = 0.01;
+export const LEVERAGE_HEALTH_WATCH_BPS = 11_000;
+export const LEVERAGE_HEALTH_LIQUIDATE_BPS = 10_000;
+
+export function unknownLeverageHealth(position: PositionData, error?: string): LeverageHealth {
+  const debt = Math.max(0, position.fronted);
+  const maintenanceBuffer = Math.max(
+    DEFAULT_MIN_MAINTENANCE_BUFFER_DUSDC,
+    debt * DEFAULT_MAINTENANCE_BUFFER_BPS / BPS,
+  );
+  return {
+    positionId: position.id,
+    status: 'unknown',
+    redeemValue: null,
+    debt,
+    maintenanceBuffer,
+    keeperFee: DEFAULT_KEEPER_FEE_DUSDC,
+    requiredRepay: debt + maintenanceBuffer + DEFAULT_KEEPER_FEE_DUSDC,
+    equity: null,
+    healthBps: null,
+    updatedAt: Date.now(),
+    error,
+  };
+}
+
+export function computeLeverageHealth(
+  position: PositionData,
+  redeemValue: number,
+  opts: {
+    maintenanceBufferBps?: number;
+    minMaintenanceBufferDusdc?: number;
+    keeperFeeDusdc?: number;
+  } = {},
+): LeverageHealth {
+  const debt = Math.max(0, position.fronted);
+  const maintenanceBufferBps = opts.maintenanceBufferBps ?? DEFAULT_MAINTENANCE_BUFFER_BPS;
+  const minMaintenanceBufferDusdc = opts.minMaintenanceBufferDusdc ?? DEFAULT_MIN_MAINTENANCE_BUFFER_DUSDC;
+  const keeperFee = opts.keeperFeeDusdc ?? DEFAULT_KEEPER_FEE_DUSDC;
+  const maintenanceBuffer = Math.max(minMaintenanceBufferDusdc, debt * maintenanceBufferBps / BPS);
+  const requiredRepay = debt + maintenanceBuffer + keeperFee;
+  const healthBps = requiredRepay > 0 ? Math.floor((redeemValue * BPS) / requiredRepay) : null;
+  const equity = redeemValue - debt;
+  const status: LeverageHealthStatus = healthBps == null
+    ? 'unknown'
+    : healthBps <= LEVERAGE_HEALTH_LIQUIDATE_BPS
+      ? 'liquidatable'
+      : healthBps <= LEVERAGE_HEALTH_WATCH_BPS
+        ? 'watch'
+        : 'safe';
+
+  return {
+    positionId: position.id,
+    status,
+    redeemValue,
+    debt,
+    maintenanceBuffer,
+    keeperFee,
+    requiredRepay,
+    equity,
+    healthBps,
+    updatedAt: Date.now(),
+  };
 }
 
 // ─── read: reserve stats ───

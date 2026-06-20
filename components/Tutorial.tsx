@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useCurrentAccount, ConnectButton } from '@mysten/dapp-kit';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
 
@@ -26,12 +27,17 @@ const steps: TutorialStep[] = [
   {
     title: 'How a round works',
     jp: '方向を選ぶ',
-    description: 'Every market asks one question: will BTC be above your line at the bell? Go UP for above, DOWN for below. Get it right and you are paid automatically. Gas is on us, and there is no seed phrase.',
+    description: 'Every market asks one question: will BTC be above your line when the round closes? Go UP for above, DOWN for below. Get it right and you are paid automatically. Gas is on us, and there is no seed phrase.',
   },
   {
     title: 'Setup is automatic',
     jp: '準備完了',
     description: 'No seed phrase, no setup screen, no gas. We create and fund your on-chain account in the background — the three steps in the corner tick off as you go. Then it is one tap to bet.',
+  },
+  {
+    title: 'Your Trading Balance',
+    jp: '取引残高',
+    description: 'Think of it as your Yosuku account. Test DUSDC can sit there between trades, winnings and cashouts land there first, and idle funds can be withdrawn back to your wallet anytime. The benefit is speed: once funded, bets and leverage can move without making you manage loose coins every time.',
   },
   {
     title: 'Pick your view',
@@ -42,8 +48,10 @@ const steps: TutorialStep[] = [
 ];
 
 export default function Tutorial() {
+  const account = useCurrentAccount();
   const [visible, setVisible] = useState(false);
   const [step, setStep] = useState(0);
+  const [mode, setMode] = useState<'simple' | 'pro' | null>(null);
 
   useEffect(() => {
     try {
@@ -61,13 +69,22 @@ export default function Tutorial() {
   // The final onboarding decision: set the trade view to match the user's level so
   // the whole panel opens right for them. TradePanel reads yosuku_trade_mode on mount;
   // yosuku_mode_chosen tells the FirstRunGuide fallback the choice is already made.
-  const chooseMode = (m: 'simple' | 'pro') => {
+  // Unlike before, picking does NOT close the tutorial — the last screen ends on the
+  // Connect Wallet step, so it stays open until they connect (or skip).
+  const selectMode = (m: 'simple' | 'pro') => {
+    setMode(m);
     try {
       localStorage.setItem('yosuku_trade_mode', m);
       localStorage.setItem('yosuku_mode_chosen', '1');
     } catch { /* ignore */ }
-    dismiss();
   };
+
+  // The tutorial ends by connecting a wallet. The moment that happens on the final
+  // step, onboarding is done — close so the user lands straight on the live markets.
+  useEffect(() => {
+    if (visible && step === steps.length - 1 && account?.address) dismiss();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible, step, account?.address]);
 
   // Never trap the user: Escape closes, and so does clicking the backdrop.
   useEffect(() => {
@@ -112,17 +129,24 @@ export default function Tutorial() {
           <div className="px-8 py-5">
             {current.choice ? (
               <>
-                <div className="grid grid-cols-2 gap-3 mb-4">
-                  <button onClick={() => chooseMode('simple')} className="rounded-xl border border-white/[0.12] bg-white/[0.03] hover:border-vermilion/50 hover:bg-white/[0.06] px-4 py-4 text-left transition-colors">
+                <p className="text-sm text-gray-400 mb-3 leading-relaxed">First, how should the trade panel look?</p>
+                <div className="grid grid-cols-2 gap-3 mb-5">
+                  <button onClick={() => selectMode('simple')} className={`rounded-xl border px-4 py-4 text-left transition-colors ${mode === 'simple' ? 'border-vermilion bg-vermilion/[0.1]' : 'border-white/[0.12] bg-white/[0.03] hover:border-vermilion/50 hover:bg-white/[0.06]'}`}>
                     <span className="block font-display font-bold text-white text-lg">New to this</span>
                     <span className="block text-xs text-gray-500 mt-1 leading-snug">Plain questions — just tap Higher or Lower. We handle the rest.</span>
                   </button>
-                  <button onClick={() => chooseMode('pro')} className="rounded-xl border border-white/[0.12] bg-white/[0.03] hover:border-vermilion/50 hover:bg-white/[0.06] px-4 py-4 text-left transition-colors">
+                  <button onClick={() => selectMode('pro')} className={`rounded-xl border px-4 py-4 text-left transition-colors ${mode === 'pro' ? 'border-vermilion bg-vermilion/[0.1]' : 'border-white/[0.12] bg-white/[0.03] hover:border-vermilion/50 hover:bg-white/[0.06]'}`}>
                     <span className="block font-display font-bold text-white text-lg">I trade</span>
                     <span className="block text-xs text-gray-500 mt-1 leading-snug">Strikes, leverage, range markets — the full panel.</span>
                   </button>
                 </div>
-                <p className="text-xs text-gray-600">{current.description}</p>
+                <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] px-4 py-4">
+                  <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-gray-600 mb-1">Last step</div>
+                  <p className="text-sm text-white font-semibold mb-0.5">Connect to start trading</p>
+                  <p className="text-xs text-gray-500 leading-snug mb-3">Google or any Sui wallet. We sponsor the gas and fund your testnet account automatically — no seed phrase, no real money.</p>
+                  <div className="flex justify-center"><ConnectButton connectText="Connect Wallet" /></div>
+                </div>
+                <p className="text-[11px] text-gray-600 mt-3">{current.description}</p>
               </>
             ) : (
               <p className="text-base text-gray-400 leading-relaxed">{current.description}</p>

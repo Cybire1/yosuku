@@ -19,6 +19,9 @@ export function humanizeTxError(err: unknown): FriendlyError {
   if (lower.includes('insufficientcoinbalance')) {
     return { title: 'Not enough DUSDC for this trade. Lower the amount or top up.', detail: raw };
   }
+  if (lower.includes('assert_mintable_ask') || lower.includes('easkpriceoutofbounds') || (lower.includes('moveabort') && lower.includes('abort code: 7'))) {
+    return { title: 'This price is outside DeepBook Predict mint bounds — pick a less certain line or the other side.', detail: raw };
+  }
   if (lower.includes('moveabort')) {
     return { title: 'The contract rejected this trade — the round may have just closed or moved. Refresh and try again.', detail: raw };
   }

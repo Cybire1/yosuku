@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useCurrentAccount, useSuiClient } from '@mysten/dapp-kit';
+import { Transaction } from '@mysten/sui/transactions';
 
 /** Polling that pauses when the tab is hidden and resumes when visible */
 function useVisibilityAwareInterval(callback: () => void, intervalMs: number) {
@@ -65,8 +66,18 @@ import {
   type ManagerSummaryData,
   type ManagerPnLData,
 } from './predictApi';
-import { DUSDC_TYPE, PLP_TYPE, PREDICT_ID, FLOAT_SCALING, NEG_INF, POS_INF } from './constants';
+import {
+  DUSDC_TYPE,
+  PLP_TYPE,
+  PREDICT_ID,
+  FLOAT_SCALING,
+  NEG_INF,
+  POS_INF,
+  TRADING_VAULT_ID,
+  TRADING_VAULT_PACKAGE,
+} from './constants';
 import { getCachedOracleState, cacheOracleState } from './oracleCache';
+import { simulateReturnU64Commands } from './modernClients';
 
 /** Hook: connected wallet address */
 export function useWalletAddress(): string | null {
@@ -101,7 +112,11 @@ export function useOracles(pollInterval = 30_000) {
   // that depends on it (e.g. ParlayBuilder's btcBells) re-fired every render,
   // which caused an infinite setState loop on /parlay ("Maximum update depth").
   const active = useMemo(
-    () => oracles.filter(o => o.status === 'active').sort((a, b) => a.expiry - b.expiry),
+    // "active" must mean TRADEABLE. The indexer (and our ~2-min cache grace) can keep an
+    // oracle status==='active' for seconds-to-hours past its expiry, but predict::mint
+    // aborts the instant the round leaves 'active'. Require expiry in the future so the
+    // Live-now list, count badges, and market selection never offer a round that reverts.
+    () => oracles.filter(o => o.status === 'active' && o.expiry > Date.now()).sort((a, b) => a.expiry - b.expiry),
     [oracles],
   );
   const settled = useMemo(
@@ -182,6 +197,67 @@ export function useDUSDCBalance(pollInterval = 30_000) {
   useVisibilityAwareInterval(refresh, pollInterval);
 
   return { balance, coins, loading, refresh };
+}
+
+export interface TradingVaultBalance {
+  available: number;
+  privateAvailable: number;
+  agentAvailable: number;
+  lockedMargin: number;
+  accountValue: number;
+}
+
+const EMPTY_TRADING_VAULT_BALANCE: TradingVaultBalance = {
+  available: 0,
+  privateAvailable: 0,
+  agentAvailable: 0,
+  lockedMargin: 0,
+  accountValue: 0,
+};
+
+/** Hook: live TradingVault account buckets for the connected wallet. */
+export function useTradingVaultBalance(pollInterval = 20_000) {
+  const address = useWalletAddress();
+  const [balance, setBalance] = useState<TradingVaultBalance>(EMPTY_TRADING_VAULT_BALANCE);
+  const [loading, setLoading] = useState(true);
+
+  const refresh = useCallback(async () => {
+    if (!address || !TRADING_VAULT_ID || !TRADING_VAULT_PACKAGE) {
+      setBalance(EMPTY_TRADING_VAULT_BALANCE);
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const tx = new Transaction();
+      const target = `${TRADING_VAULT_PACKAGE}::trading_vault`;
+      const args = () => [tx.object(TRADING_VAULT_ID), tx.pure.address(address)];
+      tx.moveCall({ target: `${target}::available_of`, typeArguments: [DUSDC_TYPE], arguments: args() });
+      tx.moveCall({ target: `${target}::private_of`, typeArguments: [DUSDC_TYPE], arguments: args() });
+      tx.moveCall({ target: `${target}::agent_of`, typeArguments: [DUSDC_TYPE], arguments: args() });
+      tx.moveCall({ target: `${target}::locked_margin_of`, typeArguments: [DUSDC_TYPE], arguments: args() });
+      tx.moveCall({ target: `${target}::account_value_of`, typeArguments: [DUSDC_TYPE], arguments: args() });
+
+      const values = await simulateReturnU64Commands(tx, address);
+      setBalance({
+        available: Number(values[0]?.[0] ?? BigInt(0)),
+        privateAvailable: Number(values[1]?.[0] ?? BigInt(0)),
+        agentAvailable: Number(values[2]?.[0] ?? BigInt(0)),
+        lockedMargin: Number(values[3]?.[0] ?? BigInt(0)),
+        accountValue: Number(values[4]?.[0] ?? BigInt(0)),
+      });
+    } catch (err) {
+      console.error('Failed to fetch TradingVault balance:', err);
+      setBalance(EMPTY_TRADING_VAULT_BALANCE);
+    } finally {
+      setLoading(false);
+    }
+  }, [address]);
+
+  useEffect(() => { refresh(); }, [refresh]);
+  useVisibilityAwareInterval(refresh, pollInterval);
+
+  return { balance, loading, refresh, configured: !!TRADING_VAULT_ID && !!TRADING_VAULT_PACKAGE };
 }
 
 /** Hook: PLP (LP token) balance with coin object IDs */

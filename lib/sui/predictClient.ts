@@ -7,6 +7,11 @@ import {
   DUSDC_TYPE,
   CLOCK_ID,
 } from './constants';
+import {
+  creditAvailableForCall,
+  depositTradingBalanceCall,
+  withdrawTradingBalanceCall,
+} from './tradingVaultClient';
 
 /**
  * Create a PredictManager for the connected wallet.
@@ -207,6 +212,22 @@ export function redeemAllPermissionlessTx(positions: ClaimablePosition[]): Trans
   return tx;
 }
 
+/** Claim settled binary winners, withdraw the payout, and credit TradingVault. */
+export function redeemAllPermissionlessToTradingBalanceTx(positions: ClaimablePosition[], owner: string): Transaction {
+  const tx = new Transaction();
+  for (const p of positions) addRedeemPermissionless(tx, p);
+  const managerId = positions[0]?.managerId;
+  const payout = positions.reduce((sum, p) => sum + p.quantity, BigInt(0));
+  if (!managerId || payout <= BigInt(0)) return tx;
+  const funds = tx.moveCall({
+    target: `${PACKAGE_ID}::predict_manager::withdraw`,
+    typeArguments: [DUSDC_TYPE],
+    arguments: [tx.object(managerId), tx.pure.u64(payout)],
+  });
+  creditAvailableForCall(tx, owner, funds);
+  return tx;
+}
+
 /**
  * Atomic: deposit DUSDC from wallet + mint position in one PTB.
  */
@@ -242,6 +263,65 @@ export function depositAndMintTx(
   });
 
   // Step 3: Build market key and mint
+  const marketKey = marketKeyArgs(tx, oracleId, expiry, strike, direction);
+  tx.moveCall({
+    target: `${PACKAGE_ID}::predict::mint`,
+    typeArguments: [DUSDC_TYPE],
+    arguments: [
+      tx.object(PREDICT_ID),
+      tx.object(managerId),
+      tx.object(oracleId),
+      marketKey,
+      tx.pure.u64(quantity),
+      tx.object(CLOCK_ID),
+    ],
+  });
+
+  return tx;
+}
+
+function mergedPrimaryCoin(tx: Transaction, coinIds: string[]) {
+  if (coinIds.length === 0) throw new Error('No DUSDC coin selected');
+  const primaryCoin = tx.object(coinIds[0]);
+  if (coinIds.length > 1) {
+    tx.mergeCoins(primaryCoin, coinIds.slice(1).map(id => tx.object(id)));
+  }
+  return primaryCoin;
+}
+
+/**
+ * Atomic: optional wallet top-up -> TradingVault -> PredictManager -> mint.
+ *
+ * This is the feature-test path for the new Trading Balance contract. The user
+ * trades from TradingVault first; if vault funds are short, the same PTB tops the
+ * vault up from wallet DUSDC before debiting it.
+ */
+export function tradingBalanceDepositAndMintTx(
+  managerId: string,
+  coinIds: string[],
+  vaultAvailableAmount: bigint,
+  spendAmount: bigint,
+  oracleId: string,
+  expiry: bigint,
+  strike: bigint,
+  direction: 'UP' | 'DOWN',
+  quantity: bigint,
+): Transaction {
+  const tx = new Transaction();
+
+  if (vaultAvailableAmount < spendAmount) {
+    const topUp = spendAmount - vaultAvailableAmount;
+    const [funds] = tx.splitCoins(mergedPrimaryCoin(tx, coinIds), [topUp]);
+    depositTradingBalanceCall(tx, funds);
+  }
+
+  const spend = withdrawTradingBalanceCall(tx, spendAmount);
+  tx.moveCall({
+    target: `${PACKAGE_ID}::predict_manager::deposit`,
+    typeArguments: [DUSDC_TYPE],
+    arguments: [tx.object(managerId), spend],
+  });
+
   const marketKey = marketKeyArgs(tx, oracleId, expiry, strike, direction);
   tx.moveCall({
     target: `${PACKAGE_ID}::predict::mint`,
@@ -372,6 +452,52 @@ export function depositAndMintRangeTx(
   });
 
   // Step 3: Build range key and mint
+  const rangeKey = rangeKeyDirect(tx, oracleId, expiry, lowerStrike, higherStrike);
+  tx.moveCall({
+    target: `${PACKAGE_ID}::predict::mint_range`,
+    typeArguments: [DUSDC_TYPE],
+    arguments: [
+      tx.object(PREDICT_ID),
+      tx.object(managerId),
+      tx.object(oracleId),
+      rangeKey,
+      tx.pure.u64(quantity),
+      tx.object(CLOCK_ID),
+    ],
+  });
+
+  return tx;
+}
+
+/**
+ * Atomic range version: optional wallet top-up -> TradingVault -> PredictManager -> mint_range.
+ */
+export function tradingBalanceDepositAndMintRangeTx(
+  managerId: string,
+  coinIds: string[],
+  vaultAvailableAmount: bigint,
+  spendAmount: bigint,
+  oracleId: string,
+  expiry: bigint,
+  lowerStrike: bigint,
+  higherStrike: bigint,
+  quantity: bigint,
+): Transaction {
+  const tx = new Transaction();
+
+  if (vaultAvailableAmount < spendAmount) {
+    const topUp = spendAmount - vaultAvailableAmount;
+    const [funds] = tx.splitCoins(mergedPrimaryCoin(tx, coinIds), [topUp]);
+    depositTradingBalanceCall(tx, funds);
+  }
+
+  const spend = withdrawTradingBalanceCall(tx, spendAmount);
+  tx.moveCall({
+    target: `${PACKAGE_ID}::predict_manager::deposit`,
+    typeArguments: [DUSDC_TYPE],
+    arguments: [tx.object(managerId), spend],
+  });
+
   const rangeKey = rangeKeyDirect(tx, oracleId, expiry, lowerStrike, higherStrike);
   tx.moveCall({
     target: `${PACKAGE_ID}::predict::mint_range`,

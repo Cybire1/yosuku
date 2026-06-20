@@ -53,7 +53,7 @@ export default function MirrorTradePanel({ market, onSuccess, roomId, roomLocked
   }, [market]);
 
   const microAmount = Math.floor(parseFloat(amount || '0') * PRED_MULTIPLIER);
-  const canTrade = Boolean(market?.onChainCreated && !market?.onChainResolved && market?.vaultAddress);
+  const canTrade = false;
 
   const payout = useMemo(() => {
     if (!market || microAmount <= 0) return 0;
@@ -134,15 +134,11 @@ export default function MirrorTradePanel({ market, onSuccess, roomId, roomLocked
     <section className="mt-6 grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_360px]">
       <div className="rounded-3xl border border-white/7 bg-neutral-950/70 p-5 sm:p-6">
         <div className="mb-4 flex flex-wrap items-center gap-2">
-          <span className="rounded-full border border-new-mint/20 bg-new-mint/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.24em] text-new-mint">
-            Mirror Market
+          <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.24em] text-gray-300">
+            Mirror Preview
           </span>
-          <span className={`rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.24em] ${
-            market.onChainCreated
-              ? 'border-off-blue/20 bg-off-blue/10 text-off-blue'
-              : 'border-white/8 bg-white/[0.03] text-gray-400'
-          }`}>
-            {market.onChainCreated ? 'Live on Sui' : 'Queued'}
+          <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.24em] text-amber-300">
+            Local-only
           </span>
           {market.onChainResolved && (
             <span className="rounded-full border border-white/8 bg-white/[0.03] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.24em] text-gray-400">
@@ -153,7 +149,7 @@ export default function MirrorTradePanel({ market, onSuccess, roomId, roomLocked
 
         <h3 className="text-2xl font-black leading-tight text-white">{market.question}</h3>
         <p className="mt-2 max-w-3xl text-sm leading-relaxed text-gray-400">
-          {market.description || 'This market was mirrored from Polymarket and can be traded on Sui through DART.'}
+          {market.description || 'This market was mirrored from Polymarket for preview and room-gating experiments.'}
         </p>
 
         <div className="mt-5 grid gap-3 md:grid-cols-3">
@@ -191,7 +187,7 @@ export default function MirrorTradePanel({ market, onSuccess, roomId, roomLocked
             </a>
           </div>
           <p className="mt-3">
-            Mirrored markets replicate public market data from Polymarket and allow trading with fixed-payout positions on Sui.
+            Mirrored markets replicate public market data from Polymarket for discovery, pricing experiments, and private-room previews. This cut does not settle mirror positions on Sui yet.
           </p>
         </div>
       </div>
@@ -207,13 +203,13 @@ export default function MirrorTradePanel({ market, onSuccess, roomId, roomLocked
             {roomLocked
               ? 'This mirrored market belongs to a private room. Unlock the room to place a trade.'
               : market.onChainResolved
-              ? 'This mirrored market has already resolved on Sui.'
-              : 'This market is in the mirror queue, but it is not live on Sui yet. Enable on-chain mirroring to make it tradable.'}
+              ? 'This mirrored source market has already resolved.'
+              : 'Mirror trading is preview-only in this build. Use BTC Predict markets for end-to-end Sui settlement.'}
           </div>
         )}
         {hasOpenPosition && (
           <div className="mb-4 rounded-2xl border border-new-mint/15 bg-new-mint/10 p-3 text-sm text-new-mint">
-            You already have an open position on this mirrored market. Claim, refund, or forfeit it from your portfolio after settlement.
+            You already have a local preview position on this mirrored market. It can be marked from the mirror portfolio after the source market resolves.
           </div>
         )}
 
@@ -277,7 +273,7 @@ export default function MirrorTradePanel({ market, onSuccess, roomId, roomLocked
           </div>
           <div className="flex items-center gap-2 rounded-xl border border-new-mint/15 bg-new-mint/10 px-3 py-2 text-xs text-new-mint">
             <Lock className="h-3.5 w-3.5" />
-            Position tracked locally. On-chain mirror integration coming soon.
+            Preview position only. No DUSDC leaves your wallet and no Sui settlement is performed.
           </div>
         </div>
 
@@ -294,7 +290,7 @@ export default function MirrorTradePanel({ market, onSuccess, roomId, roomLocked
           className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-black uppercase tracking-[0.2em] text-black transition-all disabled:cursor-not-allowed disabled:opacity-40"
         >
           {loading ? <Loader className="h-4 w-4 animate-spin" /> : <Wallet className="h-4 w-4" />}
-          {loading ? 'Submitting...' : `Trade ${side === 'YES' ? market.outcomeLabels[0] : market.outcomeLabels[1]}`}
+          {loading ? 'Submitting...' : 'Preview only'}
         </motion.button>
       </div>
     </section>

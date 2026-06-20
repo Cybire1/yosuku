@@ -51,6 +51,15 @@ export async function simulateReturnU64s(tx: Transaction, sender: string, comman
   return (cmd?.returnValues ?? []).map((rv) => decodeU64(rv.bcs));
 }
 
+/** Read u64 return values from every command in one simulated transaction. */
+export async function simulateReturnU64Commands(tx: Transaction, sender: string): Promise<bigint[][]> {
+  tx.setSenderIfNotSet(sender);
+  const res = await grpc.simulateTransaction({ transaction: tx, include: { commandResults: true } });
+  return (res.commandResults ?? []).map((cmd) =>
+    (cmd.returnValues ?? []).map((rv) => decodeU64(rv.bcs)),
+  );
+}
+
 /** Raw boolean return (1 byte) from a simulated command (replaces devInspect bool reads). */
 export async function simulateReturnBool(tx: Transaction, sender: string, commandIndex = 0): Promise<boolean> {
   tx.setSenderIfNotSet(sender);

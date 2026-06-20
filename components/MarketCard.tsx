@@ -17,6 +17,7 @@ interface MarketCardProps {
   spotPrice?: number | null;
   forwardPrice?: number | null;
   seedStrike?: number | null;
+  horizonLabel?: string;
   isFavorite?: boolean;
   onToggleFavorite?: (oracleId: string) => void;
 }
@@ -25,7 +26,7 @@ const ASSET_GLYPH: Record<string, string> = {
   BTC: '₿', ETH: 'Ξ', SOL: '◎', SUI: 'S',
 };
 
-export default function MarketCard({ oracle, spotPrice, forwardPrice, seedStrike, isFavorite, onToggleFavorite }: MarketCardProps) {
+export default function MarketCard({ oracle, spotPrice, forwardPrice, seedStrike, horizonLabel, isFavorite, onToggleFavorite }: MarketCardProps) {
   const router = useRouter();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [timeLeft, setTimeLeft] = useState(getTimeRemaining(oracle.expiry));
@@ -241,7 +242,7 @@ export default function MarketCard({ oracle, spotPrice, forwardPrice, seedStrike
       <div className="mc-head">
         <span className="mc-asset">
           <span className="glyph">{glyph}</span>
-          {asset} · 15-min
+          {asset} · {horizonLabel ?? '15-min'}
         </span>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           {onToggleFavorite && (
