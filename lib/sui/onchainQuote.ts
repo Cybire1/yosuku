@@ -1,6 +1,7 @@
 // Client-safe wrapper around the exact on-chain quote. The actual devInspect runs
 // in the /api/yosuku/quote server route (Node), which keeps the @yosuku/deepbook-predict SDK
 // — and Node's Buffer — out of the browser bundle.
+import { QuoteSchema, parseOne } from './schemas';
 
 export interface OnChainQuote {
   mintCost: number; // DUSDC to open `quantity` now
@@ -23,7 +24,9 @@ export async function fetchOnChainQuote(a: {
   });
   const res = await fetch(`/api/yosuku/quote?${params.toString()}`);
   if (!res.ok) throw new Error(`on-chain quote ${res.status}`);
-  return res.json();
+  const q = parseOne(QuoteSchema, await res.json(), 'quote');
+  if (!q) throw new Error('on-chain quote returned malformed data');
+  return q as OnChainQuote;
 }
 
 /** Exact on-chain quote for a RANGE position (settles inside (lower, higher]). */
@@ -44,5 +47,7 @@ export async function fetchOnChainRangeQuote(a: {
   });
   const res = await fetch(`/api/yosuku/quote?${params.toString()}`);
   if (!res.ok) throw new Error(`on-chain range quote ${res.status}`);
-  return res.json();
+  const q = parseOne(QuoteSchema, await res.json(), 'range quote');
+  if (!q) throw new Error('on-chain range quote returned malformed data');
+  return q as OnChainQuote;
 }

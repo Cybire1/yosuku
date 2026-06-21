@@ -1,5 +1,6 @@
 // REST client for DeepBook Predict server
 // All read queries go through this — writes go through PTBs via dapp-kit
+import { RawOracleSchema, RawPriceSchema, RawPositionSchema, TradeSchema, parseList, parseOne } from './schemas';
 
 // Use local proxy to avoid CORS issues with the predict server.
 // Next.js rewrites /api/predict/* → predict-server.testnet.mystenlabs.com/*
@@ -147,10 +148,10 @@ export async function fetchOracles(): Promise<OracleData[]> {
     // Client: use server-side cached route (returns only active + recent settled)
     const res = await fetch('/api/oracles');
     if (!res.ok) throw new Error(`Oracles API: ${res.status}`);
-    return res.json();
+    return parseList(RawOracleSchema, await res.json(), 'oracles') as OracleData[];
   }
   // Server: fetch directly
-  return fetchJson<OracleData[]>('/oracles');
+  return parseList(RawOracleSchema, await fetchJson<unknown>('/oracles'), 'oracles') as OracleData[];
 }
 
 /** List active oracles only */
@@ -180,8 +181,8 @@ function transformPrice(raw: RawPriceResponse): PriceData {
 /** Get latest prices for an oracle */
 export async function fetchLatestPrices(oracleId: string): Promise<PriceData | null> {
   try {
-    const raw = await fetchJson<RawPriceResponse>(`/oracles/${oracleId}/prices/latest`);
-    return transformPrice(raw);
+    const raw = parseOne(RawPriceSchema, await fetchJson<unknown>(`/oracles/${oracleId}/prices/latest`), 'price');
+    return raw ? transformPrice(raw as RawPriceResponse) : null;
   } catch {
     return null;
   }
@@ -190,8 +191,8 @@ export async function fetchLatestPrices(oracleId: string): Promise<PriceData | n
 /** Get price history for an oracle */
 export async function fetchPriceHistory(oracleId: string, limit = 100): Promise<PriceData[]> {
   try {
-    const raw = await fetchJson<RawPriceResponse[]>(`/oracles/${oracleId}/prices?limit=${limit}`);
-    return raw.map(transformPrice);
+    const raw = parseList(RawPriceSchema, await fetchJson<unknown>(`/oracles/${oracleId}/prices?limit=${limit}`), 'prices');
+    return raw.map((p) => transformPrice(p as RawPriceResponse));
   } catch {
     return [];
   }
@@ -265,9 +266,9 @@ function transformPosition(raw: RawPosition): PositionData {
 /** Get positions for a manager */
 export async function fetchManagerPositions(managerId: string): Promise<PositionData[]> {
   try {
-    const data = await fetchJson<{ minted: RawPosition[]; redeemed: RawPosition[] }>(`/managers/${managerId}/positions`);
-    const minted = (data.minted || []).map(transformPosition);
-    const redeemed = (data.redeemed || []).map(transformPosition);
+    const data = await fetchJson<{ minted?: unknown[]; redeemed?: unknown[] }>(`/managers/${managerId}/positions`);
+    const minted = parseList(RawPositionSchema, data.minted ?? [], 'positions.minted').map((p) => transformPosition(p as RawPosition));
+    const redeemed = parseList(RawPositionSchema, data.redeemed ?? [], 'positions.redeemed').map((p) => transformPosition(p as RawPosition));
     return [...minted, ...redeemed];
   } catch {
     return [];
@@ -286,7 +287,7 @@ export async function fetchMintedPositions(oracleId: string): Promise<MintedPosi
 /** Get trade history for an oracle */
 export async function fetchTrades(oracleId: string): Promise<TradeData[]> {
   try {
-    return await fetchJson<TradeData[]>(`/trades/${oracleId}`);
+    return parseList(TradeSchema, await fetchJson<unknown>(`/trades/${oracleId}`), 'trades') as TradeData[];
   } catch {
     return [];
   }
