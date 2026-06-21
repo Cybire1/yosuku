@@ -8,9 +8,12 @@
 import { z } from 'zod';
 
 // The server returns some numbers as strings, so coerce. `.int()` is required on every
-// field that later becomes a BigInt — BigInt() throws on a non-integer number.
-const intField = z.coerce.number().int();
-const numField = z.coerce.number().finite();
+// field that later becomes a BigInt — BigInt() throws on a non-integer number. Treat
+// null / undefined / '' as missing (→ NaN) so a required field FAILS instead of silently
+// coercing to 0 (z.coerce.number(null) would be 0).
+const nullish = (v: unknown) => (v === null || v === undefined || v === '' ? NaN : v);
+const intField = z.preprocess(nullish, z.coerce.number().int());
+const numField = z.preprocess(nullish, z.coerce.number().finite());
 
 export const RawOracleSchema = z
   .object({
@@ -71,8 +74,8 @@ export const TradeSchema = z
 // The on-chain cost quote — feeds maxCost / the bet's spend cap. Must be finite & >= 0.
 export const QuoteSchema = z
   .object({
-    mintCost: z.coerce.number().finite().nonnegative(),
-    redeemPayout: z.coerce.number().finite().nonnegative(),
+    mintCost: z.preprocess(nullish, z.coerce.number().finite().nonnegative()),
+    redeemPayout: z.preprocess(nullish, z.coerce.number().finite().nonnegative()),
   })
   .passthrough();
 

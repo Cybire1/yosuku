@@ -6,6 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "check:market-line": "node scripts/check-market-line.mjs",
     "private-bet:executor": "node services/private-bet-executor/server.mjs",
     "private-bet:create-manager": "node scripts/private-bet-create-manager.mjs",
@@ -51,6 +53,7 @@
     "playwright": "^1.61.0",
     "tailwindcss": "^4",
     "typescript": "^5",
+    "vitest": "^4.1.9",
     "ws": "^8.19.0"
   }
 }
