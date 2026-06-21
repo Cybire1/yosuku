@@ -23,8 +23,7 @@ export default function IncognitoToggle({ mode, onChange }: IncognitoToggleProps
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 min-w-0">
           <VenetianMask className={`w-4 h-4 shrink-0 transition-colors ${isPrivate ? 'text-off-blue' : 'text-gray-500'}`} />
-          <span className="text-[13px] font-semibold text-white whitespace-nowrap">Incognito</span>
-          <span className="px-1 py-0.5 bg-off-blue/15 text-off-blue text-[8px] font-black rounded uppercase tracking-tight border border-off-blue/30">ZK</span>
+          <span className="text-[13px] font-semibold text-white whitespace-nowrap">Trade privately</span>
           <button
             type="button"
             onClick={() => setShowInfo((v) => !v)}
@@ -41,7 +40,7 @@ export default function IncognitoToggle({ mode, onChange }: IncognitoToggleProps
           type="button"
           role="switch"
           aria-checked={isPrivate}
-          aria-label="Incognito mode"
+          aria-label="Trade privately"
           onClick={() => onChange(isPrivate ? 'public' : 'private')}
           className={`relative h-6 w-11 shrink-0 rounded-full border transition-colors ${isPrivate ? 'bg-off-blue/40 border-off-blue/60' : 'bg-white/[0.08] border-white/15'}`}
         >

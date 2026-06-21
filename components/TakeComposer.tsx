@@ -36,6 +36,7 @@ export default function TakeComposer({ oracles, onClose }: { oracles: OracleData
   const [spot, setSpot] = useState<number | null>(null);
   const [cents, setCents] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
+  const [amount, setAmount] = useState('10');
 
   // default the price to the round's canonical strike (≈ spot) when the round changes
   useEffect(() => {
@@ -76,7 +77,7 @@ export default function TakeComposer({ oracles, onClose }: { oracles: OracleData
 
   const multiple = cents ? (100 / cents).toFixed(2) : null;
   const bump = useCallback((d: number) => setPrice(p => String(Math.max(0, Math.round((parseFloat(p || '0') || 0) + d)))), []);
-  const takeIt = () => { if (oracle && strikeScaled != null) router.push(`/markets/${oracle.oracle_id}?strike=${strikeScaled}&side=${side}`); };
+  const takeIt = () => { if (oracle && strikeScaled != null) router.push(`/markets/${oracle.oracle_id}?strike=${strikeScaled}&side=${side}&amount=${amount}`); };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -174,7 +175,30 @@ export default function TakeComposer({ oracles, onClose }: { oracles: OracleData
             </div>
           </div>
 
-          <button onClick={takeIt} disabled={strikeScaled == null}
+          {/* stake — set the amount here so it carries straight into the bet */}
+          <div className="mb-4">
+            <div className="flex items-baseline justify-between mb-1.5">
+              <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-gray-500">Amount</span>
+              {cents != null && parseFloat(amount) > 0 && (
+                <span className="font-mono text-[10px] text-emerald-300">win {usd(parseFloat(amount) * (100 / cents))}</span>
+              )}
+            </div>
+            <div className="flex items-center gap-2 border border-white/10 rounded-xl px-3 py-2.5 focus-within:border-white/25 transition-colors mb-2">
+              <input value={amount} onChange={e => setAmount(e.target.value.replace(/[^0-9.]/g, ''))} inputMode="decimal" placeholder="0"
+                className="bg-transparent flex-1 outline-none font-mono text-2xl min-w-0" />
+              <span className="text-gray-500 font-mono text-sm">DUSDC</span>
+            </div>
+            <div className="grid grid-cols-4 gap-2">
+              {['5', '10', '25', '100'].map(a => (
+                <button key={a} onClick={() => setAmount(a)}
+                  className={`rounded-lg py-2 font-mono text-sm border transition-all ${amount === a ? 'bg-vermilion/15 border-vermilion/50 text-white' : 'border-white/10 text-gray-500 hover:text-gray-300'}`}>
+                  {a}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <button onClick={takeIt} disabled={strikeScaled == null || !(parseFloat(amount) > 0)}
             className="w-full bg-vermilion hover:bg-vermilion-d text-white font-bold rounded-2xl py-4 text-sm uppercase tracking-wider transition-colors disabled:opacity-50">
             Take it →
           </button>

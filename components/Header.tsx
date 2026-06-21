@@ -42,7 +42,6 @@ const PRIMARY_NAV: NavLink[] = [
 const SECONDARY_NAV: NavLink[] = [
   { name: 'Parlay', href: '/parlay', icon: ChartNoAxesCombined },
   { name: 'Surface', href: '/surface', icon: Activity },
-  { name: 'Pool', href: '/pool', icon: Coins },
   { name: 'Agents', href: '/agents', icon: Bot },
   { name: 'Leaderboard', href: '/leaderboard', icon: Trophy },
   { name: 'Docs', href: '/docs', icon: BookOpen },
