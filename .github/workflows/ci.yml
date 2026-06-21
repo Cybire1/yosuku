@@ -1,0 +1,42 @@
+name: CI
+
+# Guards the money-path: typecheck + the runtime-validation tests
+# (lib/sui/schemas.ts) must pass before anything merges, so the bet /
+# claim / cashout boundary can never silently regress.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Cancel superseded runs on the same ref to save minutes.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: typecheck + test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      # Advisory only — surfaces lint issues without blocking the merge gate.
+      # Promote to a blocking step once the existing lint debt is cleared.
+      - name: Lint
+        run: npm run lint
+        continue-on-error: true
