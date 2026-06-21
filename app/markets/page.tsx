@@ -12,7 +12,8 @@ import { useBtcPrice } from '@/lib/hooks/useBtcPrice';
 import { drawPriceLine, genCandles } from '@/lib/charts/canvasChart';
 import { fetchPriceHistory } from '@/lib/sui/predictApi';
 import { FLOAT_SCALING } from '@/lib/sui/constants';
-import { Search, X, ChevronDown } from 'lucide-react';
+import { Search, X, ChevronDown, Clock, Maximize2 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useKeyboardShortcuts } from '@/lib/hooks/useKeyboardShortcuts';
 import { loadFavorites, toggleFavorite } from '@/lib/favorites';
 import Header from '@/components/Header';
@@ -20,6 +21,7 @@ import Footer from '@/components/Footer';
 import Marquee from '@/components/Marquee';
 import GrainOverlay from '@/components/GrainOverlay';
 import MarketCard from '@/components/MarketCard';
+import TradePanel from '@/components/TradePanel';
 import SectionHeader from '@/components/SectionHeader';
 import TheBell from '@/components/TheBell';
 import Tutorial from '@/components/Tutorial';
@@ -130,6 +132,49 @@ export default function MarketsPage() {
   const [heroYesProb, setHeroYesProb] = useState<number | null>(null);
   // The hero chart IS the headline live market — tradable, not decoration.
   const [heroOracle, setHeroOracle] = useState<{ id: string; expiry: number; strike: number; strikeDollars: number } | null>(null);
+  // Raw OracleData for the hero market — feeds the embedded TradePanel (same panel the detail page uses).
+  const heroRawOracle = useMemo(
+    () => (heroOracle ? active.find(o => o.oracle_id === heroOracle.id) ?? null : null),
+    [active, heroOracle],
+  );
+  // Expand the hero market into a full detail modal (click the card → morph open).
+  const [expanded, setExpanded] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+  const modalCanvasRef = useRef<HTMLCanvasElement>(null);
+  // Fade the "scroll for markets" cue once the user starts scrolling.
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 60);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+  // Lock body scroll + close on Escape while the modal is open.
+  useEffect(() => {
+    if (!expanded) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setExpanded(false); };
+    document.addEventListener('keydown', onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = prev; };
+  }, [expanded]);
+  // Draw the expanded chart from the cached hero series (+ live tick), retrying until the canvas mounts.
+  useEffect(() => {
+    if (!expanded || !heroOracle) return;
+    let raf = 0;
+    const tryDraw = () => {
+      if (!modalCanvasRef.current) { raf = requestAnimationFrame(tryDraw); return; }
+      const base = heroSeriesRef.current?.series ?? [];
+      const series = btcPrice ? [...base, btcPrice] : base;
+      if (series.length >= 2) {
+        drawPriceLine(modalCanvasRef.current, series, {
+          target: heroOracle.strikeDollars,
+          targetLabel: `Win line · $${Math.round(heroOracle.strikeDollars).toLocaleString()}`,
+          verdict: true, gridLines: true, axisRight: 64, padX: 18, padTop: 16, padBot: 16,
+        });
+      }
+    };
+    tryDraw();
+    return () => cancelAnimationFrame(raf);
+  }, [expanded, heroOracle, btcPrice]);
   const [nowMs, setNowMs] = useState(0);
   useEffect(() => {
     const tick = () => setNowMs(Date.now());
@@ -141,6 +186,7 @@ export default function MarketsPage() {
   useEffect(() => {
     if (!heroCanvasRef.current) return;
     let cancelled = false;
+    let raf = 0;
 
     async function renderHeroChart() {
       // Soonest BTC round that is still TRADABLE — skip expired-but-unsettled
@@ -227,16 +273,23 @@ export default function MarketsPage() {
             }
 
             if (!cancelled && heroCanvasRef.current) {
-              drawPriceLine(heroCanvasRef.current, liveSeries, {
-                target: midDollars,
-                targetLabel: `Win line · $${Math.round(midDollars).toLocaleString()}`,
-                verdict: true,
-                gridLines: true,
-                axisRight: 60,
-                padX: 14,
-                padTop: 12,
-                padBot: 12,
-              });
+              const drawFrame = (now: number) => {
+                if (cancelled || !heroCanvasRef.current) return;
+                drawPriceLine(heroCanvasRef.current, liveSeries, {
+                  target: midDollars,
+                  targetLabel: `Win line · $${Math.round(midDollars).toLocaleString()}`,
+                  verdict: true,
+                  gridLines: true,
+                  axisRight: 60,
+                  padX: 14,
+                  padTop: 12,
+                  padBot: 12,
+                  motion: true,
+                  now,
+                });
+                raf = window.requestAnimationFrame(drawFrame);
+              };
+              raf = window.requestAnimationFrame(drawFrame);
               return;
             }
           }
@@ -260,7 +313,7 @@ export default function MarketsPage() {
     }
 
     renderHeroChart();
-    return () => { cancelled = true; };
+    return () => { cancelled = true; if (raf) window.cancelAnimationFrame(raf); };
   }, [btcPrice, active, settled, prices, nowMs]);
 
   const recentSettled = settled.slice(0, 6);
@@ -391,86 +444,161 @@ export default function MarketsPage() {
             <span style={{ color: 'var(--white)' }}>Markets</span>
           </div>
 
-          <div className="hero-grid">
-            <div className="hero-left">
-              <div className="eyebrow">
-                <span className="dash" />
-                <span className="live-dot" />
-                <span>The floor · open</span>
-                <span style={{ color: 'var(--gray-700)' }}>·</span>
-                <span>15-min binary rounds</span>
-              </div>
-              <h1 className="page-title">
-                The<br />
-                <span className="accent">floor</span> is<br />
-                open.
-              </h1>
-
-            </div>
-
+          <div className="hero-grid hero-grid-mini">
             {/* Hero chart */}
             <div
               className="hero-chart"
-              role={heroOracle ? 'link' : undefined}
+              role={heroOracle ? 'button' : undefined}
               tabIndex={heroOracle ? 0 : undefined}
-              aria-label={heroOracle ? 'Open this market' : undefined}
+              aria-label={heroOracle ? 'Expand this market' : undefined}
               data-cursor={heroOracle ? 'hover' : undefined}
-              style={{ cursor: heroOracle ? 'pointer' : undefined }}
-              onClick={() => { if (heroOracle) router.push(`/markets/${heroOracle.id}`); }}
-              onKeyDown={(e) => { if (e.key === 'Enter' && heroOracle) router.push(`/markets/${heroOracle.id}`); }}
+              style={{ cursor: heroOracle ? 'zoom-in' : undefined }}
+              onClick={() => { if (heroOracle) setExpanded(true); }}
+              onKeyDown={(e) => { if (e.key === 'Enter' && heroOracle) setExpanded(true); }}
             >
               <div className="hero-chart-head">
-                <div className="left">
-                  <span className="glyph">₿</span>
-                  <div>
-                    <div className="pair">
-                      {heroOracle ? `BTC above $${heroOracle.strikeDollars.toLocaleString(undefined, { maximumFractionDigits: 0 })}?` : 'BTC · USD'}
-                    </div>
-                    <div className="pair-meta">
-                      {heroOracle ? (
-                        <>
-                          <span className="meta-soft">Tap UP or DOWN · closes in </span>
-                          {formatCountdown(getTimeRemaining(heroOracle.expiry))}
-                          <span className="meta-soft"> · oracle-settled</span>
-                        </>
-                      ) : 'spot · live stream · 1m candles'}
-                    </div>
+                <div>
+                  <div className="flex items-center gap-3 mb-2.5">
+                    <span className="font-mono text-[9px] tracking-[0.16em] uppercase px-2.5 py-1 rounded-full border text-vermilion bg-vermilion/10 border-vermilion/20">Live</span>
+                    <span className="font-mono text-[10px] tracking-[0.1em] uppercase text-gray-600">BTC</span>
                   </div>
+                  <h2 className="font-display font-[800] text-3xl sm:text-4xl text-white tracking-tight leading-[1.05]">
+                    {heroOracle ? (
+                      <>BTC above <span className="text-vermilion">{`$${heroOracle.strikeDollars.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}</span>?</>
+                    ) : 'BTC · USD'}
+                  </h2>
+                  {heroOracle && btcPrice != null && (
+                    <div className="flex items-center gap-2 mt-2.5 font-mono text-sm sm:text-base">
+                      <span className={btcPrice >= heroOracle.strikeDollars ? 'text-profit font-semibold' : 'text-loss font-semibold'}>
+                        {btcPrice >= heroOracle.strikeDollars
+                          ? `$${Math.round(btcPrice - heroOracle.strikeDollars).toLocaleString()} above your line`
+                          : `needs +$${Math.round(heroOracle.strikeDollars - btcPrice).toLocaleString()} to win`}
+                      </span>
+                      <span className="text-gray-600">·</span>
+                      <span className="text-gray-400">{formatCountdown(getTimeRemaining(heroOracle.expiry))} left</span>
+                    </div>
+                  )}
                 </div>
-                <div className="left" style={{ textAlign: 'right', flexDirection: 'column', alignItems: 'flex-end', gap: 0 }}>
-                  <div>
-                    <span className="price">
-                      {btcPrice ? `$${btcPrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '—'}
-                    </span>
-                    <span className="delta">{heroChartDelta || '\u2014'}</span>
+                {heroOracle && (
+                  <div className="text-right shrink-0">
+                    <span className="font-mono text-[9px] tracking-[0.16em] uppercase text-gray-600 block mb-1">Expires in</span>
+                    <span className="font-mono text-2xl sm:text-3xl font-semibold text-white tabular-nums">{formatCountdown(getTimeRemaining(heroOracle.expiry))}</span>
                   </div>
-                  <div className="pair-meta meta-soft" style={{ fontSize: '9px' }}>live oracle price</div>
-                </div>
-              </div>
-              <canvas ref={heroCanvasRef} />
-              <div className="hero-chart-foot">
-                <span>WINNING SIDE PAYS $1 · PRICE-ORACLE SETTLED</span>
-                {heroOracle ? (
-                  <span className="hero-bet">
-                    <Link onClick={(e) => e.stopPropagation()} href={`/markets/${heroOracle.id}?strike=${heroOracle.strike}&side=UP`} className="hero-bet-btn up" data-cursor="up">
-                      UP <span className="c">{heroYesProb ?? '—'}¢</span>
-                    </Link>
-                    <Link onClick={(e) => e.stopPropagation()} href={`/markets/${heroOracle.id}?strike=${heroOracle.strike}&side=DOWN`} className="hero-bet-btn down" data-cursor="hover">
-                      DOWN <span className="c">{heroYesProb !== null ? 100 - heroYesProb : '—'}¢</span>
-                    </Link>
-                  </span>
-                ) : (
-                  <span className="ramp">
-                    <span>YES</span>
-                    <span className="bar"><span className="fill" /></span>
-                    <span style={{ color: 'var(--vermilion)' }}>{heroYesProb ? `${heroYesProb}¢` : '\u2014'}</span>
-                  </span>
                 )}
               </div>
+              <div className="hero-chart-canvas">
+                <canvas ref={heroCanvasRef} />
+                {heroOracle && (
+                  <button
+                    type="button"
+                    className="hero-expand-btn"
+                    aria-label="Expand market"
+                    onClick={(e) => { e.stopPropagation(); setExpanded(true); }}
+                  >
+                    <Maximize2 />
+                  </button>
+                )}
+              </div>
+              <div className="hero-chart-foot">
+                <span>WINNING SIDE PAYS $1 · PRICE-ORACLE SETTLED</span>
+                <span className="ramp">
+                  <span>YES</span>
+                  <span className="bar"><span className="fill" style={{ width: heroYesProb != null ? `${heroYesProb}%` : '50%' }} /></span>
+                  <span style={{ color: 'var(--vermilion)' }}>{heroYesProb != null ? `${heroYesProb}¢` : '—'}</span>
+                </span>
+              </div>
+            </div>
+
+            {/* Mini bet panel — the same TradePanel the full market page uses */}
+            <div className="hero-mini-panel">
+              {heroRawOracle ? (
+                <TradePanel
+                  oracle={heroRawOracle}
+                  spotPrice={prices[heroRawOracle.oracle_id]?.spot ?? null}
+                  forwardPrice={prices[heroRawOracle.oracle_id]?.forward ?? null}
+                  defaultSide="UP"
+                  initialStrike={heroOracle?.strike ?? null}
+                  initialMode="simple"
+                />
+              ) : (
+                <div className="hero-mini-loading">Loading live market…</div>
+              )}
             </div>
           </div>
         </div>
+        <button
+          type="button"
+          className={`scroll-cue${scrolled ? ' gone' : ''}`}
+          aria-label="Scroll to markets"
+          onClick={() => window.scrollTo({ top: window.innerHeight * 0.78, behavior: 'smooth' })}
+        >
+          <span className="scroll-cue-label">Markets below</span>
+          <span className="scroll-cue-track"><span className="scroll-cue-dot" /></span>
+        </button>
       </section>
+
+      {/* Expanded market modal — morphs open from the hero card */}
+      <AnimatePresence>
+        {expanded && heroOracle && heroRawOracle && (
+          <motion.div
+            className="market-modal-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            onClick={() => setExpanded(false)}
+          >
+            <motion.div
+              className="market-modal"
+              initial={{ opacity: 0, scale: 0.96, y: 14 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.97, y: 10 }}
+              transition={{ type: 'spring', stiffness: 320, damping: 32 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="market-modal-head">
+                <div className="mm-title">
+                  <span className="glyph">B</span>
+                  <div>
+                    <div className="mm-q">{`BTC above $${heroOracle.strikeDollars.toLocaleString(undefined, { maximumFractionDigits: 0 })}?`}</div>
+                    <div className="hero-chart-tags">
+                      <span className="hc-countdown"><Clock />Closes in <b>{formatCountdown(getTimeRemaining(heroOracle.expiry))}</b></span>
+                      <span className="hc-chip">Oracle-settled</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="mm-head-right">
+                  <div className="mm-price">
+                    <span className="price">{btcPrice ? `$${btcPrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '—'}</span>
+                    <span className="delta">{heroChartDelta || '—'}</span>
+                  </div>
+                  <button type="button" className="mm-close" aria-label="Close" onClick={() => setExpanded(false)}><X /></button>
+                </div>
+              </div>
+              <div className="market-modal-body">
+                <div className="market-modal-chart">
+                  <canvas ref={modalCanvasRef} />
+                  <div className="mm-chart-foot">
+                    <span>WINNING SIDE PAYS $1 · PRICE-ORACLE SETTLED</span>
+                    <Link href={`/markets/${heroOracle.id}`} className="mm-fullpage" data-cursor="hover">Open full page →</Link>
+                  </div>
+                </div>
+                <div className="market-modal-panel">
+                  <TradePanel
+                    oracle={heroRawOracle}
+                    spotPrice={prices[heroRawOracle.oracle_id]?.spot ?? null}
+                    forwardPrice={prices[heroRawOracle.oracle_id]?.forward ?? null}
+                    defaultSide="UP"
+                    initialStrike={heroOracle?.strike ?? null}
+                    initialMode="pro"
+                    onSuccess={() => setExpanded(false)}
+                  />
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Filter bar (sticky) */}
       <div className="filter-bar">

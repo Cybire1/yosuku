@@ -22,13 +22,14 @@ interface CashOutProps {
   oracleId: string;
   expiry: number;
   isActive: boolean;
+  embedded?: boolean;
 }
 
 interface QuotedPosition extends LocalPosition {
   exitValue: number | null; // DUSDC, live
 }
 
-export default function CashOut({ oracleId, expiry, isActive }: CashOutProps) {
+export default function CashOut({ oracleId, expiry, isActive, embedded = false }: CashOutProps) {
   const account = useCurrentAccount();
   const address = account?.address ?? null;
   const { submit } = useSmartSubmit();
@@ -97,10 +98,18 @@ export default function CashOut({ oracleId, expiry, isActive }: CashOutProps) {
     }
   };
 
-  if (!isActive || !address || positions.length === 0) return null;
+  if (!isActive || !address) return null;
+  if (positions.length === 0) {
+    return embedded ? (
+      <div className="text-center py-10 text-[12px] text-gray-500 font-mono leading-relaxed">
+        No open positions in this market.<br />
+        Bets you place show here to cash out before the bell.
+      </div>
+    ) : null;
+  }
 
   return (
-    <div className="rounded-2xl border border-white/[0.08] bg-neutral-900/60 p-4 space-y-3">
+    <div className={embedded ? 'space-y-3' : 'rounded-2xl border border-white/[0.08] bg-neutral-900/60 p-4 space-y-3'}>
       <h3 className="font-mono text-[9px] tracking-[0.16em] uppercase text-gray-600">
         Your position
       </h3>

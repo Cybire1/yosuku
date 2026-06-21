@@ -21,8 +21,8 @@ import { FLOAT_SCALING, DUSDC_MULTIPLIER } from '@/lib/sui/constants';
 import { useManager, useDUSDCBalance, useManagerBalance, useSviPricing, useVaultStats, useTradingVaultBalance } from '@/lib/sui/hooks';
 import {
   createManagerTx,
-  tradingBalanceDepositAndMintRangeTx,
-  tradingBalanceDepositAndMintTx,
+  depositAndMintRangeTx,
+  depositAndMintTx,
 } from '@/lib/sui/predictClient';
 import { defaultStrike, generateDisplayStrikeGrid, formatStrike, nearestStrike, savePosition } from '@/lib/roundHelpers';
 import { computeSviPrice, computeRangePrice, computeFeeBreakdown, type FeeBreakdown } from '@/lib/sui/sviPricing';
@@ -36,6 +36,7 @@ import { recordLocalLeverageOrder } from '@/lib/leverageLocal';
 import { useDailyStop } from '@/lib/dailyStop';
 import { humanizeTxError } from '@/lib/errorMessages';
 import { useSmartSubmit } from '@/lib/sui/useSmartSubmit';
+import CashOut from '@/components/CashOut';
 import Countdown from './Countdown';
 import TradeConfirmationModal from './TradeConfirmationModal';
 import Tooltip from './Tooltip';
@@ -74,6 +75,8 @@ interface TradePanelProps {
   onSideChange?: (side: 'UP' | 'DOWN') => void;
   onStrikeChange?: (strike: number) => void;
   onSuccess?: () => void;
+  initialMode?: 'simple' | 'pro';
+  initialAmount?: string;
 }
 
 type Side = 'UP' | 'DOWN' | 'RANGE';
@@ -88,6 +91,8 @@ export default function TradePanel({
   onSideChange,
   onStrikeChange,
   onSuccess,
+  initialMode = 'pro',
+  initialAmount,
 }: TradePanelProps) {
   const account = useCurrentAccount();
   const address = account?.address ?? null;
@@ -103,7 +108,7 @@ export default function TradePanel({
   const [side, setSide] = useState<Side>(defaultSide);
   const [leverage, setLeverage] = useState(1); // 1× = no leverage; 2×/3× underwritten by the yolev reserve
   const { stats: reserveStats } = useReserveStats();
-  const [amount, setAmount] = useState('10');
+  const [amount, setAmount] = useState(initialAmount ?? '10');
   const [selectedStrike, setSelectedStrike] = useState<number | null>(initialStrike);
   const [rangeUpperStrike, setRangeUpperStrike] = useState<number | null>(null);
   const [showStrikeSelector, setShowStrikeSelector] = useState(false);
@@ -137,7 +142,8 @@ export default function TradePanel({
   // feature set (leverage/strikes/range) is visible out of the box — a saved
   // preference still wins. Loaded from localStorage in an effect (not lazy init)
   // to avoid an SSR/client hydration mismatch.
-  const [mode, setMode] = useState<'simple' | 'pro'>('pro');
+  const [mode, setMode] = useState<'simple' | 'pro'>(initialMode);
+  const [tab, setTab] = useState<'buy' | 'sell'>('buy');
   useEffect(() => {
     try {
       const saved = localStorage.getItem('yosuku_trade_mode');
@@ -284,7 +290,7 @@ export default function TradePanel({
     ? true
     : isLeveraged
     ? walletBalance + tradingVaultBalance.available >= amountMicro
-    : walletBalance + tradingVaultBalance.available >= amountMicro;
+    : walletBalance >= amountMicro;
 
   // Range validation
   const isRangeValid = side !== 'RANGE' || (selectedStrike !== null && rangeUpperStrike !== null && selectedStrike < rangeUpperStrike);
@@ -544,19 +550,16 @@ export default function TradePanel({
         });
       } else {
         if (!managerId) throw new Error('No trading account.');
-        const vaultAvailable = BigInt(tradingVaultBalance.available);
-        const needsTopUp = vaultAvailable < BigInt(amountMicro);
-        if (needsTopUp && coins.length === 0) {
-          throw new Error('Add DUSDC to your wallet or Trading Balance before trading.');
+        if (walletBalance < amountMicro || coins.length === 0) {
+          throw new Error('Add DUSDC to your wallet before trading.');
         }
 
         if (side === 'RANGE' && rangeUpperStrike) {
           setStep('minting');
           const coinIds = coins.map(c => c.coinObjectId);
-          ({ digest } = await submit(() => tradingBalanceDepositAndMintRangeTx(
+          ({ digest } = await submit(() => depositAndMintRangeTx(
             managerId!,
             coinIds,
-            vaultAvailable,
             BigInt(amountMicro),
             oracle.oracle_id,
             BigInt(oracle.expiry),
@@ -568,10 +571,9 @@ export default function TradePanel({
         } else {
           setStep('minting');
           const coinIds = coins.map(c => c.coinObjectId);
-          ({ digest } = await submit(() => tradingBalanceDepositAndMintTx(
+          ({ digest } = await submit(() => depositAndMintTx(
             managerId!,
             coinIds,
-            vaultAvailable,
             BigInt(amountMicro),
             oracle.oracle_id,
             BigInt(oracle.expiry),
@@ -607,7 +609,7 @@ export default function TradePanel({
       const strikeLabel = selectedStrike ? `$${(selectedStrike / FLOAT_SCALING).toLocaleString()}` : '';
       toast(
         leverage > 1
-          ? `${leverage}× order placed — the keeper is opening your position (a few seconds). Track it on Earn.`
+          ? `${leverage}× order placed — Yosuku is opening your position. Track it on Earn.`
           : `Position opened: ${(amountMicro / DUSDC_MULTIPLIER).toFixed(2)} DUSDC on ${oracle.underlying_asset || 'BTC'} ${side} ${strikeLabel}`,
         'success',
       );
@@ -692,7 +694,7 @@ export default function TradePanel({
 
   if (!address) {
     return (
-      <div className="rounded-2xl border border-white/[0.08] bg-neutral-900/60 p-6 text-center">
+      <div className="rounded-2xl border border-white/[0.07] bg-[#0e0e11] shadow-[0_24px_64px_-32px_rgba(0,0,0,0.9)] p-6 text-center">
         <Wallet className="w-8 h-8 text-gray-600 mx-auto mb-3" />
         <p className="text-sm text-gray-400 mb-1">Connect your wallet to trade</p>
         <p className="text-xs text-gray-600 mb-4">Any Sui wallet — test funds are free</p>
@@ -701,8 +703,40 @@ export default function TradePanel({
     );
   }
 
+  // Buy / Sell switcher — Buy = predict; Sell = cash out open positions in this market.
+  const buySellTabs = (
+    <div className="flex items-center gap-5 px-4 pt-3 border-b border-white/5">
+      {(['buy', 'sell'] as const).map((t) => (
+        <button
+          key={t}
+          type="button"
+          onClick={() => setTab(t)}
+          aria-pressed={tab === t}
+          className={`relative pb-2.5 text-sm font-bold capitalize transition-colors ${tab === t ? 'text-white' : 'text-gray-500 hover:text-gray-300'}`}
+        >
+          {t}
+          {tab === t && <span className="absolute left-0 right-0 -bottom-px h-0.5 bg-vermilion" />}
+        </button>
+      ))}
+    </div>
+  );
+
+  if (tab === 'sell') {
+    return (
+      <div className="rounded-2xl border border-white/[0.07] bg-[#0e0e11] shadow-[0_24px_64px_-32px_rgba(0,0,0,0.9)] overflow-hidden">
+        <div className="flex items-center px-4 pt-2.5 pb-2 border-b border-white/5">
+          <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-600">Place a bet</span>
+        </div>
+        {buySellTabs}
+        <div className="p-4">
+          <CashOut oracleId={oracle.oracle_id} expiry={oracle.expiry} isActive embedded />
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="rounded-2xl border border-white/[0.08] bg-neutral-900/60 overflow-hidden">
+    <div className="rounded-2xl border border-white/[0.07] bg-[#0e0e11] shadow-[0_24px_64px_-32px_rgba(0,0,0,0.9)] overflow-hidden">
       {/* Mode toggle — Simple (plain question) vs Pro (full machinery) */}
       <div className="flex items-center justify-between px-4 pt-2.5 pb-2 border-b border-white/5">
         <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-600">Place a bet</span>
@@ -714,7 +748,7 @@ export default function TradePanel({
               onClick={() => applyMode(m)}
               aria-pressed={mode === m}
               className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded-md transition-colors ${
-                mode === m ? 'bg-white/10 text-white' : 'text-gray-500 hover:text-gray-300'
+                mode === m ? 'bg-vermilion/15 text-vermilion' : 'text-gray-500 hover:text-gray-300'
               }`}
             >
               {m === 'simple' ? 'Simple' : 'Pro'}
@@ -722,6 +756,7 @@ export default function TradePanel({
           ))}
         </div>
       </div>
+      {buySellTabs}
       {/* Side selector (Pro: Up / Down / Range tabs) */}
       {mode === 'pro' && (
       <div className="flex border-b border-white/5">
@@ -750,19 +785,6 @@ export default function TradePanel({
         >
           <TrendingDown className="w-4 h-4" />
           Down
-        </button>
-        <button
-          type="button"
-          onClick={() => setSide('RANGE')}
-          aria-pressed={side === 'RANGE'}
-          className={`flex-1 flex items-center justify-center gap-2 py-3.5 text-sm font-bold transition-all ${
-            side === 'RANGE'
-              ? 'bg-amber-500/10 text-amber-400 border-b-2 border-amber-400'
-              : 'text-gray-500 hover:text-gray-300'
-          }`}
-        >
-          <Activity className="w-4 h-4" />
-          Range
         </button>
       </div>
       )}
@@ -972,7 +994,7 @@ export default function TradePanel({
             )}
           </div>
         ) : (
-          <div>
+          <div hidden>
             <div className="flex items-center justify-between mb-2">
               <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500">
                 Your line
@@ -1011,14 +1033,6 @@ export default function TradePanel({
               <button type="button" disabled={!selectedStrike} onClick={() => selectedStrike && commitStrike(selectedStrike / FLOAT_SCALING - 1000)} className="flex-1 py-1.5 text-[10px] font-bold rounded-lg border border-white/5 bg-white/[0.02] text-gray-400 hover:text-white transition-colors disabled:opacity-40">−$1k</button>
               <button type="button" disabled={!selectedStrike} onClick={() => selectedStrike && commitStrike(selectedStrike / FLOAT_SCALING + 1000)} className="flex-1 py-1.5 text-[10px] font-bold rounded-lg border border-white/5 bg-white/[0.02] text-gray-400 hover:text-white transition-colors disabled:opacity-40">+$1k</button>
             </div>
-            {/* price-to-beat framing — keeps the binary mental model legible */}
-            {selectedStrike && (
-              <p className="text-[11px] text-gray-500 mt-2 leading-snug">
-                {oracle.underlying_asset || 'BTC'} must close{' '}
-                <span className={side === 'UP' ? 'text-new-mint' : 'text-rose-400'}>{side === 'UP' ? 'above' : 'below'}</span>{' '}
-                <span className="text-white font-mono">{formatStrike(selectedStrike)}</span> at the bell
-              </p>
-            )}
 
             <AnimatePresence>
               {showStrikeSelector && (
@@ -1086,9 +1100,9 @@ export default function TradePanel({
               {mode === 'simple' ? 'Your stake' : 'Amount (DUSDC)'}
             </label>
             <span className="text-[10px] text-gray-600">
-              {mode === 'simple'
-                ? `Trading: ${(tradingVaultBalance.available / DUSDC_MULTIPLIER).toFixed(2)} | Wallet: ${(walletBalance / DUSDC_MULTIPLIER).toFixed(2)}`
-                : `Wallet: ${(walletBalance / DUSDC_MULTIPLIER).toFixed(2)} | Trading: ${(tradingVaultBalance.available / DUSDC_MULTIPLIER).toFixed(2)}`}
+              {isLeveraged
+                ? `Wallet: ${(walletBalance / DUSDC_MULTIPLIER).toFixed(2)} | Trading: ${(tradingVaultBalance.available / DUSDC_MULTIPLIER).toFixed(2)}`
+                : `Wallet: ${(walletBalance / DUSDC_MULTIPLIER).toFixed(2)}`}
             </span>
           </div>
           <div className="relative">
@@ -1240,7 +1254,7 @@ export default function TradePanel({
               position is sized to use it; any sub-unit remainder stays in your
               balance, reusable — never a hidden deduction. */}
           {/* Earnings hero — the one number a consumer actually cares about. */}
-          <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/[0.07] px-3 py-2.5 text-center">
+          <div className="rounded-lg border border-emerald-500/25 bg-emerald-500/[0.07] px-3 py-2 text-center">
             <div className="font-mono text-[9px] uppercase tracking-[0.18em] text-emerald-400/70">
               {isLeveraged ? 'You could collect' : 'You could win'}
             </div>
@@ -1248,17 +1262,8 @@ export default function TradePanel({
               <div className="font-display text-xl font-extrabold text-emerald-400/50 mt-0.5">…</div>
             ) : isValidAmount && onChainQuote ? (
               <>
-                <div className="font-display text-[22px] leading-none font-extrabold text-emerald-400 tabular-nums mt-0.5">
+                <div className="font-display text-[18px] leading-none font-extrabold text-emerald-400 tabular-nums mt-0.5">
                   {(maxCollectMicro / DUSDC_MULTIPLIER).toFixed(2)} <span className="text-xs">DUSDC</span>
-                </div>
-                <div className="font-mono text-[10px] text-gray-400 mt-1">
-                  {(() => {
-                    const pay = amountMicro / DUSDC_MULTIPLIER;
-                    const win = maxCollectMicro / DUSDC_MULTIPLIER;
-                    const profit = isLeveraged ? maxProfitMicro / DUSDC_MULTIPLIER : win - pay;
-                    const mult = win / Math.max(0.0001, pay);
-                    return <>+{profit.toFixed(2)} profit · {mult.toFixed(2)}× if you&apos;re right</>;
-                  })()}
                 </div>
               </>
             ) : quoteError ? (
@@ -1269,59 +1274,12 @@ export default function TradePanel({
               <div className="font-display text-xl font-extrabold text-gray-700 mt-0.5">—</div>
             )}
           </div>
-          <div className="flex justify-between items-baseline">
-            <span className="text-gray-500 text-xs inline-flex items-center gap-1">
-              {isLeveraged ? 'Your margin' : 'You pay'}
-              <Tooltip text={isLeveraged ? 'The DUSDC you put at risk. Boost adds exposure, but your max loss stays this margin.' : "What leaves your wallet for this bet. Anything your position doesn't use stays in your balance for next time."} position="bottom" />
-            </span>
-            <span className="text-white font-mono font-bold text-base">
-              {isValidAmount ? `${(amountMicro / DUSDC_MULTIPLIER).toFixed(2)} DUSDC` : '—'}
-            </span>
-          </div>
           {leveragedRightSideLosesMoney && (
             <div className="rounded-lg border border-rose-500/15 bg-rose-500/[0.06] px-3 py-2 text-[11px] leading-relaxed text-rose-200/80">
               Leverage is disabled here because a correct trade would collect less than your margin after reserve repayment.
             </div>
           )}
-          <div className="flex justify-between text-xs pt-1">
-            <span className="text-gray-500">Expires in</span>
-            <span className="text-white">
-              <Countdown expiryMs={oracle.expiry} className="text-xs" />
-            </span>
-          </div>
 
-          {/* Win chance + the verifiable price check are detail a consumer doesn't need —
-              the earnings hero already says what they'd win. Keep them for Pro mode (and
-              judges), where the "verified on-chain" moat is worth showing. */}
-          {mode === 'pro' && feeBreakdown && (
-            <div className="py-2 border-t border-white/5 space-y-1.5">
-              <div className="flex justify-between text-xs">
-                <span className="text-gray-500 inline-flex items-center gap-1">
-                  Win chance
-                  <Tooltip text="The market's estimate of how likely your side is to win — fees included." position="bottom" />
-                </span>
-                <span className="text-white font-mono">{(feeBreakdown.fairPrice * 100).toFixed(0)}%</span>
-              </div>
-              {/* Verify: re-derive the price in the browser from the public vol
-                  surface and check it against the live on-chain quote. The moat,
-                  demonstrated — not claimed. */}
-              {onChainQuote && pricePerUnit > 0 && (() => {
-                const deltaCents = Math.abs(pricePerUnit - feeBreakdown.totalCostPerUnit) * 100;
-                const matches = deltaCents < 1;
-                return (
-                  <div className="flex justify-between items-center text-xs">
-                    <span className="text-gray-500 inline-flex items-center gap-1">
-                      Price check
-                      <Tooltip text={`We re-derive this price in your browser from the public volatility surface (SVI → N(d2)) and compare it to the live on-chain quote — math you can reproduce, not a number to trust. Browser ${(feeBreakdown.totalCostPerUnit * 100).toFixed(1)}¢ · chain ${(pricePerUnit * 100).toFixed(1)}¢.`} position="bottom" />
-                    </span>
-                    <span className={`inline-flex items-center gap-1.5 font-mono ${matches ? 'text-emerald-400' : 'text-amber-400'}`}>
-                      {matches ? <><Check className="w-3 h-3" /> verified on-chain</> : 'recheck'}
-                    </span>
-                  </div>
-                );
-              })()}
-            </div>
-          )}
         </div>
 
         {/* Execute button */}
@@ -1452,7 +1410,7 @@ export default function TradePanel({
                 <>
                   <p className="text-sm font-bold text-white">{leverage}× order placed</p>
                   <p className="text-xs text-gray-400 mt-1">
-                    The keeper is opening your position — track it on{' '}
+                    Yosuku is opening your position — track it on{' '}
                     <a href="/earn" className="text-new-mint hover:underline">Earn</a>.
                   </p>
                 </>
@@ -1460,7 +1418,7 @@ export default function TradePanel({
                 <>
                   <p className="text-sm font-bold text-white">Private ticket opened</p>
                   <p className="text-xs text-gray-400 mt-1">
-                    A session manager opens the public Predict position; cashout will credit your Private Balance.
+                    Your wallet stays off this trade. Cashout credits your Private Balance.
                   </p>
                   {txDigest && (
                     <p className="text-xs text-new-mint mt-1">

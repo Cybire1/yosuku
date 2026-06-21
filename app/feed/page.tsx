@@ -22,6 +22,8 @@ function FeedCard({ oracle, settled }: { oracle: OracleData; settled: OracleData
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const seriesRef = useRef<number[] | null>(null);
   const visibleRef = useRef(false);
+  const rafRef = useRef(0);
+  const drawDataRef = useRef<{ series: number[]; strike: number } | null>(null);
   const [strikeD, setStrikeD] = useState<number | null>(null);
   const [live, setLive] = useState<number | null>(null);
   const [delta, setDelta] = useState<number | null>(null);
@@ -62,16 +64,8 @@ function FeedCard({ oracle, settled }: { oracle: OracleData; settled: OracleData
         const z = diff / (sigma || 0.01);
         setUpProb(Math.round(Math.max(1, Math.min(99, 100 / (1 + Math.exp(-1.7 * z))))));
       }
-      if (canvasRef.current && series.length > 1) {
-        drawPriceLine(canvasRef.current, series, {
-          target: strike,
-          targetLabel: `Win line · ${usd(strike)}`,
-          gridLines: true,
-          axisRight: 56,
-          padX: 14,
-          padTop: 12,
-          padBot: 12,
-        });
+      if (series.length > 1) {
+        drawDataRef.current = { series, strike };
       }
     } catch { /* keep last frame */ }
   }
@@ -80,13 +74,32 @@ function FeedCard({ oracle, settled }: { oracle: OracleData; settled: OracleData
   useEffect(() => {
     const el = cardRef.current;
     if (!el) return;
+    const drawFrame = (now: number) => {
+      const d = drawDataRef.current;
+      if (canvasRef.current && d && d.series.length > 1) {
+        drawPriceLine(canvasRef.current, d.series, {
+          target: d.strike,
+          targetLabel: `Win line · ${usd(d.strike)}`,
+          gridLines: true,
+          axisRight: 56,
+          padX: 14,
+          padTop: 12,
+          padBot: 12,
+          motion: true,
+          now,
+        });
+      }
+      rafRef.current = requestAnimationFrame(drawFrame);
+    };
+    const startRaf = () => { if (!rafRef.current) rafRef.current = requestAnimationFrame(drawFrame); };
+    const stopRaf = () => { if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = 0; } };
     const io = new IntersectionObserver(([e]) => {
       visibleRef.current = e.isIntersecting;
-      if (e.isIntersecting) tick();
+      if (e.isIntersecting) { tick(); startRaf(); } else { stopRaf(); }
     }, { threshold: 0.4 });
     io.observe(el);
     const poll = setInterval(() => { if (visibleRef.current) tick(); }, 10_000);
-    return () => { io.disconnect(); clearInterval(poll); };
+    return () => { io.disconnect(); clearInterval(poll); stopRaf(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [oracle.oracle_id]);
 

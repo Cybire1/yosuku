@@ -45,6 +45,7 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
   const searchParams = useSearchParams();
   const sideParam = searchParams.get('side');
   const strikeParam = searchParams.get('strike');
+  const amountParam = searchParams.get('amount');
   const defaultSide = parseSideParam(sideParam);
 
   const [trades, setTrades] = useState<TradeData[]>([]);
@@ -530,6 +531,7 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
                   forwardPrice={prices?.forward}
                   defaultSide={activeSide}
                   initialStrike={activeStrike}
+                  initialAmount={amountParam ?? undefined}
                   onSideChange={handleSideChange}
                   onStrikeChange={handleStrikeChange}
                 />

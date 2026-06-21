@@ -1,18 +1,20 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useCurrentAccount } from '@mysten/dapp-kit';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { useCurrentAccount, ConnectButton } from '@mysten/dapp-kit';
 import { useSmartSubmit } from '@/lib/sui/useSmartSubmit';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import Marquee from '@/components/Marquee';
 import GrainOverlay from '@/components/GrainOverlay';
 import SectionHeader from '@/components/SectionHeader';
-import { useDUSDCBalance } from '@/lib/sui/hooks';
+import { useDUSDCBalance, usePLPBalance, useVaultStats, useVaultSummary, useVaultPerformance } from '@/lib/sui/hooks';
 import { useReserveStats, useMySupply, useMyPositions, useMyOrders } from '@/lib/sui/leverageHooks';
 import { supplyTx, withdrawTx, cancelOrderTx, settleTx, type PositionData } from '@/lib/sui/leverageClient';
-import { KEEPER_ADDRESS } from '@/lib/sui/constants';
+import { supplyLpTx, withdrawAllPlpTx } from '@/lib/sui/predictClient';
+import { DUSDC_MULTIPLIER, PREDICT_ID } from '@/lib/sui/constants';
 import { fetchOracles, type OracleData } from '@/lib/sui/predictApi';
+import { drawSparkline } from '@/lib/charts/canvasChart';
 
 const fmt = (n: number, d = 2) => n.toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d });
 const pct = (bps: number) => `${(bps / 100).toFixed(1)}%`;
@@ -25,20 +27,20 @@ function outcome(p: PositionData, o: OracleData | undefined): 'pending' | 'won' 
   return (p.isUp ? s > Number(p.lowerStrike) : s <= Number(p.lowerStrike)) ? 'won' : 'lost';
 }
 
-// utilization donut — the reserve's "at risk" share, rendered as an arc
+// utilization donut — the reserve's active capital share, rendered as an arc
 function Gauge({ bps }: { bps: number }) {
   const p = Math.min(1, Math.max(0, bps / 10000));
-  const R = 58, C = 2 * Math.PI * R;
+  const R = 52, C = 2 * Math.PI * R;
   return (
-    <svg width="148" height="148" viewBox="0 0 148 148" className="block">
-      <circle cx="74" cy="74" r={R} fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth="10" />
+    <svg width="132" height="132" viewBox="0 0 132 132" className="block shrink-0">
+      <circle cx="66" cy="66" r={R} fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth="9" />
       <circle
-        cx="74" cy="74" r={R} fill="none" stroke="var(--vermilion)" strokeWidth="10" strokeLinecap="round"
-        strokeDasharray={C} strokeDashoffset={C * (1 - p)} transform="rotate(-90 74 74)"
+        cx="66" cy="66" r={R} fill="none" stroke="var(--vermilion)" strokeWidth="9" strokeLinecap="round"
+        strokeDasharray={C} strokeDashoffset={C * (1 - p)} transform="rotate(-90 66 66)"
         style={{ filter: 'drop-shadow(0 0 8px rgba(224,77,38,0.45))' }}
       />
-      <text x="74" y="68" textAnchor="middle" className="fill-white" style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 30 }}>{(p * 100).toFixed(0)}%</text>
-      <text x="74" y="90" textAnchor="middle" style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: 3, fill: 'var(--gray-500)' }}>AT RISK</text>
+      <text x="66" y="61" textAnchor="middle" className="fill-white" style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 27 }}>{(p * 100).toFixed(0)}%</text>
+      <text x="66" y="81" textAnchor="middle" style={{ fontFamily: 'var(--font-mono)', fontSize: 8, letterSpacing: 3, fill: 'var(--gray-500)' }}>IN USE</text>
     </svg>
   );
 }
@@ -47,13 +49,24 @@ export default function EarnPage() {
   const account = useCurrentAccount();
   const address = account?.address ?? null;
   const { submit } = useSmartSubmit();
-  const { stats, refresh: refreshStats } = useReserveStats();
-  const { positions, refresh: refreshMine } = useMySupply(stats);
+  const [tab, setTab] = useState<'yield' | 'leverage'>('yield');
+
+  // ── Protocol vault / PLP (the real, passive yield) ──
+  const { stats: vaultStats, refresh: refreshVault } = useVaultStats();
+  const { summary } = useVaultSummary(PREDICT_ID);
+  const { performance } = useVaultPerformance(PREDICT_ID);
+  const { balance: plpBalance, coins: plpCoins, refresh: refreshPlp } = usePLPBalance();
+  const { coins: dusdcCoins, refresh: refreshDusdc } = useDUSDCBalance();
+  const sparkRef = useRef<HTMLCanvasElement>(null);
+
+  // ── Leverage reserve (advanced) ──
+  const { stats: reserveStats, refresh: refreshReserve } = useReserveStats();
+  const { positions: supplies, refresh: refreshSupplies } = useMySupply(reserveStats);
   const { positions: myPositions, refresh: refreshPos } = useMyPositions();
   const { orders: myOrders, refresh: refreshOrders } = useMyOrders();
-  const { coins, refresh: refreshBal } = useDUSDCBalance();
 
-  const [amount, setAmount] = useState('');
+  const [plpAmount, setPlpAmount] = useState('');
+  const [resAmount, setResAmount] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState('');
   const [oracles, setOracles] = useState<Record<string, OracleData>>({});
@@ -66,34 +79,76 @@ export default function EarnPage() {
     return () => { on = false; clearInterval(t); };
   }, []);
 
-  const supplied = positions.reduce((s, p) => s + p.value, 0);
-  const earned = supplied - 0; // display value already includes accrued premiums
+  // share-price sparkline — real on-chain history
+  useEffect(() => {
+    if (!sparkRef.current || !performance?.points?.length) return;
+    drawSparkline(sparkRef.current, performance.points.map((p) => p.share_price), {
+      color: '#E04D26', fillColor: 'rgba(224,77,38,0.12)', lineWidth: 1.6, dotEnd: true,
+    });
+  }, [performance]);
+
+  // Honest yield: realized share-price growth over the real on-chain window, plus an
+  // annualized estimate (only when the window is ≥ 1 day, and clearly labelled). No
+  // fabricated APY — if there isn't enough history yet, we show nothing.
+  const perf = useMemo(() => {
+    const pts = performance?.points ? [...performance.points].sort((a, b) => a.timestamp_ms - b.timestamp_ms) : [];
+    if (pts.length < 2) return null;
+    const first = pts[0], last = pts[pts.length - 1];
+    if (!(first.share_price > 0) || !(last.share_price > 0)) return null;
+    const ratio = last.share_price / first.share_price;
+    const realizedPct = (ratio - 1) * 100;
+    const periodMs = last.timestamp_ms - first.timestamp_ms;
+    const days = periodMs / 86_400_000;
+    const apy = periodMs > 0 && days >= 1 ? (Math.pow(ratio, 31_536_000_000 / periodMs) - 1) * 100 : null;
+    return { realizedPct, days, apy };
+  }, [performance]);
+
+  const sharePrice = summary?.plp_share_price ?? null;
+  const vaultValue = summary ? summary.vault_value / DUSDC_MULTIPLIER : vaultStats ? vaultStats.vaultValue / DUSDC_MULTIPLIER : null;
+  const myPlp = plpBalance / DUSDC_MULTIPLIER;
+  const myValue = vaultStats && vaultStats.totalPlpSupply > 0
+    ? (plpBalance / vaultStats.totalPlpSupply) * (vaultStats.vaultValue / DUSDC_MULTIPLIER)
+    : sharePrice != null ? myPlp * sharePrice : 0;
+  const walletDusdc = dusdcCoins.reduce((s, c) => s + Number(c.balance), 0) / DUSDC_MULTIPLIER;
+  const suppliedReserve = supplies.reduce((s, p) => s + p.value, 0);
 
   async function run(label: string, fn: () => Promise<void>) {
     setBusy(label); setMsg('');
     try {
       await fn();
       setMsg('Done ✓');
-      setTimeout(() => { refreshStats(); refreshMine(); refreshBal(); refreshPos(); refreshOrders(); }, 1200);
+      setTimeout(() => { refreshVault(); refreshPlp(); refreshDusdc(); refreshReserve(); refreshSupplies(); refreshPos(); refreshOrders(); }, 1200);
     } catch (e) {
       setMsg(e instanceof Error ? e.message.slice(0, 120) : String(e));
-    } finally {
-      setBusy(null);
-    }
+    } finally { setBusy(null); }
   }
 
-  async function doSupply() {
+  // ── PLP handlers ──
+  async function doDepositPlp() {
     if (!address) return;
-    const walletMicro = BigInt(coins.reduce((s, c) => s + Number(c.balance), 0));
-    let micro = BigInt(Math.floor(Number(amount) * 1_000_000));
+    const walletMicro = BigInt(dusdcCoins.reduce((s, c) => s + Number(c.balance), 0));
+    let micro = BigInt(Math.floor(Number(plpAmount) * DUSDC_MULTIPLIER));
     if (micro <= BigInt(0)) { setMsg('Enter an amount'); return; }
-    if (walletMicro <= BigInt(0)) { setMsg('No DUSDC in your wallet to supply — claim some from the faucet first.'); return; }
-    // clamp to the actual wallet balance: "Max" rounds to 2dp (can overshoot) and a user can
-    // over-type — either would make splitCoins fail with insufficient balance.
+    if (walletMicro <= BigInt(0)) { setMsg('No DUSDC in your wallet — claim some from the faucet first.'); return; }
     if (micro > walletMicro) micro = walletMicro;
-    await run('supply', async () => { await submit(() => supplyTx(coins.map((c) => c.coinObjectId), micro, address)); setAmount(''); });
+    await run('plp-deposit', async () => { await submit(() => supplyLpTx(dusdcCoins.map((c) => c.coinObjectId), micro, address)); setPlpAmount(''); });
   }
-  async function doWithdraw(id: string) {
+  async function doWithdrawPlp() {
+    if (!address || plpCoins.length === 0) return;
+    await run('plp-withdraw', async () => { await submit(() => withdrawAllPlpTx(plpCoins.map((c) => c.coinObjectId), address)); });
+  }
+
+  // ── Reserve handlers ──
+  async function doSupplyReserve() {
+    if (!address) return;
+    const walletMicro = BigInt(dusdcCoins.reduce((s, c) => s + Number(c.balance), 0));
+    let micro = BigInt(Math.floor(Number(resAmount) * DUSDC_MULTIPLIER));
+    if (micro <= BigInt(0)) { setMsg('Enter an amount'); return; }
+    if (walletMicro <= BigInt(0)) { setMsg('No DUSDC in your wallet to supply.'); return; }
+    if (micro > walletMicro) micro = walletMicro;
+    await run('res-supply', async () => { await submit(() => supplyTx(dusdcCoins.map((c) => c.coinObjectId), micro, address)); setResAmount(''); });
+  }
+  async function doWithdrawReserve(id: string) {
     if (!address) return;
     await run('w:' + id, async () => { await submit(() => withdrawTx(id, address)); });
   }
@@ -101,19 +156,14 @@ export default function EarnPage() {
     if (!address) return;
     await run('x:' + id, async () => { await submit(() => cancelOrderTx(id, address)); });
   }
+  // Permissionless self-settle: redeem the won position, repay the reserve, force-pay the
+  // owner — works even if the keeper is down. Exposed to the position owner, not just the keeper.
   async function doSettle(p: PositionData) {
     if (!address) return;
-    // permissionless self-settle: redeem the won position, repay the reserve, and the
-    // PnL is force-paid to the owner on-chain — works even if the keeper is down.
     await run('s:' + p.id, async () => {
       await submit(() => settleTx({
-        positionId: p.id,
-        managerId: p.managerId,
-        oracleId: p.oracleId,
-        expiry: p.expiry,
-        strike: p.lowerStrike, // binary: lowerStrike holds the strike
-        isUp: p.isUp,
-        quantity: p.quantity,
+        positionId: p.id, managerId: p.managerId, oracleId: p.oracleId,
+        expiry: p.expiry, strike: p.lowerStrike, isUp: p.isUp, quantity: p.quantity,
       }));
     });
   }
@@ -124,13 +174,13 @@ export default function EarnPage() {
       <Header />
       <GrainOverlay />
 
-      {/* Hero */}
+      {/* Hero — protocol vault yield */}
       <section className="page-hero">
         <span className="crop tl" /><span className="crop tr" /><span className="crop bl" /><span className="crop br" />
-        <span className="hero-meta tl">RESERVE V-03<span className="ln">UNDERWRITING DESK</span></span>
+        <span className="hero-meta tl">VAULT V-04<span className="ln">PROTOCOL LIQUIDITY</span></span>
         <span className="hero-meta tr">EDITION 04 / 2026<span className="ln">SUI · TESTNET</span></span>
-        <span className="hero-meta bl">PREMIUM {stats ? pct(stats.premiumBps) : '—'}<span className="ln">PAID BY TRADERS</span></span>
-        <span className="hero-meta br">{stats ? `${fmt(stats.totalValue, 0)} DUSDC` : '—'}<span className="ln">RESERVE VALUE</span></span>
+        <span className="hero-meta bl">SHARE {sharePrice != null ? sharePrice.toFixed(4) : '—'}<span className="ln">DUSDC / PLP</span></span>
+        <span className="hero-meta br">{vaultValue != null ? `${fmt(vaultValue, 0)} DUSDC` : '—'}<span className="ln">VAULT VALUE</span></span>
 
         <div className="container">
           <div className="breadcrumb">
@@ -144,35 +194,44 @@ export default function EarnPage() {
               <div className="eyebrow">
                 <span className="dash" />
                 <span className="live-dot" />
-                <span>The reserve · live</span>
+                <span>Be the house</span>
                 <span style={{ color: 'var(--gray-700)' }}>·</span>
-                <span>you are the house</span>
+                <span>earn the protocol&apos;s spread</span>
               </div>
               <h1 className="page-title">
-                Underwrite<br />
-                the <span className="accent">upside</span>.
+                Earn real<br />
+                <span className="accent">yield</span>.
               </h1>
               <p className="mt-6 max-w-md text-gray-400 leading-relaxed text-[15px]">
-                When a trader levers up, the reserve fronts the extra notional and pockets a premium. Supply DUSDC,
-                take the other side, and earn what they pay. Traders carry no debt — so there&apos;s nothing to liquidate.
+                Supply DUSDC to the protocol vault and earn the trading spread on every market — passive, and
+                withdrawable anytime. The share price reflects yield as it accrues; it can dip if the vault takes losses.
               </p>
             </div>
 
-            {/* live reserve dashboard */}
+            {/* live vault dashboard */}
             <div className="rounded-2xl border border-white/[0.10] bg-gradient-to-b from-white/[0.04] to-transparent p-7 backdrop-blur-sm">
-              <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center justify-between mb-4">
                 <span className="font-mono text-[10px] tracking-[0.22em] uppercase text-gray-500 flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-vermilion" style={{ boxShadow: '0 0 8px var(--vermilion)' }} /> Live reserve
+                  <span className="w-1.5 h-1.5 rounded-full bg-vermilion" style={{ boxShadow: '0 0 8px var(--vermilion)' }} /> Live vault
                 </span>
-                <span className="font-mono text-[10px] tracking-[0.18em] uppercase text-gray-600">{stats ? `${stats.maxLeverageBps / 10000}× max` : '—'}</span>
+                <canvas ref={sparkRef} width={120} height={28} className="opacity-90" />
               </div>
-              <div className="flex items-center gap-6">
-                <Gauge bps={stats?.utilizationBps ?? 0} />
-                <div className="flex-1 space-y-3.5">
-                  <ReserveRow label="Reserve value" value={stats ? `${fmt(stats.totalValue)}` : '—'} unit="DUSDC" big />
-                  <ReserveRow label="Available now" value={stats ? `${fmt(stats.liquid)}` : '—'} unit="DUSDC" />
-                  <ReserveRow label="Premium spread" value={stats ? pct(stats.premiumBps) : '—'} accent />
-                </div>
+              <div className="font-display text-4xl font-extrabold tracking-tight">
+                {sharePrice != null ? sharePrice.toFixed(4) : '—'}
+                <span className="text-sm text-gray-500 font-mono font-normal ml-2">DUSDC / share</span>
+              </div>
+              <div className="mt-1.5 font-mono text-[11px]">
+                {perf ? (
+                  <span className={perf.realizedPct >= 0 ? 'text-emerald-400' : 'text-rose-400'}>
+                    {perf.realizedPct >= 0 ? '+' : ''}{perf.realizedPct.toFixed(3)}% realized · {perf.days >= 1 ? `${Math.round(perf.days)}d` : '<1d'}
+                    {perf.apy != null && <span className="text-gray-500"> · ~{perf.apy.toFixed(1)}% APY (annualized · testnet)</span>}
+                  </span>
+                ) : <span className="text-gray-600">building yield history…</span>}
+              </div>
+              <div className="mt-5 space-y-3.5">
+                <ReserveRow label="Vault value" value={vaultValue != null ? fmt(vaultValue) : '—'} unit="DUSDC" />
+                <ReserveRow label="Available to withdraw" value={summary ? fmt(summary.available_withdrawal / DUSDC_MULTIPLIER) : '—'} unit="DUSDC" />
+                <ReserveRow label="Utilization" value={summary ? `${(summary.utilization * 100).toFixed(0)}%` : '—'} accent />
               </div>
             </div>
           </div>
@@ -180,176 +239,246 @@ export default function EarnPage() {
       </section>
 
       <main>
-        <div className="container max-w-5xl mx-auto pt-14 pb-20">
-          {/* Supply */}
-          <SectionHeader number="01" title="Supply the reserve" desc="Deposit DUSDC to back leveraged trades and earn the premiums they pay." meta="withdraw idle liquidity anytime" />
-          <div className="grid md:grid-cols-2 gap-5 mb-16">
-            {/* supply card */}
-            <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-6">
-              {!address ? (
-                <p className="font-mono text-xs text-gray-500 py-10 text-center">Connect a wallet to supply.</p>
-              ) : (
-                <>
-                  <div className="flex items-baseline justify-between mb-3">
-                    <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-gray-600">Amount</span>
-                    <span className="font-mono text-[10px] text-gray-600">wallet {fmt((coins.reduce((s, c) => s + Number(c.balance), 0)) / 1e6)} DUSDC</span>
-                  </div>
-                  <div className="flex items-center gap-2 border border-white/10 rounded-xl px-4 py-3.5 mb-4 focus-within:border-white/25 transition-colors">
-                    <input
-                      value={amount}
-                      onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))}
-                      placeholder="0.00"
-                      inputMode="decimal"
-                      className="bg-transparent flex-1 outline-none font-mono text-2xl"
-                    />
-                    <button onClick={() => setAmount((Math.floor(coins.reduce((s, c) => s + Number(c.balance), 0) / 1e4) / 100).toFixed(2))} className="font-mono text-[10px] uppercase tracking-wider text-vermilion hover:text-white transition-colors">Max</button>
-                    <span className="font-mono text-sm text-gray-500">DUSDC</span>
-                  </div>
-                  <button
-                    onClick={doSupply}
-                    disabled={busy === 'supply'}
-                    className="w-full bg-white text-black font-semibold rounded-full py-3.5 hover:scale-[1.01] active:scale-[0.98] transition-transform disabled:opacity-60"
-                  >
-                    {busy === 'supply' ? 'Supplying…' : 'Supply DUSDC'}
-                  </button>
-                  <p className="font-mono text-[11px] text-gray-600 mt-3.5 leading-relaxed">
-                    Earns the {stats ? pct(stats.premiumBps) : '—'} premium on every leveraged trade · your value grows with premiums, dips when a fronted trade loses.
-                  </p>
-                </>
-              )}
-            </div>
+        <div className="container max-w-5xl mx-auto pt-10 pb-20">
+          {/* tab toggle */}
+          <div className="flex items-center gap-7 border-b border-white/[0.07] mb-10">
+            {([['yield', 'Earn yield'], ['leverage', 'Back leverage']] as const).map(([k, label]) => (
+              <button
+                key={k}
+                type="button"
+                onClick={() => setTab(k)}
+                aria-pressed={tab === k}
+                className={`relative pb-3 text-sm font-bold transition-colors ${tab === k ? 'text-white' : 'text-gray-500 hover:text-gray-300'}`}
+              >
+                {label}
+                {k === 'leverage' && <span className="ml-2 font-mono text-[9px] uppercase tracking-wider text-gray-600">advanced</span>}
+                {tab === k && <span className="absolute left-0 right-0 -bottom-px h-0.5 bg-vermilion" />}
+              </button>
+            ))}
+          </div>
 
-            {/* your supply card */}
-            <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-6">
-              <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-gray-600 mb-4">Your supply</div>
-              {!address ? (
-                <p className="font-mono text-xs text-gray-500 py-10 text-center">—</p>
-              ) : positions.length === 0 ? (
-                <p className="font-mono text-xs text-gray-500 py-10 text-center">No active supply yet.</p>
-              ) : (
-                <>
-                  <div className="font-display text-4xl font-extrabold tracking-tight">{fmt(supplied)} <span className="text-base text-gray-500 font-mono font-normal">DUSDC</span></div>
-                  <div className="font-mono text-[11px] text-gray-500 mt-1 mb-5">across {positions.length} position{positions.length > 1 ? 's' : ''}{earned > 0 ? '' : ''}</div>
+          {tab === 'yield' ? (
+            <>
+              <SectionHeader number="01" title="Supply the vault" desc="Earn the trading spread on every market. Your PLP rises in value as the vault earns." meta="withdraw anytime" />
+              <div className="grid md:grid-cols-2 gap-5 mb-10">
+                {/* deposit */}
+                <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-6">
+                  {!address ? (
+                    <div className="py-8 text-center">
+                      <p className="font-mono text-xs text-gray-500 mb-4">Connect a wallet to supply.</p>
+                      <div className="flex justify-center"><ConnectButton /></div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex items-baseline justify-between mb-3">
+                        <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-gray-600">Amount</span>
+                        <span className="font-mono text-[10px] text-gray-600">wallet {fmt(walletDusdc)} DUSDC</span>
+                      </div>
+                      <div className="flex items-center gap-2 border border-white/10 rounded-xl px-4 py-3.5 mb-3 focus-within:border-white/25 transition-colors">
+                        <input value={plpAmount} onChange={(e) => setPlpAmount(e.target.value.replace(/[^0-9.]/g, ''))} placeholder="0.00" inputMode="decimal" className="bg-transparent flex-1 outline-none font-mono text-2xl min-w-0" />
+                        <button onClick={() => setPlpAmount((Math.floor(walletDusdc * 100) / 100).toFixed(2))} className="font-mono text-[10px] uppercase tracking-wider text-vermilion hover:text-white transition-colors">Max</button>
+                        <span className="font-mono text-sm text-gray-500">DUSDC</span>
+                      </div>
+                      <div className="grid grid-cols-4 gap-2 mb-4">
+                        {['50', '100', '250', '500'].map((a) => (
+                          <button key={a} onClick={() => setPlpAmount(a)} className={`rounded-lg py-2 font-mono text-xs border transition-all ${plpAmount === a ? 'bg-vermilion/15 border-vermilion/50 text-white' : 'border-white/10 text-gray-500 hover:text-gray-300'}`}>{a}</button>
+                        ))}
+                      </div>
+                      <button onClick={doDepositPlp} disabled={busy === 'plp-deposit'} className="w-full bg-white text-black font-semibold rounded-full py-3.5 hover:scale-[1.01] active:scale-[0.98] transition-transform disabled:opacity-60">
+                        {busy === 'plp-deposit' ? 'Supplying…' : 'Supply DUSDC'}
+                      </button>
+                      <p className="font-mono text-[11px] text-gray-600 mt-3.5 leading-relaxed">
+                        You receive PLP at the live share price. Its value rises as the vault earns the spread — and can dip if the vault takes losses.
+                      </p>
+                    </>
+                  )}
+                </div>
+
+                {/* your position */}
+                <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-6">
+                  <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-gray-600 mb-4">Your position</div>
+                  {!address ? (
+                    <p className="font-mono text-xs text-gray-500 py-10 text-center">—</p>
+                  ) : plpBalance <= 0 ? (
+                    <p className="font-mono text-xs text-gray-500 py-10 text-center">No PLP yet. Supply to start earning.</p>
+                  ) : (
+                    <>
+                      <div className="font-display text-4xl font-extrabold tracking-tight">{fmt(myValue)} <span className="text-base text-gray-500 font-mono font-normal">DUSDC</span></div>
+                      <div className="font-mono text-[11px] text-gray-500 mt-1 mb-5">{fmt(myPlp)} PLP · at {sharePrice != null ? sharePrice.toFixed(4) : '—'} / share</div>
+                      <button onClick={doWithdrawPlp} disabled={busy === 'plp-withdraw' || plpCoins.length === 0} className="w-full border border-white/15 rounded-full py-3 font-mono text-xs uppercase tracking-wider text-vermilion hover:text-white hover:border-white/30 transition-colors disabled:opacity-50">
+                        {busy === 'plp-withdraw' ? 'Withdrawing…' : 'Withdraw all'}
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+              <p className="font-mono text-[10px] text-gray-700 text-center tracking-wider">protocol vault (PLP) · share price &amp; yield are live on-chain · testnet</p>
+            </>
+          ) : (
+            <>
+              <SectionHeader number="01" title="Back boosted trades" desc="Supply DUSDC to the leverage reserve — back the extra exposure traders take and earn the premium they pay. Wins repay the reserve first; losses are absorbed by it." meta="higher yield · higher risk" />
+
+              {/* reserve dashboard */}
+              <div className="rounded-2xl border border-white/[0.10] bg-white/[0.02] p-6 mb-6 flex items-center gap-6 flex-wrap">
+                <Gauge bps={reserveStats?.utilizationBps ?? 0} />
+                <div className="flex-1 min-w-[220px] space-y-3.5">
+                  <ReserveRow label="Reserve value" value={reserveStats ? fmt(reserveStats.totalValue) : '—'} unit="DUSDC" big />
+                  <ReserveRow label="Available liquidity" value={reserveStats ? fmt(reserveStats.liquid) : '—'} unit="DUSDC" />
+                  <ReserveRow label="Premium charged" value={reserveStats ? pct(reserveStats.premiumBps) : '—'} accent />
+                </div>
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-5 mb-10">
+                {/* supply reserve */}
+                <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-6">
+                  {!address ? (
+                    <p className="font-mono text-xs text-gray-500 py-10 text-center">Connect a wallet to supply.</p>
+                  ) : (
+                    <>
+                      <div className="flex items-baseline justify-between mb-3">
+                        <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-gray-600">Amount</span>
+                        <span className="font-mono text-[10px] text-gray-600">wallet {fmt(walletDusdc)} DUSDC</span>
+                      </div>
+                      <div className="flex items-center gap-2 border border-white/10 rounded-xl px-4 py-3.5 mb-4 focus-within:border-white/25 transition-colors">
+                        <input value={resAmount} onChange={(e) => setResAmount(e.target.value.replace(/[^0-9.]/g, ''))} placeholder="0.00" inputMode="decimal" className="bg-transparent flex-1 outline-none font-mono text-2xl min-w-0" />
+                        <button onClick={() => setResAmount((Math.floor(walletDusdc * 100) / 100).toFixed(2))} className="font-mono text-[10px] uppercase tracking-wider text-vermilion hover:text-white transition-colors">Max</button>
+                        <span className="font-mono text-sm text-gray-500">DUSDC</span>
+                      </div>
+                      <button onClick={doSupplyReserve} disabled={busy === 'res-supply'} className="w-full bg-white text-black font-semibold rounded-full py-3.5 hover:scale-[1.01] active:scale-[0.98] transition-transform disabled:opacity-60">
+                        {busy === 'res-supply' ? 'Supplying…' : 'Supply to reserve'}
+                      </button>
+                      <p className="font-mono text-[11px] text-gray-600 mt-3.5 leading-relaxed">
+                        Earns the {reserveStats ? pct(reserveStats.premiumBps) : '—'} premium on every leveraged trade · your value grows with premiums, dips when a fronted trade loses.
+                      </p>
+                    </>
+                  )}
+                </div>
+
+                {/* your reserve supply */}
+                <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-6">
+                  <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-gray-600 mb-4">Your reserve position</div>
+                  {!address ? (
+                    <p className="font-mono text-xs text-gray-500 py-10 text-center">—</p>
+                  ) : supplies.length === 0 ? (
+                    <p className="font-mono text-xs text-gray-500 py-10 text-center">No active supply yet.</p>
+                  ) : (
+                    <>
+                      <div className="font-display text-4xl font-extrabold tracking-tight">{fmt(suppliedReserve)} <span className="text-base text-gray-500 font-mono font-normal">DUSDC</span></div>
+                      <div className="font-mono text-[11px] text-gray-500 mt-1 mb-5">across {supplies.length} position{supplies.length > 1 ? 's' : ''}</div>
+                      <div className="space-y-2">
+                        {supplies.map((p) => (
+                          <div key={p.id} className="flex items-center justify-between border border-white/[0.06] rounded-xl px-4 py-3">
+                            <span className="font-mono text-sm text-gray-300">{fmt(p.value)} DUSDC</span>
+                            <button onClick={() => doWithdrawReserve(p.id)} disabled={busy === 'w:' + p.id} className="font-mono text-xs text-vermilion hover:text-white transition-colors disabled:opacity-50">
+                              {busy === 'w:' + p.id ? 'Withdrawing…' : 'Withdraw'}
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Pending boost requests */}
+              {address && myOrders.length > 0 && (
+                <div className="mb-6 rounded-2xl border border-vermilion/20 bg-vermilion/[0.04] p-5">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-vermilion opacity-75" /><span className="relative inline-flex h-2 w-2 rounded-full bg-vermilion" /></span>
+                    <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-vermilion">Opening {myOrders.length} boosted position{myOrders.length > 1 ? 's' : ''}…</span>
+                  </div>
                   <div className="space-y-2">
-                    {positions.map((p) => (
-                      <div key={p.id} className="flex items-center justify-between border border-white/[0.06] rounded-xl px-4 py-3">
-                        <span className="font-mono text-sm text-gray-300">{fmt(p.value)} DUSDC</span>
-                        <button onClick={() => doWithdraw(p.id)} disabled={busy === 'w:' + p.id} className="font-mono text-xs text-vermilion hover:text-white transition-colors disabled:opacity-50">
-                          {busy === 'w:' + p.id ? 'Withdrawing…' : 'Withdraw'}
+                    {myOrders.map((o) => (
+                      <div key={o.id} className="flex items-center justify-between rounded-xl border border-white/[0.06] px-4 py-3 gap-3">
+                        <div>
+                          <span className="font-mono text-sm text-gray-300"><span className="text-vermilion font-bold">{o.leverage.toFixed(0)}×</span> · {fmt(o.margin)} DUSDC margin {o.isRange ? '· range' : ''}</span>
+                          <p className={`font-mono text-[10px] mt-1 ${
+                            o.expiry && Number(o.expiry) < Date.now()
+                              ? 'text-rose-400'
+                              : o.createdAt && Date.now() - o.createdAt > 90_000
+                                ? 'text-amber-400'
+                                : 'text-gray-600'
+                          }`}>
+                            {o.source === 'local'
+                              ? 'syncing request'
+                              : o.expiry && Number(o.expiry) < Date.now()
+                                ? 'round expired before open - cancel to return margin'
+                                : o.createdAt && Date.now() - o.createdAt > 90_000
+                                  ? 'taking longer than usual - you can cancel'
+                                  : 'opening now'}
+                          </p>
+                        </div>
+                        <button onClick={() => doCancel(o.id)} disabled={busy === 'x:' + o.id || o.source === 'local'} className="font-mono text-xs text-gray-500 hover:text-white transition-colors disabled:opacity-50 shrink-0">
+                          {o.source === 'local' ? 'Syncing…' : busy === 'x:' + o.id ? 'Cancelling…' : 'Cancel'}
                         </button>
                       </div>
                     ))}
                   </div>
+                  <p className="font-mono text-[10px] text-gray-600 mt-3">Your margin is held while Yosuku opens the boost. If it takes too long or the round expires, Cancel returns it.</p>
+                </div>
+              )}
+
+              {/* Your leveraged positions */}
+              {address && myPositions.length > 0 && (
+                <>
+                  <SectionHeader number="02" title="Your boosted positions" desc="Opened with your margin plus reserve capital. Max loss is always your margin." meta="settle anytime once won" />
+                  <div className="space-y-2.5">
+                    {myPositions.map((p) => {
+                      const oc = outcome(p, oracles[p.oracleId]);
+                      const maxPayout = Number(p.quantity) / 1_000_000;
+                      return (
+                        <div key={p.id} className="flex items-center justify-between gap-3 rounded-2xl border border-white/[0.08] bg-white/[0.02] px-5 py-4 flex-wrap hover:border-white/[0.14] transition-colors">
+                          <div className="flex items-center gap-4">
+                            <span className="font-display text-2xl font-extrabold text-vermilion w-12">{p.leverage.toFixed(0)}×</span>
+                            <div>
+                              <div className="font-mono text-sm text-white">{fmt(p.notional)} DUSDC <span className="text-gray-500">· {p.isRange ? 'range' : p.isUp ? 'UP' : 'DOWN'}</span></div>
+                              <div className="font-mono text-[11px] text-gray-600 mt-0.5">{fmt(p.margin)} margin · {fmt(p.fronted)} fronted · {fmt(p.premium)} premium</div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-5">
+                            <div className="text-right">
+                              <div className="font-mono text-[9px] uppercase tracking-wider text-gray-600">max payout</div>
+                              <div className="font-mono text-sm text-emerald-400/90">{fmt(maxPayout)} DUSDC</div>
+                            </div>
+                            {oc === 'pending' ? (
+                              <span className="font-mono text-[11px] text-gray-500 px-3 py-2 inline-flex items-center gap-1.5">
+                                <span className="w-1.5 h-1.5 rounded-full bg-gray-600" /> live
+                              </span>
+                            ) : oc === 'won' ? (
+                              p.isRange ? (
+                                <span className="font-mono text-[11px] px-3 py-2 rounded-full border border-emerald-500/30 text-emerald-300 inline-flex items-center gap-1.5">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> won · paying out
+                                </span>
+                              ) : (
+                                <button
+                                  onClick={() => doSettle(p)}
+                                  disabled={busy === 's:' + p.id}
+                                  className="font-mono text-[11px] px-4 py-2 rounded-full border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 hover:border-emerald-400/60 transition-colors disabled:opacity-50 inline-flex items-center gap-1.5"
+                                  title="Redeem your win and repay the reserve"
+                                >
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                  {busy === 's:' + p.id ? 'Settling…' : 'Cash out win'}
+                                </button>
+                              )
+                            ) : (
+                              <span className="font-mono text-[11px] px-3 py-2 rounded-full border border-white/10 text-gray-500">lost · margin only</span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <p className="font-mono text-[10px] text-gray-600 mt-4 leading-relaxed max-w-2xl">
+                    When a boosted position wins, the reserve is repaid first and the remaining profit goes to your wallet. A loss costs only your margin. You can settle a win yourself anytime — it doesn&apos;t depend on the keeper.
+                  </p>
                 </>
               )}
-            </div>
-          </div>
 
-          {/* Pending escrows — the keeper is filling these */}
-          {address && myOrders.length > 0 && (
-            <div className="mb-6 rounded-2xl border border-vermilion/20 bg-vermilion/[0.04] p-5">
-              <div className="flex items-center gap-2 mb-3">
-                <span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-vermilion opacity-75" /><span className="relative inline-flex h-2 w-2 rounded-full bg-vermilion" /></span>
-                <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-vermilion">Keeper is opening {myOrders.length} position{myOrders.length > 1 ? 's' : ''}…</span>
-              </div>
-              <div className="space-y-2">
-                {myOrders.map((o) => (
-                  <div key={o.id} className="flex items-center justify-between rounded-xl border border-white/[0.06] px-4 py-3 gap-3">
-                    <div>
-                      <span className="font-mono text-sm text-gray-300"><span className="text-vermilion font-bold">{o.leverage.toFixed(0)}×</span> · {fmt(o.margin)} DUSDC margin {o.isRange ? '· range' : ''}</span>
-                      <p className={`font-mono text-[10px] mt-1 ${
-                        o.expiry && Number(o.expiry) < Date.now()
-                          ? 'text-rose-400'
-                          : o.createdAt && Date.now() - o.createdAt > 90_000
-                            ? 'text-amber-400'
-                            : 'text-gray-600'
-                      }`}>
-                        {o.source === 'local'
-                          ? 'syncing order id from transaction'
-                          : o.expiry && Number(o.expiry) < Date.now()
-                            ? 'round expired before fill - cancel to reclaim margin'
-                            : o.createdAt && Date.now() - o.createdAt > 90_000
-                              ? 'keeper delayed - margin remains escrowed'
-                              : 'queued for keeper fill'}
-                      </p>
-                    </div>
-                    <button onClick={() => doCancel(o.id)} disabled={busy === 'x:' + o.id || o.source === 'local'} className="font-mono text-xs text-gray-500 hover:text-white transition-colors disabled:opacity-50 shrink-0">
-                      {o.source === 'local' ? 'Syncing…' : busy === 'x:' + o.id ? 'Cancelling…' : 'Cancel'}
-                    </button>
-                  </div>
-                ))}
-              </div>
-              <p className="font-mono text-[10px] text-gray-600 mt-3">Margin is escrowed on-chain. If the keeper is delayed or the round expires, Cancel reclaims it.</p>
-            </div>
-          )}
-
-          {/* Your leveraged positions */}
-          {address && myPositions.length > 0 && (
-            <>
-              <SectionHeader number="02" title="Your leveraged positions" desc="Opened with margin + the reserve's fronted capital. Max loss is always your margin." meta="settled by you" />
-              <div className="space-y-2.5">
-                {myPositions.map((p) => {
-                  const oc = outcome(p, oracles[p.oracleId]);
-                  const maxPayout = Number(p.quantity) / 1_000_000;
-                  return (
-                    <div key={p.id} className="flex items-center justify-between gap-3 rounded-2xl border border-white/[0.08] bg-white/[0.02] px-5 py-4 flex-wrap hover:border-white/[0.14] transition-colors">
-                      <div className="flex items-center gap-4">
-                        <span className="font-display text-2xl font-extrabold text-vermilion w-12">{p.leverage.toFixed(0)}×</span>
-                        <div>
-                          <div className="font-mono text-sm text-white">{fmt(p.notional)} DUSDC <span className="text-gray-500">· {p.isRange ? 'range' : p.isUp ? 'UP' : 'DOWN'}</span></div>
-                          <div className="font-mono text-[11px] text-gray-600 mt-0.5">{fmt(p.margin)} margin · {fmt(p.fronted)} fronted · {fmt(p.premium)} premium</div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-5">
-                        <div className="text-right">
-                          <div className="font-mono text-[9px] uppercase tracking-wider text-gray-600">max payout</div>
-                          <div className="font-mono text-sm text-emerald-400/90">{fmt(maxPayout)} DUSDC</div>
-                        </div>
-                        {oc === 'pending' ? (
-                          <span className="font-mono text-[11px] text-gray-500 px-3 py-2 inline-flex items-center gap-1.5">
-                            <span className="w-1.5 h-1.5 rounded-full bg-gray-600" /> live
-                          </span>
-                        ) : oc === 'won' ? (
-                          p.isRange ? (
-                            <span className="font-mono text-[11px] px-3 py-2 rounded-full border border-emerald-500/30 text-emerald-300 inline-flex items-center gap-1.5">
-                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> won · keeper settling
-                            </span>
-                          ) : address === KEEPER_ADDRESS ? (
-                            <button
-                              onClick={() => doSettle(p)}
-                              disabled={busy === 's:' + p.id}
-                              className="font-mono text-[11px] px-4 py-2 rounded-full border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 hover:border-emerald-400/60 transition-colors disabled:opacity-50 inline-flex items-center gap-1.5"
-                              title="keeper liveness crank"
-                            >
-                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                              {busy === 's:' + p.id ? 'Settling…' : 'Settle now'}
-                            </button>
-                          ) : (
-                            <span className="font-mono text-[11px] px-3 py-2 rounded-full border border-emerald-500/30 text-emerald-300 inline-flex items-center gap-1.5">
-                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> won · keeper settling
-                            </span>
-                          )
-                        ) : (
-                          <span className="font-mono text-[11px] px-3 py-2 rounded-full border border-white/10 text-gray-500">lost · margin only</span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-              <p className="font-mono text-[10px] text-gray-600 mt-4 leading-relaxed max-w-2xl">
-                Positions are custodied by the protocol and <span className="text-vermilion/80">settled by the keeper crank</span> when the round ends —
-                a win redeems, repays the reserve&apos;s fronted capital, and force-pays your PnL to your wallet on-chain; a loss costs only your margin.
-                Redeem and settle are permissionless on-chain; the protocol-owned manager withdraw is keeper-gated, so the crank runs from the keeper.
-              </p>
+              <p className="font-mono text-[10px] text-gray-700 text-center tracking-wider mt-12">leverage reserve · testnet preview</p>
             </>
           )}
 
           {msg && <p className={`text-center mt-8 text-[12px] font-mono ${msg.includes('✓') ? 'text-emerald-400' : 'text-rose-400'}`}>{msg}</p>}
-
-          <p className="text-center font-mono text-[10px] text-gray-700 mt-16 tracking-wider">
-            underwriting reserve · testnet preview
-          </p>
         </div>
         <Footer />
       </main>

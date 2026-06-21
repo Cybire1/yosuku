@@ -393,6 +393,7 @@ body.urgent::before {
 .page-hero::before {
   content: '予測';
   position: absolute;
+  z-index: -1;
   top: 50%; right: -2vw;
   transform: translateY(-46%);
   font-family: var(--font-jp); font-weight: 700;
@@ -494,6 +495,7 @@ body.urgent::before {
 /* Hero chart panel */
 .hero-chart {
   position: relative;
+  display: flex; flex-direction: column;
   aspect-ratio: 5 / 4;
   border: 1px solid rgba(255,255,255,0.08);
   border-radius: 4px;
@@ -503,13 +505,12 @@ body.urgent::before {
   overflow: hidden;
 }
 .hero-chart-head {
-  position: absolute; top: 0; left: 0; right: 0;
-  display: flex; justify-content: space-between; align-items: center;
-  padding: 16px 20px;
-  border-bottom: 1px solid rgba(255,255,255,0.05);
-  z-index: 2;
-  background: rgba(5,5,5,0.5);
+  position: static; flex-shrink: 0;
+  display: flex; justify-content: space-between; align-items: flex-start; gap: 24px;
+  padding: 22px 24px 18px;
 }
+.hero-chart-canvas { position: relative; flex: 1; min-height: 160px; }
+.hero-chart-canvas canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
 .hero-chart-head .left { display: flex; align-items: center; gap: 12px; }
 .hero-chart-head .glyph {
   width: 22px; height: 22px;
@@ -523,7 +524,36 @@ body.urgent::before {
 .hero-chart-head .price { font-family: var(--font-mono); font-size: 18px; font-weight: 600; color: var(--white); letter-spacing: -0.02em; }
 .hero-chart-head .delta { font-family: var(--font-mono); font-size: 11px; color: var(--vermilion); margin-left: 6px; }
 
-.hero-chart canvas { position: absolute; inset: 56px 0 56px 0; width: 100%; }
+/* Hero chart-head: legible countdown pill + trust chip (replaces the faint gray subtitle) */
+.hero-chart-tags { display: flex; align-items: center; gap: 8px; margin-top: 7px; flex-wrap: wrap; }
+.hc-countdown {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.03em;
+  color: var(--gray-300);
+  background: rgba(224,77,38,0.1);
+  border: 1px solid rgba(224,77,38,0.3);
+  padding: 3px 10px 3px 8px; border-radius: 999px;
+}
+.hc-countdown svg { width: 12px; height: 12px; color: var(--vermilion); }
+.hc-countdown b { color: var(--white); font-weight: 700; font-variant-numeric: tabular-nums; }
+.hc-chip {
+  display: inline-flex; align-items: center;
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--gray-400);
+  border: 1px solid rgba(255,255,255,0.12); border-radius: 999px;
+  padding: 3px 9px;
+}
+.hero-live-label {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.05em;
+  color: var(--gray-400); margin-top: 3px;
+}
+.hc-live-dot {
+  width: 6px; height: 6px; border-radius: 50%; background: var(--profit);
+  animation: pulseDot 1.6s var(--ease) infinite;
+}
+
+/* (hero chart canvas now positioned via .hero-chart-canvas above) */
 .hero-chart-axis {
   position: absolute; right: 16px;
   font-family: var(--font-mono); font-size: 9px; color: var(--gray-700);
@@ -546,7 +576,7 @@ body.urgent::before {
 }
 
 .hero-chart-foot {
-  position: absolute; bottom: 0; left: 0; right: 0;
+  position: static; flex-shrink: 0;
   display: flex; justify-content: space-between; align-items: center;
   padding: 12px 20px;
   border-top: 1px solid rgba(255,255,255,0.05);
@@ -566,6 +596,30 @@ body.urgent::before {
   position: absolute; inset: 0 auto 0 0;
   width: 64%;
   background: linear-gradient(90deg, var(--vermilion), var(--white));
+}
+
+/* ── Markets hero: mini market card (chart + the real TradePanel) — compact, capped height ── */
+.markets-hero .hero-grid.hero-grid-mini {
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 20px;
+  align-items: stretch;
+}
+.markets-hero .hero-grid-mini .hero-chart {
+  aspect-ratio: auto;
+  height: auto;
+  min-height: 460px;
+}
+.hero-mini-panel { width: 100%; min-width: 0; }
+.hero-mini-loading {
+  display: flex; align-items: center; justify-content: center;
+  height: 100%; min-height: 460px;
+  border: 1px solid rgba(255,255,255,0.08); border-radius: 4px;
+  background: rgba(255,255,255,0.012);
+  color: var(--gray-500); font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.04em;
+}
+@media (max-width: 900px) {
+  .markets-hero .hero-grid.hero-grid-mini { grid-template-columns: 1fr; gap: 16px; }
+  .markets-hero .hero-grid-mini .hero-chart { min-height: 300px; }
 }
 
 /* ───────── Sticky filter bar ───────── */
@@ -1046,7 +1100,7 @@ body.urgent::before {
 .mc-countdown.urgent .clock-dot { background: var(--vermilion); animation: pulseDot 0.9s var(--ease) infinite; }
 
 .mc-body {
-  padding: 18px 18px 0;
+  padding: 18px;
   display: flex; flex-direction: column; gap: 16px;
 }
 .mc-question {
@@ -1145,14 +1199,14 @@ body.urgent::before {
 
 .mc-foot {
   display: flex; gap: 8px;
-  margin-top: 18px; padding-top: 16px;
+  margin-top: 14px; padding-top: 12px;
   border-top: 1px solid rgba(255,255,255,0.05);
 }
 /* Outlined green/red pills — matches the markets hero `.hero-bet-btn`. */
 .mc-side {
   flex: 1;
   display: flex; align-items: center; justify-content: center; gap: 8px;
-  padding: 11px 14px; border-radius: 10px;
+  padding: 8px 14px; border-radius: 10px;
   font-family: var(--font-mono); font-size: 12px; font-weight: 700;
   letter-spacing: 0.08em; text-transform: uppercase;
   border: 1px solid transparent;
@@ -3665,7 +3719,7 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
   .mc-pricebar { margin: 6px 0; }
   .mc-pricebar .big { font-size: 16px; }
   .mc-foot { margin-top: 12px; }
-  .mc-side { padding: 11px 14px; }
+  .mc-side { padding: 8px 14px; }
   .mc-side .price { font-size: 12px; }
   .filter-row { flex-direction: column; align-items: stretch; gap: 12px; }
   .filter-tabs { overflow-x: auto; }
@@ -3886,8 +3940,8 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
 @media (max-width: 1100px) {
   /* Editorial corner labels (EDITION / R/N / LAT-LON) + crop marks bleed over the
      card on narrow screens — keep them for the full-width desktop look only. */
-  .markets-hero .hero-meta,
-  .markets-hero .crop,
+  .page-hero .hero-meta,
+  .page-hero .crop,
   .markets-hero .breadcrumb { display: none; }
 }
 
@@ -3948,3 +4002,114 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
   .hero-chart-head .pair-meta { font-size: 9px; white-space: nowrap; }
   .hero-chart-head .glyph { width: 18px; height: 18px; font-size: 10px; }
 }
+
+/* ── Expanded market modal (morphs open from the hero card) ── */
+.hero-expand-btn {
+  position: absolute; top: 12px; right: 12px; z-index: 4;
+  width: 30px; height: 30px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(14,14,17,0.7); backdrop-filter: blur(6px);
+  color: var(--gray-300);
+  opacity: 0; transition: opacity 0.18s var(--ease), background 0.18s var(--ease), border-color 0.18s var(--ease), color 0.18s var(--ease);
+}
+.hero-expand-btn svg { width: 14px; height: 14px; }
+.hero-chart:hover .hero-expand-btn, .hero-expand-btn:focus-visible { opacity: 1; }
+.hero-expand-btn:hover { background: rgba(20,20,24,0.92); border-color: rgba(255,255,255,0.25); color: var(--white); }
+
+.market-modal-backdrop {
+  position: fixed; inset: 0; z-index: 1000;
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+  background: rgba(3,3,4,0.72);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+}
+.market-modal {
+  width: 100%; max-width: 1080px; max-height: 90vh;
+  display: flex; flex-direction: column;
+  background: #0e0e11;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 16px;
+  box-shadow: 0 40px 120px -40px rgba(0,0,0,0.9);
+  overflow: hidden;
+}
+.market-modal-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 16px; padding: 18px 20px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.market-modal-head .mm-title { display: flex; align-items: center; gap: 12px; }
+.market-modal-head .glyph {
+  width: 26px; height: 26px; flex-shrink: 0;
+  border: 1px solid rgba(255,255,255,0.2); border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-mono); font-size: 12px; color: var(--white);
+}
+.mm-q { font-family: var(--font-display); font-size: 19px; font-weight: 700; color: var(--white); line-height: 1.1; }
+.mm-head-right { display: flex; align-items: center; gap: 16px; }
+.mm-price { text-align: right; }
+.mm-price .price { font-family: var(--font-mono); font-size: 18px; font-weight: 600; color: var(--white); }
+.mm-price .delta { font-family: var(--font-mono); font-size: 11px; color: var(--vermilion); margin-left: 6px; }
+.mm-close {
+  width: 34px; height: 34px; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.02); color: var(--gray-300);
+  transition: background 0.15s var(--ease), color 0.15s var(--ease), border-color 0.15s var(--ease);
+}
+.mm-close svg { width: 16px; height: 16px; }
+.mm-close:hover { background: rgba(255,255,255,0.08); color: var(--white); border-color: rgba(255,255,255,0.25); }
+.market-modal-body {
+  display: grid; grid-template-columns: minmax(0,1fr) 380px;
+  min-height: 0; flex: 1;
+}
+.market-modal-chart { position: relative; min-height: 420px; border-right: 1px solid rgba(255,255,255,0.06); }
+.market-modal-chart canvas { position: absolute; inset: 16px 0 48px 0; width: 100%; }
+.mm-chart-foot {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 20px; border-top: 1px solid rgba(255,255,255,0.05);
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em; color: var(--gray-500);
+}
+.mm-fullpage { color: var(--gray-300); transition: color 0.15s var(--ease); }
+.mm-fullpage:hover { color: var(--white); }
+.market-modal-panel { overflow-y: auto; padding: 16px; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.16) transparent; }
+.market-modal-panel::-webkit-scrollbar { width: 6px; }
+.market-modal-panel::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.16); border-radius: 999px; }
+@media (max-width: 880px) {
+  .market-modal-body { grid-template-columns: 1fr; }
+  .market-modal-chart { border-right: 0; border-bottom: 1px solid rgba(255,255,255,0.06); min-height: 260px; }
+  .market-modal { max-height: 94vh; }
+}
+
+/* Award-winning scroll cue: hero -> markets (auto-fades on scroll) */
+.scroll-cue {
+  position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%);
+  display: flex; flex-direction: column; align-items: center; gap: 9px;
+  z-index: 5; background: none; border: 0; cursor: pointer; padding: 6px 12px;
+  opacity: 1; transition: opacity 0.45s var(--ease), transform 0.45s var(--ease);
+}
+.scroll-cue.gone { opacity: 0; transform: translate(-50%, 10px); pointer-events: none; }
+.scroll-cue-label {
+  font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.22em;
+  text-transform: uppercase; color: var(--gray-500); transition: color 0.2s var(--ease);
+}
+.scroll-cue:hover .scroll-cue-label { color: var(--gray-300); }
+.scroll-cue-track {
+  position: relative; width: 1px; height: 34px; overflow: hidden;
+  background: linear-gradient(180deg, rgba(255,255,255,0.18), rgba(255,255,255,0.02));
+}
+.scroll-cue-dot {
+  position: absolute; left: -1.5px; top: 0;
+  width: 4px; height: 9px; border-radius: 2px; background: var(--vermilion);
+  box-shadow: 0 0 8px rgba(224,77,38,0.6);
+  animation: scrollCueDot 1.9s var(--ease) infinite;
+}
+@keyframes scrollCueDot {
+  0%   { transform: translateY(-12px); opacity: 0; }
+  25%  { opacity: 1; }
+  75%  { opacity: 1; }
+  100% { transform: translateY(34px); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) { .scroll-cue-dot { animation: none; top: 12px; } }
