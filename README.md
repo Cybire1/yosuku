@@ -4,7 +4,7 @@
 
 ### The consumer layer for DeepBook Predict.
 
-Predict directly from X, with leverage, private trading, and agent strategies. On web and a native iOS + Android app.
+Predict directly from X, with leverage, private trading, and agent strategies. On web and a native iOS + Android app. 
 
 <br/>
 
