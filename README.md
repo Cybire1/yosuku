@@ -111,7 +111,7 @@ Composed, not bolted on.
 
 ## Traction
 
-Testnet, to date: **42 connected wallets · 18 wallets placed trades · 71 on-chain Predict transactions · 36 waitlist signups · 12 TestFlight requests.** Developer pull: about **1,870 npm installs** combined across the @yosuku Predict packages (`@yosuku/deepbook-predict` 198, `@yosuku/deepbook-predict-mcp` 172, `@yosuku/predict` 1,504).
+On-chain (testnet), live and growing: **18+ distinct external wallets** have transacted via Onara-sponsored gas (**51+ sponsored on-chain actions**), with the running count computed from chain at **[yosuku.xyz/stats](https://yosuku.xyz/stats)**. Developer pull: about **1,870 npm installs** combined across the @yosuku Predict packages (`@yosuku/deepbook-predict` 198, `@yosuku/deepbook-predict-mcp` 172, `@yosuku/predict` 1,504).
 
 ## Quickstart
 
