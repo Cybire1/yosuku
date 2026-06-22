@@ -3,6 +3,10 @@
   "gasBudgetMax": 200000000,
   "allowedCommandKinds": ["MoveCall", "SplitCoins", "MergeCoins", "TransferObjects"],
   "targets": [
+    "0x3b76383b2bb9bc411dc56c571a1da22f348b3c19518115ae958fe96e031cf30e::trading_vault::open_leverage",
+    "0x3b76383b2bb9bc411dc56c571a1da22f348b3c19518115ae958fe96e031cf30e::trading_vault::deposit",
+    "0x3b76383b2bb9bc411dc56c571a1da22f348b3c19518115ae958fe96e031cf30e::trading_vault::withdraw",
+    "0x3b76383b2bb9bc411dc56c571a1da22f348b3c19518115ae958fe96e031cf30e::trading_vault::create",
     "0x75e00dc36b96cc4adafd4b180c791f7a0fb40aed92fd11c40968227fc6318a36::underwrite::request_open",
     "0x75e00dc36b96cc4adafd4b180c791f7a0fb40aed92fd11c40968227fc6318a36::underwrite::cancel",
     "0x75e00dc36b96cc4adafd4b180c791f7a0fb40aed92fd11c40968227fc6318a36::underwrite::settle",

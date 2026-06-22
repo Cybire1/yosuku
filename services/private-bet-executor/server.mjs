@@ -116,14 +116,10 @@ function marketKey(tx, oracleId, expiry, strike, isUp) {
 
 async function signAndExecute(tx, gasBudget = 120_000_000) {
   if (cfg.useOnara && cfg.onaraUrl) {
-    try {
-      return await signAndExecuteSponsored(tx, gasBudget);
-    } catch (error) {
-      console.warn(
-        'private-bet sponsored execution failed; falling back to executor gas:',
-        error instanceof Error ? error.message : String(error),
-      );
-    }
+    // Sponsored-only. Do NOT fall back to a self-paid retry of the SAME tx: it still carries
+    // gas owner = sponsor, so re-submitting it with a single signature throws the misleading
+    // "Expect 2 signer signatures but got 1". Let the real sponsor / simulation error surface.
+    return await signAndExecuteSponsored(tx, gasBudget);
   }
   tx.setGasBudget(gasBudget);
   const res = await client.signAndExecuteTransaction({
