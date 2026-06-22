@@ -229,7 +229,32 @@ export function redeemAllPermissionlessToTradingBalanceTx(positions: ClaimablePo
 }
 
 /**
- * Atomic: deposit DUSDC from wallet + mint position in one PTB.
+ * Sweep the manager's *entire* free DUSDC balance back to the owner's wallet,
+ * in the same PTB. Used by the plain (1×) bet builders so a normal bet never
+ * leaves money parked in the trading account: we deposit the full stake (for
+ * slippage headroom), mint, then return whatever the mint didn't spend.
+ *
+ * `predict_manager::balance` returns the post-mint residual at execution time,
+ * which we feed straight into `withdraw` — no build-time guess about the exact
+ * fill price. Binary/range mint only debits free balance (no collateral lock),
+ * so this can't touch funds backing a live position.
+ */
+function sweepManagerResidual(tx: Transaction, managerId: string, owner: string) {
+  const [residual] = tx.moveCall({
+    target: `${PACKAGE_ID}::predict_manager::balance`,
+    typeArguments: [DUSDC_TYPE],
+    arguments: [tx.object(managerId)],
+  });
+  const [change] = tx.moveCall({
+    target: `${PACKAGE_ID}::predict_manager::withdraw`,
+    typeArguments: [DUSDC_TYPE],
+    arguments: [tx.object(managerId), residual],
+  });
+  tx.transferObjects([change], tx.pure.address(owner));
+}
+
+/**
+ * Atomic: deposit DUSDC from wallet + mint position + sweep residual in one PTB.
  */
 export function depositAndMintTx(
   managerId: string,
@@ -240,6 +265,7 @@ export function depositAndMintTx(
   strike: bigint,
   direction: 'UP' | 'DOWN',
   quantity: bigint,
+  owner: string,
 ): Transaction {
   const tx = new Transaction();
 
@@ -276,6 +302,10 @@ export function depositAndMintTx(
       tx.object(CLOCK_ID),
     ],
   });
+
+  // Step 4: return whatever the mint didn't spend — a 1× bet leaves nothing
+  // parked in the trading account (that's reserved for leverage).
+  sweepManagerResidual(tx, managerId, owner);
 
   return tx;
 }
@@ -429,6 +459,7 @@ export function depositAndMintRangeTx(
   lowerStrike: bigint,
   higherStrike: bigint,
   quantity: bigint,
+  owner: string,
 ): Transaction {
   const tx = new Transaction();
 
@@ -465,6 +496,9 @@ export function depositAndMintRangeTx(
       tx.object(CLOCK_ID),
     ],
   });
+
+  // Step 4: sweep the unspent remainder back to the wallet (see depositAndMintTx).
+  sweepManagerResidual(tx, managerId, owner);
 
   return tx;
 }

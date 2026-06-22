@@ -619,7 +619,9 @@ body.urgent::before {
 }
 @media (max-width: 900px) {
   .markets-hero .hero-grid.hero-grid-mini { grid-template-columns: 1fr; gap: 16px; }
-  .markets-hero .hero-grid-mini .hero-chart { min-height: 300px; }
+  .markets-hero .hero-grid-mini .hero-chart { min-height: 340px; }
+  /* mobile: show only the chart — tap it to open the bet panel (expand modal) */
+  .hero-mini-panel { display: none; }
 }
 
 /* ───────── Sticky filter bar ───────── */
@@ -3606,19 +3608,19 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
   backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
   border: 1px solid rgba(255,255,255,0.08);
   border-radius: 999px;
-  padding: 6px 8px;
+  padding: 5px 6px;
   gap: 2px;
 }
 .mobile-bottom-nav a,
 .mobile-bottom-nav button {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 2px;
-  padding: 8px 14px;
+  padding: 6px 11px;
   border: 0;
   border-radius: 999px;
   background: transparent;
   color: var(--gray-500);
-  font-family: var(--font-body); font-size: 10px; font-weight: 500;
+  font-family: var(--font-body); font-size: 9px; font-weight: 500;
   letter-spacing: 0.02em;
   transition: color 200ms var(--ease), background 200ms var(--ease);
   text-decoration: none;
@@ -3627,7 +3629,7 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
 }
 .mobile-bottom-nav a svg,
 .mobile-bottom-nav button svg {
-  width: 20px; height: 20px;
+  width: 18px; height: 18px;
   stroke: currentColor; fill: none;
   stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
 }
@@ -4017,6 +4019,8 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
 .hero-expand-btn svg { width: 14px; height: 14px; }
 .hero-chart:hover .hero-expand-btn, .hero-expand-btn:focus-visible { opacity: 1; }
 .hero-expand-btn:hover { background: rgba(20,20,24,0.92); border-color: rgba(255,255,255,0.25); color: var(--white); }
+/* touch: no hover, so always show the expand affordance on mobile */
+@media (max-width: 900px) { .hero-chart .hero-expand-btn { opacity: 1; } }
 
 .market-modal-backdrop {
   position: fixed; inset: 0; z-index: 1000;

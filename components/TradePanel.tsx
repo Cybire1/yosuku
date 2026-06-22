@@ -566,6 +566,7 @@ export default function TradePanel({
             BigInt(selectedStrike),
             BigInt(rangeUpperStrike),
             BigInt(positionQty),
+            address,
           )));
           setTxDigest(digest);
         } else {
@@ -580,6 +581,7 @@ export default function TradePanel({
             BigInt(selectedStrike),
             side as 'UP' | 'DOWN',
             BigInt(positionQty),
+            address,
           )));
           setTxDigest(digest);
         }
