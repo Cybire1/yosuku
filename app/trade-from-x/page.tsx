@@ -37,7 +37,7 @@ export default function TradeFromXPage() {
     setErr(''); setDepositing(true);
     try {
       const micro = BigInt(Math.round(parseFloat(amount || '0') * DUSDC_MUL));
-      if (micro <= 0n) throw new Error('Enter an amount');
+      if (micro <= BigInt(0)) throw new Error('Enter an amount');
       const coins = await fetchDUSDCCoins(null as never, addr);
       if (!coins.length) throw new Error('No DUSDC in your wallet. Grab some from the faucet first.');
       await submit(() => {
