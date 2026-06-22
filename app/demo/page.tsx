@@ -77,6 +77,16 @@ export default function DemoPage() {
         </div>
       </section>
 
+      {/* the demo video — this page is the submitted demo link, so the video lives here */}
+      <section className="max-w-5xl mx-auto px-6 pt-2 pb-16">
+        <Reveal>
+          <div className="mb-4 font-mono text-[12px] tracking-widest uppercase text-vermilion">▶ watch the demo</div>
+          <div className="relative rounded-2xl overflow-hidden border border-white/10 shadow-[0_40px_120px_-40px_rgba(0,0,0,0.9)]" style={{ aspectRatio: '16 / 9' }}>
+            <iframe className="absolute inset-0 w-full h-full" src="https://www.youtube.com/embed/gpnsv3Sx3oA" title="Yosuku demo" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen></iframe>
+          </div>
+        </Reveal>
+      </section>
+
       {/* 1 — trade from a tweet */}
       <section className="max-w-6xl mx-auto px-6 py-20 grid lg:grid-cols-2 gap-12 items-center">
         <Reveal>
