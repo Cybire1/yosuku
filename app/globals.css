@@ -610,6 +610,7 @@ body.urgent::before {
   min-height: 460px;
 }
 .hero-mini-panel { width: 100%; min-width: 0; }
+.hero-yesno { display: none; }
 .hero-mini-loading {
   display: flex; align-items: center; justify-content: center;
   height: 100%; min-height: 460px;
@@ -620,8 +621,23 @@ body.urgent::before {
 @media (max-width: 900px) {
   .markets-hero .hero-grid.hero-grid-mini { grid-template-columns: 1fr; gap: 16px; }
   .markets-hero .hero-grid-mini .hero-chart { min-height: 340px; }
-  /* mobile: show only the chart — tap it to open the bet panel (expand modal) */
+  /* mobile: hide the side panel; trade via the prominent Trade button → modal */
   .hero-mini-panel { display: none; }
+  .hero-yesno {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px;
+  }
+  .hyn {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+    padding: 13px 10px; border-radius: 14px; cursor: pointer;
+    border: 1px solid transparent; transition: transform .12s ease, background .15s ease;
+  }
+  .hyn:active { transform: scale(.98); }
+  .hyn-label { font-weight: 800; font-size: 16px; letter-spacing: 0.06em; }
+  .hyn-price { font-family: var(--font-mono); font-weight: 600; font-size: 13px; opacity: 0.8; }
+  .hyn-yes { background: rgba(52,211,153,0.13); border-color: rgba(52,211,153,0.32); color: var(--profit); }
+  .hyn-yes:hover { background: rgba(52,211,153,0.2); }
+  .hyn-no { background: rgba(251,113,133,0.13); border-color: rgba(251,113,133,0.32); color: var(--loss); }
+  .hyn-no:hover { background: rgba(251,113,133,0.2); }
 }
 
 /* ───────── Sticky filter bar ───────── */
@@ -4117,3 +4133,5 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
   100% { transform: translateY(34px); opacity: 0; }
 }
 @media (prefers-reduced-motion: reduce) { .scroll-cue-dot { animation: none; top: 12px; } }
+/* mobile: the Trade button is the CTA — drop the scroll cue so they don't overlap */
+@media (max-width: 900px) { .scroll-cue { display: none; } }

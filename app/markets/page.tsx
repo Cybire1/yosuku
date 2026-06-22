@@ -139,6 +139,8 @@ export default function MarketsPage() {
   );
   // Expand the hero market into a full detail modal (click the card → morph open).
   const [expanded, setExpanded] = useState(false);
+  // Which side the mobile YES/NO buttons opened the trade modal on.
+  const [heroSide, setHeroSide] = useState<'UP' | 'DOWN'>('UP');
   const [scrolled, setScrolled] = useState(false);
   const modalCanvasRef = useRef<HTMLCanvasElement>(null);
   // Fade the "scroll for markets" cue once the user starts scrolling.
@@ -507,6 +509,28 @@ export default function MarketsPage() {
                   <span style={{ color: 'var(--vermilion)' }}>{heroYesProb != null ? `${heroYesProb}¢` : '—'}</span>
                 </span>
               </div>
+              {heroOracle && (
+                <div className="hero-yesno">
+                  <button
+                    type="button"
+                    className="hyn hyn-yes font-display"
+                    aria-label="Bet Yes"
+                    onClick={(e) => { e.stopPropagation(); setHeroSide('UP'); setExpanded(true); }}
+                  >
+                    <span className="hyn-label">YES</span>
+                    <span className="hyn-price">{heroYesProb != null ? `${heroYesProb}¢` : '—'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="hyn hyn-no font-display"
+                    aria-label="Bet No"
+                    onClick={(e) => { e.stopPropagation(); setHeroSide('DOWN'); setExpanded(true); }}
+                  >
+                    <span className="hyn-label">NO</span>
+                    <span className="hyn-price">{heroYesProb != null ? `${100 - heroYesProb}¢` : '—'}</span>
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Mini bet panel — the same TradePanel the full market page uses */}
@@ -588,7 +612,7 @@ export default function MarketsPage() {
                     oracle={heroRawOracle}
                     spotPrice={prices[heroRawOracle.oracle_id]?.spot ?? null}
                     forwardPrice={prices[heroRawOracle.oracle_id]?.forward ?? null}
-                    defaultSide="UP"
+                    defaultSide={heroSide}
                     initialStrike={heroOracle?.strike ?? null}
                     initialMode="pro"
                     onSuccess={() => setExpanded(false)}
