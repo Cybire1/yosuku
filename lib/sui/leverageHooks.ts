@@ -97,6 +97,21 @@ async function liveByEvent(eventType: string, idField: string, owner: string, ow
   return objs.map((o) => { const f = fieldsOf(o.data?.content); return f ? { ...f, _id: o.data!.objectId } : null; }).filter(Boolean) as Fields[];
 }
 
+// Fill detection via EVENT HISTORY (not live objects): a position that was filled and has
+// since settled/liquidated leaves no live object, but the PositionOpened event persists — so
+// an order is "filled" (not stuck) if a matching fill event ever fired for this owner.
+async function filledEventsByOwner(owner: string): Promise<{ margin: number; leverage: number; ts: number }[]> {
+  const ev = await readClient.queryEvents({ query: { MoveEventType: MARGIN_POSITION_OPENED }, limit: 1000, order: 'descending' });
+  return ev.data
+    .filter((e) => { const j = e.parsedJson as Record<string, unknown> | undefined; return !!j && String(j.owner).toLowerCase() === owner.toLowerCase(); })
+    .map((e) => {
+      const j = e.parsedJson as Record<string, unknown>;
+      const margin = Number(j.margin) / DUSDC_MULTIPLIER;
+      const borrowed = Number(j.borrowed) / DUSDC_MULTIPLIER;
+      return { margin, leverage: margin > 0 ? (margin + borrowed) / margin : 0, ts: Number((e as { timestampMs?: string | number | null }).timestampMs ?? 0) };
+    });
+}
+
 /** The connected wallet's open underwritten Positions (shared objects, via events). */
 export function useMyPositions(pollMs = 12_000) {
   const account = useCurrentAccount();
@@ -146,9 +161,9 @@ export function useMyOrders(pollMs = 6_000) {
   const refresh = useCallback(async () => {
     if (!address) { setOrders([]); return; }
     try {
-      const [rows, filledRows] = await Promise.all([
+      const [rows, filledEvents] = await Promise.all([
         liveByEvent(MARGIN_ORDER_REQUESTED, 'order', address, 'trader'),
-        liveByEvent(MARGIN_POSITION_OPENED, 'position', address, 'owner'),
+        filledEventsByOwner(address),
       ]);
       const chainOrders = rows.map((f): OrderData => ({
         id: String(f._id),
@@ -187,16 +202,13 @@ export function useMyOrders(pollMs = 6_000) {
         Math.abs(order.leverage - local.leverage) < 0.000001 &&
         (!order.createdAt || !local.createdAt || Math.abs(order.createdAt - local.createdAt) < 180_000)
       );
-      const filledMatchesLocal = (local: OrderData) => filledRows.some((position) => {
-        const margin = Number(position.margin) / DUSDC_MULTIPLIER;
-        const fronted = Number(position.borrowed) / DUSDC_MULTIPLIER;
-        const leverage = margin > 0 ? (margin + fronted) / margin : 0;
-        return String(position.oracle_id) === local.oracleId &&
-          Boolean(position.is_range) === local.isRange &&
-          Boolean(position.is_up) === local.isUp &&
-          Math.abs(margin - local.margin) < 0.000001 &&
-          Math.abs(leverage - local.leverage) < 0.000001;
-      });
+      // filled if a PositionOpened event for this owner matches margin+leverage near the open time
+      // (the event lacks oracle/strike, so match on amount+leverage+recency — robust for the common case)
+      const filledMatchesLocal = (local: OrderData) => filledEvents.some((p) =>
+        Math.abs(p.margin - local.margin) < 0.000001 &&
+        Math.abs(p.leverage - local.leverage) < 0.000001 &&
+        (!local.createdAt || !p.ts || Math.abs(p.ts - local.createdAt) < 600_000)
+      );
       setOrders([
         ...chainOrders,
         ...localOrders.filter((order) => !chainMatchesLocal(order) && !filledMatchesLocal(order)),
