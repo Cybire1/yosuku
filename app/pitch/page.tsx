@@ -70,25 +70,23 @@ const SLIDES: { id: string; render: () => React.ReactNode }[] = [
   {
     id: 'cover',
     render: () => (
-      <div className="grid lg:grid-cols-[1.1fr_0.9fr] gap-12 items-center w-full">
-        <div>
-          <Eyebrow>予測 · Pitch · Edition 04 / Tokyo 2026</Eyebrow>
-          <M variants={rise} className="mt-7 font-display font-[800] tracking-tight text-white text-[clamp(3.4rem,9vw,7.5rem)] leading-[0.86]">Yosuku</M>
-          <M variants={rise} className="mt-6 font-display font-bold text-[clamp(1.2rem,2.6vw,2rem)] text-white leading-[1.15] max-w-[20ch]">
-            The consumer front door to <span className="text-vermilion">on-chain prediction markets</span>.
+      <div className="grid lg:grid-cols-[1.15fr_0.85fr] gap-10 items-center w-full">
+        <div className="relative z-10">
+          <Eyebrow>予測 · PITCH · TOKYO 2026</Eyebrow>
+          <M variants={rise} className="mt-7 font-display font-[800] tracking-[-0.02em] text-white text-[clamp(3.6rem,11vw,9rem)] leading-[0.8]">Yosuku</M>
+          <M variants={rise} className="mt-6 font-display font-bold text-white text-[clamp(1.3rem,3vw,2.3rem)] leading-[1.1] max-w-[19ch]">
+            The consumer front door to <span className="text-vermilion">on-chain prediction markets.</span>
           </M>
-          <M variants={rise} className="mt-5 text-[15px] sm:text-lg leading-relaxed max-w-[34ch] text-gray-400">
-            One tap, <Serif>non-custodial</Serif>, built on DeepBook Predict — on web and a native mobile app.
+          <M variants={rise} className="mt-5 text-[15px] sm:text-lg leading-relaxed max-w-[40ch] text-gray-400">
+            One tap, <Serif>non-custodial</Serif>, built on DeepBook Predict. Web and a native mobile app.
           </M>
-          <M variants={rise} className="mt-9 flex flex-wrap gap-2.5">
-            {['18 wallets', '51 gas-free trades', '~1,800 SDK installs', 'live on Sui'].map((c) => (
-              <span key={c} className="font-mono text-[10px] sm:text-[11px] tracking-wide text-gray-300 border border-white/12 rounded-full px-3 py-1.5">{c}</span>
-            ))}
+          <M variants={rise} className="mt-10 border-t border-white/10 pt-5 font-mono text-[11px] tracking-wide text-gray-500 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            <span>18 wallets</span><span className="text-vermilion/50">·</span><span>51 gas-free trades</span><span className="text-vermilion/50">·</span><span>~1,800 SDK installs</span><span className="text-vermilion/50">·</span><span>live on Sui testnet</span>
           </M>
         </div>
-        <M variants={rise} className="relative">
-          <div className="absolute -inset-10 bg-[radial-gradient(circle_at_60%_40%,rgba(224,77,38,0.18),transparent_70%)] blur-2xl" />
-          <Frame src="/pitch/chart.png" alt="Yosuku live market" className="relative rotate-[1.5deg]" />
+        <M variants={rise} className="relative hidden lg:flex items-center justify-center">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(224,77,38,0.22),transparent_72%)] blur-2xl" />
+          <div className="relative font-jp font-bold text-vermilion text-[clamp(14rem,26vw,30rem)] leading-none drop-shadow-[0_0_70px_rgba(224,77,38,0.4)]">予</div>
         </M>
       </div>
     ),
@@ -168,10 +166,47 @@ const SLIDES: { id: string; render: () => React.ReactNode }[] = [
     ),
   },
   {
+    id: 'fullstack',
+    render: () => (
+      <div className="w-full">
+        <Eyebrow>04 — The full stack</Eyebrow>
+        <M variants={rise} className="mt-6 font-display font-[800] tracking-tight text-white text-[clamp(2rem,5vw,3.6rem)] leading-[1.02]">
+          One app. <Serif>The whole stack.</Serif>
+        </M>
+        <M variants={rise} className="mt-3 text-[15px] text-gray-400 max-w-xl">
+          Simple enough for a first bet, deep enough to never leave. All of it non-custodial.
+        </M>
+        <div className="mt-8 grid md:grid-cols-3 gap-4">
+          {[
+            [Smartphone, 'Front door', [['One-tap bets', 'web + native iOS / Android'], ['A live feed', 'markets like short-form video']]],
+            [Zap, 'Social & viral', [['Trade from a tweet', 'no-divert by design'], ['Post-a-take', 'any opinion becomes a market']]],
+            [Layers, 'Real depth', [['Leverage', 'boost up to 3×'], ['Private trades', 'your wallet stays off it'], ['Copy-trade strategies', 'follow an agent, un-drainably']]],
+          ].map(([Icon, group, items]) => {
+            const I = Icon as typeof Smartphone;
+            return (
+              <M key={group as string} variants={rise} className="rounded-2xl border border-white/[0.08] bg-gradient-to-b from-white/[0.04] to-transparent p-5">
+                <I className="w-6 h-6 text-vermilion" />
+                <div className="mt-3 font-display font-bold text-white text-lg">{group as string}</div>
+                <div className="mt-3 space-y-2.5">
+                  {(items as [string, string][]).map(([h, d]) => (
+                    <div key={h}>
+                      <div className="font-display font-semibold text-white text-[15px]">{h}</div>
+                      <div className="text-[12.5px] text-gray-400 leading-snug">{d}</div>
+                    </div>
+                  ))}
+                </div>
+              </M>
+            );
+          })}
+        </div>
+      </div>
+    ),
+  },
+  {
     id: 'whynow',
     render: () => (
       <div className="w-full">
-        <Eyebrow>04 — Why now</Eyebrow>
+        <Eyebrow>05 — Why now</Eyebrow>
         <M variants={rise} className="mt-6 font-display font-[800] tracking-tight text-white text-[clamp(2.2rem,5.5vw,4rem)] leading-[1.02]">The moment is <Serif>here.</Serif></M>
         <div className="mt-12 grid md:grid-cols-3 gap-8">
           {[
@@ -193,7 +228,7 @@ const SLIDES: { id: string; render: () => React.ReactNode }[] = [
     id: 'whyus',
     render: () => (
       <div className="w-full">
-        <Eyebrow>05 — Why us</Eyebrow>
+        <Eyebrow>06 — Why us</Eyebrow>
         <M variants={rise} className="mt-6 font-display font-[800] tracking-tight text-white text-[clamp(2rem,5vw,3.6rem)] leading-[1.02]">
           Four things, together, <Serif>no one else has.</Serif>
         </M>
@@ -224,7 +259,7 @@ const SLIDES: { id: string; render: () => React.ReactNode }[] = [
     render: () => (
       <div className="grid lg:grid-cols-2 gap-12 items-center w-full">
         <div>
-          <Eyebrow>06 — Market</Eyebrow>
+          <Eyebrow>07 — Market</Eyebrow>
           <M variants={rise} className="mt-7 font-display font-[800] tracking-tight text-white text-[clamp(2rem,5vw,3.6rem)] leading-[1.04]">
             The consumer layer for a category going <Serif>mainstream.</Serif>
           </M>
@@ -251,7 +286,7 @@ const SLIDES: { id: string; render: () => React.ReactNode }[] = [
     id: 'traction',
     render: () => (
       <div className="w-full">
-        <Eyebrow>07 — Traction</Eyebrow>
+        <Eyebrow>08 — Traction</Eyebrow>
         <M variants={rise} className="mt-6 font-display font-[800] tracking-tight text-white text-[clamp(2.2rem,5.5vw,4rem)] leading-[1.02]">
           Real usage. On-chain. <Serif>Verifiable.</Serif>
         </M>
@@ -276,7 +311,7 @@ const SLIDES: { id: string; render: () => React.ReactNode }[] = [
     id: 'tech',
     render: () => (
       <div className="w-full">
-        <Eyebrow>08 — How it&apos;s built</Eyebrow>
+        <Eyebrow>09 — How it&apos;s built</Eyebrow>
         <M variants={rise} className="mt-6 font-display font-[800] tracking-tight text-white text-[clamp(2rem,5vw,3.4rem)] leading-[1.02]">
           DeepBook Predict for the markets. <Serif>Our Move for the moat.</Serif>
         </M>
@@ -307,7 +342,7 @@ const SLIDES: { id: string; render: () => React.ReactNode }[] = [
     id: 'business',
     render: () => (
       <div className="w-full">
-        <Eyebrow>09 — Business model</Eyebrow>
+        <Eyebrow>10 — Business model</Eyebrow>
         <M variants={rise} className="mt-6 font-display font-[800] tracking-tight text-white text-[clamp(2rem,5vw,3.6rem)] leading-[1.02]">
           We earn when the market <Serif>works.</Serif>
         </M>
@@ -336,7 +371,7 @@ const SLIDES: { id: string; render: () => React.ReactNode }[] = [
     render: () => (
       <div className="grid lg:grid-cols-2 gap-12 items-center w-full">
         <div>
-          <Eyebrow>10 — Team</Eyebrow>
+          <Eyebrow>11 — Team</Eyebrow>
           <M variants={rise} className="mt-7 font-display font-[800] tracking-tight text-white text-[clamp(2rem,5vw,3.6rem)] leading-[1.04]">
             Builders who ship at the speed this category <Serif>demands.</Serif>
           </M>
@@ -356,7 +391,7 @@ const SLIDES: { id: string; render: () => React.ReactNode }[] = [
     id: 'close',
     render: () => (
       <div className="flex flex-col items-center text-center w-full">
-        <Eyebrow>11 — Vision</Eyebrow>
+        <Eyebrow>12 — Vision</Eyebrow>
         <M variants={rise} className="mt-8 font-display font-[800] tracking-tight text-white leading-[1.04] text-[clamp(2.2rem,6vw,4.4rem)] max-w-[16ch]">
           The front door to <Serif>on-chain prediction markets</Serif>.
         </M>

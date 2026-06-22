@@ -1,6 +1,6 @@
 # Yosuku — Pitch Deck
 
-> Slide-by-slide deck. **12 slides**, Sequoia/Web3-hybrid order (Problem → Solution → Why Now → Market → Proof).
+> Slide-by-slide deck. **13 slides**, Sequoia/Web3-hybrid order (Problem → Solution → Why Now → Market → Proof).
 > Design rule: one idea per slide, minimal text, real on-chain screenshots over words.
 > Every number here is verified on-chain or from real package data — nothing inflated.
 > Each slide: **HEADLINE**, on-slide content (keep it sparse), `[VISUAL]`, and _(speaker note — what you say)_.
@@ -66,7 +66,23 @@ _(speaker: "Here's the product. Bet in two taps. Cash out anytime. A feed of liv
 
 ---
 
-## Slide 5 — Why Now
+## Slide 5 — The full stack
+
+# One app. The whole stack.
+
+> Simple enough for a first bet, deep enough to never leave. All of it non-custodial.
+
+- **Front door** — one-tap bets on **web + a native iOS / Android app**, with a **feed** of live markets like short-form video.
+- **Social & viral** — **trade from a tweet** (no-divert by design), and **post-a-take**: any opinion becomes a tradeable market.
+- **Real depth** — **leverage** (boost up to 3×), **private / incognito trades** (your wallet stays off it), and **copy-trade agent strategies** (follow an agent, un-drainably).
+
+`[VISUAL: three columns — Front door / Social & viral / Real depth — each with product shots; the rendered “full stack” slide at yosuku.xyz/pitch.]`
+
+_(speaker: “It's one app with the whole stack. A simple front door on web and mobile with a social feed; viral, because you can trade straight from a tweet; and real depth underneath — leverage, private trades, and a copy-trade strategy exchange — all non-custodial.”)_
+
+---
+
+## Slide 6 — Why Now
 
 # The moment is here.
 
@@ -80,7 +96,7 @@ _(speaker: "Polymarket proved the world wants this. DeepBook Predict just brough
 
 ---
 
-## Slide 6 — Why Us (the moat)
+## Slide 7 — Why Us (the moat)
 
 # Four things, together, no one else has.
 
@@ -95,7 +111,7 @@ _(speaker: "What makes us different: trade-from-X where the agent can never touc
 
 ---
 
-## Slide 7 — Market
+## Slide 8 — Market
 
 # A category going mainstream — and we're the consumer layer.
 
@@ -109,7 +125,7 @@ _(speaker: "If DeepBook Predict is the infrastructure, Yosuku is the consumer pr
 
 ---
 
-## Slide 8 — Traction (the slide judges remember)
+## Slide 9 — Traction (the slide judges remember)
 
 # Real usage. All on-chain. All verifiable.
 
@@ -125,7 +141,7 @@ _(speaker: "And it's real. Eighteen wallets have placed gas-free trades, across 
 
 ---
 
-## Slide 9 — How it's built (Technical)
+## Slide 10 — How it's built (Technical)
 
 # DeepBook Predict for the markets. Our Move for the moat.
 
@@ -139,7 +155,7 @@ _(speaker: "We don't reinvent the market — we build on DeepBook Predict, and a
 
 ---
 
-## Slide 10 — Business model
+## Slide 11 — Business model
 
 # We earn when the market works.
 
@@ -154,7 +170,7 @@ _(speaker: "Revenue tracks usage: the vault spread, leverage premium, builder fe
 
 ---
 
-## Slide 11 — Team / Execution
+## Slide 12 — Team / Execution
 
 # Built a full consumer product — web, mobile, SDKs, Move — fast.
 
@@ -168,7 +184,7 @@ _(speaker: "We're builders. In the time most teams ship a market card, we shippe
 
 ---
 
-## Slide 12 — Vision / Ask / Close
+## Slide 13 — Vision / Ask / Close
 
 # The consumer front door to on-chain prediction markets.
 

@@ -55,7 +55,7 @@ function Stat({ label, value, sub, accent }: { label: string; value: string; sub
 function GrowthCurve({ points, height = 200 }: { points: GrowthPoint[]; height?: number }) {
   const W = 920, H = height, padX = 16, padT = 22, padB = 26;
   if (points.length === 0) {
-    return <div className="font-mono text-[11px] text-gray-600 py-16 text-center">your growth curve starts with the first sponsored signup — drive one and watch it climb.</div>;
+    return <div className="font-mono text-[11px] text-gray-600 py-16 text-center">your growth curve starts with the first gas-free signup — drive one and watch it climb.</div>;
   }
   const max = Math.max(1, ...points.map((p) => p.cumulative));
   const xAt = (i: number) => points.length === 1 ? W / 2 : padX + (i / (points.length - 1)) * (W - 2 * padX);
@@ -199,7 +199,7 @@ export default function StatsPage() {
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4">
                 <Stat label="Wallets onboarded" value={fmt(t.onboardedUsers)} sub="gas paid by Yosuku — provably ours" accent />
                 <Stat label="Waitlist signups" value={fmt(t.waitlistSignups)} sub="signed on-chain" />
-                <Stat label="Gas-free actions" value={fmt(t.sponsoredActions)} sub="Yosuku sponsored the gas" />
+                <Stat label="Gas-free actions" value={fmt(t.sponsoredActions)} sub="gas paid by Yosuku" />
               </div>
               <p className="font-mono text-[11px] text-gray-600 mb-10 leading-relaxed max-w-2xl">
                 Every wallet here had its gas <span className="text-gray-400">paid by Yosuku&apos;s sponsor</span> — the chain records us as sponsor,

@@ -149,14 +149,14 @@ export default function StrategiesPage() {
     return () => clearInterval(id);
   }, [refreshSocialVaultBalance, refreshSubscriptions]);
 
-  // Subscriber: pay the fee + authorize the agent to copy-trade your vault funds, under
+  // Subscriber: pay the fee + authorize the agent to copy-trade your budget, under
   // the strategy's hard caps. Mirrors WaitlistCard.join(): sponsored path if the gas
   // station is up, wallet-pays fallback otherwise — both execute off JSON-RPC over gRPC.
   async function subscribe(card: StrategyCard) {
     if (!address) return;
     const targetBalance = Number(targetBalanceFor(card).replace(',', '.'));
     if (!Number.isFinite(targetBalance) || targetBalance <= 0) {
-      toast('Enter a copy balance above 0', 'error');
+      toast('Enter a Copy Budget above 0', 'error');
       return;
     }
     const targetMicro = BigInt(Math.floor(targetBalance * DUSDC_MULTIPLIER));
@@ -168,7 +168,7 @@ export default function StrategiesPage() {
 
     if (walletMicro < neededMicro) {
       toast(
-        `Wallet DUSDC too low — needs ${(Number(neededMicro) / DUSDC_MULTIPLIER).toFixed(2)} for top-up + fee`,
+        `Wallet DUSDC too low — needs ${(Number(neededMicro) / DUSDC_MULTIPLIER).toFixed(2)} for budget + fee`,
         'error',
       );
       return;
@@ -186,8 +186,8 @@ export default function StrategiesPage() {
       );
       toast(
         topUpMicro > BigInt(0)
-          ? `Funded copy balance and subscribed to ${fmtAddr(card.agent)}`
-          : `Subscribed to ${fmtAddr(card.agent)} — the agent can now copy-trade your vault`,
+          ? `Copy Budget set. Now copying ${fmtAddr(card.agent)}`
+          : `Now copying ${fmtAddr(card.agent)} with your Copy Budget`,
         'success',
       );
       await load();
@@ -196,7 +196,7 @@ export default function StrategiesPage() {
       refreshDusdc();
     } catch (e) {
       const msg = String(e instanceof Error ? e.message : e).slice(0, 140);
-      toast(`Subscribe failed: ${msg}`, 'error');
+      toast(`Could not start copying: ${msg}`, 'error');
     } finally {
       setSubscribingId(null);
     }
@@ -230,14 +230,14 @@ export default function StrategiesPage() {
     try {
       capsuleBlob = BigInt(form.capsuleBlob.trim() || '0');
     } catch {
-      toast('Walrus capsule blob must be a decimal u256, or blank', 'error');
+      toast('Strategy file ID must be a number, or blank', 'error');
       return;
     }
     if (maxLeverageBps < 10_000) { toast('Max leverage must be at least 1x', 'error'); return; }
-    if (maxMarginMicro <= BigInt(0)) { toast('Max margin must be greater than 0', 'error'); return; }
+    if (maxMarginMicro <= BigInt(0)) { toast('Max budget per trade must be greater than 0', 'error'); return; }
     if (!/^0x[0-9a-fA-F]{64}$/.test(agent)) { toast('Agent must be a 0x… address', 'error'); return; }
     if (memoryAccount !== ZERO_ADDR && !/^0x[0-9a-fA-F]{64}$/.test(memoryAccount)) {
-      toast('MemWal account must be a 0x… address, or blank', 'error');
+      toast('Verified memory must be a 0x… address, or blank', 'error');
       return;
     }
     setListing(true);
@@ -253,12 +253,12 @@ export default function StrategiesPage() {
           creator: address,
         }),
       );
-      toast('Strategy listed — it now appears in the marketplace', 'success');
+      toast('Strategy published — users can now copy it', 'success');
       setShowList(false);
       await load();
     } catch (e) {
       const msg = String(e instanceof Error ? e.message : e).slice(0, 140);
-      toast(`List failed: ${msg}`, 'error');
+      toast(`Publish failed: ${msg}`, 'error');
     } finally {
       setListing(false);
     }
@@ -279,14 +279,13 @@ export default function StrategiesPage() {
         </div>
 
         <h1 className="font-display font-[800] text-4xl text-white tracking-tight mb-2">
-          Strategy Market
+          Agent Strategies
         </h1>
-        <p className="font-jp text-gray-500 text-sm mb-6">戦略取引所</p>
+        <p className="font-jp text-gray-500 text-sm mb-6">コピー取引</p>
 
         <p className="text-gray-400 text-sm leading-relaxed max-w-2xl mb-6">
-          Agents use MCP to trade DeepBook Predict and MemWal to remember what happened.
-          Subscribe to a strategy memory, fund a capped vault, and every copied trade becomes
-          verifiable proof creators can post to X.
+          Copy prediction agents with a capped budget. They can trade for you, but they
+          cannot withdraw your funds. Pause anytime.
         </p>
 
         {/* Creator: list a strategy */}
@@ -296,21 +295,21 @@ export default function StrategiesPage() {
               onClick={() => setShowList((v) => !v)}
               className="font-mono text-[12px] px-4 py-2 rounded-full border border-white/10 hover:border-white/25 hover:bg-white/[0.03] text-gray-300 hover:text-white transition-colors"
             >
-              {showList ? '× Close' : '+ List a strategy'}
+              {showList ? '× Close creator mode' : '+ Creator mode'}
             </button>
           )}
 
           {address && showList && (
             <div className="border border-white/[0.08] rounded bg-bg p-5 mt-4 max-w-2xl">
-              <h3 className="font-display font-[700] text-sm text-white mb-1">Publish a strategy</h3>
+              <h3 className="font-display font-[700] text-sm text-white mb-1">Publish an agent strategy</h3>
               <p className="text-gray-500 text-xs leading-relaxed mb-5">
-                Your caps are the hard ceiling your agent is bound to on every subscriber&apos;s funds —
-                it can never exceed them, and never holds subscriber capital. Attach a MemWal account
-                or Walrus/Seal capsule when you have one; blank fields publish as open provenance later.
+                Set the risk limits subscribers see before they copy you. Your agent can trade
+                only inside those limits and can never withdraw user funds. Verified memory and
+                strategy files are optional.
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <label className="block">
-                  <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 block mb-1.5">Executing agent</span>
+                  <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 block mb-1.5">Agent wallet</span>
                   <input
                     value={form.agent}
                     onChange={(e) => setForm((f) => ({ ...f, agent: e.target.value }))}
@@ -319,7 +318,7 @@ export default function StrategiesPage() {
                   />
                 </label>
                 <label className="block">
-                  <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 block mb-1.5">Sub fee (DUSDC)</span>
+                  <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 block mb-1.5">Subscription fee</span>
                   <input
                     type="number" min="0" step="0.1"
                     value={form.subFee}
@@ -328,7 +327,7 @@ export default function StrategiesPage() {
                   />
                 </label>
                 <label className="block">
-                  <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 block mb-1.5">MemWal account</span>
+                  <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 block mb-1.5">Verified memory</span>
                   <input
                     value={form.memoryAccount}
                     onChange={(e) => setForm((f) => ({ ...f, memoryAccount: e.target.value }))}
@@ -337,11 +336,11 @@ export default function StrategiesPage() {
                   />
                 </label>
                 <label className="block">
-                  <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 block mb-1.5">Walrus capsule blob</span>
+                  <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 block mb-1.5">Strategy file</span>
                   <input
                     value={form.capsuleBlob}
                     onChange={(e) => setForm((f) => ({ ...f, capsuleBlob: e.target.value }))}
-                    placeholder="u256 decimal · optional"
+                    placeholder="optional file id"
                     className="w-full px-3 py-2 rounded bg-white/[0.03] border border-white/[0.08] focus:border-white/20 text-white font-mono text-[12px] outline-none transition-colors"
                   />
                 </label>
@@ -355,7 +354,7 @@ export default function StrategiesPage() {
                   />
                 </label>
                 <label className="block">
-                  <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 block mb-1.5">Max margin / trade (DUSDC)</span>
+                  <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 block mb-1.5">Max budget / trade</span>
                   <input
                     type="number" min="0" step="1"
                     value={form.maxMargin}
@@ -378,12 +377,12 @@ export default function StrategiesPage() {
         {loading && strategies.length === 0 ? (
           <div className="font-mono text-sm text-gray-500 py-20 text-center">reading the chain…</div>
         ) : (
-          <div className="space-y-8">
-            {/* 01: Leaderboard + X distribution */}
-            <section>
+          <div className="flex flex-col gap-8">
+            {/* 02: Leaderboard + X distribution */}
+            <section className="order-2">
               <SectionHeader
-                number="01"
-                title="Strategy leaderboard"
+                number="02"
+                title="Proof leaderboard"
                 jp="拡散"
                 live={topRows.length > 0}
                 meta={`${topRows.length} ranked`}
@@ -396,13 +395,13 @@ export default function StrategiesPage() {
                       <Radio className="w-4 h-4 text-vermilion" />
                     </div>
                     <div>
-                      <h3 className="font-display font-[700] text-white text-base">X proof post</h3>
-                      <p className="font-mono text-[10px] tracking-[0.16em] uppercase text-gray-500">human-approved distribution</p>
+                      <h3 className="font-display font-[700] text-white text-base">Share the leaderboard</h3>
+                      <p className="font-mono text-[10px] tracking-[0.16em] uppercase text-gray-500">human-approved X post</p>
                     </div>
                   </div>
                   <p className="text-gray-400 text-sm leading-relaxed mb-5">
-                    Turn the live leaderboard into a proof-backed X post. The post links back here;
-                    the proof still lives on Sui events and MemWal/Walrus pointers.
+                    Turn live copy-trading activity into a clean X post. The claim links back here;
+                    the proof lives in Sui events and verified memory pointers.
                   </p>
                   <div className="flex gap-2">
                     <button
@@ -410,7 +409,7 @@ export default function StrategiesPage() {
                       className="inline-flex items-center justify-center gap-2 flex-1 py-3 rounded bg-white text-black text-sm font-semibold hover:bg-gray-200 transition-colors"
                     >
                       <Share2 className="w-4 h-4" />
-                      Post top strategies
+                      Post leaderboard
                     </button>
                     <button
                       onClick={() => copyPost('leaderboard', buildLeaderboardShareText(leaderboard))}
@@ -463,7 +462,7 @@ export default function StrategiesPage() {
                                 <MiniStat label="score" value={row.score.toFixed(0)} />
                                 <MiniStat label="proof" value={String(row.proofCount)} />
                                 <MiniStat label="trades" value={String(row.copyTrades)} />
-                                <MiniStat label="subs" value={String(row.subscribers)} />
+                                <MiniStat label="copiers" value={String(row.subscribers)} />
                                 <MiniStat
                                   label={row.realizedTrades > 0 ? 'realized' : 'copied'}
                                   value={
@@ -499,9 +498,9 @@ export default function StrategiesPage() {
               </div>
             </section>
 
-            {/* 02: The strategies */}
-            <section>
-              <SectionHeader number="02" title="The strategies" jp="戦略" live={strategies.length > 0} meta={`${strategies.length} listed`} />
+            {/* 01: The strategies */}
+            <section className="order-1">
+              <SectionHeader number="01" title="Copy an agent" jp="戦略" live={strategies.length > 0} meta={`${strategies.length} listed`} />
 
               {strategies.length === 0 ? (
                 <div className="border border-white/[0.08] rounded bg-bg p-16 text-center">
@@ -512,7 +511,7 @@ export default function StrategiesPage() {
                   <p className="text-gray-500 text-sm max-w-sm mx-auto">
                     {loadError
                       ? "Couldn't reach the chain — retrying."
-                      : 'Investable strategies will appear here as creators publish them. Each one binds its agent to hard risk caps before a single subscriber dollar moves.'}
+                      : 'Copyable agents will appear here as creators publish them. Each one is bound to risk limits before a single user dollar moves.'}
                   </p>
                 </div>
               ) : (
@@ -531,10 +530,10 @@ export default function StrategiesPage() {
                     const walletNeedDusdc = topUpDusdc + card.subFee;
                     const copyCapacity = validTarget ? Math.min(targetBalance, card.maxMargin) : 0;
                     const cta = topUpDusdc > 0.000001
-                      ? `Fund ${fmtDusdc(topUpDusdc)} + subscribe →`
+                      ? `Add ${fmtDusdc(topUpDusdc)} + start copying →`
                       : free
-                        ? 'Subscribe — free →'
-                        : `Subscribe · ${fmtDusdc(card.subFee)} DUSDC`;
+                        ? 'Start copying — free →'
+                        : `Start copying · ${fmtDusdc(card.subFee)} DUSDC`;
                     return (
                       <div key={card.id} id={`strategy-${card.id}`} className="border border-white/[0.08] rounded bg-bg p-5 flex flex-col">
                         {/* top row: avatar glyph + agent address + capability chips */}
@@ -554,12 +553,12 @@ export default function StrategiesPage() {
                           <div className="flex items-center gap-1.5">
                             {card.hasCapsule && (
                               <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-gray-400 border border-white/10 rounded px-2 py-1">
-                                Seal playbook
+                                Strategy file
                               </span>
                             )}
                             {card.hasMemory && (
                               <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-gray-400 border border-white/10 rounded px-2 py-1">
-                                MemWal memory
+                                Verified memory
                               </span>
                             )}
                           </div>
@@ -590,11 +589,11 @@ export default function StrategiesPage() {
                             <span className="font-mono text-sm text-white">{card.maxLeverage}x</span>
                           </div>
                           <div>
-                            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 block mb-1">Max margin</span>
+                            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 block mb-1">Max / trade</span>
                             <span className="font-mono text-sm text-white">{fmtDusdc(card.maxMargin)} DUSDC</span>
                           </div>
                           <div>
-                            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 block mb-1">Sub fee</span>
+                            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 block mb-1">Fee</span>
                             <span className="font-mono text-sm text-white">{fmtDusdc(card.subFee)} DUSDC</span>
                           </div>
                         </div>
@@ -602,11 +601,11 @@ export default function StrategiesPage() {
                         {/* live performance row */}
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-5">
                           <div>
-                            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 block mb-1">Subs</span>
+                            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 block mb-1">Copiers</span>
                             <span className="font-mono text-sm text-white tabular-nums">{card.subscribers}</span>
                           </div>
                           <div>
-                            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 block mb-1">Copy-trades</span>
+                            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 block mb-1">Trades</span>
                             <span className="font-mono text-sm text-white tabular-nums">{card.copyTrades}</span>
                           </div>
                           <div>
@@ -628,9 +627,9 @@ export default function StrategiesPage() {
                         <div className="border border-new-mint/20 bg-new-mint/[0.04] rounded p-4 mb-5">
                           <div className="flex items-start justify-between gap-4 mb-3">
                             <div>
-                              <h3 className="font-display font-[700] text-sm text-white mb-1">Copy balance</h3>
+                              <h3 className="font-display font-[700] text-sm text-white mb-1">Copy Budget</h3>
                               <p className="font-mono text-[9px] tracking-[0.16em] uppercase text-gray-500">
-                                shared vault · withdraw anytime
+                                your limit · pause anytime
                               </p>
                             </div>
                             <span className="shrink-0 font-mono text-[9px] tracking-[0.16em] uppercase text-new-mint border border-new-mint/20 rounded-full px-2.5 py-1">
@@ -649,14 +648,14 @@ export default function StrategiesPage() {
                             <span className="font-mono text-[11px] text-gray-500 tracking-[0.14em]">DUSDC</span>
                           </div>
                           <div className="grid grid-cols-2 gap-2 mb-3">
-                            <MiniStat label="vault now" value={`${fmtDusdc(currentVaultDusdc)} DUSDC`} />
-                            <MiniStat label="top-up now" value={validTarget ? `${fmtDusdc(topUpDusdc)} DUSDC` : '—'} />
-                            <MiniStat label="wallet need" value={`${fmtDusdc(walletNeedDusdc)} DUSDC`} />
-                            <MiniStat label="capacity" value={validTarget ? `${fmtDusdc(copyCapacity)} DUSDC` : '—'} />
+                            <MiniStat label="current budget" value={`${fmtDusdc(currentVaultDusdc)} DUSDC`} />
+                            <MiniStat label="add today" value={validTarget ? `${fmtDusdc(topUpDusdc)} DUSDC` : '—'} />
+                            <MiniStat label="wallet needed" value={`${fmtDusdc(walletNeedDusdc)} DUSDC`} />
+                            <MiniStat label="max copied" value={validTarget ? `${fmtDusdc(copyCapacity)} DUSDC` : '—'} />
                           </div>
                           <p className="text-[12px] leading-relaxed text-gray-500">
-                            The agent can only spend your social-vault balance and cannot exceed this strategy&apos;s
-                            on-chain caps: {fmtDusdc(card.maxMargin)} DUSDC per copied trade, max {card.maxLeverage}x.
+                            This agent can only use your Copy Budget and cannot withdraw it. Each copied trade is capped at
+                            {' '}{fmtDusdc(card.maxMargin)} DUSDC, max {card.maxLeverage}x.
                           </p>
                         </div>
 
@@ -669,11 +668,11 @@ export default function StrategiesPage() {
                               <div className="flex items-start justify-between gap-3">
                                 <div>
                                   <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-new-mint mb-1">
-                                    subscribed
+                                    copying
                                   </p>
                                   <p className="text-[12px] text-gray-400 leading-relaxed">
-                                    Future copies are active under {fmtDusdc(activeSub.maxMargin)} DUSDC / trade,
-                                    max {activeSub.maxLeverageBps / 10_000}x.
+                                    Future copies are active. The agent cannot exceed {fmtDusdc(activeSub.maxMargin)}
+                                    DUSDC per trade or {activeSub.maxLeverageBps / 10_000}x.
                                   </p>
                                 </div>
                                 <button
@@ -692,7 +691,7 @@ export default function StrategiesPage() {
                               className="w-full py-3 rounded text-sm font-semibold bg-vermilion hover:bg-vermilion-d text-white transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                             >
                               {busy
-                                ? 'subscribing…'
+                                ? 'starting…'
                                 : cta}
                             </button>
                           )}
@@ -705,7 +704,7 @@ export default function StrategiesPage() {
             </section>
 
             {/* 03: Recent copy-trades */}
-            <section>
+            <section className="order-3">
               <SectionHeader number="03" title="Recent copy-trades" jp="コピー取引" meta={`${copyTrades.length}`} />
               <div className="border border-white/[0.08] rounded bg-bg divide-y divide-white/[0.05] overflow-hidden">
                 {copyTrades.length === 0 ? (
