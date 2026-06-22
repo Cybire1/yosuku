@@ -627,13 +627,13 @@ body.urgent::before {
     display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px;
   }
   .hyn {
-    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
-    padding: 13px 10px; border-radius: 14px; cursor: pointer;
+    display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 8px;
+    padding: 11px 14px; border-radius: 11px; cursor: pointer;
     border: 1px solid transparent; transition: transform .12s ease, background .15s ease;
   }
   .hyn:active { transform: scale(.98); }
-  .hyn-label { font-weight: 800; font-size: 16px; letter-spacing: 0.06em; }
-  .hyn-price { font-family: var(--font-mono); font-weight: 600; font-size: 13px; opacity: 0.8; }
+  .hyn-label { font-weight: 800; font-size: 14px; letter-spacing: 0.05em; }
+  .hyn-price { font-family: var(--font-mono); font-weight: 600; font-size: 13px; opacity: 0.85; }
   .hyn-yes { background: rgba(52,211,153,0.13); border-color: rgba(52,211,153,0.32); color: var(--profit); }
   .hyn-yes:hover { background: rgba(52,211,153,0.2); }
   .hyn-no { background: rgba(251,113,133,0.13); border-color: rgba(251,113,133,0.32); color: var(--loss); }
