@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useCurrentAccount } from '@mysten/dapp-kit';
 import { readClient } from './modernClients';
-import { RESERVE_ID, DUSDC_MULTIPLIER } from './constants';
+import { RESERVE_ID, DUSDC_MULTIPLIER, TRADING_VAULT_PACKAGE } from './constants';
 import { loadLocalLeverageOrders } from '../leverageLocal';
 import { fetchOnChainQuote, fetchOnChainRangeQuote } from './onchainQuote';
 import {
@@ -12,8 +12,6 @@ import {
   supplyPositionValue,
   unknownLeverageHealth,
   SUPPLY_POSITION_TYPE,
-  ORDER_REQUESTED_EVENT,
-  ORDER_FILLED_EVENT,
   type ReserveStats,
   type LeverageHealth,
   type PositionData,
@@ -25,6 +23,11 @@ const fieldsOf = (content: unknown): Fields | null => {
   const c = content as { fields?: Fields } | null | undefined;
   return c?.fields ?? null;
 };
+
+// The live web-leverage desk (trading_vault → margin) emits these. OpenOrder filtered by
+// `trader`; the filled MarginPosition (shared) by `owner`. Fields: margin/borrowed/notional.
+const MARGIN_ORDER_REQUESTED = `${TRADING_VAULT_PACKAGE}::margin::OrderRequested`;
+const MARGIN_POSITION_OPENED = `${TRADING_VAULT_PACKAGE}::margin::PositionOpened`;
 
 /** Live underwriting-reserve stats (TVL, utilization, premium, exposure). */
 export function useReserveStats(pollMs = 15_000) {
@@ -83,11 +86,11 @@ export function useMySupply(stats: ReserveStats | null, pollMs = 15_000) {
 
 // collect ids from an event type's field where the event's `trader` is the wallet,
 // then fetch the objects that still exist (live orders / positions).
-async function liveByEvent(eventType: string, idField: string, trader: string): Promise<Fields[]> {
+async function liveByEvent(eventType: string, idField: string, owner: string, ownerField = 'trader'): Promise<Fields[]> {
   const ev = await readClient.queryEvents({ query: { MoveEventType: eventType }, limit: 1000, order: 'descending' });
   const ids = [...new Set(ev.data
     .map((e) => e.parsedJson as Record<string, unknown> | undefined)
-    .filter((j) => j && String(j.trader).toLowerCase() === trader.toLowerCase())
+    .filter((j) => j && String(j[ownerField]).toLowerCase() === owner.toLowerCase())
     .map((j) => String(j![idField])))];
   if (ids.length === 0) return [];
   const objs = await readClient.multiGetObjects({ ids, options: { showContent: true } });
@@ -102,16 +105,16 @@ export function useMyPositions(pollMs = 12_000) {
   const refresh = useCallback(async () => {
     if (!address) { setPositions([]); return; }
     try {
-      const rows = await liveByEvent(ORDER_FILLED_EVENT, 'position', address);
+      const rows = await liveByEvent(MARGIN_POSITION_OPENED, 'position', address, 'owner');
       const ls = rows.map((f): PositionData => {
         const margin = Number(f.margin) / DUSDC_MULTIPLIER;
-        const fronted = Number(f.fronted) / DUSDC_MULTIPLIER;
+        const fronted = Number(f.borrowed) / DUSDC_MULTIPLIER;
         return {
           id: String(f._id),
           owner: String(f.owner),
           margin,
           fronted,
-          premium: Number(f.premium) / DUSDC_MULTIPLIER,
+          premium: 0,
           notional: Number(f.notional) / DUSDC_MULTIPLIER,
           leverage: margin > 0 ? (margin + fronted) / margin : 0,
           managerId: String(f.manager_id),
@@ -144,8 +147,8 @@ export function useMyOrders(pollMs = 6_000) {
     if (!address) { setOrders([]); return; }
     try {
       const [rows, filledRows] = await Promise.all([
-        liveByEvent(ORDER_REQUESTED_EVENT, 'order', address),
-        liveByEvent(ORDER_FILLED_EVENT, 'position', address),
+        liveByEvent(MARGIN_ORDER_REQUESTED, 'order', address, 'trader'),
+        liveByEvent(MARGIN_POSITION_OPENED, 'position', address, 'owner'),
       ]);
       const chainOrders = rows.map((f): OrderData => ({
         id: String(f._id),
@@ -186,7 +189,7 @@ export function useMyOrders(pollMs = 6_000) {
       );
       const filledMatchesLocal = (local: OrderData) => filledRows.some((position) => {
         const margin = Number(position.margin) / DUSDC_MULTIPLIER;
-        const fronted = Number(position.fronted) / DUSDC_MULTIPLIER;
+        const fronted = Number(position.borrowed) / DUSDC_MULTIPLIER;
         const leverage = margin > 0 ? (margin + fronted) / margin : 0;
         return String(position.oracle_id) === local.oracleId &&
           Boolean(position.is_range) === local.isRange &&
