@@ -57,15 +57,19 @@ export default function DemoPage() {
       </div>
 
       {/* hero */}
-      <section className="relative max-w-6xl mx-auto px-6 pt-24 pb-20">
+      <section className="relative max-w-5xl mx-auto px-6 pt-12 pb-16">
         <div className="pointer-events-none absolute -right-24 top-0 font-jp font-bold text-vermilion/[0.06] text-[28rem] leading-none select-none hidden lg:block">予</div>
         <div className="relative">
           <Eyebrow>予測 · live demo</Eyebrow>
-          <motion.h1 variants={rise} initial="hidden" animate="show" className="mt-6 font-display font-[800] tracking-tight text-[clamp(2.6rem,7vw,5.5rem)] leading-[0.92] max-w-[16ch]">
+          <motion.h1 variants={rise} initial="hidden" animate="show" className="mt-5 mb-2 font-display font-[800] tracking-tight text-[clamp(2.2rem,5vw,4rem)] leading-[0.95]">
             See Yosuku <Serif>work.</Serif>
           </motion.h1>
+          <div className="mb-3 font-mono text-[12px] tracking-widest uppercase text-vermilion">▶ the 5-min demo</div>
+          <motion.div variants={rise} initial="hidden" animate="show" className="relative rounded-2xl overflow-hidden border border-white/10 shadow-[0_40px_120px_-40px_rgba(0,0,0,0.9)]" style={{ aspectRatio: '16 / 9' }}>
+            <iframe className="absolute inset-0 w-full h-full" src="https://www.youtube.com/embed/gpnsv3Sx3oA" title="Yosuku demo" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen></iframe>
+          </motion.div>
           <motion.p variants={rise} initial="hidden" animate="show" className="mt-6 text-lg text-gray-400 max-w-[52ch] leading-relaxed">
-            The consumer front door to on-chain prediction markets. One tap, non-custodial, on web and native mobile. Every feature below is live on Sui testnet, and every claim links to a transaction you can verify yourself.
+            The consumer front door to on-chain prediction markets — one tap, non-custodial, gas-free, on web and native mobile. Full feature breakdown and verifiable on-chain proofs below.
           </motion.p>
           <motion.div variants={rise} initial="hidden" animate="show" className="mt-9 flex flex-wrap gap-3">
             <Link href="/markets" className="inline-flex items-center gap-2 bg-vermilion hover:bg-vermilion-d transition-colors rounded-full px-5 py-3 font-display font-bold text-sm">Open the app <ArrowRight className="w-4 h-4" /></Link>
@@ -75,16 +79,6 @@ export default function DemoPage() {
             <span>18 wallets</span><span className="text-vermilion/50">·</span><span>51 gas-free trades</span><span className="text-vermilion/50">·</span><span>~1,800 SDK installs</span><span className="text-vermilion/50">·</span><span>live on Sui testnet</span>
           </motion.div>
         </div>
-      </section>
-
-      {/* the demo video — this page is the submitted demo link, so the video lives here */}
-      <section className="max-w-5xl mx-auto px-6 pt-2 pb-16">
-        <Reveal>
-          <div className="mb-4 font-mono text-[12px] tracking-widest uppercase text-vermilion">▶ watch the demo</div>
-          <div className="relative rounded-2xl overflow-hidden border border-white/10 shadow-[0_40px_120px_-40px_rgba(0,0,0,0.9)]" style={{ aspectRatio: '16 / 9' }}>
-            <iframe className="absolute inset-0 w-full h-full" src="https://www.youtube.com/embed/gpnsv3Sx3oA" title="Yosuku demo" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen></iframe>
-          </div>
-        </Reveal>
       </section>
 
       {/* 1 — trade from a tweet */}
