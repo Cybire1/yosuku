@@ -628,7 +628,7 @@ body.urgent::before {
   }
   .hyn {
     display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 8px;
-    padding: 11px 14px; border-radius: 11px; cursor: pointer;
+    padding: 11px 14px; border-radius: 11px; cursor: pointer; text-decoration: none;
     border: 1px solid transparent; transition: transform .12s ease, background .15s ease;
   }
   .hyn:active { transform: scale(.98); }
