@@ -624,20 +624,22 @@ body.urgent::before {
   /* mobile: hide the side panel; trade via the prominent Trade button → modal */
   .hero-mini-panel { display: none; }
   .hero-yesno {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-top: 12px;
   }
   .hyn {
-    display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 8px;
-    padding: 11px 14px; border-radius: 11px; cursor: pointer; text-decoration: none;
-    border: 1px solid transparent; transition: transform .12s ease, background .15s ease;
+    display: flex; align-items: center; justify-content: center; gap: 7px;
+    padding: 9.5px 14px; border-radius: 12px; cursor: pointer; text-decoration: none;
+    border: 1px solid transparent;
+    transition: transform .14s ease, background .18s ease, border-color .18s ease, box-shadow .18s ease;
   }
-  .hyn:active { transform: scale(.98); }
-  .hyn-label { font-weight: 800; font-size: 14px; letter-spacing: 0.05em; }
-  .hyn-price { font-family: var(--font-mono); font-weight: 600; font-size: 13px; opacity: 0.85; }
-  .hyn-yes { background: rgba(52,211,153,0.13); border-color: rgba(52,211,153,0.32); color: var(--profit); }
-  .hyn-yes:hover { background: rgba(52,211,153,0.2); }
-  .hyn-no { background: rgba(251,113,133,0.13); border-color: rgba(251,113,133,0.32); color: var(--loss); }
-  .hyn-no:hover { background: rgba(251,113,133,0.2); }
+  .hyn:active { transform: scale(.985); }
+  .hyn:hover { transform: translateY(-1px); }
+  .hyn-label { font-family: var(--font-display, inherit); font-weight: 700; font-size: 13px; letter-spacing: 0.1em; }
+  .hyn-price { font-family: var(--font-mono); font-weight: 500; font-size: 12px; opacity: 0.66; }
+  .hyn-yes { background: linear-gradient(180deg, rgba(52,211,153,0.11), rgba(52,211,153,0.035)); border-color: rgba(52,211,153,0.28); color: var(--profit); }
+  .hyn-yes:hover { background: rgba(52,211,153,0.17); border-color: rgba(52,211,153,0.5); box-shadow: 0 8px 22px -12px rgba(52,211,153,0.55); }
+  .hyn-no { background: linear-gradient(180deg, rgba(251,113,133,0.11), rgba(251,113,133,0.035)); border-color: rgba(251,113,133,0.28); color: var(--loss); }
+  .hyn-no:hover { background: rgba(251,113,133,0.17); border-color: rgba(251,113,133,0.5); box-shadow: 0 8px 22px -12px rgba(251,113,133,0.55); }
 }
 
 /* ───────── Sticky filter bar ───────── */
