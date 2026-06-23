@@ -3728,7 +3728,11 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
      content + footers never hide beneath it on phones. */
   body { padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px)); }
   .container { padding-inline: 18px; }
-  .page-hero { padding: 140px 0 48px; }
+  .page-hero { padding: 116px 0 24px; }
+  /* tighten the loose vertical rhythm between sections on phones */
+  .markets-section { padding: 32px 0 0; }
+  .markets-section.settled { padding-top: 40px !important; }
+  .section-head { margin-bottom: 18px; }
   .markets-grid { grid-template-columns: 1fr; gap: 12px; }
   /* Trim the full-width "Live now" cards so each isn't a whole screenful: shorter
      chart, no forced tall question, tighter paddings + smaller type. */
