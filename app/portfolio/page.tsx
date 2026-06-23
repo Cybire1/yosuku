@@ -6,7 +6,6 @@ import { useCurrentAccount, ConnectButton } from '@mysten/dapp-kit';
 import { useSmartSubmit } from '@/lib/sui/useSmartSubmit';
 import {
   depositTradingBalanceTx,
-  moveTradingToPrivateTx,
   sweepManagerToTradingBalanceTx,
   withdrawPrivateTradingBalanceTx,
   withdrawTradingBalanceTx,
@@ -49,7 +48,7 @@ export default function PortfolioPage() {
   const { submit } = useSmartSubmit();
   const [sweepingManager, setSweepingManager] = useState(false);
   const [vaultAmount, setVaultAmount] = useState('1');
-  const [vaultBusy, setVaultBusy] = useState<'deposit' | 'withdraw' | 'to-private' | 'withdraw-private' | null>(null);
+  const [vaultBusy, setVaultBusy] = useState<'deposit' | 'withdraw' | 'withdraw-private' | null>(null);
 
   const handleSweepManagerBalance = async () => {
     if (!manager || !address || managerBalance <= 0) return;
@@ -109,18 +108,6 @@ export default function PortfolioPage() {
     }
   };
 
-  const handleVaultMovePrivate = async () => {
-    if (!address || vaultAmountMicro <= BigInt(0)) return;
-    setVaultBusy('to-private');
-    try {
-      await submit(() => moveTradingToPrivateTx(vaultAmountMicro));
-      refreshBalances();
-    } catch (err) {
-      console.error('TradingVault move private error:', err);
-    } finally {
-      setVaultBusy(null);
-    }
-  };
 
   const handleVaultWithdrawPrivate = async () => {
     if (!address || tradingVaultBalance.privateAvailable <= 0) return;
@@ -398,7 +385,7 @@ export default function PortfolioPage() {
                         TradingVault live
                       </span>
                       <p className="font-mono text-[10px] mt-1 max-w-2xl" style={{ color: '#6B6353' }}>
-                        New contract path: wallet deposits fund Trading Balance, public bets debit it, private funds can sit in Private Balance, and withdrawals come back to your wallet.
+                        Deposit funds your Trading Balance; every bet — normal, private, or leverage — draws from it, and withdrawals come back to your wallet. One balance.
                       </p>
                     </div>
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -426,20 +413,15 @@ export default function PortfolioPage() {
                         >
                           {vaultBusy === 'withdraw' ? 'Withdrawing' : 'Withdraw'}
                         </button>
-                        <button
-                          onClick={handleVaultMovePrivate}
-                          disabled={vaultBusy !== null || vaultAmountMicro <= BigInt(0) || tradingVaultBalance.available < parsedVaultAmount}
-                          className="h-11 rounded-xl border border-emerald-700/20 px-4 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-emerald-700 transition-colors hover:bg-emerald-500/10 disabled:opacity-40"
-                        >
-                          {vaultBusy === 'to-private' ? 'Moving' : 'To Private'}
-                        </button>
-                        <button
-                          onClick={handleVaultWithdrawPrivate}
-                          disabled={vaultBusy !== null || tradingVaultBalance.privateAvailable <= 0}
-                          className="h-11 rounded-xl border border-emerald-700/20 px-4 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-emerald-700 transition-colors hover:bg-emerald-500/10 disabled:opacity-40"
-                        >
-                          {vaultBusy === 'withdraw-private' ? 'Withdrawing' : 'Withdraw Private'}
-                        </button>
+                        {tradingVaultBalance.privateAvailable > 0 && (
+                          <button
+                            onClick={handleVaultWithdrawPrivate}
+                            disabled={vaultBusy !== null}
+                            className="h-11 rounded-xl border border-emerald-700/20 px-4 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-emerald-700 transition-colors hover:bg-emerald-500/10 disabled:opacity-40"
+                          >
+                            {vaultBusy === 'withdraw-private' ? 'Withdrawing' : 'Withdraw Private'}
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>

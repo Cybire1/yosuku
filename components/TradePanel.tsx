@@ -48,12 +48,9 @@ import {
   getPrivateBetStatus,
   loadPrivateBetTickets,
   openPrivateBet,
-  privateBalanceDusdc as getPrivateBalanceDusdc,
   savePrivateBetTickets,
-  withdrawPrivateBalance,
   type PrivateBetStatus,
   type PrivateBetTicket,
-  type PrivateWithdrawMode,
   type PrivacyMode,
 } from '@/lib/privateBet';
 
@@ -180,7 +177,6 @@ export default function TradePanel({
     setPrivateTickets(loadPrivateBetTickets(address));
   }, [address]);
 
-  const privateBalance = useMemo(() => getPrivateBalanceDusdc(privateTickets), [privateTickets]);
 
   const applyMode = useCallback((m: 'simple' | 'pro') => {
     setMode(m);
@@ -648,7 +644,7 @@ export default function TradePanel({
       setPrivateTickets(nextAll.filter((t) => t.owner.toLowerCase() === ticket.owner.toLowerCase()));
       setTxDigest(updated.cashoutDigest ?? '');
       setStep('success');
-      toast('Private cashout credited to your Private Balance.', 'success');
+      toast('Cashed out — winnings added to your Trading Balance.', 'success');
       setTimeout(() => setStep('idle'), 5000);
     } catch (err: unknown) {
       setStep('error');
@@ -658,37 +654,6 @@ export default function TradePanel({
       toast(friendly.title, 'error');
     }
   }, [privateStatus, step, toast]);
-
-  const handlePrivateWithdraw = useCallback(async (mode: PrivateWithdrawMode) => {
-    if (!address || step !== 'idle') return;
-    setStep('minting');
-    setErrorMsg('');
-    setTxDigest('');
-    try {
-      const updatedTickets = await withdrawPrivateBalance(address, privateTickets, privateStatus, mode);
-      const updatedByDigest = new Map(updatedTickets.map((ticket) => [ticket.digest, ticket]));
-      const allTickets = loadPrivateBetTickets();
-      const nextAll = allTickets.map((ticket) => updatedByDigest.get(ticket.digest) ?? ticket);
-      savePrivateBetTickets(nextAll);
-      setPrivateTickets(nextAll.filter((ticket) => ticket.owner.toLowerCase() === address.toLowerCase()));
-      const withdrawDigest = updatedTickets.find((ticket) => ticket.withdrawDigest)?.withdrawDigest ?? '';
-      setTxDigest(withdrawDigest);
-      setStep('success');
-      toast(
-        mode === 'private'
-          ? 'Private Balance withdrawn, kept separate from your main wallet.'
-          : 'Private Balance withdrawn to your connected wallet.',
-        'success',
-      );
-      setTimeout(() => setStep('idle'), 5000);
-    } catch (err: unknown) {
-      setStep('error');
-      const friendly = humanizeTxError(err);
-      setErrorMsg(friendly.title);
-      setErrorDetail(friendly.detail);
-      toast(friendly.title, 'error');
-    }
-  }, [address, privateTickets, privateStatus, step, toast]);
 
   const quickAmounts = [5, 10, 25, 50, 100];
   const strikeDollars = selectedStrike ? selectedStrike / FLOAT_SCALING : 0;
@@ -1464,10 +1429,8 @@ export default function TradePanel({
 
         <PrivateTicketLedger
           tickets={privateTickets}
-          balanceDusdc={privateBalance}
           busy={step !== 'idle'}
           onCashOut={handlePrivateCashout}
-          onWithdraw={handlePrivateWithdraw}
         />
 
         {/* Trading account is auto-provisioned silently on market open (see the
@@ -1546,16 +1509,12 @@ export default function TradePanel({
 
 function PrivateTicketLedger({
   tickets,
-  balanceDusdc,
   busy,
   onCashOut,
-  onWithdraw,
 }: {
   tickets: PrivateBetTicket[];
-  balanceDusdc: number;
   busy: boolean;
   onCashOut: (ticket: PrivateBetTicket) => void;
-  onWithdraw: (mode: PrivateWithdrawMode) => void;
 }) {
   if (tickets.length === 0) return null;
 
@@ -1563,53 +1522,15 @@ function PrivateTicketLedger({
     <div className="rounded-xl bg-new-mint/[0.035] border border-new-mint/15 p-3 space-y-2">
       <div className="flex items-center justify-between">
         <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500">
-          Private balance
-        </span>
-        <span className="text-[10px] font-mono text-new-mint">{balanceDusdc.toFixed(2)} DUSDC</span>
-      </div>
-      <div className="rounded-lg border border-white/5 bg-black/25 p-3 space-y-3">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-lg font-mono font-bold text-white">{balanceDusdc.toFixed(2)} DUSDC</p>
-            <p className="text-[11px] leading-relaxed text-gray-500 mt-1">
-              Winnings land here first, kept separate from your main wallet so this bet is harder to link back to you.
-            </p>
-          </div>
-          <ShieldCheck className="w-4 h-4 text-new-mint shrink-0 mt-1" />
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={() => onWithdraw('fast')}
-            disabled={busy || balanceDusdc <= 0}
-            className="flex items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-gray-200 transition-colors hover:bg-white/[0.08] disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            <Wallet className="w-3.5 h-3.5" />
-            Fast withdraw
-          </button>
-          <button
-            type="button"
-            onClick={() => onWithdraw('private')}
-            disabled={busy || balanceDusdc <= 0}
-            className="flex items-center justify-center gap-2 rounded-lg border border-new-mint/20 bg-new-mint/10 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-new-mint transition-colors hover:border-new-mint/40 disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            <ShieldCheck className="w-3.5 h-3.5" />
-            Private withdraw
-          </button>
-        </div>
-        <p className="text-[10px] leading-relaxed text-gray-600">
-          Fast withdraw pays your connected wallet now. Private withdraw keeps the payout separate from your main wallet for an extra layer; stronger privacy is coming.
-        </p>
-      </div>
-      <div className="flex items-center justify-between pt-1">
-        <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-600">
-          Private tickets
+          Private bets
         </span>
         <span className="text-[10px] font-mono text-gray-500">{tickets.length}</span>
       </div>
+      <p className="text-[11px] leading-relaxed text-gray-500">
+        Placed without linking to your main wallet. When you cash out, the winnings go straight to your Trading Balance.
+      </p>
       {tickets.slice(0, 3).map((ticket) => {
-        const credited = ticket.status === 'credited';
-        const withdrawn = ticket.status === 'withdrawn' || ticket.status === 'cashed_out';
+        const settled = ticket.status === 'settled' || ticket.status === 'credited';
         const open = ticket.status === 'open';
         return (
           <div key={ticket.digest} className="rounded-lg border border-white/5 bg-black/20 p-2.5 space-y-2">
@@ -1617,14 +1538,14 @@ function PrivateTicketLedger({
               <span className={`font-mono text-xs font-bold ${ticket.side === 'UP' ? 'text-new-mint' : 'text-rose-400'}`}>
                 {ticket.side} · {formatStrike(ticket.strike)}
               </span>
-              <span className={`font-mono text-[9px] ${open ? 'text-vermilion' : credited ? 'text-new-mint' : 'text-gray-500'}`}>
-                {open ? 'OPEN' : credited ? 'IN BALANCE' : 'WITHDRAWN'}
+              <span className={`font-mono text-[9px] ${open ? 'text-vermilion' : settled ? 'text-new-mint' : 'text-gray-500'}`}>
+                {open ? 'OPEN' : settled ? 'IN YOUR BALANCE' : 'DONE'}
               </span>
             </div>
             <div className="grid grid-cols-2 gap-2 font-mono text-[10px] text-gray-500">
               <span>{(ticket.stakeMicro / DUSDC_MULTIPLIER).toFixed(2)} DUSDC</span>
               <span className="text-right">
-                {credited || withdrawn ? `${(ticket.payoutDusdc ?? 0).toFixed(2)} credited` : `wins ${(ticket.quantity / DUSDC_MULTIPLIER).toFixed(2)} DUSDC`}
+                {settled ? `+${(ticket.payoutDusdc ?? 0).toFixed(2)} to balance` : `wins ${(ticket.quantity / DUSDC_MULTIPLIER).toFixed(2)} DUSDC`}
               </span>
               <span className="truncate">Private bet · {ticket.sessionAddress ? 'ready' : 'pending'}</span>
               <a
@@ -1643,7 +1564,7 @@ function PrivateTicketLedger({
               className="w-full flex items-center justify-center gap-2 rounded-lg border border-new-mint/20 bg-new-mint/10 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-new-mint transition-colors hover:border-new-mint/40 disabled:opacity-45 disabled:cursor-not-allowed"
             >
               <LogOut className="w-3.5 h-3.5" />
-              {open ? 'Cash out to balance' : credited ? 'In Private Balance' : 'Withdrawn'}
+              {open ? 'Cash out to Trading Balance' : settled ? 'In your Trading Balance' : 'Done'}
             </button>
           </div>
         );

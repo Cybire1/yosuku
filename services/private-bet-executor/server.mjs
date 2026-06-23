@@ -25,6 +25,9 @@ const cfg = {
   packageId: process.env.PREDICT_PACKAGE_ID ?? TESTNET.predictPackage,
   predictId: process.env.PREDICT_OBJECT_ID ?? TESTNET.predictObject,
   dusdcType: process.env.DUSDC_TYPE ?? TESTNET.dusdcType,
+  // Trading Balance vault — private-bet winnings settle straight here (no separate "Private Balance").
+  tradingVaultPkg: process.env.TRADING_VAULT_PACKAGE ?? '0x3b76383b2bb9bc411dc56c571a1da22f348b3c19518115ae958fe96e031cf30e',
+  tradingVault: process.env.TRADING_VAULT_ID ?? '0xc04516b582bfe73c71325408bfb9e9a5a8fdcd54952a313a288a135e272fa1e6',
   vortexPool: process.env.PRIVATE_BET_DUSDC_POOL || '0x0',
   sharedSecret: process.env.PRIVATE_BET_SHARED_SECRET ?? '',
   onaraUrl: (process.env.PRIVATE_BET_ONARA_URL ?? process.env.NEXT_PUBLIC_ONARA_URL ?? '').replace(/\/$/, ''),
@@ -390,22 +393,42 @@ async function cashoutPrivateBet(body) {
   );
 
   const balance = await managerDusdcBalance(managerId);
-  const creditedAt = Date.now();
+  const settledAt = Date.now();
+
+  // Return the proceeds STRAIGHT to the user's Trading Balance (no separate "Private
+  // Balance" + withdraw step). credit_available_for is permissionless and built for this.
+  let creditDigest = null;
+  if (balance > 0n) {
+    const tx = new Transaction();
+    const coin = tx.moveCall({
+      target: `${cfg.packageId}::predict_manager::withdraw`,
+      typeArguments: [cfg.dusdcType],
+      arguments: [tx.object(managerId), tx.pure.u64(balance)],
+    });
+    tx.moveCall({
+      target: `${cfg.tradingVaultPkg}::trading_vault::credit_available_for`,
+      typeArguments: [cfg.dusdcType],
+      arguments: [tx.object(cfg.tradingVault), tx.pure.address(owner), coin],
+    });
+    const credit = await signAndExecute(tx, 120_000_000);
+    creditDigest = credit.digest;
+  }
 
   await updateTicket(digest, {
-    status: 'credited',
+    status: 'settled',
     redeemDigest: redeem.digest,
+    creditDigest,
     payoutMicro: balance.toString(),
-    creditedAt,
-    cashedOutAt: creditedAt,
+    settledAt,
+    cashedOutAt: settledAt,
   });
 
   return {
     ok: true,
-    digest: redeem.digest,
-    credited: true,
+    digest: creditDigest ?? redeem.digest,
+    settledToTradingBalance: true,
     payoutDusdc: Number(balance) / 1e6,
-    creditedAt,
+    settledAt,
   };
 }
 

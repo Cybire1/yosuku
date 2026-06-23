@@ -33,7 +33,7 @@ export interface PrivateBetTicket {
   payoutDusdc?: number;
   withdrawDigest?: string;
   withdrawMode?: PrivateWithdrawMode;
-  status: 'open' | 'credited' | 'withdrawn' | 'cashed_out';
+  status: 'open' | 'settled' | 'credited' | 'withdrawn' | 'cashed_out';
   openedAt: number;
   creditedAt?: number;
   withdrewAt?: number;
@@ -193,9 +193,10 @@ export async function cashOutPrivateBet(ticket: PrivateBetTicket, status: Privat
     throw new Error(json.error ?? `Private cashout failed: ${res.status}`);
   }
 
+  // Winnings now settle STRAIGHT into the user's Trading Balance (no separate Private Balance).
   return {
     ...ticket,
-    status: 'credited',
+    status: 'settled',
     cashoutDigest: json.digest,
     redeemDigest: json.digest,
     payoutDusdc: typeof json.payoutDusdc === 'number' ? json.payoutDusdc : ticket.payoutDusdc,
