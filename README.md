@@ -127,7 +127,7 @@ Connect a Sui wallet, the faucet auto-surfaces test DUSDC, pick a live BTC marke
 ## Roadmap
 
 - **Now** (live on testnet): gasless consumer markets, the TikTok-style feed + post-a-take composer, a native iOS + Android app, predict-from-X (no-divert, proven on-chain), agent strategies, streak parlays, the leverage desk, the Trading Balance account, and the SDK + MCP.
-- **Next**: bind the live Nitro enclave as the signer for the agentic flows (the attestation is verified on-chain today; wiring the enclave key into predict-from-X is the remaining step), a hosted always-on X listener (it already runs on our infra), more assets.
+- **Next**: bind the live Nitro enclave as the signer for the agentic flows (the attestation is verified on-chain today; wiring the enclave key into predict-from-X is the remaining step), and more assets.
 - **Later**: mainnet the day DeepBook Predict does; `@yosuku/deepbook-predict` as the primitive other builders ship on.
 
 <details>
@@ -148,7 +148,7 @@ Connect a Sui wallet, the faucet auto-surfaces test DUSDC, pick a live BTC marke
 **Limitations (we would rather you know):**
 - **Testnet only.** DeepBook Predict is testnet today; mainnet IDs will change.
 - **BTC only.** More assets at mainnet.
-- **Predict-from-X is no-divert and proven on-chain; the X listener runs on our infra and has done real tweet→trades — it's just not a hosted 24/7 SLA yet.** The mechanism, the proof, and the live bot are real; a managed always-on deployment is the remaining step.
+- **Predict-from-X is no-divert and proven on-chain; the X listener now runs 24/7 as a managed systemd service on our box (auto-restart, survives reboot, token auto-refresh).** The mechanism, the proof, and the live bot are all real — it's a single box, not multi-region HA.
 - **The Nitro enclave is registered on-chain with genuine PCRs, but it is not yet the signer for the live agentic flows.** The attested-agent trade is proven; binding the enclave key into predict-from-X is remaining work.
 - **Private Balance is link-reduction, not full cryptographic privacy.** Full unlinkability needs the pool/proof/relayer (Vortex) layer.
 - **About 2 percent round-trip spread**, shown transparently, never hidden.
