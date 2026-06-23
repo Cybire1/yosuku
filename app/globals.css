@@ -620,7 +620,8 @@ body.urgent::before {
 }
 @media (max-width: 900px) {
   .markets-hero .hero-grid.hero-grid-mini { grid-template-columns: 1fr; gap: 16px; }
-  .markets-hero .hero-grid-mini .hero-chart { min-height: 340px; }
+  .markets-hero .hero-grid-mini .hero-chart { min-height: 400px; }
+  .markets-hero .hero-grid-mini .hero-chart-canvas { min-height: 230px !important; }
   /* mobile: hide the side panel; trade via the prominent Trade button → modal */
   .hero-mini-panel { display: none; }
   .hero-yesno {
@@ -3746,7 +3747,10 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
   .mc-side { padding: 8px 14px; }
   .mc-side .price { font-size: 12px; }
   .filter-row { flex-direction: column; align-items: stretch; gap: 12px; }
-  .filter-tabs { overflow-x: auto; }
+  .filter-bar { padding: 7px 0; }
+  .filter-tabs { overflow-x: auto; padding: 2px; }
+  .filter-tab { padding: 5px 13px; font-size: 11px; line-height: 1.1; }
+  .filter-tab .ct { font-size: 9px; }
   .search-box { width: 100%; }
   /* clear the floating bottom nav (bottom:16px + ~64px tall) */
   .bell { width: 76px; height: 76px; bottom: 100px; right: 16px; }
