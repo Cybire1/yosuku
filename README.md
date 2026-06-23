@@ -25,7 +25,7 @@ Predict directly from X, with leverage, private trading, and agent strategies. O
 
 <div align="center">
 
-**Tweet "@yosuku BTC up 3x" and an AI agent opens that exact position on-chain, from a vault only you can withdraw from.<br/>It trades your money. It cannot take it. Proven on-chain: user +0.953 DUSDC, agent ±0.000.**
+**Tweet "@yosuku BTC up 3x" and an AI agent opens that exact position on-chain, from a vault only you can withdraw from.<br/>It trades your money. It cannot take it. Proven on-chain: the agent routed the funds back to the user — 0.953 DUSDC to the user, 0 to the agent.**
 
 </div>
 
@@ -100,7 +100,7 @@ Composed, not bolted on.
 
 | Claim | Proof |
 |---|---|
-| **No-divert predict-from-X** — an executor fills your order but **cannot divert** the proceeds | proven: user **+0.953 DUSDC**, agent **±0.000** |
+| **No-divert predict-from-X** — an executor fills your order but **cannot divert** the proceeds | proven: funds returned to the user — **0.953 DUSDC** to the user, **0** to the agent ([tx `BmuJroQS…`](https://suiscan.xyz/testnet/tx/BmuJroQS4wgG9yvVBCDsq7xmdYVD6WyLsFPsBN8Em8rr)) |
 | **Attested agent trade** — Bellkeeper decision signed in the enclave, attestation verified on-chain, caps re-checked, position minted | [tx `9zN7Jac…`](https://suiscan.xyz/testnet/tx/9zN7JacN5AdzKLRHRh5vDDocx5CTns6HqFSrfWEavAbj) |
 | **Real Nitro attestation** — genuine PCRs pinned on-chain via Sui's native verifier | [tx `6gczxvyR…`](https://suiscan.xyz/testnet/tx/6gczxvyRXMUeub6GVU7xennCgXb2kahyjg3eRzqzjLzH) |
 | **Parlays (multi-leg AND-combo)** — stack N bells, all must win; full lifecycle | [open](https://suiscan.xyz/testnet/tx/22RYaGccku5NprXZLDmtGEA8k7cWPyNyueHwjN4QCxiD) → resolve → [claim](https://suiscan.xyz/testnet/tx/5AmZGc2bp2hBGycVeMEdaJt3d14NTBByrkc6LSZcwJC1), plus the [early-kill](https://suiscan.xyz/testnet/tx/CC2V5dDEYmYMQHb7Ueb3UeBJwEMsHAgYj5GrYZovsdNj) |
@@ -111,7 +111,7 @@ Composed, not bolted on.
 
 ## Traction
 
-On-chain (testnet), live and growing: **18+ distinct external wallets** have transacted via Onara-sponsored gas (**51+ sponsored on-chain actions**), with the running count computed from chain at **[yosuku.xyz/stats](https://yosuku.xyz/stats)**. Developer pull: about **1,870 npm installs** combined across the @yosuku Predict packages (`@yosuku/deepbook-predict` 198, `@yosuku/deepbook-predict-mcp` 172, `@yosuku/predict` 1,504).
+On-chain (testnet), early and verifiable: **~9 distinct non-team wallets** have touched our contracts, **6 actively trading/betting** (verified on-chain 2026-06-23), via Onara-sponsored gas (~42–51 sponsored on-chain actions), with the running count at **[yosuku.xyz/stats](https://yosuku.xyz/stats)**. Developer pull: about **1,870 npm installs** combined across the @yosuku Predict packages (`@yosuku/deepbook-predict` 198, `@yosuku/deepbook-predict-mcp` 172, `@yosuku/predict` 1,504).
 
 ## Quickstart
 
@@ -126,8 +126,8 @@ Connect a Sui wallet, the faucet auto-surfaces test DUSDC, pick a live BTC marke
 
 ## Roadmap
 
-- **Now** (live on testnet): gasless consumer markets, the TikTok-style feed + post-a-take composer, a native iOS + Android app, predict-from-X (no-divort, proven on-chain), agent strategies, streak parlays, the leverage desk, the Trading Balance account, and the SDK + MCP.
-- **Next**: bind the live Nitro enclave as the signer for the agentic flows (the attestation is verified on-chain today; wiring the enclave key into predict-from-X is the remaining step), an always-on public X listener, more assets.
+- **Now** (live on testnet): gasless consumer markets, the TikTok-style feed + post-a-take composer, a native iOS + Android app, predict-from-X (no-divert, proven on-chain), agent strategies, streak parlays, the leverage desk, the Trading Balance account, and the SDK + MCP.
+- **Next**: bind the live Nitro enclave as the signer for the agentic flows (the attestation is verified on-chain today; wiring the enclave key into predict-from-X is the remaining step), a hosted always-on X listener (it already runs on our infra), more assets.
 - **Later**: mainnet the day DeepBook Predict does; `@yosuku/deepbook-predict` as the primitive other builders ship on.
 
 <details>
@@ -148,7 +148,7 @@ Connect a Sui wallet, the faucet auto-surfaces test DUSDC, pick a live BTC marke
 **Limitations (we would rather you know):**
 - **Testnet only.** DeepBook Predict is testnet today; mainnet IDs will change.
 - **BTC only.** More assets at mainnet.
-- **Predict-from-X is no-divort and proven on-chain, but the always-on public X listener is not running yet.** The mechanism and the proof are real; the live "tweet at it and wait" bot is the remaining step.
+- **Predict-from-X is no-divert and proven on-chain; the X listener runs on our infra and has done real tweet→trades — it's just not a hosted 24/7 SLA yet.** The mechanism, the proof, and the live bot are real; a managed always-on deployment is the remaining step.
 - **The Nitro enclave is registered on-chain with genuine PCRs, but it is not yet the signer for the live agentic flows.** The attested-agent trade is proven; binding the enclave key into predict-from-X is remaining work.
 - **Private Balance is link-reduction, not full cryptographic privacy.** Full unlinkability needs the pool/proof/relayer (Vortex) layer.
 - **About 2 percent round-trip spread**, shown transparently, never hidden.
