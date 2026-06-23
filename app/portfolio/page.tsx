@@ -617,7 +617,7 @@ function LeveragePortfolioPanel({
                     ) : null}
                   </div>
                   <div className={`font-mono text-[10px] mt-1 ${expired ? 'text-rose-400' : stale ? 'text-amber-400' : 'text-gray-600'}`}>
-                    {expired ? 'round expired before fill - cancel to reclaim margin' : stale ? 'keeper delayed - margin is still escrowed' : 'queued for keeper fill'}
+                    {expired ? 'this round closed before your position opened — tap to refund' : stale ? 'taking a little longer than usual — your stake is safe' : 'opening your position…'}
                   </div>
                 </div>
                 {syncing ? (
@@ -630,14 +630,14 @@ function LeveragePortfolioPanel({
                     disabled={busy === order.id}
                     className="font-mono text-[10px] uppercase tracking-[0.14em] rounded-full border border-vermilion/30 px-3 py-1.5 text-vermilion hover:bg-vermilion/10 disabled:opacity-50"
                   >
-                    {busy === order.id ? 'Cancelling...' : 'Cancel escrow'}
+                    {busy === order.id ? 'Refunding...' : 'Cancel'}
                   </button>
                 )}
               </div>
             );
           })}
           <p className="font-mono text-[10px] text-gray-600 leading-relaxed">
-            Your DUSDC is inside an on-chain OpenOrder. If the keeper is delayed, canceling reclaims the escrowed margin.
+            Your stake is held safely on-chain while the position opens. Taking too long? Cancel anytime to get it straight back.
           </p>
         </div>
       )}
@@ -646,10 +646,10 @@ function LeveragePortfolioPanel({
         <div className="space-y-2.5">
           <div className="flex items-center justify-between">
             <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-gray-500">
-              Filled leverage positions
+              Your leverage positions
             </span>
             <span className="font-mono text-[10px] text-gray-600">
-              custodied by protocol manager
+              held on-chain
             </span>
           </div>
           {positions.map((position) => {
@@ -676,7 +676,7 @@ function LeveragePortfolioPanel({
                       rel="noreferrer"
                       className="font-mono text-[10px] uppercase tracking-[0.14em] rounded-full border border-white/10 px-3 py-1.5 text-gray-500 hover:text-white"
                     >
-                      View object
+                      View on-chain
                     </a>
                   </div>
                 </div>
@@ -699,7 +699,7 @@ function LeveragePortfolioPanel({
                     Advanced leverage details
                   </summary>
                   <p className="font-mono text-[10px] text-gray-600 mt-2 leading-relaxed">
-                    Reserve debt {position.fronted.toFixed(2)} DUSDC. Health uses live Predict redeem value against reserve debt plus maintenance buffer. Keeper liquidates when health reaches 100%.
+                    Borrowed {position.fronted.toFixed(2)} DUSDC. Health is your live cash-out value against what you borrowed plus a safety buffer; your position auto-closes if health reaches 100%.
                   </p>
                 </details>
               </div>
@@ -715,7 +715,7 @@ function HealthBadge({ health }: { health?: LeverageHealth }) {
   const label = !health || health.status === 'unknown'
     ? 'QUOTING'
     : health.status === 'liquidatable'
-      ? 'LIQUIDATE'
+      ? 'AT RISK'
       : health.status === 'watch'
         ? 'WATCH'
         : 'HEALTHY';

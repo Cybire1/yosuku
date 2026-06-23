@@ -62,7 +62,7 @@ export default function IncognitoToggle({ mode, onChange }: IncognitoToggleProps
             transition={{ duration: 0.18 }}
             className="overflow-hidden text-[11px] leading-relaxed text-gray-500"
           >
-            <span className="text-gray-300">On:</span> trade without revealing your wallet — entry and cash-out route through Vortex, a temporary on-device wallet that never links to your main one. <span className="text-gray-300">Off:</span> a normal public trade.
+            <span className="text-gray-300">On:</span> your bet stays separate from your main wallet, so it isn't tied to your public trading history. <span className="text-gray-300">Off:</span> a normal public trade.
           </motion.p>
         )}
       </AnimatePresence>

@@ -488,7 +488,7 @@ export default function TradePanel({
         setStep('success');
         onSuccess?.();
         toast(
-          `Private bet opened: ${ticket.side} ${oracle.underlying_asset || 'BTC'} at ${(ticket.strike / FLOAT_SCALING).toLocaleString()} via session route.`,
+          `Private bet placed — ${ticket.side} ${oracle.underlying_asset || 'BTC'} at ${(ticket.strike / FLOAT_SCALING).toLocaleString()}.`,
           'success',
         );
         setTimeout(() => {
@@ -611,7 +611,7 @@ export default function TradePanel({
       const strikeLabel = selectedStrike ? `$${(selectedStrike / FLOAT_SCALING).toLocaleString()}` : '';
       toast(
         leverage > 1
-          ? `${leverage}× order placed — Yosuku is opening your position. Track it on Earn.`
+          ? `Opening your ${leverage}× position — it'll be live in a few seconds.`
           : `Position opened: ${(amountMicro / DUSDC_MULTIPLIER).toFixed(2)} DUSDC on ${oracle.underlying_asset || 'BTC'} ${side} ${strikeLabel}`,
         'success',
       );
@@ -1410,9 +1410,9 @@ export default function TradePanel({
               </motion.div>
               {isLeveraged ? (
                 <>
-                  <p className="text-sm font-bold text-white">{leverage}× order placed</p>
+                  <p className="text-sm font-bold text-white">Opening your {leverage}× position</p>
                   <p className="text-xs text-gray-400 mt-1">
-                    Yosuku is opening your position — track it on{' '}
+                    This takes a few seconds — track it in{' '}
                     <a href="/earn" className="text-new-mint hover:underline">Earn</a>.
                   </p>
                 </>
