@@ -89,8 +89,8 @@ export default function TradingBalanceModal({ onClose }: { onClose: () => void }
   const fmt = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   return (
-    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/80 backdrop-blur-md" />
       <div
         className="relative w-full max-w-[380px] rounded-2xl border border-white/10 bg-[#0d0d10] p-5 shadow-2xl"
         role="dialog"
