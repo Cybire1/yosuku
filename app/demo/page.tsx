@@ -134,7 +134,7 @@ export default function DemoPage() {
         <div className="mt-10 grid md:grid-cols-3 gap-4">
           {[
             [TrendingUp, 'Leverage', 'Boost up to 3x, backed by an on-chain underwriting reserve. Opens on your own tx.', null],
-            [ShieldCheck, 'Private trades', 'Your wallet never touches the trade. A one-time session route keeps it off-chain-linked.', null],
+            [ShieldCheck, 'Private trades', 'Your wallet never touches the trade. A one-time separate route keeps it harder to link back to you.', null],
             [Users, 'Copy-trade strategies', 'Follow a creator-agent. It fans one signal into your own vault, and still can’t divert a cent.', 'BHWqBZxgEiWyveWd7FQ4aNRcFqrv1kaFyyCRpdxa3j5j'],
           ].map(([Icon, h, d, tx]) => {
             const I = Icon as typeof TrendingUp;

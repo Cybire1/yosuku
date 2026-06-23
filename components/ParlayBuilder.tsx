@@ -490,7 +490,7 @@ export default function ParlayBuilder() {
 
                 {/* no manager / no AccountSetup needed — parlay escrows directly */}
                 <p className="text-[10px] text-gray-600 text-center leading-relaxed">
-                  The reserve escrows the full payout up front. No account setup — your stake leaves your wallet, the rest is fronted by the reserve.
+                  The full payout is set aside up front. No account setup — your stake leaves your wallet, and the rest is covered for you.
                 </p>
 
                 <AnimatePresence>

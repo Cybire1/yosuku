@@ -581,10 +581,10 @@ function LeveragePortfolioPanel({
         <div className="space-y-2.5">
           <div className="flex items-center justify-between">
             <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-vermilion">
-              Margin escrowed
+              Margin set aside
             </span>
             <span className="font-mono text-[10px] text-gray-600">
-              waiting for keeper fill
+              opening…
             </span>
           </div>
           {orders.map((order) => {
@@ -604,7 +604,7 @@ function LeveragePortfolioPanel({
                     {order.isRange && order.higherStrike ? ` - ${formatStrikeValue(order.higherStrike)}` : ''}
                     {syncing && order.txDigest ? (
                       <>
-                        {' '}· syncing from tx{' '}
+                        {' '}· confirming{' '}
                         <a
                           href={`https://suiscan.xyz/testnet/tx/${order.txDigest}`}
                           target="_blank"
@@ -622,7 +622,7 @@ function LeveragePortfolioPanel({
                 </div>
                 {syncing ? (
                   <span className="font-mono text-[10px] text-gray-500 rounded-full border border-white/10 px-3 py-1.5">
-                    syncing order id
+                    confirming
                   </span>
                 ) : (
                   <button
@@ -637,7 +637,7 @@ function LeveragePortfolioPanel({
             );
           })}
           <p className="font-mono text-[10px] text-gray-600 leading-relaxed">
-            Your stake is held safely on-chain while the position opens. Taking too long? Cancel anytime to get it straight back.
+            Your stake is held safely while the position opens. Taking too long? Cancel anytime to get it straight back.
           </p>
         </div>
       )}
@@ -649,7 +649,7 @@ function LeveragePortfolioPanel({
               Your leverage positions
             </span>
             <span className="font-mono text-[10px] text-gray-600">
-              held on-chain
+              open
             </span>
           </div>
           {positions.map((position) => {
@@ -662,7 +662,7 @@ function LeveragePortfolioPanel({
                     <div className="font-mono text-sm text-white">
                       <span className="text-vermilion font-bold">{position.leverage.toFixed(0)}x</span>
                       {' '}{position.isRange ? 'RANGE' : position.isUp ? 'UP' : 'DOWN'}
-                      <span className="text-gray-500"> · {position.notional.toFixed(2)} DUSDC exposure</span>
+                      <span className="text-gray-500"> · {position.notional.toFixed(2)} DUSDC position size</span>
                     </div>
                     <div className="font-mono text-[10px] text-gray-600 mt-1">
                       {position.margin.toFixed(2)} DUSDC margin · {formatStrikeValue(position.lowerStrike)}
@@ -676,7 +676,7 @@ function LeveragePortfolioPanel({
                       rel="noreferrer"
                       className="font-mono text-[10px] uppercase tracking-[0.14em] rounded-full border border-white/10 px-3 py-1.5 text-gray-500 hover:text-white"
                     >
-                      View on-chain
+                      View details
                     </a>
                   </div>
                 </div>
@@ -696,10 +696,10 @@ function LeveragePortfolioPanel({
                 </div>
                 <details className="mt-3 rounded-lg border border-white/[0.06] bg-black/20 px-3 py-2">
                   <summary className="cursor-pointer list-none font-mono text-[10px] uppercase tracking-[0.14em] text-gray-600">
-                    Advanced leverage details
+                    How this works
                   </summary>
                   <p className="font-mono text-[10px] text-gray-600 mt-2 leading-relaxed">
-                    Borrowed {position.fronted.toFixed(2)} DUSDC. Health is your live cash-out value against what you borrowed plus a safety buffer; your position auto-closes if health reaches 100%.
+                    Leverage adds {position.fronted.toFixed(2)} DUSDC on top of your stake. Health compares your live cash-out value to that extra amount plus a safety buffer; your position auto-closes if health reaches 100% so you can't lose more than your stake.
                   </p>
                 </details>
               </div>
