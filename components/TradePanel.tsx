@@ -162,7 +162,7 @@ export default function TradePanel({
           setPrivateStatus({
             ready: false,
             label: 'BETA',
-            reasons: ['Private route status is unavailable.'],
+            reasons: ['Private mode status is unavailable.'],
             vortexPool: '',
           });
         }
@@ -419,14 +419,14 @@ export default function TradePanel({
       : leverage > 1
         ? 'Private mode is not available for leveraged trades yet.'
         : privateStatus.maxStakeDusdc && amountMicro > privateStatus.maxStakeDusdc * DUSDC_MULTIPLIER
-          ? `Beta limit: ${privateStatus.maxStakeDusdc.toFixed(2)} DUSDC max per private ticket.`
+          ? `For now, private bets are capped at ${privateStatus.maxStakeDusdc.toFixed(2)} DUSDC each.`
         : !privateStatus.ready
-          ? privateStatus.reasons[0] ?? 'Private route is not ready.'
+          ? privateStatus.reasons[0] ?? 'Private mode is not ready yet.'
           : '';
   const privateRouteReady = privacyMode === 'public' || privateRouteIssue === '';
   const privateRouteButtonLabel = privateRouteIssue.startsWith('Beta limit')
     ? privateRouteIssue.replace(' max per private ticket.', '')
-    : 'Private route not ready';
+    : 'Private mode not ready';
   // Estimated cost of the sized position (per-unit price read on-chain × our quantity).
   const estTradeCost = pricePerUnit > 0
     ? (positionQty * pricePerUnit) / DUSDC_MULTIPLIER
@@ -443,7 +443,7 @@ export default function TradePanel({
     }
     if (askOutOfBounds) {
       setShowConfirmModal(false);
-      setErrorMsg('This price is outside DeepBook Predict mint bounds — pick a less certain line or the other side.');
+      setErrorMsg('This price is too certain to bet on — pick a less certain line or the other side.');
       setStep('error');
       return;
     }
@@ -676,7 +676,7 @@ export default function TradePanel({
       setStep('success');
       toast(
         mode === 'private'
-          ? 'Private Balance withdrawn through the separated beta route.'
+          ? 'Private Balance withdrawn, kept separate from your main wallet.'
           : 'Private Balance withdrawn to your connected wallet.',
         'success',
       );
@@ -1163,8 +1163,8 @@ export default function TradePanel({
                 )}
                 <p className="text-[11px] leading-snug text-gray-400">
                   {privateStatus.mode === 'unconfigured'
-                    ? 'The private route is offline right now — try again shortly.'
-                    : 'Your wallet stays off this trade. Winnings land in your Private Balance, and you choose when to withdraw.'}
+                    ? 'Private mode is unavailable right now — try again shortly.'
+                    : 'Your main wallet stays off this trade. Winnings land in your Private Balance, and you choose when to withdraw.'}
                 </p>
               </div>
               {privateRouteIssue && (
@@ -1223,12 +1223,12 @@ export default function TradePanel({
               <div className="flex justify-between"><span className="text-gray-500">Auto-cashout watch</span><span className="font-mono text-gray-300">{(liquidationWatchMicro / DUSDC_MULTIPLIER).toFixed(2)} live value</span></div>
               <details className="group rounded-lg border border-white/5 bg-black/20 px-3 py-2">
                 <summary className="cursor-pointer list-none font-mono text-[10px] uppercase tracking-[0.16em] text-gray-500 group-open:text-gray-300">
-                  Reserve details
+                  How the boost works
                 </summary>
                 <div className="mt-2 space-y-1.5 border-t border-white/5 pt-2">
-                  <div className="flex justify-between"><span className="text-gray-500">Reserve fronts</span><span className="font-mono text-white">{(frontedMicro / DUSDC_MULTIPLIER).toFixed(2)} DUSDC</span></div>
-                  <div className="flex justify-between"><span className="text-gray-500 inline-flex items-center gap-1">Premium <Tooltip text="One-time fee paid to the reserve for fronting the boost." position="bottom" /></span><span className="font-mono text-white">{(premiumMicro / DUSDC_MULTIPLIER).toFixed(2)} DUSDC</span></div>
-                  <div className="flex justify-between"><span className="text-gray-500">Net deployed</span><span className="font-mono text-white">{(notionalMicro / DUSDC_MULTIPLIER).toFixed(2)} DUSDC</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500">Borrowed for the boost</span><span className="font-mono text-white">{(frontedMicro / DUSDC_MULTIPLIER).toFixed(2)} DUSDC</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500 inline-flex items-center gap-1">Boost fee <Tooltip text="A one-time fee for borrowing the extra funds that size up your bet." position="bottom" /></span><span className="font-mono text-white">{(premiumMicro / DUSDC_MULTIPLIER).toFixed(2)} DUSDC</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500">Working in the market</span><span className="font-mono text-white">{(notionalMicro / DUSDC_MULTIPLIER).toFixed(2)} DUSDC</span></div>
                 </div>
               </details>
             </div>
@@ -1278,7 +1278,7 @@ export default function TradePanel({
           </div>
           {leveragedRightSideLosesMoney && (
             <div className="rounded-lg border border-rose-500/15 bg-rose-500/[0.06] px-3 py-2 text-[11px] leading-relaxed text-rose-200/80">
-              Leverage is disabled here because a correct trade would collect less than your margin after reserve repayment.
+              Boost is off here because even a winning bet would collect less than you put in after the borrowing cost.
             </div>
           )}
 
@@ -1289,7 +1289,7 @@ export default function TradePanel({
           type="button"
           onClick={() => {
             if (roundClosing) { setErrorMsg('This round just closed — pick the next bell.'); return; }
-            if (askOutOfBounds) { setErrorMsg('This price is outside DeepBook Predict mint bounds — pick a less certain line or the other side.'); setStep('error'); return; }
+            if (askOutOfBounds) { setErrorMsg('This price is too certain to bet on — pick a less certain line or the other side.'); setStep('error'); return; }
             if (leveragedRightSideLosesMoney) { setErrorMsg('Leverage is not safe on this price — even a win would collect less than your margin. Use 1x or pick a less certain line.'); setStep('error'); return; }
             setShowConfirmModal(true);
           }}
@@ -1333,7 +1333,7 @@ export default function TradePanel({
           ) : roundClosing ? (
             'This round just closed — pick the next bell'
           ) : askOutOfBounds ? (
-            'Price outside mint range'
+            'Price too certain to bet'
           ) : leveragedRightSideLosesMoney ? (
             'Use 1x — leverage loses even if right'
           ) : stopHit ? (
@@ -1572,7 +1572,7 @@ function PrivateTicketLedger({
           <div>
             <p className="text-lg font-mono font-bold text-white">{balanceDusdc.toFixed(2)} DUSDC</p>
             <p className="text-[11px] leading-relaxed text-gray-500 mt-1">
-              Private cashouts land here first, so the public Predict position does not instantly point back to your wallet.
+              Winnings land here first, kept separate from your main wallet so this bet is harder to link back to you.
             </p>
           </div>
           <ShieldCheck className="w-4 h-4 text-new-mint shrink-0 mt-1" />
@@ -1598,7 +1598,7 @@ function PrivateTicketLedger({
           </button>
         </div>
         <p className="text-[10px] leading-relaxed text-gray-600">
-          Fast withdraw pays your connected wallet now. Private withdraw uses the separated beta route; full zk unlinking needs the Vortex pool upgrade.
+          Fast withdraw pays your connected wallet now. Private withdraw keeps the payout separate from your main wallet for an extra layer; stronger privacy is coming.
         </p>
       </div>
       <div className="flex items-center justify-between pt-1">
@@ -1624,16 +1624,16 @@ function PrivateTicketLedger({
             <div className="grid grid-cols-2 gap-2 font-mono text-[10px] text-gray-500">
               <span>{(ticket.stakeMicro / DUSDC_MULTIPLIER).toFixed(2)} DUSDC</span>
               <span className="text-right">
-                {credited || withdrawn ? `${(ticket.payoutDusdc ?? 0).toFixed(2)} credited` : `${(ticket.quantity / DUSDC_MULTIPLIER).toFixed(2)} payout units`}
+                {credited || withdrawn ? `${(ticket.payoutDusdc ?? 0).toFixed(2)} credited` : `wins ${(ticket.quantity / DUSDC_MULTIPLIER).toFixed(2)} DUSDC`}
               </span>
-              <span className="truncate">session {ticket.sessionAddress ? `${ticket.sessionAddress.slice(0, 6)}...${ticket.sessionAddress.slice(-4)}` : 'pending'}</span>
+              <span className="truncate">Private bet · {ticket.sessionAddress ? 'ready' : 'pending'}</span>
               <a
                 href={`https://suiscan.xyz/testnet/tx/${ticket.digest}`}
                 target="_blank"
                 rel="noreferrer"
                 className="text-right text-gray-400 hover:text-white"
               >
-                tx {ticket.digest.slice(0, 6)}...{ticket.digest.slice(-4)}
+                View receipt ↗
               </a>
             </div>
             <button

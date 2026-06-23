@@ -37,7 +37,7 @@ const steps: TutorialStep[] = [
   {
     title: 'Your Trading Balance',
     jp: '取引残高',
-    description: 'Think of it as your Yosuku account, not a second wallet. You can place a normal trade without moving funds first, but funds kept in Trading make repeat bets, leverage, private routes, and agent strategies feel instant. Winnings and cashouts land there first, and idle funds can be withdrawn anytime.',
+    description: 'Think of it as your Yosuku account, not a second wallet. You can place a normal trade without moving funds first, but funds kept in Trading make repeat bets, leverage, private bets, and agent strategies feel instant. Winnings and cashouts land there first, and idle funds can be withdrawn anytime.',
   },
   {
     title: 'Pick your view',

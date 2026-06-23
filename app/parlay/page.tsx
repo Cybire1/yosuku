@@ -82,7 +82,7 @@ export default function ParlayPage() {
               {
                 n: '③',
                 t: 'Pre-funded payout',
-                d: 'The reserve escrows your full winning payout up front, so it can never come up short. Win the streak and claim it the instant the last bell settles.',
+                d: 'The full winning payout is set aside up front, so it can never come up short. Win the streak and claim it the instant the last bell settles.',
               },
             ].map((c) => (
               <div key={c.n} className="rounded-2xl border border-white/[0.08] bg-neutral-900/40 p-5">

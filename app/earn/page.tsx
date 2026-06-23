@@ -348,7 +348,7 @@ export default function EarnPage() {
                         {busy === 'res-supply' ? 'Supplying…' : 'Supply to reserve'}
                       </button>
                       <p className="font-mono text-[11px] text-gray-600 mt-3.5 leading-relaxed">
-                        Earns the {reserveStats ? pct(reserveStats.premiumBps) : '—'} premium on every leveraged trade · your value grows with premiums, dips when a fronted trade loses.
+                        Earns the {reserveStats ? pct(reserveStats.premiumBps) : '—'} fee on every leveraged trade · your value grows with fees, and dips when a boosted trade loses.
                       </p>
                     </>
                   )}
@@ -400,12 +400,12 @@ export default function EarnPage() {
                                 : 'text-gray-600'
                           }`}>
                             {o.source === 'local'
-                              ? 'syncing request'
+                              ? 'getting started'
                               : o.expiry && Number(o.expiry) < Date.now()
-                                ? 'round expired before open - cancel to return margin'
+                                ? 'round ended before this opened - cancel to get your margin back'
                                 : o.createdAt && Date.now() - o.createdAt > 90_000
                                   ? 'taking longer than usual - you can cancel'
-                                  : 'opening now'}
+                                  : 'opening your position'}
                           </p>
                         </div>
                         <button onClick={() => doCancel(o.id)} disabled={busy === 'x:' + o.id || o.source === 'local'} className="font-mono text-xs text-gray-500 hover:text-white transition-colors disabled:opacity-50 shrink-0">
@@ -414,7 +414,7 @@ export default function EarnPage() {
                       </div>
                     ))}
                   </div>
-                  <p className="font-mono text-[10px] text-gray-600 mt-3">Your margin is held while Yosuku opens the boost. If it takes too long or the round expires, Cancel returns it.</p>
+                  <p className="font-mono text-[10px] text-gray-600 mt-3">Your margin is held while your boosted position opens. If it takes too long or the round expires, Cancel returns it.</p>
                 </div>
               )}
 
@@ -432,7 +432,7 @@ export default function EarnPage() {
                             <span className="font-display text-2xl font-extrabold text-vermilion w-12">{p.leverage.toFixed(0)}×</span>
                             <div>
                               <div className="font-mono text-sm text-white">{fmt(p.notional)} DUSDC <span className="text-gray-500">· {p.isRange ? 'range' : p.isUp ? 'UP' : 'DOWN'}</span></div>
-                              <div className="font-mono text-[11px] text-gray-600 mt-0.5">{fmt(p.margin)} margin · {fmt(p.fronted)} fronted · {fmt(p.premium)} premium</div>
+                              <div className="font-mono text-[11px] text-gray-600 mt-0.5">{fmt(p.margin)} margin · {fmt(p.fronted)} backed · {fmt(p.premium)} premium</div>
                             </div>
                           </div>
                           <div className="flex items-center gap-5">
@@ -454,7 +454,7 @@ export default function EarnPage() {
                                   onClick={() => doSettle(p)}
                                   disabled={busy === 's:' + p.id}
                                   className="font-mono text-[11px] px-4 py-2 rounded-full border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 hover:border-emerald-400/60 transition-colors disabled:opacity-50 inline-flex items-center gap-1.5"
-                                  title="Redeem your win and repay the reserve"
+                                  title="Cash out your win"
                                 >
                                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                                   {busy === 's:' + p.id ? 'Settling…' : 'Cash out win'}
@@ -469,7 +469,7 @@ export default function EarnPage() {
                     })}
                   </div>
                   <p className="font-mono text-[10px] text-gray-600 mt-4 leading-relaxed max-w-2xl">
-                    When a boosted position wins, the reserve is repaid first and the remaining profit goes to your wallet. A loss costs only your margin. You can settle a win yourself anytime — it doesn&apos;t depend on the keeper.
+                    When a boosted position wins, the borrowed amount is paid back first and the remaining profit goes to your wallet. A loss costs only your margin. You can cash out a win yourself anytime — you don&apos;t have to wait for it to happen automatically.
                   </p>
                 </>
               )}
