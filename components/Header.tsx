@@ -13,6 +13,7 @@ import {
   ChevronDown,
   Coins,
   MoreHorizontal,
+  Sparkles,
   Trophy,
   WalletCards,
   Zap,
@@ -44,6 +45,7 @@ const SECONDARY_NAV: NavLink[] = [
   { name: 'Parlay', href: '/parlay', icon: ChartNoAxesCombined },
   { name: 'Surface', href: '/surface', icon: Activity },
   { name: 'Agents', href: '/agents', icon: Bot },
+  { name: 'Waitlist', href: '/waitlist', icon: Sparkles },
   { name: 'Docs', href: '/docs', icon: BookOpen },
 ];
 
