@@ -20,7 +20,6 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import AddFunds from './AddFunds';
-import FirstRunGuide from './FirstRunGuide';
 import CreditWelcome from './CreditWelcome';
 import TradingBalanceModal from './TradingBalanceModal';
 import { useToast } from './Toast';
@@ -387,7 +386,6 @@ export default function Header() {
 
       <CreditWelcome />
 
-      <FirstRunGuide />
       <AddFunds open={showFunds} onClose={() => setShowFunds(false)} onFunded={() => { refreshDusdc(); refreshTrading(); }} />
       {showBalance && <TradingBalanceModal onClose={() => { setShowBalance(false); refreshDusdc(); refreshTrading(); }} />}
     </>

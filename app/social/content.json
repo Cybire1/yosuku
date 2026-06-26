@@ -1,0 +1,271 @@
+{
+  "generatedAt": "2026-06-26T08:40:22.118Z",
+  "sections": [
+    {
+      "title": "How Sui makes tweet-to-bet safe",
+      "badge": "SUI TECH",
+      "units": [
+        {
+          "kind": "tweet",
+          "n": "1",
+          "total": "8",
+          "text": "Tweet your bet — \"BTC up, $5\" — and an AI places it for you on DeepBook Predict. No app, no seed phrase, and we fund your first $2. The wild part: we built it so the AI can never take a cent. How the Sui stack makes it safe 🧵",
+          "img": "sui-tech/01-hook.png"
+        },
+        {
+          "kind": "tweet",
+          "n": "2",
+          "total": "8",
+          "text": "Seal + Walrus. Your withdraw key is encrypted with Seal (threshold) and stored on Walrus; we discard the plaintext, so we hold no usable key. Unsealing requires the wallet the on-chain registry binds to your handle — and every binding is a public on-chain tx.",
+          "img": "sui-tech/02-seal-walrus.png"
+        },
+        {
+          "kind": "tweet",
+          "n": "3",
+          "total": "8",
+          "text": "And the agent can't divert a cent. In Move, social_vault::agent_trade debits only YOUR balance into a position whose owner is hard-wired to you; every exit force-pays you. withdraw is owner-gated; the agent has no withdraw. The worst it can do is open your own position.",
+          "img": null
+        },
+        {
+          "kind": "tweet",
+          "n": "4",
+          "total": "8",
+          "text": "Proven, not promised. In a real trade-from-X round-trip the agent moved ±0.000 — it took nothing; every coin routed back to you. Read the Move + the on-chain close yourself — link in reply.",
+          "img": "sui-tech/04-proof.png"
+        },
+        {
+          "kind": "tweet",
+          "n": "5",
+          "total": "8",
+          "text": "This is where Nautilus comes in — Mysten's verifiable off-chain compute for Sui. The agent runs in an AWS Nitro TEE, attested on-chain by Sui's native nitro_attestation (real PCRs pinned). We're making that enclave the sole authority over your claim, so no human can rebind it.",
+          "img": "sui-tech/05-nautilus.png"
+        },
+        {
+          "kind": "tweet",
+          "n": "6",
+          "total": "8",
+          "text": "You never need SUI. The relay executes the trade and pays gas itself, debiting only your in-vault balance — so a tweet is enough to bet. (Onboarding + the waitlist use Sui's sponsored transactions for gasless signups.)",
+          "img": "sui-tech/06-sponsored.png"
+        },
+        {
+          "kind": "tweet",
+          "n": "7",
+          "total": "8",
+          "text": "Atomicity where it counts. The fill is one Programmable Transaction Block — fill → deposit → mint, together or not at all. If it fails, your margin sits in a user-owned cancelable order. No divert path, no agent withdrawal.",
+          "img": null
+        },
+        {
+          "kind": "tweet",
+          "n": "8",
+          "total": "8",
+          "text": "We don't reinvent the market. DeepBook Predict settles it: oracle-settled, not committee-voted. Honest boundary: testnet today, mainnet next. It trades your money. It cannot take it. Built on @SuiNetwork",
+          "img": "sui-tech/08-close.png"
+        },
+        {
+          "kind": "reply",
+          "text": "Read it yourself — the no-divert close: suiscan.xyz/testnet/tx/BmuJroQS4wgG9yvVBCDsq7xmdYVD6WyLsFPsBN8Em8rr · agent ±0.000; 0.953 DUSDC back to the user (custody, not profit). Move: agent_trade (owner hard-wired) + withdraw (owner-gated). Attestation: tx 6gczxvyR · risk: OWASP LLM01."
+        }
+      ]
+    },
+    {
+      "title": "Product launch — thread",
+      "badge": "FULL PRODUCT",
+      "units": [
+        {
+          "kind": "tweet",
+          "n": "1",
+          "total": "10",
+          "text": "We let an AI agent open a real prediction-market position from a tweet, then proved on-chain it could not take a cent. Every coin routed back: 0.953 DUSDC to the user, 0 to the agent. That 0.953 is return of custody, not profit. The point is the zero next to the agent.",
+          "img": "01-hook.png"
+        },
+        {
+          "kind": "tweet",
+          "n": "2",
+          "total": "10",
+          "text": "DeepBook Predict is a clean primitive. Oracle-settled binary markets, no order book, no committee vote deciding the outcome. That settlement integrity is Mysten's. But out of the box there is no app, no SDK, and no safe way for an agent to trade it. A primitive is not a product.",
+          "img": "02-primitive.png"
+        },
+        {
+          "kind": "tweet",
+          "n": "3",
+          "total": "10",
+          "text": "Open the app and land in a live feed, one full-screen BTC market, price drawing itself in, clock to the bell. Swipe up. Tap UP or DOWN. Gasless, no seed phrase, oracle-settled. A zero-SUI wallet has signed on-chain with the sponsor paying gas. This is door one: people.",
+          "img": "03-custody-bug.png"
+        },
+        {
+          "kind": "tweet",
+          "n": "4",
+          "total": "10",
+          "text": "It runs on web and as a native mobile app. Built in Expo, installable today as an Android APK and an iOS TestFlight build, per-device non-custodial keys, full feature parity with web. The whole product fits in your pocket.",
+          "img": "04-source.png"
+        },
+        {
+          "kind": "tweet",
+          "n": "5",
+          "total": "10",
+          "text": "One Trading Balance underneath it all. Deposit DUSDC once, route into private, leverage, or agentic trades, withdraw owner-only. Normal 1x bets stay on standard Predict. Parlays stack 2 to 3 bells into one ticket: every leg must land. 59/59 Move tests on that path.",
+          "img": "05-took-zero.png"
+        },
+        {
+          "kind": "tweet",
+          "n": "6",
+          "total": "10",
+          "text": "For developers: @mysten/deepbook-v3 ships zero Predict support, so we wrote the first TypeScript SDK and the first MCP server for it. Inside the SDK, an SVI to N(d2) engine matches the on-chain quote to about 0.03 cents. A runnable test you can check yourself.",
+          "img": "06-attestation.png"
+        },
+        {
+          "kind": "tweet",
+          "n": "7",
+          "total": "10",
+          "text": "For agents: the drain class is known. A prompt-injected agent can be talked into moving your funds. We made that structurally impossible. In social_vault.move line 180, agent_trade hard-wires the position owner to you. withdraw is owner-gated. The agent has no withdraw.",
+          "img": "07-thesis.png"
+        },
+        {
+          "kind": "tweet",
+          "n": "8",
+          "total": "10",
+          "text": "So predict-from-X is safe by construction. You tweet, a bounded executor opens the position from your own vault, the oracle settles, proceeds are force-paid to you. A prompt-injected executor can only open your position in your name. It trades your money. It cannot take it.",
+          "img": null
+        },
+        {
+          "kind": "tweet",
+          "n": "9",
+          "total": "10",
+          "text": "Honest scope. Everything is on testnet because DeepBook Predict is testnet-only. Predict-from-X is proven on-chain and runs on our infra, not a 24/7 SLA. The Nitro enclave is attested but not yet the live signer. Private is link-reduction. Oracle-settled, not trustless.",
+          "img": null
+        },
+        {
+          "kind": "tweet",
+          "n": "10",
+          "total": "10",
+          "text": "Yosuku does not reinvent prediction markets. DeepBook Predict settles them honestly. We make it usable by people, buildable by developers, tradeable by agents, custody users cannot lose. If you build trading agents: what is the line of Move that stops yours from self-dealing?",
+          "img": null
+        },
+        {
+          "kind": "reply",
+          "text": "The full launch essay, with every claim linked to Suiscan and the Move source: [ESSAY_URL]\n\nWatch the no-divert round-trip and the live feed in under a minute: [DEMO_URL]"
+        }
+      ]
+    },
+    {
+      "title": "Anchor — it trades your money, it cannot take it",
+      "badge": "ANCHOR",
+      "units": [
+        {
+          "kind": "tweet",
+          "n": "1",
+          "total": "7",
+          "text": "We let an AI agent open a real prediction-market position from a tweet, then proved on-chain it could not divert a cent. At close, 0.953 DUSDC routed back to the user and the agent moved ±0.000. The line of Move that makes theft impossible is two functions you can read yourself.",
+          "img": "01-hook.png"
+        },
+        {
+          "kind": "tweet",
+          "n": "2",
+          "total": "7",
+          "text": "A primitive is not a product. DeepBook Predict is a good market: oracle-settled, no order book, the oracle decides the outcome, not a committee. But out of the box there is no app, no SDK, and no safe way for an agent to trade it. Almost nobody can use it.",
+          "img": "02-primitive.png"
+        },
+        {
+          "kind": "tweet",
+          "n": "3",
+          "total": "7",
+          "text": "The obvious fix is an agent in front of it. The problem is custody. When an agent holds a key that can trade and withdraw, a prompt injection becomes a theft. Grok and Bankr were both steered by crafted inputs. The agent obeyed. The design was wrong.",
+          "img": "03-custody-bug.png"
+        },
+        {
+          "kind": "tweet",
+          "n": "4",
+          "total": "7",
+          "text": "We do not ask you to trust the agent. We remove its ability to steal. In social_vault::agent_trade the owner is hard-wired to the user, the executor cannot name a beneficiary, and withdraw asserts the caller is the owner. The agent has no withdraw capability.",
+          "img": "04-source.png"
+        },
+        {
+          "kind": "tweet",
+          "n": "5",
+          "total": "7",
+          "text": "So the worst a fully prompt-injected executor can do is move your money into your own position. It cannot send it elsewhere. There was no point it could grab a beneficiary slot, because the Move never offered one. Across six signed txs the agent took 0.",
+          "img": "05-took-zero.png"
+        },
+        {
+          "kind": "tweet",
+          "n": "6",
+          "total": "7",
+          "text": "The second agent, the Bellkeeper, signs in a Nitro enclave. Sui's native nitro_attestation verified the AWS chain and pinned real PCRs on-chain, PCR0 0c0cfdcc. Honest boundary: the doc is verified, the live enclave is not yet the consumer signer. The proof stack works.",
+          "img": "06-attestation.png"
+        },
+        {
+          "kind": "tweet",
+          "n": "7",
+          "total": "7",
+          "text": "Yosuku does not reinvent the market. DeepBook Predict settles it honestly. We make it usable by people and tradeable by their agents, with custody you cannot lose. With an owner-gated exit and the beneficiary hard-wired, what attack surface is left other than the cap itself?",
+          "img": "07-thesis.png"
+        },
+        {
+          "kind": "reply",
+          "text": "The full essay, with every claim linked to Suiscan and the Move source you can read yourself: [ESSAY_URL]\n\nThe close that force-paid the user, on-chain: suiscan.xyz/testnet/tx/BmuJroQS4wgG9yvVBCDsq7xmdYVD6WyLsFPsBN8Em8rr\n\nAnd the under-60-second screen recording of the no-divert round-trip, open to close, Suiscan tab visible, 0.953 routed back to the user and the agent at ±0.000: [DEMO_URL]"
+        }
+      ]
+    },
+    {
+      "title": "Drafts — 2026-06-23",
+      "badge": "DRIP",
+      "units": [
+        {
+          "kind": "post",
+          "label": "Attach",
+          "text": "Most people never place a prediction-market trade. The wallet, the gas, the seed phrase stop them. Yosuku removes all three. Sign in with Google, the faucet finds you, pick a side. Gas is sponsored. The oracle settles at the bell. yosuku.xyz"
+        },
+        {
+          "kind": "post",
+          "label": "Attach",
+          "text": "1,877 npm installs in the last 30 days across the @yosuku Predict packages. The first TypeScript SDK for DeepBook Predict — quote, trade, and build on it in a few lines. npmjs.com/package/@yosuku/deepbook-predict"
+        },
+        {
+          "kind": "post",
+          "label": "Attach",
+          "text": "An agent can trade your money and physically cannot take it. Hard-wired in Move: the position owner is you, withdraw is owner-gated. A fully prompt-injected executor can only move your funds into your own position. Proven on-chain: user +0.953 DUSDC, agent ±0.000."
+        },
+        {
+          "kind": "post",
+          "label": "Attach",
+          "text": "Prediction markets resolve two ways. A committee votes, or an oracle reports. Committees can be slow, wrong, or captured. Yosuku is built on DeepBook Predict — the oracle reports the price at the bell, settlement is automatic. The block decides."
+        }
+      ]
+    },
+    {
+      "title": "Drafts — 2026-06-24",
+      "badge": "DRIP",
+      "units": [
+        {
+          "kind": "post",
+          "label": "Attach",
+          "text": "An AI agent opened a real prediction-market position from a tweet, and the on-chain round-trip proved it: at close, 0.953 DUSDC routed back to the user and the agent moved ±0.000. It moved your money and kept none of it. Read the two functions that make theft impossible."
+        },
+        {
+          "kind": "post",
+          "label": "Reply #1 (link text)",
+          "text": "The close that force-paid the user, on-chain: suiscan.xyz/testnet/tx/BmuJroQS4wgG9yvVBCDsq7xmdYVD6WyLsFPsBN8Em8rr — and the two functions you can read yourself in social_vault.move: agent_trade hard-wires the position owner to you, withdraw is owner-gated and the agent has no withdraw capability."
+        }
+      ]
+    }
+  ],
+  "essays": [
+    {
+      "title": "Product launch — essay",
+      "markdown": "# Launching Yosuku\n\nPrediction markets just had their breakout. Polymarket and Kalshi proved that millions of people want to stake real money on real questions — that part is settled, and they earned it. What's still wide open is the *architecture* underneath: how an outcome gets decided, who holds your funds while you wait, and what a position can actually do once you own it.\n\nYosuku is our take, built on a newer foundation. It's a prediction-market app you use in two taps — gasless, no seed phrase, self-custody — running on [DeepBook Predict](https://docs.sui.io/onchain-finance/deepbook-predict), Mysten's on-chain market. Your outcome isn't proposed and voted on; a [Block Scholes](https://blog.sui.io/introducing-deepbook-predict/) options oracle settles it the instant the first post-expiry price posts, on a chain that finalizes in under 400ms.\n\n## A newer foundation\n\nThe incumbents built this category and built it well. Yosuku just makes different design choices, and they show up in three places: **how an outcome resolves, where your funds sit, and what a position can do next.**\n\n**How it resolves.** Optimistic-oracle designs — like the UMA system behind Polymarket — are robust: a proposal, a challenge window, and a token-holder vote as the backstop. The tradeoff is time; a contested market can take days to finalize. DeepBook Predict takes a different route — its oracle, built with **Block Scholes** (institutional options pricing, now fully on-chain), freezes the outcome the moment the feed posts the first price after expiry. No proposal, no challenge window, no vote. (Honest version: on testnet today that oracle is trusted, not yet trustless.)\n\n**Where your funds sit.** A regulated exchange custodies your collateral and clears your trade — that's part of what the regulation buys you. Yosuku takes the on-chain route instead: your funds stay in your own vault, and even the trading agents are wired so they can open your position but can *never* withdraw it (more on that below).\n\n**What a position can do.** This is the part we're most excited about. A Predict position *composes* — it plugs into DeepBook's Margin and Spot in the same transaction, which is exactly how Yosuku stacks leverage, parlays, and agent strategies on top of a plain UP/DOWN bet. The bet isn't an endpoint; it's a building block. And because there's no order book to bootstrap — a shared liquidity vault is the counterparty — markets quote from minute one.\n\nWe didn't reinvent the market; Mysten built it, and it's the right foundation. We built everything around it that turns it into something people actually use.\n\n## Bet like it's a feed\n\nOpen the app and you land in a live feed. One full-screen BTC market at a time, its price drawing itself in, the clock counting down to the bell. Swipe up for the next one. Tap **UP** or **DOWN** and you're in. The first trade is free — sponsored gas covers it, so a wallet with zero SUI can still play (a zero-SUI wallet has signed `waitlist::join` on-chain with the sponsor paying gas, tx [`HCYq3d5N`](https://suiscan.xyz/testnet/tx/HCYq3d5N)). It's the TikTok loop, pointed at markets.\n\n## Make your own market\n\nDon't see the bet you want? **Post a take.** Drag a strike line to the price you're calling, scrub the horizon to when it should close, slide to confirm. Your prediction *becomes* the post, and the feed can take the other side. You're not just betting the market — you're making it.\n\n## Bet quietly\n\nSome calls you'd rather not tie to your public history. **Private bets** give you that: an opt-in path that separates a trade from your main wallet. We label it honestly — it's a link-reduction routing layer in beta, not full cryptographic anonymity. But for \"I don't want this one on my public record,\" it does the job, and it draws from the same balance as everything else.\n\n## Turn it up with leverage\n\nGot conviction? The **leverage desk** lets you amplify a call. And it's real, not cosmetic: liquidations are enforced in Move — the liquidate path asserts a position's value has actually fallen below its debt threshold before anyone can touch it, so a liquidation can't be faked, and twelve have already fired on-chain. (Honest: native Predict leverage now exists in code too, so we shipped this first — we don't call it a moat.)\n\n## Let an agent trade for you — that cannot run off with your money\n\nThis is the part we're proudest of. The industry just learned the hard way that giving an AI agent permission to trade has meant giving it permission to *steal*: prompt-inject the agent and it wires your funds to an attacker. That's the Grok/Bankr drain class, and it has cost real money.\n\nWe made it structurally impossible. In `social_vault.move` (line 180), the agent opens a position whose **owner is hard-wired to you**. The only way money ever leaves the vault is `withdraw`, and `withdraw` checks the caller is you. The agent has no withdraw power at all. So the worst a fully prompt-injected agent can do with your money is open *your* position, in *your* name.\n\nThat powers two features:\n\n- **Predict-from-X.** Tweet `@yosuku BTC up 3x`. A relay reads the mention, the bounded agent opens that exact position from your own vault, and the proceeds are force-paid back to you. We proved the custody on-chain: in one full round-trip, **0.953 DUSDC went back to the user and 0 to the agent**. (That 0.953 is the return of your custody, not profit — the leg took a small loss; the point is the number next to the agent, and it's zero. Close tx [`BmuJroQS`](https://suiscan.xyz/testnet/tx/BmuJroQS4wgG9yvVBCDsq7xmdYVD6WyLsFPsBN8Em8rr).) The listener now runs 24/7 as a service on our infra.\n- **Strategies.** Subscribe to a creator's agent strategy with a **capped, revocable budget**. The agent routes its signal into your vault — but every resulting position is hard-wired to you, for every subscriber. The creator can never name itself the beneficiary, on any of them.\n\nFor full autonomy, the **Bellkeeper** agent signs its decisions inside an AWS Nitro enclave, and its attestation is verified on-chain by Sui's native `nitro_attestation`, with genuine PCRs pinned (tx [`6gczxvyR`](https://suiscan.xyz/testnet/tx/6gczxvyRXMUeub6GVU7xennCgXb2kahyjg3eRzqzjLzH)). Read that as the proof stack — the attestation is verified on-chain today; wiring the live enclave in as the consumer signer is the remaining step.\n\n## One balance, in your pocket\n\nAll of it draws from one **Trading Balance**: deposit DUSDC once, route it into normal, private, leverage, or agent trades, and withdraw to your wallet whenever you want — owner-only, always. The `TradingVault<DUSDC>` is live at [`0xc04516b5`](https://suiscan.xyz/testnet/object/0xc04516b582bfe73c71325408bfb9e9a5a8fdcd54952a313a288a135e272fa1e6) with 59 of 59 Move tests on that path.\n\nAnd it's not just a website. Yosuku is a **native iOS and Android app** (Expo), installable today via TestFlight and an Android APK, with per-device non-custodial keys and parity with the web. **Streak parlays** ride along too — stack two or three BTC bells into one ticket where every leg has to land; the full lifecycle is on-chain, open [`22RYaGcc`](https://suiscan.xyz/testnet/tx/22RYaGccku5NprXZLDmtGEA8k7cWPyNyueHwjN4QCxiD) → claim [`5AmZGc2b`](https://suiscan.xyz/testnet/tx/5AmZGc2bp2hBGycVeMEdaJt3d14NTBByrkc6LSZcwJC1).\n\n## And for builders\n\n`@mysten/deepbook-v3` ships zero Predict support, so we wrote the **first TypeScript SDK** ([`@yosuku/deepbook-predict`](https://www.npmjs.com/package/@yosuku/deepbook-predict)) and the **first MCP server** ([`@yosuku/deepbook-predict-mcp`](https://www.npmjs.com/package/@yosuku/deepbook-predict-mcp)) for it — quote, mint, redeem, and let any LLM trade Predict through a standard tool interface. About 1,870 npm installs in the last 30 days say the developer pull is real before the consumer app is even loud.\n\n## The honest boundary\n\nOne disprovable claim torches every real proof, so here's the line. Everything is on **testnet**, because DeepBook Predict is testnet-only today — mainnet is a config switch, not a rewrite, and we flip it the day Predict does. Markets are **BTC only** for now. Private is link-reduction, not zk. Resolution is oracle-settled, not trustless. The enclave attestation is proven on-chain but not yet the live consumer signer. On-chain usage is **early and verifiable**: around nine non-team wallets have touched our contracts, six of them actively trading, checkable at [yosuku.xyz/stats](https://yosuku.xyz/stats). Small, but real, and none of it rounded up.\n\n## The thesis\n\nDeepBook Predict already settles markets honestly. Yosuku makes that primitive **usable by people, buildable by developers, and tradeable by agents** — with custody you cannot lose. That's the launch.\n\n[yosuku.xyz](https://yosuku.xyz) · [@yosuku0](https://x.com/yosuku0)\n"
+    },
+    {
+      "title": "Anchor — essay",
+      "markdown": "# It trades your money. It cannot take it.\n\nWe let an AI agent open a real prediction-market position from a tweet, then proved on-chain that it could not divert a cent. The run was six transactions, every one signed by the agent. When the position closed, the contract force-paid 0.953 DUSDC back to the user while the agent's own balance moved ±0.000. That 0.953 is the close remainder returned to the user, not a profit: the point is that a compromised agent moved the money and kept none of it. You can read the close in [tx BmuJroQS…](https://suiscan.xyz/testnet/tx/BmuJroQS4wgG9yvVBCDsq7xmdYVD6WyLsFPsBN8Em8rr). The line of Move that makes diversion impossible is two functions you can read yourself. This essay shows you both.\n\nI am leading with proofs because in this market one disprovable claim torches every real one, so I would rather hand you the artifacts and let you grade them. This is testnet: [DeepBook Predict](https://docs.sui.io/onchain-finance/deepbook-predict) is testnet-only, so the whole track is testnet today, and DUSDC is a test currency. That is an external dependency, not a gap I am hiding.\n\n## A primitive is not a product\n\nDeepBook Predict is a good piece of infrastructure. It is an oracle-settled, volatility-priced binary market that needs no order book and no counterparty. The outcome is decided by an oracle reading a price, not by a committee voting on a question. That settlement integrity is Mysten's, and it is the right foundation to build on.\n\nBut out of the box there is no consumer app, no SDK, and no safe way for an agent to trade it. Almost nobody can use it. A primitive sitting on a chain is not a thing a person can hold.\n\nThe obvious way to close that gap is to put an agent in front of it. Tweet an intent, let software act on it. The problem is that the current crop of trading agents share a custody design that fails badly. When an agent holds a key that can both trade and withdraw, a prompt injection becomes a theft. Grok and Bankr have both been steered by crafted inputs into actions their operators never intended. The agent did exactly what it was told. The design is what was wrong. Giving an agent your money and a withdraw capability is the bug, not the model.\n\n## The structural answer\n\nWe do not ask you to trust the agent. We remove its ability to steal.\n\nThe flow runs through `social_vault::agent_trade`. The executor holds a bounded key that can open a position. It cannot name the beneficiary. The position owner is hard-wired to the user in the function body, and there is no parameter or code path that lets the executor name a different one. From the source comment: *\"the position owner is hard-wired to `user`.\"* The only function that moves funds to an arbitrary address is `withdraw`, and `withdraw` asserts the caller is the account owner. From the source: *\"The agent has no withdraw capability.\"*\n\nPut those two facts together and the worst a fully prompt-injected executor can do is move your money into your own position. It cannot send it anywhere else. The guarantee is enforced in Move; you verify it by reading two functions in `social_vault.move`, not by trusting a dashboard.\n\nThat is what the run above demonstrates end to end. The executor filled the order, the position settled, and the close force-paid the remainder to the user. The agent's balance moved ±0.000 across all six transactions; it signed every one and was paid nothing but gas. There was no point in the flow where it could have taken a beneficiary slot, because the Move never offered one.\n\n## Authority, checked by consensus\n\nThere is a second agent in the system, the autonomous Bellkeeper, and it goes one step further. Its decisions are meant to be signed inside an AWS Nitro enclave, with the attestation document verified on-chain before the vault releases funds. That verification is real and it is on-chain: Sui's native `nitro_attestation` verifier checked the AWS certificate chain and pinned genuine PCRs, PCR0 starting `0c0cfdcc`, in transaction [6gczxvyR…](https://suiscan.xyz/testnet/tx/6gczxvyRXMUeub6GVU7xennCgXb2kahyjg3eRzqzjLzH).\n\nHere is the honest boundary. The attestation document is verified on-chain. The proven vault trade [9zN7Jac](https://suiscan.xyz/testnet/tx/9zN7JacN5AdzKLRHRh5vDDocx5CTns6HqFSrfWEavAbj) ran against dev-stub PCRs on one agent registration. The real-Nitro PCRs in [6gczxvyR](https://suiscan.xyz/testnet/tx/6gczxvyRXMUeub6GVU7xennCgXb2kahyjg3eRzqzjLzH) were pinned on a separate registration for a different agent. The proof stack works. The live enclave is not yet the signer for the consumer runtime. I would rather you know exactly where the line sits than discover it later.\n\n## What else is real, one checkable line each\n\nThe first TypeScript SDK and the first MCP server for DeepBook Predict are on npm: [`@yosuku/deepbook-predict`](https://www.npmjs.com/package/@yosuku/deepbook-predict) and [`@yosuku/deepbook-predict-mcp`](https://www.npmjs.com/package/@yosuku/deepbook-predict-mcp). With `@yosuku/predict`, that is roughly 1,870 installs in the last thirty days, a current run-rate near 440 per week and rising across the three packages. They exist because `@mysten/deepbook-v3` ships zero Predict support, so without this there is no library to import.\n\nPricing you can check: the off-chain SVI to N(d2) engine matches the on-chain `get_trade_amounts` quote to about 0.03¢ typically, under a cent worst-case, on real signed mints. The test is runnable at `suioverflow/predict/verify-pricing.ts`.\n\nParlays run a full lifecycle: stack two or three bells into one ticket, every leg has to land, [open](https://suiscan.xyz/testnet/tx/22RYaGccku5NprXZLDmtGEA8k7cWPyNyueHwjN4QCxiD) through [claim](https://suiscan.xyz/testnet/tx/5AmZGc2bp2hBGycVeMEdaJt3d14NTBByrkc6LSZcwJC1), plus an [early-kill](https://suiscan.xyz/testnet/tx/CC2V5dDEYmYMQHb7Ueb3UeBJwEMsHAgYj5GrYZovsdNj).\n\nLeverage liquidations have fired twelve times on-chain. The eligibility check in `margin.move` is `(pv as u128) * BPS < (debt as u128) * (d.maintenance_bps as u128)`, asserted on the real recovered value, so a liquidation cannot be faked. Native Predict leverage now exists in code too, so I frame ours as shipped-first, not as the moat.\n\nGasless onboarding works from zero: a wallet holding no SUI signed `waitlist::join` on-chain while a sponsor paid the gas, transaction [HCYq3d5N…](https://suiscan.xyz/testnet/tx/HCYq3d5N), backed by three Onara policies.\n\n## What is not real yet\n\nMainnet is a config switch and an external dependency on DeepBook Predict shipping there. Predict-from-X runs live on our own infrastructure and has already turned real tweets into on-chain trades; what I do not yet claim is a hosted, always-on uptime guarantee. Private trading is a link-reduction routing layer in beta, not cryptographic privacy. Settlement is oracle-settled, far better than committee-voted, but oracle-trusted on testnet, not trustless, so I do not call it that. Adoption is small and labeled: counting directly from the on-chain sponsored-action records, single-digit early external wallets have transacted via sponsored gas, with on-chain interactions in the dozens and climbing over the build window. I am quoting the verified on-chain count, not a deck number. One disprovable overclaim would torch every proof above, so none of these get rounded up.\n\n## The thesis\n\nYosuku does not reinvent prediction markets. DeepBook Predict already settles them honestly. We make that primitive usable by people and by their agents, with custody users cannot lose, and we ship the SDK developers need to build on it. The market plus settlement are Mysten's. Our part is the consumer layer, the SDK, and the one piece that matters most when you hand an agent your money: the agent has no withdraw capability, enforced in Move, proven on-chain. The market can give an agent your money to trade. The Move makes sure it can never be your money to take.\n\nIf you build agent trading on Sui, here is the question worth answering before you ship. Can your design survive the assumption that the agent is fully compromised, on the very first trade. If the answer is no, the key is in the wrong place.\n"
+    }
+  ],
+  "cards": [
+    "01-hook.png",
+    "02-primitive.png",
+    "03-custody-bug.png",
+    "04-source.png",
+    "05-took-zero.png",
+    "06-attestation.png",
+    "07-thesis.png"
+  ]
+}

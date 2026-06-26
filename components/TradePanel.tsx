@@ -302,6 +302,18 @@ export default function TradePanel({
     return side === 'DOWN' ? 1 - p : p;
   }, [sviData, selectedStrike, rangeUpperStrike, forwardPrice, side]);
 
+  // Geometry for the visual range band — auto-scales the track to the chosen band around "now".
+  const rangeBand = useMemo(() => {
+    const center = (forwardPrice || spotPrice || 0) / FLOAT_SCALING;
+    if (!center) return null;
+    const lo = selectedStrike ? selectedStrike / FLOAT_SCALING : null;
+    const hi = rangeUpperStrike ? rangeUpperStrike / FLOAT_SCALING : null;
+    const span = Math.max(Math.abs((hi ?? center) - center), Math.abs(center - (lo ?? center)), center * 0.04) * 1.5;
+    const min = center - span, max = center + span;
+    const pos = (x: number) => Math.max(3, Math.min(97, ((x - min) / (max - min)) * 100));
+    return { center, lo, hi, curPos: pos(center), loPos: lo != null ? pos(lo) : null, hiPos: hi != null ? pos(hi) : null };
+  }, [forwardPrice, spotPrice, selectedStrike, rangeUpperStrike]);
+
   // Raw up-probability (fee-less) — used only for the Simple-mode per-side
   // "chance" hint. The summary's "To win" remains the on-chain source of truth.
   const upProb = useMemo(() => {
@@ -753,6 +765,19 @@ export default function TradePanel({
           <TrendingDown className="w-4 h-4" />
           Down
         </button>
+        <button
+          type="button"
+          onClick={() => setSide('RANGE')}
+          aria-pressed={side === 'RANGE'}
+          className={`flex-1 flex items-center justify-center gap-2 py-3.5 text-sm font-bold transition-all ${
+            side === 'RANGE'
+              ? 'bg-amber-500/10 text-amber-400 border-b-2 border-amber-400'
+              : 'text-gray-500 hover:text-gray-300'
+          }`}
+        >
+          <Activity className="w-4 h-4" />
+          Range
+        </button>
       </div>
       )}
 
@@ -858,6 +883,25 @@ export default function TradePanel({
           </div>
         ) : side === 'RANGE' ? (
           <div className="grid grid-cols-2 gap-3">
+            {/* visual range band — auto-scales to the chosen band around "now" */}
+            <div className="col-span-2 rounded-xl bg-amber-500/[0.04] border border-amber-500/15 px-3.5 pt-3 pb-4">
+              <p className="text-[9px] uppercase tracking-[0.18em] text-amber-500/70 font-bold mb-3.5">The band</p>
+              {rangeBand && (
+                <div className="relative h-7">
+                  <div className="absolute top-1/2 left-0 right-0 h-1 -translate-y-1/2 rounded-full bg-white/10" />
+                  {rangeBand.loPos != null && rangeBand.hiPos != null && rangeBand.hiPos > rangeBand.loPos && (
+                    <div className="absolute top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-amber-400/90" style={{ left: `${rangeBand.loPos}%`, width: `${rangeBand.hiPos - rangeBand.loPos}%` }} />
+                  )}
+                  <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-0.5 h-4 bg-white rounded-full" style={{ left: `${rangeBand.curPos}%` }} />
+                  <span className="absolute -top-1 text-[8px] font-mono text-gray-400 -translate-x-1/2" style={{ left: `${rangeBand.curPos}%` }}>now</span>
+                  {rangeBand.loPos != null && <span className="absolute -bottom-1 text-[9px] font-mono font-bold text-amber-400 -translate-x-1/2" style={{ left: `${rangeBand.loPos}%` }}>${Math.round(rangeBand.lo!).toLocaleString()}</span>}
+                  {rangeBand.hiPos != null && <span className="absolute -bottom-1 text-[9px] font-mono font-bold text-amber-400 -translate-x-1/2" style={{ left: `${rangeBand.hiPos}%` }}>${Math.round(rangeBand.hi!).toLocaleString()}</span>}
+                </div>
+              )}
+              <p className="text-[12px] text-gray-300 leading-snug mt-1">
+                Wins if {oracle.underlying_asset || 'BTC'} settles <span className="text-amber-400 font-bold">inside the band</span> at the bell{fairPrice != null && selectedStrike && rangeUpperStrike ? <> · <span className="font-mono">~{Math.round(fairPrice * 100)}% chance</span></> : ''}.
+              </p>
+            </div>
             {/* Lower strike */}
             <div>
               <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 block mb-2">
