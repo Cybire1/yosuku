@@ -627,12 +627,14 @@ export function buildFundAndSubscribeTx(p: {
     payment = tx.moveCall({ target: `0x2::coin::zero`, typeArguments: [DUSDC_TYPE] });
   }
 
-  const refund = tx.moveCall({
+  // The DEPLOYED strategy::subscribe (pkg 0x47d3c108) consumes the payment and returns NOTHING
+  // (arity 0). We split `payment` to exactly the fee, so there is no remainder — do NOT capture a
+  // refund or transferObjects on its result (doing so caused InvalidResultArity on the subscribe call).
+  tx.moveCall({
     target: `${STRATEGY_PKG}::strategy::subscribe`,
     typeArguments: [DUSDC_TYPE],
     arguments: [tx.object(p.strategyId), tx.object(SOCIAL_VAULT_ID), payment],
   });
-  tx.transferObjects([refund], tx.pure.address(p.owner));
   return tx;
 }
 
