@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-06-26T08:40:22.118Z",
+  "generatedAt": "2026-06-27T23:26:02.784Z",
   "sections": [
     {
       "title": "How Sui makes tweet-to-bet safe",
@@ -64,6 +64,72 @@
         {
           "kind": "reply",
           "text": "Read it yourself — the no-divert close: suiscan.xyz/testnet/tx/BmuJroQS4wgG9yvVBCDsq7xmdYVD6WyLsFPsBN8Em8rr · agent ±0.000; 0.953 DUSDC back to the user (custody, not profit). Move: agent_trade (owner hard-wired) + withdraw (owner-gated). Attestation: tx 6gczxvyR · risk: OWASP LLM01."
+        }
+      ]
+    },
+    {
+      "title": "How we built leverage on Yosuku",
+      "badge": "LEVERAGE",
+      "units": [
+        {
+          "kind": "tweet",
+          "n": "1",
+          "total": "8",
+          "text": "We built leverage on Sui before the official release — a sneak peek at leverage for our users. Now @DeepBookonSui Predict ships it natively, so we're migrating.\n\nHere's how we built the preview, and the one part we keep. 🧵",
+          "img": "leverage/01-hook.png"
+        },
+        {
+          "kind": "tweet",
+          "n": "2",
+          "total": "8",
+          "text": "Your money lives in a vault you own. To trade 3×, you lock $10 of it as margin; a desk borrows $20 → a $30 position.\n\nWin big, lose big — but your max downside is the $10 you locked. Never more.",
+          "img": "leverage/02-model.png"
+        },
+        {
+          "kind": "tweet",
+          "n": "3",
+          "total": "8",
+          "text": "Where's the $20 from? A lending pool — the bank.\n\nLPs supply it, earn the borrow spread, and backstop the downside. With no order book, the pool is also the counterparty. Funded + live on testnet.",
+          "img": null
+        },
+        {
+          "kind": "tweet",
+          "n": "4",
+          "total": "8",
+          "text": "The risk in any margin trade is going underwater. So we built liquidation in: every position has a health factor; cross the line and a keeper closes it — pool repaid first, the rest back to your vault.\n\nWe proved it on-chain 12× — 9 clean, 3 socialized shortfall.",
+          "img": "leverage/04-liquidation.png"
+        },
+        {
+          "kind": "tweet",
+          "n": "5",
+          "total": "8",
+          "text": "And we built that keeper to be untouchable: it ran inside an attested AWS Nitro enclave — Mysten's Nautilus — and liquidated autonomously, on-chain.\n\nReal PCRs pinned, so you verify the code, not us.",
+          "img": "leverage/05-nautilus.png"
+        },
+        {
+          "kind": "tweet",
+          "n": "6",
+          "total": "8",
+          "text": "At the bell, DeepBook Predict's oracle settles your position — not a committee vote.\n\nThe desk repays the pool, then credits your vault the rest. Proven end to end on testnet — real fills + closes on Suiscan.",
+          "img": null
+        },
+        {
+          "kind": "tweet",
+          "n": "7",
+          "total": "8",
+          "text": "The honest part: leverage was never our moat. Native Predict has it now — so we're handing the leverage math over.\n\nWhat we keep is the edge native can't give: your funds in a vault the agent can open + close but can never drain.",
+          "img": "leverage/07-honest.png"
+        },
+        {
+          "kind": "tweet",
+          "n": "8",
+          "total": "8",
+          "text": "Testnet today — and every fill, close, and liquidation above is on-chain. Verify it yourself.\n\nIt trades your money. It cannot take it. Built on @SuiNetwork",
+          "img": "leverage/08-close.png"
+        },
+        {
+          "kind": "reply",
+          "text": "Proof: it's real Move on Sui testnet — a vault (your funds, no-divert), a margin desk + funded lending pool, oracle settlement at the bell. Liquidation proven on-chain 12× — incl. autonomously inside the Nitro enclave, code verifiable via pinned PCRs."
         }
       ]
     },

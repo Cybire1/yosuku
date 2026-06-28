@@ -26,6 +26,7 @@ import {
   fmtAddr,
   ago,
   glyphFromAddress,
+  codenameFromAddress,
   rankStrategies,
   SUISCAN_TX,
   SUISCAN_ACC,
@@ -541,14 +542,22 @@ export default function StrategiesPage() {
                           <div className="w-10 h-10 shrink-0 border border-white/10 rounded-full flex items-center justify-center">
                             <span className="font-jp text-lg text-vermilion">{glyphFromAddress(card.agent)}</span>
                           </div>
-                          <a
-                            href={SUISCAN_ACC(card.agent)}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="font-mono text-[13px] text-gray-300 hover:text-white transition-colors"
-                          >
-                            {fmtAddr(card.agent)}
-                          </a>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <h3 className="font-display font-[800] text-base text-white truncate">{codenameFromAddress(card.agent)}</h3>
+                              {rank && (
+                                <span className="shrink-0 font-mono text-[10px] font-bold text-vermilion border border-vermilion/30 rounded px-1.5 py-0.5">#{rank}</span>
+                              )}
+                            </div>
+                            <a
+                              href={SUISCAN_ACC(card.agent)}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="font-mono text-[11px] text-gray-500 hover:text-gray-300 transition-colors"
+                            >
+                              {fmtAddr(card.agent)}
+                            </a>
+                          </div>
                           <span className="flex-1" />
                           <div className="flex items-center gap-1.5">
                             {card.hasCapsule && (
@@ -582,19 +591,22 @@ export default function StrategiesPage() {
                           </div>
                         </div>
 
-                        {/* caps row */}
-                        <div className="grid grid-cols-3 gap-4 pb-4 mb-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                          <div>
-                            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 block mb-1">Max leverage</span>
-                            <span className="font-mono text-sm text-white">{card.maxLeverage}x</span>
+                        {/* hero: leverage + non-custodial seal */}
+                        <div className="flex items-stretch gap-3 mb-4">
+                          <div className="flex-1 border border-white/[0.08] rounded bg-white/[0.02] px-4 py-3">
+                            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 block mb-1">Trade up to</span>
+                            <span className="font-display font-[800] text-4xl text-white leading-none tabular-nums">
+                              {card.maxLeverage}<span className="text-vermilion">×</span>
+                            </span>
+                            <span className="font-mono text-[10px] text-gray-500 block mt-1.5">
+                              {fmtDusdc(card.maxMargin)} DUSDC / trade · {card.subFee === 0 ? 'free' : `${fmtDusdc(card.subFee)} DUSDC fee`}
+                            </span>
                           </div>
-                          <div>
-                            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 block mb-1">Max / trade</span>
-                            <span className="font-mono text-sm text-white">{fmtDusdc(card.maxMargin)} DUSDC</span>
-                          </div>
-                          <div>
-                            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 block mb-1">Fee</span>
-                            <span className="font-mono text-sm text-white">{fmtDusdc(card.subFee)} DUSDC</span>
+                          <div className="flex-1 border border-new-mint/25 bg-new-mint/[0.05] rounded px-4 py-3 flex flex-col justify-center">
+                            <span className="font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-new-mint block mb-1.5">● Non-custodial</span>
+                            <span className="text-[12.5px] leading-snug text-gray-300">
+                              Trades your budget. <span className="text-white font-semibold">Can&apos;t withdraw a cent.</span>
+                            </span>
                           </div>
                         </div>
 
