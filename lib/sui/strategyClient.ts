@@ -245,14 +245,36 @@ const EVENTS_Q = `query Ev($t: String!, $last: Int!) {
 
 type EvNode = { timestamp: string | null; sender: { address: string }; contents: { json: Record<string, unknown> }; transaction: { digest: string } | null };
 
-async function queryEvents(type: string, last = 100): Promise<EvNode[]> {
+const RPC_URL = process.env.NEXT_PUBLIC_SUI_RPC_URL || 'https://fullnode.testnet.sui.io:443';
+
+// JSON-RPC fallback — testnet GraphQL event indexing lags/windows (returns 0 StrategyListed while
+// these events are live on-chain). suix_queryEvents is the reliable source. (JSON-RPC sunsets
+// ~Jul 2026; revisit once GraphQL event indexing is dependable.)
+async function jsonRpcEvents(type: string, last: number): Promise<EvNode[]> {
   try {
-    const { data, errors } = await gql.query<{ events: { nodes: EvNode[] } }>({ query: EVENTS_Q, variables: { t: type, last } });
-    if (errors?.length || !data) return [];
-    return data.events.nodes.slice().reverse(); // newest first
+    const r = await fetch(RPC_URL, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'suix_queryEvents', params: [{ MoveEventType: type }, null, last, true] }),
+    });
+    const j = await r.json();
+    return ((j.result?.data ?? []) as Array<Record<string, any>>).map((e) => ({
+      timestamp: e.timestampMs ? new Date(Number(e.timestampMs)).toISOString() : null,
+      sender: { address: e.sender ?? '' },
+      contents: { json: e.parsedJson ?? {} },
+      transaction: { digest: e.id?.txDigest ?? null },
+    }));
   } catch {
     return [];
   }
+}
+
+async function queryEvents(type: string, last = 100): Promise<EvNode[]> {
+  try {
+    const { data, errors } = await gql.query<{ events: { nodes: EvNode[] } }>({ query: EVENTS_Q, variables: { t: type, last } });
+    if (!errors?.length && data?.events?.nodes?.length) return data.events.nodes.slice().reverse(); // newest first
+  } catch { /* fall through to JSON-RPC */ }
+  return jsonRpcEvents(type, last); // GraphQL empty/errored → reliable JSON-RPC
 }
 
 function num(v: unknown): number {
@@ -677,6 +699,16 @@ export function glyphFromAddress(addr: string): string {
   let hash = 0;
   for (let i = 0; i < addr.length; i++) hash = ((hash << 5) - hash + addr.charCodeAt(i)) | 0;
   return KANJI_POOL[Math.abs(hash) % KANJI_POOL.length];
+}
+
+// Deterministic memorable codename for an agent — gives each strategy an identity to remember
+// instead of a bare 0x… address. Two-word, brand-flavoured, stable per address.
+const CODE_A = ['Vermilion', 'Onyx', 'Crimson', 'Cobalt', 'Ember', 'Slate', 'Ivory', 'Indigo', 'Saffron', 'Jade', 'Ash', 'Glass', 'Iron', 'Mist', 'Dusk', 'Flint'];
+const CODE_B = ['Falcon', 'Drift', 'Kestrel', 'Vector', 'Cipher', 'Helix', 'Talon', 'Quanta', 'Ronin', 'Atlas', 'Nexus', 'Pulse', 'Forge', 'Strider', 'Oracle', 'Maru'];
+export function codenameFromAddress(addr: string): string {
+  let h = 0;
+  for (let i = 0; i < addr.length; i++) h = ((h << 5) - h + addr.charCodeAt(i)) | 0;
+  return `${CODE_A[Math.abs(h) % CODE_A.length]} ${CODE_B[Math.abs(h >> 5) % CODE_B.length]}`;
 }
 
 export const SUISCAN_TX = (d: string) => `https://suiscan.xyz/testnet/tx/${d}`;
