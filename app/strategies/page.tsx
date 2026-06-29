@@ -39,11 +39,12 @@ const ZERO_ADDR = '0x00000000000000000000000000000000000000000000000000000000000
 const SUISCAN_OBJ = (id: string) => `https://suiscan.xyz/testnet/object/${id}`;
 const DAY = 86_400_000;
 
-type Tier = { key: 'new' | 'active' | 'proven'; label: string; tone: 'gray' | 'vermilion' | 'mint' };
+type Tier = { key: 'new' | 'active' | 'settled'; label: string; tone: 'gray' | 'vermilion' | 'white' };
 
-// Honest, data-true tier — never a red "unproven" on a clean new agent.
+// Honest tiers. "Settled" means it has CLOSED, on-chain P&L (win OR loss) — it never implies
+// profit; the realized number itself carries the sign. Never a red "unproven" on a clean new agent.
 function tierOf(c: StrategyCard): Tier {
-  if (c.copyTrades >= 10 || c.realizedTrades > 0) return { key: 'proven', label: `Proven · ${c.copyTrades} copy-trades`, tone: 'mint' };
+  if (c.realizedTrades > 0) return { key: 'settled', label: `Settled · ${c.realizedTrades} closed`, tone: 'white' };
   if (c.copyTrades >= 1) return { key: 'active', label: `Active · ${c.copyTrades} copy-trades`, tone: 'vermilion' };
   return { key: 'new', label: 'New · no track record yet', tone: 'gray' };
 }
@@ -51,12 +52,12 @@ function tierOf(c: StrategyCard): Tier {
 const TONE = {
   gray: 'text-gray-400 border-white/15',
   vermilion: 'text-vermilion border-vermilion/35',
-  mint: 'text-new-mint border-new-mint/35',
+  white: 'text-gray-100 border-white/30',
 } as const;
 
 const TABS = [
   { key: 'all', label: 'All' },
-  { key: 'proven', label: 'Proven' },
+  { key: 'settled', label: 'Settled' },
   { key: 'new', label: 'New' },
   { key: 'copied', label: 'Most copied' },
   { key: 'safest', label: 'Safest' },
@@ -65,13 +66,13 @@ type TabKey = (typeof TABS)[number]['key'];
 
 function filterSort(list: StrategyCard[], tab: TabKey): StrategyCard[] {
   let out = [...list];
-  if (tab === 'proven') out = out.filter((c) => tierOf(c).key === 'proven');
+  if (tab === 'settled') out = out.filter((c) => tierOf(c).key === 'settled');
   else if (tab === 'new') out = out.filter((c) => tierOf(c).key === 'new');
-  const provenFirst = (a: StrategyCard, b: StrategyCard) =>
-    (tierOf(b).key === 'proven' ? 1 : 0) - (tierOf(a).key === 'proven' ? 1 : 0);
+  const settledFirst = (a: StrategyCard, b: StrategyCard) =>
+    (tierOf(b).key === 'settled' ? 1 : 0) - (tierOf(a).key === 'settled' ? 1 : 0);
   if (tab === 'copied') out.sort((a, b) => b.subscribers - a.subscribers || b.copyTrades - a.copyTrades);
   else if (tab === 'safest') out.sort((a, b) => a.maxLeverage - b.maxLeverage || a.maxMargin - b.maxMargin);
-  else out.sort((a, b) => provenFirst(a, b) || b.copyTrades - a.copyTrades || b.subscribers - a.subscribers);
+  else out.sort((a, b) => settledFirst(a, b) || b.copyTrades - a.copyTrades || b.subscribers - a.subscribers);
   return out;
 }
 
@@ -245,20 +246,23 @@ export default function StrategiesPage() {
           <span className="text-white">Strategies</span>
         </div>
 
-        {/* title + positioning */}
-        <h1 className="font-display font-[800] text-4xl text-white tracking-tight mb-1.5">Agent Strategies</h1>
-        <p className="font-jp text-gray-600 text-sm mb-4">戦略</p>
+        {/* title + the hook */}
+        <div className="font-mono text-[11px] tracking-[0.2em] uppercase text-gray-500 mb-3">Agent Strategies · 戦略</div>
+        <h1 className="font-display font-[800] text-4xl md:text-5xl text-white tracking-tight leading-[1.05] mb-3">
+          Copy AI traders.<br /><span className="text-gray-500">Without giving them custody.</span>
+        </h1>
         <p className="text-gray-300 text-[15px] leading-relaxed max-w-2xl mb-4">
-          Copy a prediction agent with a capped budget. It trades for you — it can never
-          withdraw your funds. <span className="text-gray-500">Pause anytime.</span>
+          Fund a capped balance and an agent trades it for you — it can never withdraw a cent.
+          <span className="text-gray-500"> Pause anytime. Verify every cap on Sui.</span>
         </p>
 
-        {/* standing trust + risk bar (two tones) */}
+        {/* standing capability + risk bar */}
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mb-9 font-mono text-[11px]">
           <span className="inline-flex items-center gap-2 text-new-mint">
             <span className="w-1.5 h-1.5 rounded-full bg-new-mint" />
             Non-custodial · caps enforced on Sui
           </span>
+          <span className="text-gray-500">Portable agent memory · MemWal + Walrus</span>
           <span className="text-gray-600">Past copy-trades don&apos;t guarantee future results.</span>
         </div>
 
@@ -334,6 +338,18 @@ export default function StrategiesPage() {
                           {tier.key}
                         </span>
                       </div>
+
+                      {/* capability chips — portable memory / on-chain playbook (MemWal + Walrus) */}
+                      {(card.hasMemory || card.hasCapsule) && (
+                        <div className="flex flex-wrap gap-1.5 mb-4 -mt-1">
+                          {card.hasMemory && (
+                            <span className="inline-flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.14em] text-new-mint border border-new-mint/25 rounded px-2 py-1">◈ Portable memory</span>
+                          )}
+                          {card.hasCapsule && (
+                            <span className="inline-flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.14em] text-gray-300 border border-white/15 rounded px-2 py-1">▤ On-chain playbook</span>
+                          )}
+                        </div>
+                      )}
 
                       {/* HERO — the single, verifiable non-custodial + caps guarantee */}
                       <div className="relative border border-new-mint/25 bg-new-mint/[0.05] rounded-lg px-4 py-3.5 mb-4">
@@ -453,16 +469,25 @@ export default function StrategiesPage() {
 
             {/* creator mode — demoted to a quiet footer affordance */}
             <section className="mt-12">
-              {address ? (
-                <button
-                  onClick={() => setShowList((v) => !v)}
-                  className="font-mono text-[12px] text-gray-500 hover:text-white transition-colors"
-                >
-                  {showList ? '× Close creator mode' : '+ List your agent (creator)'}
-                </button>
-              ) : (
-                <span className="font-mono text-[12px] text-gray-600">Connect a wallet to list your own agent.</span>
-              )}
+              <div className="border border-white/[0.08] rounded-xl bg-bg p-5 flex flex-wrap items-center gap-4 justify-between">
+                <div className="min-w-0">
+                  <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-vermilion mb-1">For builders</div>
+                  <p className="text-[13px] text-gray-300 max-w-md leading-snug">
+                    Run an agent? Publish it as a copyable strategy — set the hard caps, earn a fee, and
+                    users keep custody the whole time.
+                  </p>
+                </div>
+                {address ? (
+                  <button
+                    onClick={() => setShowList((v) => !v)}
+                    className="shrink-0 rounded-full border border-vermilion/40 bg-vermilion/[0.07] px-5 py-2.5 text-[13px] font-semibold text-vermilion hover:bg-vermilion/[0.14] transition-colors"
+                  >
+                    {showList ? '× Close' : 'Publish a strategy →'}
+                  </button>
+                ) : (
+                  <span className="shrink-0 font-mono text-[12px] text-gray-600">Connect a wallet to publish.</span>
+                )}
+              </div>
 
               {address && showList && (
                 <div className="border border-white/[0.08] rounded-xl bg-bg p-5 mt-4 max-w-2xl">
@@ -637,6 +662,20 @@ function CopyDrawer(props: {
           <CapStat label="Copy-trades" value={String(card.copyTrades)} unit="" />
           <CapStat label="Last active" value={ago(card.lastActive) || 'never'} unit="" />
         </div>
+        {(card.hasMemory || card.hasCapsule) && (
+          <div className="border border-new-mint/20 bg-new-mint/[0.04] rounded-lg px-4 py-3 mb-4">
+            <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-new-mint mb-1.5">◈ Portable agent memory</p>
+            <p className="text-[12px] text-gray-300 leading-snug">
+              This agent carries verifiable memory + playbook on Walrus — its reasoning travels with it, readable on-chain.
+            </p>
+            <div className="flex flex-wrap gap-3 mt-2">
+              {card.hasMemory && (
+                <a href={SUISCAN_ACC(card.memoryAccount)} target="_blank" rel="noreferrer" className="font-mono text-[10px] text-gray-500 hover:text-new-mint transition-colors">verify memory ↗</a>
+              )}
+              {card.hasCapsule && <span className="font-mono text-[10px] text-gray-500">▤ on-chain playbook</span>}
+            </div>
+          </div>
+        )}
         {tier.key === 'new' && (
           <p className="font-mono text-[11px] text-gray-500 mb-4">Young strategy — short track record. Size accordingly.</p>
         )}
@@ -666,10 +705,13 @@ function CopyDrawer(props: {
         ) : (
           /* size + confirm */
           <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400">Copy budget</span>
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400">Copy Balance</span>
               <span className="font-mono text-[10px] text-gray-600">in vault: {fmtDusdc(currentVaultDusdc)} DUSDC</span>
             </div>
+            <p className="font-mono text-[10px] text-gray-600 leading-relaxed mb-2">
+              One balance, shared across every agent you copy — each agent is capped per-trade.
+            </p>
             <div className="rounded-xl border border-white/[0.08] bg-black/30 px-4 py-2.5 transition-colors focus-within:border-vermilion/50">
               <div className="flex items-center justify-between">
                 <input
@@ -694,9 +736,9 @@ function CopyDrawer(props: {
             {/* live worked example */}
             <p className="mt-3 text-[12px] text-gray-400 leading-relaxed">
               {valid ? (
-                <>You set a <span className="text-white font-semibold">{fmtDusdc(target)} DUSDC</span> budget. The agent can deploy at most <span className="text-white font-semibold">{fmtDusdc(cap)} DUSDC</span> per copied trade, up to {card.maxLeverage}×. It can never exceed this — or take your budget.</>
+                <>You set a <span className="text-white font-semibold">{fmtDusdc(target)} DUSDC</span> copy balance (shared across the agents you copy). This agent can deploy at most <span className="text-white font-semibold">{fmtDusdc(cap)} DUSDC</span> per copied trade, up to {card.maxLeverage}×. It can never exceed this — or withdraw your balance.</>
               ) : (
-                <>Set a budget. The agent deploys at most {fmtDusdc(card.maxMargin)} DUSDC per trade, up to {card.maxLeverage}× — and can never exceed it or take your budget.</>
+                <>Set a copy balance (shared across the agents you copy). This agent deploys at most {fmtDusdc(card.maxMargin)} DUSDC per trade, up to {card.maxLeverage}× — never more, and can never withdraw it.</>
               )}
             </p>
 
@@ -718,7 +760,7 @@ function CopyDrawer(props: {
                 busy || !valid ? 'cursor-not-allowed bg-white/[0.07] text-gray-400' : 'bg-vermilion text-white hover:bg-vermilion-d shadow-[0_6px_28px_-8px_var(--vermilion)]'
               }`}
             >
-              {busy ? 'Starting…' : !valid ? 'Enter a budget' : cta}
+              {busy ? 'Starting…' : !valid ? 'Enter an amount' : cta}
             </button>
           </div>
         )}
