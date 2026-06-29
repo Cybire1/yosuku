@@ -60,7 +60,7 @@ export default function ClaimPage() {
         suiClient, walletAddress: wallet, sealIdHex: acct.sealId, blobId: acct.blobId, signPersonalMessage,
       });
       const amountMist = BigInt(Math.round(acct.balanceDusdc * 1e6));
-      if (amountMist <= 0n) throw new Error('This account has no recoverable balance.');
+      if (amountMist <= BigInt(0)) throw new Error('This account has no recoverable balance.');
       const { digest } = await recoverFundsToWallet({ suiClient, accountKeyBech32: key, toAddress: wallet, amountMist });
       setResult({ amount: acct.balanceDusdc, digest });
     } catch (e: any) {
