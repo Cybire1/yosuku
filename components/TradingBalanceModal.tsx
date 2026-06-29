@@ -145,18 +145,18 @@ export default function TradingBalanceModal({ onClose }: { onClose: () => void }
               placeholder="0.00"
               value={amount}
               onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))}
-              className="w-full bg-transparent font-display text-2xl font-bold text-white outline-none placeholder:text-gray-700"
+              className="w-full bg-transparent font-display text-2xl font-bold text-white outline-none placeholder:text-gray-600"
             />
-            <span className="font-mono text-xs text-gray-500 shrink-0">DUSDC</span>
+            <span className="font-mono text-xs font-semibold text-gray-300 shrink-0">DUSDC</span>
           </div>
           <div className="mt-1.5 flex items-center justify-between">
-            <span className="font-mono text-[10px] text-gray-600">max {fmt(max)}</span>
+            <span className="font-mono text-[10px] text-gray-400">max {fmt(max)}</span>
             <div className="flex gap-1.5">
               {[0.25, 0.5, 1].map((f) => (
                 <button
                   key={f}
                   onClick={() => setAmount((max * f).toFixed(2))}
-                  className="rounded-md border border-white/10 px-2 py-0.5 font-mono text-[10px] text-gray-400 hover:border-vermilion/40 hover:text-white transition-colors"
+                  className="rounded-md border border-white/15 px-2 py-0.5 font-mono text-[10px] text-gray-300 hover:border-vermilion/50 hover:text-white transition-colors"
                 >
                   {f === 1 ? 'MAX' : `${f * 100}%`}
                 </button>
@@ -170,20 +170,36 @@ export default function TradingBalanceModal({ onClose }: { onClose: () => void }
         <button
           onClick={run}
           disabled={!canSubmit}
-          className="mt-3 w-full rounded-full bg-vermilion py-3 font-semibold text-white transition-colors hover:bg-vermilion-d disabled:cursor-not-allowed disabled:opacity-40"
+          className={`mt-3 w-full rounded-full py-3 font-semibold transition-all ${
+            canSubmit
+              ? 'bg-vermilion text-white hover:bg-vermilion-d shadow-[0_6px_28px_-8px_var(--vermilion)]'
+              : 'cursor-not-allowed bg-white/[0.07] text-gray-400'
+          }`}
         >
-          {busy ? 'Confirming…' : tab === 'deposit' ? 'Move to Trading Balance →' : 'Withdraw to Wallet →'}
+          {busy
+            ? 'Confirming…'
+            : amountMicro <= BigInt(0)
+              ? 'Enter an amount'
+              : overMax
+                ? 'Amount exceeds balance'
+                : tab === 'deposit'
+                  ? 'Move to Trading Balance →'
+                  : 'Withdraw to Wallet →'}
         </button>
 
         {msg && (
           <p className={`mt-3 text-center text-[12px] ${msg.kind === 'err' ? 'text-rose-400' : 'text-emerald-400'}`}>{msg.text}</p>
         )}
 
-        <div className="mt-4 flex items-center justify-between border-t border-white/[0.06] pt-3.5">
-          <span className="font-mono text-[10px] text-gray-600">Gas is on us · testnet</span>
-          <button onClick={openFaucet} className="font-mono text-[11px] text-gray-500 hover:text-vermilion transition-colors">
-            Need test USDC? ↗
-          </button>
+        <button
+          onClick={openFaucet}
+          className="mt-2.5 w-full rounded-full border border-vermilion/40 bg-vermilion/[0.07] py-2.5 text-[13px] font-semibold text-vermilion transition-colors hover:bg-vermilion/[0.14]"
+        >
+          + Get test USDC
+        </button>
+
+        <div className="mt-3.5 border-t border-white/[0.06] pt-3 text-center">
+          <span className="font-mono text-[10px] text-gray-500">Gas is on us · Sui testnet</span>
         </div>
       </div>
     </div>
