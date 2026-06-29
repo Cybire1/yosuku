@@ -15,9 +15,8 @@ interface TutorialStep {
   choice?: boolean; // final step: pick Simple/Pro trade view
 }
 
-// A brief welcome that sets the mental model. The actual to-do list — sign in,
-// get funds, take a side — lives in the persistent FirstRunGuide bar, so this
-// modal stays short instead of re-walking steps the bar already tracks.
+// A brief welcome that sets the mental model — sign in, get funds, take a side —
+// kept short so it orients without becoming a wall of steps.
 const steps: TutorialStep[] = [
   {
     title: 'Welcome to Yosuku',
@@ -67,10 +66,9 @@ export default function Tutorial() {
   };
 
   // The final onboarding decision: set the trade view to match the user's level so
-  // the whole panel opens right for them. TradePanel reads yosuku_trade_mode on mount;
-  // yosuku_mode_chosen tells the FirstRunGuide fallback the choice is already made.
-  // Unlike before, picking does NOT close the tutorial — the last screen ends on the
-  // Connect Wallet step, so it stays open until they connect (or skip).
+  // the whole panel opens right for them. TradePanel reads yosuku_trade_mode on mount.
+  // Picking does NOT close the tutorial — the last screen ends on the Connect Wallet
+  // step, so it stays open until they connect (or skip).
   const selectMode = (m: 'simple' | 'pro') => {
     setMode(m);
     try {
