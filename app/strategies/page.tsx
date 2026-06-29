@@ -262,6 +262,7 @@ export default function StrategiesPage() {
             <span className="w-1.5 h-1.5 rounded-full bg-new-mint" />
             Non-custodial · caps enforced on Sui
           </span>
+          <span className="text-gray-500">Portable agent memory · MemWal + Walrus</span>
           <span className="text-gray-600">Past copy-trades don&apos;t guarantee future results.</span>
         </div>
 
