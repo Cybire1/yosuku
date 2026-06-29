@@ -2167,6 +2167,12 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
 }
 .record .by .name { color: var(--white); }
 
+/* strategies copy-drawer slide-in */
+@keyframes slideIn {
+  from { transform: translateX(20px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
 /* ───────── Position cards (portfolio) ───────── */
 .position {
   background: var(--bg);

@@ -1,14 +1,13 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo, type ReactNode } from 'react';
 import { useCurrentAccount, ConnectButton } from '@mysten/dapp-kit';
-import { BrainCircuit, Copy, Radio, Share2, Trophy } from 'lucide-react';
+import { Share2, X } from 'lucide-react';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import Marquee from '@/components/Marquee';
 import GrainOverlay from '@/components/GrainOverlay';
 import CustomCursor from '@/components/CustomCursor';
-import SectionHeader from '@/components/SectionHeader';
 import { useToast } from '@/components/Toast';
 import { useDUSDCBalance } from '@/lib/sui/hooks';
 import {
@@ -18,8 +17,6 @@ import {
   buildFundAndSubscribeTx,
   buildListStrategyTx,
   buildCancelSubscriptionTx,
-  buildCopyTradeShareText,
-  buildLeaderboardShareText,
   buildStrategyShareText,
   fetchSocialVaultBalance,
   fmtDusdc,
@@ -27,7 +24,6 @@ import {
   ago,
   glyphFromAddress,
   codenameFromAddress,
-  rankStrategies,
   SUISCAN_TX,
   SUISCAN_ACC,
   xIntentUrl,
@@ -38,6 +34,46 @@ import {
 import { DUSDC_MULTIPLIER } from '@/lib/sui/constants';
 import { getSponsorStatus, type SponsorStatus } from '@/lib/sponsor';
 import { useSmartSubmit } from '@/lib/sui/useSmartSubmit';
+
+const ZERO_ADDR = '0x0000000000000000000000000000000000000000000000000000000000000000';
+const SUISCAN_OBJ = (id: string) => `https://suiscan.xyz/testnet/object/${id}`;
+const DAY = 86_400_000;
+
+type Tier = { key: 'new' | 'active' | 'proven'; label: string; tone: 'gray' | 'vermilion' | 'mint' };
+
+// Honest, data-true tier — never a red "unproven" on a clean new agent.
+function tierOf(c: StrategyCard): Tier {
+  if (c.copyTrades >= 10 || c.realizedTrades > 0) return { key: 'proven', label: `Proven · ${c.copyTrades} copy-trades`, tone: 'mint' };
+  if (c.copyTrades >= 1) return { key: 'active', label: `Active · ${c.copyTrades} copy-trades`, tone: 'vermilion' };
+  return { key: 'new', label: 'New · no track record yet', tone: 'gray' };
+}
+
+const TONE = {
+  gray: 'text-gray-400 border-white/15',
+  vermilion: 'text-vermilion border-vermilion/35',
+  mint: 'text-new-mint border-new-mint/35',
+} as const;
+
+const TABS = [
+  { key: 'all', label: 'All' },
+  { key: 'proven', label: 'Proven' },
+  { key: 'new', label: 'New' },
+  { key: 'copied', label: 'Most copied' },
+  { key: 'safest', label: 'Safest' },
+] as const;
+type TabKey = (typeof TABS)[number]['key'];
+
+function filterSort(list: StrategyCard[], tab: TabKey): StrategyCard[] {
+  let out = [...list];
+  if (tab === 'proven') out = out.filter((c) => tierOf(c).key === 'proven');
+  else if (tab === 'new') out = out.filter((c) => tierOf(c).key === 'new');
+  const provenFirst = (a: StrategyCard, b: StrategyCard) =>
+    (tierOf(b).key === 'proven' ? 1 : 0) - (tierOf(a).key === 'proven' ? 1 : 0);
+  if (tab === 'copied') out.sort((a, b) => b.subscribers - a.subscribers || b.copyTrades - a.copyTrades);
+  else if (tab === 'safest') out.sort((a, b) => a.maxLeverage - b.maxLeverage || a.maxMargin - b.maxMargin);
+  else out.sort((a, b) => provenFirst(a, b) || b.copyTrades - a.copyTrades || b.subscribers - a.subscribers);
+  return out;
+}
 
 export default function StrategiesPage() {
   const account = useCurrentAccount();
@@ -54,69 +90,44 @@ export default function StrategiesPage() {
   const [sponsor, setSponsor] = useState<SponsorStatus | null>(null);
   const [subscribingId, setSubscribingId] = useState<string | null>(null);
   const [cancelingId, setCancelingId] = useState<string | null>(null);
-  const [copiedId, setCopiedId] = useState<string | null>(null);
   const [socialVaultBalance, setSocialVaultBalance] = useState(0);
-  const [targetBalances, setTargetBalances] = useState<Record<string, string>>({});
 
-  // creator: "list a strategy" form
+  const [tab, setTab] = useState<TabKey>('all');
+  const [drawerId, setDrawerId] = useState<string | null>(null);
+  const [budget, setBudget] = useState(''); // copy-budget in the drawer (additive, never forced)
+
+  // creator: "list a strategy" form (demoted to a footer affordance)
   const [showList, setShowList] = useState(false);
   const [listing, setListing] = useState(false);
   const [form, setForm] = useState({ agent: '', memoryAccount: '', capsuleBlob: '', maxLeverage: '3', maxMargin: '5', subFee: '0.1' });
 
-  const leaderboard = rankStrategies(strategies);
-  const topRows = leaderboard.slice(0, 5);
-  const rankById = new Map(leaderboard.map((row) => [row.id, row.rank]));
-  const subscriptionByStrategy = new Map(subscriptions.map((sub) => [sub.strategy, sub]));
-  const ZERO_ADDR = '0x0000000000000000000000000000000000000000000000000000000000000000';
+  const subscriptionByStrategy = useMemo(
+    () => new Map(subscriptions.map((sub) => [sub.strategy, sub])),
+    [subscriptions],
+  );
+  const visible = useMemo(() => filterSort(strategies, tab), [strategies, tab]);
+  const drawerCard = drawerId ? strategies.find((s) => s.id === drawerId) ?? null : null;
+  const walletDusdc = dusdcCoins.reduce((s, c) => s + c.balance, BigInt(0));
+  const walletDusdcNum = Number(walletDusdc) / DUSDC_MULTIPLIER;
+  const currentVaultDusdc = socialVaultBalance / DUSDC_MULTIPLIER;
+  const tabCount = (k: TabKey) => filterSort(strategies, k).length;
 
   function postToX(text: string) {
     window.open(xIntentUrl(text), '_blank', 'noopener,noreferrer');
   }
 
-  const targetBalanceFor = (card: StrategyCard) => targetBalances[card.id] ?? '1';
-
   const refreshSocialVaultBalance = useCallback(async () => {
-    if (!address) {
-      setSocialVaultBalance(0);
-      return;
-    }
-    try {
-      setSocialVaultBalance(await fetchSocialVaultBalance(address));
-    } catch {
-      setSocialVaultBalance(0);
-    }
+    if (!address) return setSocialVaultBalance(0);
+    try { setSocialVaultBalance(await fetchSocialVaultBalance(address)); } catch { setSocialVaultBalance(0); }
   }, [address]);
 
   const refreshSubscriptions = useCallback(async () => {
-    if (!address) {
-      setSubscriptions([]);
-      return;
-    }
-    try {
-      setSubscriptions(await fetchStrategySubscriptions(address));
-    } catch {
-      setSubscriptions([]);
-    }
+    if (!address) return setSubscriptions([]);
+    try { setSubscriptions(await fetchStrategySubscriptions(address)); } catch { setSubscriptions([]); }
   }, [address]);
 
-  async function copyPost(id: string, text: string) {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopiedId(id);
-      setTimeout(() => setCopiedId(null), 1400);
-      toast('Post copied', 'success');
-    } catch {
-      toast('Could not copy post text', 'error');
-    }
-  }
+  useEffect(() => { getSponsorStatus().then(setSponsor).catch(() => {}); }, []);
 
-  // discover the gas station once; if up, subscribing is gas-free.
-  useEffect(() => {
-    getSponsorStatus().then(setSponsor).catch(() => {});
-  }, []);
-
-  // default the strategy's executing agent to the connected wallet (a creator usually runs
-  // their own agent key; they can paste a dedicated agent address instead).
   useEffect(() => {
     if (address && !form.agent) setForm((f) => ({ ...f, agent: address }));
   }, [address, form.agent]);
@@ -124,14 +135,10 @@ export default function StrategiesPage() {
   const load = useCallback(async () => {
     try {
       const [s, t] = await Promise.all([fetchStrategies(), fetchCopyTrades(50)]);
-      setStrategies(s);
-      setCopyTrades(t);
-      setLoadError(null);
+      setStrategies(s); setCopyTrades(t); setLoadError(null);
     } catch (e) {
       setLoadError(String(e instanceof Error ? e.message : e).slice(0, 160));
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   }, []);
 
   useEffect(() => {
@@ -141,66 +148,50 @@ export default function StrategiesPage() {
   }, [load]);
 
   useEffect(() => {
-    refreshSocialVaultBalance();
-    refreshSubscriptions();
-    const id = setInterval(() => {
-      refreshSocialVaultBalance();
-      refreshSubscriptions();
-    }, 20_000);
+    refreshSocialVaultBalance(); refreshSubscriptions();
+    const id = setInterval(() => { refreshSocialVaultBalance(); refreshSubscriptions(); }, 20_000);
     return () => clearInterval(id);
   }, [refreshSocialVaultBalance, refreshSubscriptions]);
 
-  // Subscriber: pay the fee + authorize the agent to copy-trade your budget, under
-  // the strategy's hard caps. Mirrors WaitlistCard.join(): sponsored path if the gas
-  // station is up, wallet-pays fallback otherwise — both execute off JSON-RPC over gRPC.
-  async function subscribe(card: StrategyCard) {
-    if (!address) return;
-    const targetBalance = Number(targetBalanceFor(card).replace(',', '.'));
-    if (!Number.isFinite(targetBalance) || targetBalance <= 0) {
-      toast('Enter a Copy Budget above 0', 'error');
-      return;
-    }
-    const targetMicro = BigInt(Math.floor(targetBalance * DUSDC_MULTIPLIER));
-    const currentVaultMicro = BigInt(Math.floor(socialVaultBalance));
-    const topUpMicro = targetMicro > currentVaultMicro ? targetMicro - currentVaultMicro : BigInt(0);
-    const feeMicro = BigInt(Math.floor(card.subFee * DUSDC_MULTIPLIER));
-    const walletMicro = dusdcCoins.reduce((sum, c) => sum + c.balance, BigInt(0));
-    const neededMicro = topUpMicro + feeMicro;
+  // open/close the copy drawer: reset budget, lock scroll, Esc to close.
+  const openDrawer = (id: string) => { setBudget(''); setDrawerId(id); };
+  const closeDrawer = useCallback(() => setDrawerId(null), []);
+  useEffect(() => {
+    if (!drawerId) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeDrawer(); };
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    document.addEventListener('keydown', onKey);
+    return () => { document.body.style.overflow = prev; document.removeEventListener('keydown', onKey); };
+  }, [drawerId, closeDrawer]);
 
-    if (walletMicro < neededMicro) {
-      toast(
-        `Wallet DUSDC too low — needs ${(Number(neededMicro) / DUSDC_MULTIPLIER).toFixed(2)} for budget + fee`,
-        'error',
-      );
+  // Subscriber: top up the capped budget + authorize the agent to copy-trade under hard caps.
+  async function subscribe(card: StrategyCard, budgetStr: string) {
+    if (!address) return;
+    const target = Number(budgetStr.replace(',', '.'));
+    if (!Number.isFinite(target) || target <= 0) { toast('Enter a copy budget above 0', 'error'); return; }
+    const targetMicro = BigInt(Math.floor(target * DUSDC_MULTIPLIER));
+    const currentMicro = BigInt(Math.floor(socialVaultBalance));
+    const topUpMicro = targetMicro > currentMicro ? targetMicro - currentMicro : BigInt(0);
+    const feeMicro = BigInt(Math.floor(card.subFee * DUSDC_MULTIPLIER));
+    const needed = topUpMicro + feeMicro;
+    if (walletDusdc < needed) {
+      toast(`Wallet DUSDC too low — needs ${(Number(needed) / DUSDC_MULTIPLIER).toFixed(2)} for budget + fee`, 'error');
       return;
     }
     setSubscribingId(card.id);
     try {
-      await submit(() =>
-        buildFundAndSubscribeTx({
-          owner: address,
-          strategyId: card.id,
-          coinIds: dusdcCoins.map((c) => c.coinObjectId),
-          topUpMicro,
-          subFeeMicro: feeMicro,
-        }),
-      );
-      toast(
-        topUpMicro > BigInt(0)
-          ? `Copy Budget set. Now copying ${fmtAddr(card.agent)}`
-          : `Now copying ${fmtAddr(card.agent)} with your Copy Budget`,
-        'success',
-      );
-      await load();
-      refreshSocialVaultBalance();
-      refreshSubscriptions();
-      refreshDusdc();
+      await submit(() => buildFundAndSubscribeTx({
+        owner: address, strategyId: card.id,
+        coinIds: dusdcCoins.map((c) => c.coinObjectId),
+        topUpMicro, subFeeMicro: feeMicro,
+      }));
+      toast(`Now copying ${codenameFromAddress(card.agent)}`, 'success');
+      closeDrawer();
+      await load(); refreshSocialVaultBalance(); refreshSubscriptions(); refreshDusdc();
     } catch (e) {
-      const msg = String(e instanceof Error ? e.message : e).slice(0, 140);
-      toast(`Could not start copying: ${msg}`, 'error');
-    } finally {
-      setSubscribingId(null);
-    }
+      toast(`Could not start copying: ${String(e instanceof Error ? e.message : e).slice(0, 140)}`, 'error');
+    } finally { setSubscribingId(null); }
   }
 
   async function cancelSubscription(sub: StrategySubscription) {
@@ -208,18 +199,13 @@ export default function StrategiesPage() {
     setCancelingId(sub.id);
     try {
       await submit(() => buildCancelSubscriptionTx(sub.id));
-      toast(`Paused future copies for ${fmtAddr(sub.agent)}`, 'success');
+      toast(`Paused future copies for ${codenameFromAddress(sub.agent)}`, 'success');
       refreshSubscriptions();
     } catch (e) {
-      const msg = String(e instanceof Error ? e.message : e).slice(0, 140);
-      toast(`Pause failed: ${msg}`, 'error');
-    } finally {
-      setCancelingId(null);
-    }
+      toast(`Pause failed: ${String(e instanceof Error ? e.message : e).slice(0, 140)}`, 'error');
+    } finally { setCancelingId(null); }
   }
 
-  // Creator: publish a new investable strategy. The caps become the hard ceiling the agent
-  // is bound to on every subscriber's funds. Capsule/memory pointers are optional (0 = none).
   async function listStrategy() {
     if (!address) return;
     const maxLeverageBps = Math.round(parseFloat(form.maxLeverage || '0') * 10_000);
@@ -228,41 +214,20 @@ export default function StrategiesPage() {
     const agent = form.agent.trim() || address;
     const memoryAccount = form.memoryAccount.trim() || ZERO_ADDR;
     let capsuleBlob = BigInt(0);
-    try {
-      capsuleBlob = BigInt(form.capsuleBlob.trim() || '0');
-    } catch {
-      toast('Strategy file ID must be a number, or blank', 'error');
-      return;
-    }
-    if (maxLeverageBps < 10_000) { toast('Max leverage must be at least 1x', 'error'); return; }
+    try { capsuleBlob = BigInt(form.capsuleBlob.trim() || '0'); }
+    catch { toast('Playbook file ID must be a number, or blank', 'error'); return; }
+    if (maxLeverageBps < 10_000) { toast('Max leverage must be at least 1×', 'error'); return; }
     if (maxMarginMicro <= BigInt(0)) { toast('Max budget per trade must be greater than 0', 'error'); return; }
     if (!/^0x[0-9a-fA-F]{64}$/.test(agent)) { toast('Agent must be a 0x… address', 'error'); return; }
-    if (memoryAccount !== ZERO_ADDR && !/^0x[0-9a-fA-F]{64}$/.test(memoryAccount)) {
-      toast('Verified memory must be a 0x… address, or blank', 'error');
-      return;
-    }
+    if (memoryAccount !== ZERO_ADDR && !/^0x[0-9a-fA-F]{64}$/.test(memoryAccount)) { toast('Memory must be a 0x… address, or blank', 'error'); return; }
     setListing(true);
     try {
-      await submit(() =>
-        buildListStrategyTx({
-          agent,
-          capsuleBlob,
-          memoryAccount,
-          maxLeverageBps,
-          maxMarginMicro,
-          subFeeMicro,
-          creator: address,
-        }),
-      );
+      await submit(() => buildListStrategyTx({ agent, capsuleBlob, memoryAccount, maxLeverageBps, maxMarginMicro, subFeeMicro, creator: address }));
       toast('Strategy published — users can now copy it', 'success');
-      setShowList(false);
-      await load();
+      setShowList(false); await load();
     } catch (e) {
-      const msg = String(e instanceof Error ? e.message : e).slice(0, 140);
-      toast(`Publish failed: ${msg}`, 'error');
-    } finally {
-      setListing(false);
-    }
+      toast(`Publish failed: ${String(e instanceof Error ? e.message : e).slice(0, 140)}`, 'error');
+    } finally { setListing(false); }
   }
 
   return (
@@ -273,511 +238,205 @@ export default function StrategiesPage() {
       <GrainOverlay />
 
       <main className="container pt-[120px] pb-12">
+        {/* breadcrumb */}
         <div className="font-mono text-[11px] tracking-[0.18em] uppercase text-gray-500 mb-7 flex items-center gap-3">
           <a href="/" className="hover:text-white transition-colors">Yosuku</a>
           <span className="text-gray-700">/</span>
           <span className="text-white">Strategies</span>
         </div>
 
-        <h1 className="font-display font-[800] text-4xl text-white tracking-tight mb-2">
-          Agent Strategies
-        </h1>
-        <p className="font-jp text-gray-500 text-sm mb-6">コピー取引</p>
-
-        <p className="text-gray-400 text-sm leading-relaxed max-w-2xl mb-6">
-          Copy prediction agents with a capped budget. They can trade for you, but they
-          cannot withdraw your funds. Pause anytime.
+        {/* title + positioning */}
+        <h1 className="font-display font-[800] text-4xl text-white tracking-tight mb-1.5">Agent Strategies</h1>
+        <p className="font-jp text-gray-600 text-sm mb-4">戦略</p>
+        <p className="text-gray-300 text-[15px] leading-relaxed max-w-2xl mb-4">
+          Copy a prediction agent with a capped budget. It trades for you — it can never
+          withdraw your funds. <span className="text-gray-500">Pause anytime.</span>
         </p>
 
-        {/* Creator: list a strategy */}
-        <div className="mb-10">
-          {address && (
-            <button
-              onClick={() => setShowList((v) => !v)}
-              className="font-mono text-[12px] px-4 py-2 rounded-full border border-white/10 hover:border-white/25 hover:bg-white/[0.03] text-gray-300 hover:text-white transition-colors"
-            >
-              {showList ? '× Close creator mode' : '+ Creator mode'}
-            </button>
-          )}
+        {/* standing trust + risk bar (two tones) */}
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mb-9 font-mono text-[11px]">
+          <span className="inline-flex items-center gap-2 text-new-mint">
+            <span className="w-1.5 h-1.5 rounded-full bg-new-mint" />
+            Non-custodial · caps enforced on Sui
+          </span>
+          <span className="text-gray-600">Past copy-trades don&apos;t guarantee future results.</span>
+        </div>
 
-          {address && showList && (
-            <div className="border border-white/[0.08] rounded bg-bg p-5 mt-4 max-w-2xl">
-              <h3 className="font-display font-[700] text-sm text-white mb-1">Publish an agent strategy</h3>
-              <p className="text-gray-500 text-xs leading-relaxed mb-5">
-                Set the risk limits subscribers see before they copy you. Your agent can trade
-                only inside those limits and can never withdraw user funds. Verified memory and
-                strategy files are optional.
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <label className="block">
-                  <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 block mb-1.5">Agent wallet</span>
-                  <input
-                    value={form.agent}
-                    onChange={(e) => setForm((f) => ({ ...f, agent: e.target.value }))}
-                    placeholder="0x… (defaults to you)"
-                    className="w-full px-3 py-2 rounded bg-white/[0.03] border border-white/[0.08] focus:border-white/20 text-white font-mono text-[12px] outline-none transition-colors"
-                  />
-                </label>
-                <label className="block">
-                  <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 block mb-1.5">Subscription fee</span>
-                  <input
-                    type="number" min="0" step="0.1"
-                    value={form.subFee}
-                    onChange={(e) => setForm((f) => ({ ...f, subFee: e.target.value }))}
-                    className="w-full px-3 py-2 rounded bg-white/[0.03] border border-white/[0.08] focus:border-white/20 text-white font-mono text-sm outline-none transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                  />
-                </label>
-                <label className="block">
-                  <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 block mb-1.5">Verified memory</span>
-                  <input
-                    value={form.memoryAccount}
-                    onChange={(e) => setForm((f) => ({ ...f, memoryAccount: e.target.value }))}
-                    placeholder="0x… optional"
-                    className="w-full px-3 py-2 rounded bg-white/[0.03] border border-white/[0.08] focus:border-white/20 text-white font-mono text-[12px] outline-none transition-colors"
-                  />
-                </label>
-                <label className="block">
-                  <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 block mb-1.5">Strategy file</span>
-                  <input
-                    value={form.capsuleBlob}
-                    onChange={(e) => setForm((f) => ({ ...f, capsuleBlob: e.target.value }))}
-                    placeholder="optional file id"
-                    className="w-full px-3 py-2 rounded bg-white/[0.03] border border-white/[0.08] focus:border-white/20 text-white font-mono text-[12px] outline-none transition-colors"
-                  />
-                </label>
-                <label className="block">
-                  <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 block mb-1.5">Max leverage (x)</span>
-                  <input
-                    type="number" min="1" step="1"
-                    value={form.maxLeverage}
-                    onChange={(e) => setForm((f) => ({ ...f, maxLeverage: e.target.value }))}
-                    className="w-full px-3 py-2 rounded bg-white/[0.03] border border-white/[0.08] focus:border-white/20 text-white font-mono text-sm outline-none transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                  />
-                </label>
-                <label className="block">
-                  <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 block mb-1.5">Max budget / trade</span>
-                  <input
-                    type="number" min="0" step="1"
-                    value={form.maxMargin}
-                    onChange={(e) => setForm((f) => ({ ...f, maxMargin: e.target.value }))}
-                    className="w-full px-3 py-2 rounded bg-white/[0.03] border border-white/[0.08] focus:border-white/20 text-white font-mono text-sm outline-none transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                  />
-                </label>
-              </div>
-              <button
-                onClick={listStrategy}
-                disabled={listing}
-                className="w-full mt-5 py-3 rounded text-sm font-semibold bg-vermilion hover:bg-vermilion-d text-white transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                {listing ? 'listing…' : 'List strategy'}
-              </button>
-            </div>
-          )}
+        {/* control bar — curated tabs (replaces the dead leaderboard) */}
+        <div className="sticky top-[64px] z-20 -mx-4 px-4 py-3 mb-7 bg-bg/85 backdrop-blur-md border-b border-white/[0.06]">
+          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
+            {TABS.map((t) => {
+              const on = tab === t.key;
+              const n = tabCount(t.key);
+              return (
+                <button
+                  key={t.key}
+                  onClick={() => setTab(t.key)}
+                  className={`shrink-0 rounded-full px-3.5 py-1.5 font-mono text-[11px] tracking-[0.08em] transition-colors border ${
+                    on ? 'bg-white text-black border-white' : 'border-white/12 text-gray-400 hover:text-white hover:border-white/30'
+                  }`}
+                >
+                  {t.label}
+                  <span className={`ml-1.5 tabular-nums ${on ? 'text-black/50' : 'text-gray-600'}`}>{n}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {loading && strategies.length === 0 ? (
-          <div className="font-mono text-sm text-gray-500 py-20 text-center">reading the chain…</div>
+          <div className="font-mono text-sm text-gray-500 py-24 text-center">reading the chain…</div>
         ) : (
-          <div className="flex flex-col gap-8">
-            {/* 02: Leaderboard + X distribution */}
-            <section className="order-2">
-              <SectionHeader
-                number="02"
-                title="Proof leaderboard"
-                jp="拡散"
-                live={topRows.length > 0}
-                meta={`${topRows.length} ranked`}
-              />
-
-              <div className="grid grid-cols-1 lg:grid-cols-[0.9fr_1.6fr] gap-5">
-                <div className="border border-white/[0.08] rounded bg-bg p-5">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-10 h-10 rounded-full border border-vermilion/30 bg-vermilion/10 flex items-center justify-center">
-                      <Radio className="w-4 h-4 text-vermilion" />
-                    </div>
-                    <div>
-                      <h3 className="font-display font-[700] text-white text-base">Share the leaderboard</h3>
-                      <p className="font-mono text-[10px] tracking-[0.16em] uppercase text-gray-500">human-approved X post</p>
-                    </div>
-                  </div>
-                  <p className="text-gray-400 text-sm leading-relaxed mb-5">
-                    Turn live copy-trading activity into a clean X post. The claim links back here;
-                    the proof lives in Sui events and verified memory pointers.
-                  </p>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => postToX(buildLeaderboardShareText(leaderboard))}
-                      className="inline-flex items-center justify-center gap-2 flex-1 py-3 rounded bg-white text-black text-sm font-semibold hover:bg-gray-200 transition-colors"
-                    >
-                      <Share2 className="w-4 h-4" />
-                      Post leaderboard
-                    </button>
-                    <button
-                      onClick={() => copyPost('leaderboard', buildLeaderboardShareText(leaderboard))}
-                      className="inline-flex items-center justify-center gap-2 px-4 py-3 rounded border border-white/10 text-gray-300 hover:text-white hover:border-white/25 transition-colors"
-                      aria-label="Copy leaderboard post"
-                    >
-                      <Copy className="w-4 h-4" />
-                      <span className="sr-only">{copiedId === 'leaderboard' ? 'Copied' : 'Copy'}</span>
-                    </button>
-                  </div>
+          <>
+            {/* 01 — the marketplace grid (primary) */}
+            {visible.length === 0 ? (
+              <div className="border border-white/[0.08] rounded-xl bg-bg p-16 text-center">
+                <div className="w-16 h-16 mx-auto mb-6 border border-white/10 rounded-full flex items-center justify-center">
+                  <span className="font-jp text-2xl text-gray-500">戦</span>
                 </div>
-
-                <div className="border border-white/[0.08] rounded bg-bg divide-y divide-white/[0.05] overflow-hidden">
-                  {topRows.length === 0 ? (
-                    <div className="font-mono text-xs text-gray-600 px-5 py-8 text-center">no strategy proof yet</div>
-                  ) : (
-                    topRows.map((row) => {
-                      const shareText = buildStrategyShareText(row, row.rank);
-                      return (
-                        <div key={row.id} className="px-5 py-4 hover:bg-white/[0.02] transition-colors">
-                          <div className="flex items-start gap-4">
-                            <div className="w-10 h-10 shrink-0 rounded-full border border-white/10 flex items-center justify-center">
-                              {row.rank === 1 ? (
-                                <Trophy className="w-4 h-4 text-vermilion" />
-                              ) : (
-                                <span className="font-mono text-xs text-gray-400">#{row.rank}</span>
-                              )}
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <div className="flex flex-wrap items-center gap-2 mb-2">
-                                <a
-                                  href={SUISCAN_ACC(row.agent)}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="font-mono text-[13px] text-gray-200 hover:text-white transition-colors"
-                                >
-                                  agent {fmtAddr(row.agent)}
-                                </a>
-                                <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-gray-500 border border-white/10 rounded px-2 py-1">
-                                  {row.distributionLabel}
-                                </span>
-                                {row.hasMemory && (
-                                  <span className="inline-flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.16em] text-new-mint border border-new-mint/20 rounded px-2 py-1">
-                                    <BrainCircuit className="w-3 h-3" />
-                                    MemWal
-                                  </span>
-                                )}
-                              </div>
-                              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-                                <MiniStat label="score" value={row.score.toFixed(0)} />
-                                <MiniStat label="proof" value={String(row.proofCount)} />
-                                <MiniStat label="trades" value={String(row.copyTrades)} />
-                                <MiniStat label="copiers" value={String(row.subscribers)} />
-                                <MiniStat
-                                  label={row.realizedTrades > 0 ? 'realized' : 'copied'}
-                                  value={
-                                    row.realizedTrades > 0
-                                      ? `${row.realizedPnl >= 0 ? '+' : ''}${fmtDusdc(row.realizedPnl)}`
-                                      : fmtDusdc(row.volumeCopied)
-                                  }
-                                />
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2 shrink-0">
-                              <button
-                                onClick={() => copyPost(`strategy-${row.id}`, shareText)}
-                                className="w-9 h-9 rounded border border-white/10 text-gray-400 hover:text-white hover:border-white/25 transition-colors flex items-center justify-center"
-                                aria-label="Copy strategy proof post"
-                              >
-                                <Copy className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={() => postToX(shareText)}
-                                className="w-9 h-9 rounded bg-vermilion text-white hover:bg-vermilion-d transition-colors flex items-center justify-center"
-                                aria-label="Post strategy proof to X"
-                              >
-                                <Share2 className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
+                <h2 className="font-display font-[700] text-xl text-white mb-2">
+                  {strategies.length === 0 ? 'No agents listed yet' : `No ${tab} agents`}
+                </h2>
+                <p className="text-gray-500 text-sm max-w-md mx-auto leading-relaxed">
+                  {loadError
+                    ? "Couldn't reach the chain — retrying every 30s."
+                    : strategies.length === 0
+                      ? 'Copyable agents appear here the moment a creator publishes one. Every agent is bound to hard risk limits on Sui before a single dollar of yours can move.'
+                      : 'Nothing matches this filter yet — try another tab.'}
+                </p>
               </div>
-            </section>
-
-            {/* 01: The strategies */}
-            <section className="order-1">
-              <SectionHeader number="01" title="Copy an agent" jp="戦略" live={strategies.length > 0} meta={`${strategies.length} listed`} />
-
-              {strategies.length === 0 ? (
-                <div className="border border-white/[0.08] rounded bg-bg p-16 text-center">
-                  <div className="w-16 h-16 mx-auto mb-6 border border-white/10 rounded-full flex items-center justify-center">
-                    <span className="font-jp text-2xl text-gray-500">戦</span>
-                  </div>
-                  <h2 className="font-display font-[700] text-xl text-white mb-2">No strategies yet</h2>
-                  <p className="text-gray-500 text-sm max-w-sm mx-auto">
-                    {loadError
-                      ? "Couldn't reach the chain — retrying."
-                      : 'Copyable agents will appear here as creators publish them. Each one is bound to risk limits before a single user dollar moves.'}
-                  </p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  {strategies.map((card) => {
-                    const busy = subscribingId === card.id;
-                    const free = card.subFee === 0 && !!sponsor;
-                    const rank = rankById.get(card.id);
-                    const activeSub = subscriptionByStrategy.get(card.id);
-                    const shareText = buildStrategyShareText(card, rank);
-                    const targetText = targetBalanceFor(card);
-                    const targetBalance = Number(targetText.replace(',', '.'));
-                    const validTarget = Number.isFinite(targetBalance) && targetBalance > 0;
-                    const currentVaultDusdc = socialVaultBalance / DUSDC_MULTIPLIER;
-                    const topUpDusdc = validTarget ? Math.max(0, targetBalance - currentVaultDusdc) : 0;
-                    const walletNeedDusdc = topUpDusdc + card.subFee;
-                    const copyCapacity = validTarget ? Math.min(targetBalance, card.maxMargin) : 0;
-                    const cta = topUpDusdc > 0.000001
-                      ? `Add ${fmtDusdc(topUpDusdc)} + start copying →`
-                      : free
-                        ? 'Start copying — free →'
-                        : `Start copying · ${fmtDusdc(card.subFee)} DUSDC`;
-                    return (
-                      <div key={card.id} id={`strategy-${card.id}`} className="border border-white/[0.08] rounded bg-bg p-5 flex flex-col">
-                        {/* top row: avatar glyph + agent address + capability chips */}
-                        <div className="flex items-center gap-3 mb-5">
-                          <div className="w-10 h-10 shrink-0 border border-white/10 rounded-full flex items-center justify-center">
-                            <span className="font-jp text-lg text-vermilion">{glyphFromAddress(card.agent)}</span>
-                          </div>
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                              <h3 className="font-display font-[800] text-base text-white truncate">{codenameFromAddress(card.agent)}</h3>
-                              {rank && (
-                                <span className="shrink-0 font-mono text-[10px] font-bold text-vermilion border border-vermilion/30 rounded px-1.5 py-0.5">#{rank}</span>
-                              )}
-                            </div>
-                            <a
-                              href={SUISCAN_ACC(card.agent)}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="font-mono text-[11px] text-gray-500 hover:text-gray-300 transition-colors"
-                            >
-                              {fmtAddr(card.agent)}
-                            </a>
-                          </div>
-                          <span className="flex-1" />
-                          <div className="flex items-center gap-1.5">
-                            {card.hasCapsule && (
-                              <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-gray-400 border border-white/10 rounded px-2 py-1">
-                                Strategy file
-                              </span>
-                            )}
-                            {card.hasMemory && (
-                              <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-gray-400 border border-white/10 rounded px-2 py-1">
-                                Verified memory
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <button
-                              onClick={() => copyPost(`card-${card.id}`, shareText)}
-                              className="w-8 h-8 rounded border border-white/10 text-gray-500 hover:text-white hover:border-white/25 transition-colors flex items-center justify-center"
-                              aria-label="Copy strategy post"
-                              title={copiedId === `card-${card.id}` ? 'Copied' : 'Copy post'}
-                            >
-                              <Copy className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => postToX(shareText)}
-                              className="w-8 h-8 rounded border border-vermilion/35 text-vermilion hover:bg-vermilion/10 transition-colors flex items-center justify-center"
-                              aria-label="Post strategy to X"
-                              title="Post to X"
-                            >
-                              <Share2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+                {visible.map((card) => {
+                  const tier = tierOf(card);
+                  const sub = subscriptionByStrategy.get(card.id);
+                  return (
+                    <div
+                      key={card.id}
+                      id={`strategy-${card.id}`}
+                      className="group border border-white/[0.08] rounded-xl bg-bg p-5 flex flex-col transition-all duration-200 hover:border-white/[0.18] hover:-translate-y-0.5"
+                    >
+                      {/* identity */}
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="w-10 h-10 shrink-0 border border-white/10 rounded-full flex items-center justify-center">
+                          <span className="font-jp text-lg text-vermilion">{glyphFromAddress(card.agent)}</span>
                         </div>
-
-                        {/* hero: leverage + non-custodial seal */}
-                        <div className="flex items-stretch gap-3 mb-4">
-                          <div className="flex-1 border border-white/[0.08] rounded bg-white/[0.02] px-4 py-3">
-                            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 block mb-1">Trade up to</span>
-                            <span className="font-display font-[800] text-4xl text-white leading-none tabular-nums">
-                              {card.maxLeverage}<span className="text-vermilion">×</span>
-                            </span>
-                            <span className="font-mono text-[10px] text-gray-500 block mt-1.5">
-                              {fmtDusdc(card.maxMargin)} DUSDC / trade · {card.subFee === 0 ? 'free' : `${fmtDusdc(card.subFee)} DUSDC fee`}
-                            </span>
-                          </div>
-                          <div className="flex-1 border border-new-mint/25 bg-new-mint/[0.05] rounded px-4 py-3 flex flex-col justify-center">
-                            <span className="font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-new-mint block mb-1.5">● Non-custodial</span>
-                            <span className="text-[12.5px] leading-snug text-gray-300">
-                              Trades your budget. <span className="text-white font-semibold">Can&apos;t withdraw a cent.</span>
-                            </span>
-                          </div>
+                        <div className="min-w-0 flex-1">
+                          <h3 className="font-display font-[800] text-base text-white truncate leading-tight">{codenameFromAddress(card.agent)}</h3>
+                          <a
+                            href={SUISCAN_ACC(card.agent)} target="_blank" rel="noreferrer"
+                            className="font-mono text-[11px] text-gray-500 hover:text-gray-300 transition-colors"
+                          >
+                            {fmtAddr(card.agent)}
+                          </a>
                         </div>
-
-                        {/* live performance row */}
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-5">
-                          <div>
-                            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 block mb-1">Copiers</span>
-                            <span className="font-mono text-sm text-white tabular-nums">{card.subscribers}</span>
-                          </div>
-                          <div>
-                            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 block mb-1">Trades</span>
-                            <span className="font-mono text-sm text-white tabular-nums">{card.copyTrades}</span>
-                          </div>
-                          <div>
-                            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 block mb-1">
-                              {card.realizedTrades > 0 ? 'Realized P&L' : 'Vol copied'}
-                            </span>
-                            <span className="font-mono text-sm text-white tabular-nums">
-                              {card.realizedTrades > 0
-                                ? `${card.realizedPnl >= 0 ? '+' : ''}${fmtDusdc(card.realizedPnl)}`
-                                : fmtDusdc(card.volumeCopied)}
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 block mb-1">Last active</span>
-                            <span className="font-mono text-sm text-white">{ago(card.lastActive)}</span>
-                          </div>
-                        </div>
-
-                        <div className="border border-new-mint/20 bg-new-mint/[0.04] rounded p-4 mb-5">
-                          <div className="flex items-start justify-between gap-4 mb-3">
-                            <div>
-                              <h3 className="font-display font-[700] text-sm text-white mb-1">Copy Budget</h3>
-                              <p className="font-mono text-[9px] tracking-[0.16em] uppercase text-gray-500">
-                                your limit · pause anytime
-                              </p>
-                            </div>
-                            <span className="shrink-0 font-mono text-[9px] tracking-[0.16em] uppercase text-new-mint border border-new-mint/20 rounded-full px-2.5 py-1">
-                              auto capped
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2 rounded border border-white/[0.08] bg-black/20 px-3 py-2 mb-3">
-                            <input
-                              type="number"
-                              min="0"
-                              step="0.1"
-                              value={targetText}
-                              onChange={(e) => setTargetBalances((m) => ({ ...m, [card.id]: e.target.value }))}
-                              className="flex-1 bg-transparent outline-none text-white font-mono text-lg tabular-nums [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                            />
-                            <span className="font-mono text-[11px] text-gray-500 tracking-[0.14em]">DUSDC</span>
-                          </div>
-                          <div className="grid grid-cols-2 gap-2 mb-3">
-                            <MiniStat label="current budget" value={`${fmtDusdc(currentVaultDusdc)} DUSDC`} />
-                            <MiniStat label="add today" value={validTarget ? `${fmtDusdc(topUpDusdc)} DUSDC` : '—'} />
-                            <MiniStat label="wallet needed" value={`${fmtDusdc(walletNeedDusdc)} DUSDC`} />
-                            <MiniStat label="max copied" value={validTarget ? `${fmtDusdc(copyCapacity)} DUSDC` : '—'} />
-                          </div>
-                          <p className="text-[12px] leading-relaxed text-gray-500">
-                            This agent can only use your Copy Budget and cannot withdraw it. Each copied trade is capped at
-                            {' '}{fmtDusdc(card.maxMargin)} DUSDC, max {card.maxLeverage}x.
-                          </p>
-                        </div>
-
-                        {/* subscribe action */}
-                        <div className="mt-auto">
-                          {!address ? (
-                            <ConnectButton />
-                          ) : activeSub ? (
-                            <div className="border border-new-mint/25 bg-new-mint/[0.06] rounded p-3">
-                              <div className="flex items-start justify-between gap-3">
-                                <div>
-                                  <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-new-mint mb-1">
-                                    copying
-                                  </p>
-                                  <p className="text-[12px] text-gray-400 leading-relaxed">
-                                    Future copies are active. The agent cannot exceed {fmtDusdc(activeSub.maxMargin)}
-                                    DUSDC per trade or {activeSub.maxLeverageBps / 10_000}x.
-                                  </p>
-                                </div>
-                                <button
-                                  onClick={() => cancelSubscription(activeSub)}
-                                  disabled={cancelingId === activeSub.id}
-                                  className="shrink-0 px-3 py-2 rounded border border-white/10 text-gray-300 hover:text-white hover:border-white/25 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-mono text-[10px] uppercase tracking-[0.14em]"
-                                >
-                                  {cancelingId === activeSub.id ? 'pausing…' : 'pause'}
-                                </button>
-                              </div>
-                            </div>
-                          ) : (
-                            <button
-                              onClick={() => subscribe(card)}
-                              disabled={busy || !validTarget}
-                              className="w-full py-3 rounded text-sm font-semibold bg-vermilion hover:bg-vermilion-d text-white transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-                            >
-                              {busy
-                                ? 'starting…'
-                                : cta}
-                            </button>
-                          )}
-                        </div>
+                        <span className={`shrink-0 font-mono text-[9px] uppercase tracking-[0.14em] rounded-full px-2 py-1 border ${TONE[tier.tone]}`}>
+                          {tier.key}
+                        </span>
                       </div>
-                    );
-                  })}
-                </div>
-              )}
-            </section>
 
-            {/* 03: Recent copy-trades */}
-            <section className="order-3">
-              <SectionHeader number="03" title="Recent copy-trades" jp="コピー取引" meta={`${copyTrades.length}`} />
-              <div className="border border-white/[0.08] rounded bg-bg divide-y divide-white/[0.05] overflow-hidden">
+                      {/* HERO — the single, verifiable non-custodial + caps guarantee */}
+                      <div className="relative border border-new-mint/25 bg-new-mint/[0.05] rounded-lg px-4 py-3.5 mb-4">
+                        <span className="font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-new-mint flex items-center gap-1.5 mb-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-new-mint" /> Non-custodial
+                        </span>
+                        <div className="flex items-baseline gap-2">
+                          <span className="font-display font-[800] text-3xl text-white leading-none tabular-nums">
+                            {card.maxLeverage}<span className="text-vermilion">×</span>
+                          </span>
+                          <span className="text-[13px] text-gray-300 leading-snug">
+                            max — <span className="text-white font-semibold">can&apos;t withdraw a cent.</span>
+                          </span>
+                        </div>
+                        <a
+                          href={SUISCAN_OBJ(card.id)} target="_blank" rel="noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="mt-2 inline-block font-mono text-[10px] text-gray-500 hover:text-new-mint transition-colors"
+                        >
+                          verify caps on-chain ↗
+                        </a>
+                      </div>
+
+                      {/* caps row — the concrete enforced numbers */}
+                      <div className="grid grid-cols-3 gap-3 pb-4 mb-4 border-b border-white/[0.06]">
+                        <CapStat label="Max / trade" value={`${fmtDusdc(card.maxMargin)}`} unit="DUSDC" />
+                        <CapStat label="Fee" value={card.subFee === 0 ? 'Free' : fmtDusdc(card.subFee)} unit={card.subFee === 0 ? '' : 'DUSDC'} />
+                        <CapStat label="Copiers" value={card.subscribers > 0 ? String(card.subscribers) : '—'} unit="" />
+                      </div>
+
+                      {/* track record — honest, within data we have */}
+                      {card.copyTrades === 0 ? (
+                        <p className="font-mono text-[11px] text-gray-600 mb-5">No copy-trades settled yet. You&apos;d be first.</p>
+                      ) : (
+                        <div className="grid grid-cols-3 gap-3 mb-5">
+                          <CapStat label="Copy-trades" value={String(card.copyTrades)} unit="" />
+                          <CapStat
+                            label={card.realizedTrades > 0 ? 'Realized P&L' : 'Volume'}
+                            value={card.realizedTrades > 0 ? `${card.realizedPnl >= 0 ? '+' : ''}${fmtDusdc(card.realizedPnl)}` : fmtDusdc(card.volumeCopied)}
+                            unit="DUSDC"
+                          />
+                          <CapStat label="Last active" value={ago(card.lastActive) || 'never'} unit="" />
+                        </div>
+                      )}
+
+                      {/* single CTA → opens the copy drawer */}
+                      <div className="mt-auto">
+                        {sub ? (
+                          <button
+                            onClick={() => openDrawer(card.id)}
+                            className="w-full py-3 rounded-full text-sm font-semibold border border-new-mint/30 bg-new-mint/[0.06] text-new-mint hover:bg-new-mint/[0.12] transition-colors inline-flex items-center justify-center gap-2"
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full bg-new-mint" /> Copying — manage
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => openDrawer(card.id)}
+                            className="w-full py-3 rounded-full text-sm font-semibold bg-vermilion text-white hover:bg-vermilion-d shadow-[0_6px_28px_-8px_var(--vermilion)] transition-all"
+                          >
+                            Copy this agent →
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* 02 — recent copy-trades (slimmed; liveness + on-chain proof) */}
+            <section className="mt-14">
+              <div className="flex items-center gap-3 mb-4">
+                <h2 className="font-mono text-[11px] uppercase tracking-[0.22em] text-gray-400">Recent copy-trades</h2>
+                <div className="h-px flex-1 bg-white/10" />
+                <span className="font-mono text-[11px] text-gray-600 tabular-nums">{copyTrades.length}</span>
+              </div>
+              <div className="border border-white/[0.08] rounded-xl bg-bg divide-y divide-white/[0.05] overflow-hidden">
                 {copyTrades.length === 0 ? (
-                  <div className="font-mono text-xs text-gray-600 px-5 py-8 text-center">no copy-trades indexed yet</div>
+                  <div className="font-mono text-xs text-gray-600 px-5 py-8 text-center">No copy-trades settled yet — be the first to put an agent to work.</div>
                 ) : (
                   copyTrades.map((t, i) => {
-                    const strategy = strategies.find((s) => s.id === t.strategy);
-                    const shareText = buildCopyTradeShareText(t, strategy);
                     const inner = (
                       <div className="flex items-center gap-3 px-5 py-3 hover:bg-white/[0.02] transition-colors">
-                        <span
-                          className="w-1.5 h-1.5 rounded-full shrink-0 bg-vermilion"
-                          style={{ boxShadow: '0 0 8px var(--vermilion)' }}
-                        />
-                        <span className="font-mono text-[12px] text-gray-300 w-24 shrink-0">copy-trade</span>
+                        <span className="font-jp text-sm text-vermilion w-5 shrink-0 text-center">{glyphFromAddress(t.agent || t.strategy)}</span>
+                        <span className="font-display font-[700] text-[13px] text-white w-28 shrink-0 truncate">{codenameFromAddress(t.agent || t.strategy)}</span>
                         <a
-                          href={SUISCAN_ACC(t.subscriber)}
-                          target="_blank"
-                          rel="noreferrer"
+                          href={SUISCAN_ACC(t.subscriber)} target="_blank" rel="noreferrer"
                           onClick={(e) => e.stopPropagation()}
-                          className="font-mono text-[12px] text-gray-500 hover:text-white transition-colors"
+                          className="font-mono text-[12px] text-gray-500 hover:text-white transition-colors hidden sm:inline"
                         >
                           {fmtAddr(t.subscriber)}
                         </a>
                         <span className="flex-1" />
                         <span className="font-mono text-[12px] text-gray-300 tabular-nums">{fmtDusdc(t.notional)} DUSDC</span>
-                        <span className="font-mono text-[11px] text-gray-500 w-12 text-right shrink-0 tabular-nums">{t.leverageBps / 10000}x</span>
-                        <span className="font-mono text-[11px] text-gray-600 w-16 text-right shrink-0">{ago(t.ts)}</span>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            copyPost(`trade-${i}`, shareText);
-                          }}
-                          className="w-7 h-7 rounded border border-white/10 text-gray-600 hover:text-white hover:border-white/25 transition-colors flex items-center justify-center"
-                          aria-label="Copy copy-trade proof post"
-                          title={copiedId === `trade-${i}` ? 'Copied' : 'Copy post'}
-                        >
-                          <Copy className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            postToX(shareText);
-                          }}
-                          className="w-7 h-7 rounded border border-vermilion/30 text-vermilion/80 hover:text-vermilion hover:bg-vermilion/10 transition-colors flex items-center justify-center"
-                          aria-label="Post copy-trade proof to X"
-                          title="Post to X"
-                        >
-                          <Share2 className="w-3.5 h-3.5" />
-                        </button>
+                        <span className="font-mono text-[11px] text-gray-500 w-10 text-right shrink-0 tabular-nums">{t.leverageBps / 10000}×</span>
+                        <span className="font-mono text-[11px] text-gray-600 w-14 text-right shrink-0">{ago(t.ts)}</span>
                         <span className="font-mono text-[11px] text-vermilion w-4 text-right shrink-0">{t.digest ? '↗' : ''}</span>
                       </div>
                     );
-                    // Row opens the tx; the address inside is its own link. Clickable
-                    // div (not <a>) so we never nest <a> in <a> (hydration error).
                     const txHref = t.digest ? SUISCAN_TX(t.digest) : null;
                     return txHref ? (
                       <div
-                        key={i}
-                        role="link"
-                        tabIndex={0}
+                        key={i} role="link" tabIndex={0}
                         onClick={() => window.open(txHref, '_blank', 'noopener,noreferrer')}
                         onKeyDown={(e) => { if (e.key === 'Enter') window.open(txHref, '_blank', 'noopener,noreferrer'); }}
                         className="block cursor-pointer"
@@ -791,24 +450,284 @@ export default function StrategiesPage() {
                 )}
               </div>
             </section>
-          </div>
+
+            {/* creator mode — demoted to a quiet footer affordance */}
+            <section className="mt-12">
+              {address ? (
+                <button
+                  onClick={() => setShowList((v) => !v)}
+                  className="font-mono text-[12px] text-gray-500 hover:text-white transition-colors"
+                >
+                  {showList ? '× Close creator mode' : '+ List your agent (creator)'}
+                </button>
+              ) : (
+                <span className="font-mono text-[12px] text-gray-600">Connect a wallet to list your own agent.</span>
+              )}
+
+              {address && showList && (
+                <div className="border border-white/[0.08] rounded-xl bg-bg p-5 mt-4 max-w-2xl">
+                  <h3 className="font-display font-[700] text-sm text-white mb-1">Publish an agent strategy</h3>
+                  <p className="text-gray-500 text-xs leading-relaxed mb-5">
+                    These limits become the hard ceiling your agent is bound to on every subscriber&apos;s
+                    funds. It can trade only inside them and can never withdraw user money. Memory and
+                    playbook files are optional.
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <Field label="Agent wallet">
+                      <input value={form.agent} onChange={(e) => setForm((f) => ({ ...f, agent: e.target.value }))} placeholder="0x… (defaults to you)" className={INPUT} />
+                    </Field>
+                    <Field label="Subscription fee (DUSDC)">
+                      <input type="number" min="0" step="0.1" value={form.subFee} onChange={(e) => setForm((f) => ({ ...f, subFee: e.target.value }))} className={INPUT_NUM} />
+                    </Field>
+                    <Field label="Agent memory (optional)">
+                      <input value={form.memoryAccount} onChange={(e) => setForm((f) => ({ ...f, memoryAccount: e.target.value }))} placeholder="0x… optional" className={INPUT} />
+                    </Field>
+                    <Field label="Playbook file (optional)">
+                      <input value={form.capsuleBlob} onChange={(e) => setForm((f) => ({ ...f, capsuleBlob: e.target.value }))} placeholder="optional file id" className={INPUT} />
+                    </Field>
+                    <Field label="Max leverage (×)">
+                      <input type="number" min="1" step="1" value={form.maxLeverage} onChange={(e) => setForm((f) => ({ ...f, maxLeverage: e.target.value }))} className={INPUT_NUM} />
+                    </Field>
+                    <Field label="Max budget / trade (DUSDC)">
+                      <input type="number" min="0" step="1" value={form.maxMargin} onChange={(e) => setForm((f) => ({ ...f, maxMargin: e.target.value }))} className={INPUT_NUM} />
+                    </Field>
+                  </div>
+                  <button
+                    onClick={listStrategy} disabled={listing}
+                    className="w-full mt-5 py-3 rounded-full text-sm font-semibold bg-vermilion hover:bg-vermilion-d text-white transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {listing ? 'publishing…' : 'Publish strategy'}
+                  </button>
+                </div>
+              )}
+            </section>
+
+            {/* standing disclosure */}
+            <p className="mt-10 font-mono text-[10px] leading-relaxed text-gray-600 max-w-2xl">
+              Agents trade testnet DUSDC on 15-min BTC markets. You can lose your full budget. The agent
+              cannot withdraw or divert it — verify every position on Sui.
+            </p>
+          </>
         )}
 
         <Footer />
       </main>
+
+      {/* ── copy drawer (slide-over) ── */}
+      {drawerCard && (
+        <CopyDrawer
+          card={drawerCard}
+          sub={subscriptionByStrategy.get(drawerCard.id) ?? null}
+          address={address}
+          sponsor={sponsor}
+          currentVaultDusdc={currentVaultDusdc}
+          walletDusdcNum={walletDusdcNum}
+          budget={budget}
+          setBudget={setBudget}
+          busy={subscribingId === drawerCard.id}
+          canceling={!!cancelingId}
+          onConfirm={(b) => subscribe(drawerCard, b)}
+          onPause={cancelSubscription}
+          onShare={() => postToX(buildStrategyShareText(drawerCard))}
+          onClose={closeDrawer}
+        />
+      )}
     </div>
   );
 }
 
-function MiniStat({ label, value }: { label: string; value: string }) {
+const INPUT = 'w-full px-3 py-2 rounded bg-white/[0.03] border border-white/[0.08] focus:border-white/20 text-white font-mono text-[12px] outline-none transition-colors';
+const INPUT_NUM = INPUT + ' [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none';
+
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <label className="block">
+      <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 block mb-1.5">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+function CapStat({ label, value, unit }: { label: string; value: string; unit: string }) {
   return (
     <div>
-      <span className="text-[9px] font-bold uppercase tracking-[0.18em] text-gray-600 block mb-1">
-        {label}
+      <span className="text-[9px] font-bold uppercase tracking-[0.18em] text-gray-500 block mb-1">{label}</span>
+      <span className="font-mono text-sm text-white tabular-nums">
+        {value}{unit && <span className="text-gray-500 text-[11px] ml-1">{unit}</span>}
       </span>
-      <span className="font-mono text-[12px] text-white tabular-nums">
-        {value}
-      </span>
+    </div>
+  );
+}
+
+// ── Copy drawer: the focused subscribe flow (review → size → worked example → confirm) ──
+function CopyDrawer(props: {
+  card: StrategyCard;
+  sub: StrategySubscription | null;
+  address: string | null;
+  sponsor: SponsorStatus | null;
+  currentVaultDusdc: number;
+  walletDusdcNum: number;
+  budget: string;
+  setBudget: (s: string) => void;
+  busy: boolean;
+  canceling: boolean;
+  onConfirm: (budget: string) => void;
+  onPause: (sub: StrategySubscription) => void;
+  onShare: () => void;
+  onClose: () => void;
+}) {
+  const { card, sub, address, sponsor, currentVaultDusdc, walletDusdcNum, budget, setBudget, busy, canceling, onConfirm, onPause, onShare, onClose } = props;
+  const tier = tierOf(card);
+  const maxTarget = currentVaultDusdc + Math.max(0, walletDusdcNum - card.subFee);
+  const target = Number(budget.replace(',', '.'));
+  const valid = Number.isFinite(target) && target > 0;
+  const topUp = valid ? Math.max(0, target - currentVaultDusdc) : 0;
+  const walletNeed = topUp + card.subFee;
+  const cap = valid ? Math.min(target, card.maxMargin) : 0;
+  const free = card.subFee === 0 && !!sponsor;
+  const add = (n: number) => setBudget(String(Math.max(0, (parseFloat(budget || '0') || 0) + n)));
+
+  const cta = topUp > 0.000001
+    ? `Add ${fmtDusdc(topUp)} DUSDC & start copying`
+    : free ? 'Start copying — gas-free' : `Start copying · ${fmtDusdc(card.subFee)} DUSDC`;
+
+  return (
+    <div className="fixed inset-0 z-[9999] flex justify-end" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+      <div
+        className="relative h-full w-full max-w-[440px] overflow-y-auto border-l border-white/10 bg-[#0b0b0e] p-6 shadow-2xl animate-[slideIn_.22s_ease]"
+        role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}
+      >
+        <button onClick={onClose} aria-label="Close" className="absolute right-4 top-4 rounded-full p-2 text-gray-600 hover:bg-white/[0.05] hover:text-white transition-colors">
+          <X className="h-4 w-4" />
+        </button>
+
+        {/* identity */}
+        <div className="flex items-center gap-3 mb-5 pr-8">
+          <div className="w-11 h-11 shrink-0 border border-white/10 rounded-full flex items-center justify-center">
+            <span className="font-jp text-xl text-vermilion">{glyphFromAddress(card.agent)}</span>
+          </div>
+          <div className="min-w-0">
+            <h2 className="font-display font-[800] text-lg text-white truncate">{codenameFromAddress(card.agent)}</h2>
+            <a href={SUISCAN_ACC(card.agent)} target="_blank" rel="noreferrer" className="font-mono text-[11px] text-gray-500 hover:text-gray-300">{fmtAddr(card.agent)}</a>
+          </div>
+          <span className={`ml-auto shrink-0 font-mono text-[9px] uppercase tracking-[0.14em] rounded-full px-2 py-1 border ${TONE[tier.tone]}`}>{tier.key}</span>
+        </div>
+
+        {/* the guarantee */}
+        <div className="border border-new-mint/25 bg-new-mint/[0.05] rounded-lg px-4 py-3 mb-4">
+          <span className="font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-new-mint flex items-center gap-1.5 mb-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-new-mint" /> Non-custodial
+          </span>
+          <p className="text-[12.5px] text-gray-300 leading-snug">
+            Your budget stays in your vault. The agent can open and close positions for you, but it
+            <span className="text-white font-semibold"> cannot withdraw or divert it.</span>
+          </p>
+          <a href={SUISCAN_OBJ(card.id)} target="_blank" rel="noreferrer" className="mt-2 inline-block font-mono text-[10px] text-gray-500 hover:text-new-mint transition-colors">verify caps on-chain ↗</a>
+        </div>
+
+        {/* caps + record */}
+        <div className="grid grid-cols-3 gap-3 mb-2">
+          <CapStat label="Max leverage" value={`${card.maxLeverage}×`} unit="" />
+          <CapStat label="Max / trade" value={fmtDusdc(card.maxMargin)} unit="DUSDC" />
+          <CapStat label="Fee" value={card.subFee === 0 ? 'Free' : fmtDusdc(card.subFee)} unit={card.subFee === 0 ? '' : 'DUSDC'} />
+        </div>
+        <div className="grid grid-cols-3 gap-3 pb-4 mb-4 border-b border-white/[0.06]">
+          <CapStat label="Copiers" value={card.subscribers > 0 ? String(card.subscribers) : '—'} unit="" />
+          <CapStat label="Copy-trades" value={String(card.copyTrades)} unit="" />
+          <CapStat label="Last active" value={ago(card.lastActive) || 'never'} unit="" />
+        </div>
+        {tier.key === 'new' && (
+          <p className="font-mono text-[11px] text-gray-500 mb-4">Young strategy — short track record. Size accordingly.</p>
+        )}
+
+        {sub ? (
+          /* manage / exit */
+          <div>
+            <div className="border border-new-mint/25 bg-new-mint/[0.06] rounded-lg p-4 mb-4">
+              <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-new-mint mb-1">● Copying</p>
+              <p className="text-[12.5px] text-gray-300 leading-relaxed">
+                Future trades are copied at up to {fmtDusdc(sub.maxMargin)} DUSDC each, max {sub.maxLeverageBps / 10_000}×.
+              </p>
+            </div>
+            <p className="text-[12px] text-gray-500 leading-relaxed mb-4">
+              Pause stops new copies. Your open positions keep running and stay yours — the agent
+              can&apos;t close or claim them out from under you.
+            </p>
+            <button
+              onClick={() => onPause(sub)} disabled={canceling}
+              className="w-full py-3 rounded-full text-sm font-semibold border border-white/12 text-gray-200 hover:text-white hover:border-white/30 transition-colors disabled:opacity-50"
+            >
+              {canceling ? 'pausing…' : 'Pause copying'}
+            </button>
+          </div>
+        ) : !address ? (
+          <div className="pt-1"><ConnectButton /></div>
+        ) : (
+          /* size + confirm */
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400">Copy budget</span>
+              <span className="font-mono text-[10px] text-gray-600">in vault: {fmtDusdc(currentVaultDusdc)} DUSDC</span>
+            </div>
+            <div className="rounded-xl border border-white/[0.08] bg-black/30 px-4 py-2.5 transition-colors focus-within:border-vermilion/50">
+              <div className="flex items-center justify-between">
+                <input
+                  autoFocus inputMode="decimal" placeholder="0.00"
+                  value={budget}
+                  onChange={(e) => setBudget(e.target.value.replace(/[^0-9.]/g, ''))}
+                  className="w-full bg-transparent font-display text-2xl font-bold text-white outline-none focus:outline-none focus-visible:outline-none placeholder:text-gray-600"
+                />
+                <span className="font-mono text-xs font-semibold text-gray-300 shrink-0">DUSDC</span>
+              </div>
+              <div className="mt-2 flex items-center justify-between">
+                <span className="font-mono text-[10px] text-gray-500">Your limit. Edit anytime. Pause anytime.</span>
+                <div className="flex gap-1.5">
+                  {[1, 5, 25].map((n) => (
+                    <button key={n} onClick={() => add(n)} className="rounded-md border border-white/15 px-2 py-0.5 font-mono text-[10px] text-gray-300 hover:border-vermilion/50 hover:text-white transition-colors">+{n}</button>
+                  ))}
+                  <button onClick={() => setBudget(maxTarget.toFixed(2))} className="rounded-md border border-white/15 px-2 py-0.5 font-mono text-[10px] text-gray-300 hover:border-vermilion/50 hover:text-white transition-colors">max</button>
+                </div>
+              </div>
+            </div>
+
+            {/* live worked example */}
+            <p className="mt-3 text-[12px] text-gray-400 leading-relaxed">
+              {valid ? (
+                <>You set a <span className="text-white font-semibold">{fmtDusdc(target)} DUSDC</span> budget. The agent can deploy at most <span className="text-white font-semibold">{fmtDusdc(cap)} DUSDC</span> per copied trade, up to {card.maxLeverage}×. It can never exceed this — or take your budget.</>
+              ) : (
+                <>Set a budget. The agent deploys at most {fmtDusdc(card.maxMargin)} DUSDC per trade, up to {card.maxLeverage}× — and can never exceed it or take your budget.</>
+              )}
+            </p>
+
+            {valid && (
+              <div className="grid grid-cols-2 gap-2 mt-3">
+                <CapStat label="Add now" value={fmtDusdc(topUp)} unit="DUSDC" />
+                <CapStat label="Wallet needed" value={fmtDusdc(walletNeed)} unit="DUSDC" />
+              </div>
+            )}
+
+            {/* risk line */}
+            <p className="mt-4 text-[11px] text-gray-500 leading-relaxed">
+              Copied trades can lose money. Only fund what you can afford to lose.
+            </p>
+
+            <button
+              onClick={() => onConfirm(budget)} disabled={busy || !valid}
+              className={`mt-3 w-full rounded-full py-3 font-semibold transition-all ${
+                busy || !valid ? 'cursor-not-allowed bg-white/[0.07] text-gray-400' : 'bg-vermilion text-white hover:bg-vermilion-d shadow-[0_6px_28px_-8px_var(--vermilion)]'
+              }`}
+            >
+              {busy ? 'Starting…' : !valid ? 'Enter a budget' : cta}
+            </button>
+          </div>
+        )}
+
+        {/* share — moved off the card face */}
+        <button onClick={onShare} className="mt-5 inline-flex items-center gap-1.5 font-mono text-[11px] text-gray-600 hover:text-vermilion transition-colors">
+          <Share2 className="w-3.5 h-3.5" /> Share this agent
+        </button>
+      </div>
     </div>
   );
 }
