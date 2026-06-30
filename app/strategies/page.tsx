@@ -719,6 +719,14 @@ function CopyDrawer(props: {
           <a href={SUISCAN_OBJ(card.id)} target="_blank" rel="noreferrer" className="mt-2 inline-block font-mono text-[10px] text-white/40 hover:text-white transition-colors">verify caps on-chain ↗</a>
         </div>
 
+        {/* how it trades — honest mechanism */}
+        <div className="border-l-2 border-white/15 pl-4 mb-5">
+          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/40 mb-1">How it trades</p>
+          <p className="text-[12.5px] text-white/70 leading-snug">
+            Each time this agent trades — a BTC up/down call on its momentum read — it opens a position <span className="text-white font-semibold">you own</span>, capped at {fmtDusdc(card.maxMargin)} DUSDC and {card.maxLeverage}× per trade. It pays out to you on exit. It&apos;s a directional bet — it can win or lose.
+          </p>
+        </div>
+
         {/* caps + record */}
         <div className="grid grid-cols-3 gap-3 mb-2">
           <CapStat label="Max leverage" value={`${card.maxLeverage}×`} unit="" />
@@ -797,7 +805,7 @@ function CopyDrawer(props: {
             <div className="border-l-2 border-vermilion pl-4 mb-4">
               <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-vermilion mb-1"><span className="inline-block w-1.5 h-1.5 rounded-full bg-vermilion mr-1.5 align-middle" />Copying</p>
               <p className="text-[12.5px] text-white/70 leading-relaxed">
-                Future trades are copied at up to {fmtDusdc(sub.maxMargin)} DUSDC each, max {sub.maxLeverageBps / 10_000}×.
+                This agent&apos;s signals are copied into your vault — up to {fmtDusdc(sub.maxMargin)} DUSDC each, max {sub.maxLeverageBps / 10_000}×, every position yours.
               </p>
             </div>
             <p className="text-[12px] text-gray-500 leading-relaxed mb-4">
