@@ -397,26 +397,14 @@ export default function StrategiesPage() {
                         </div>
                       )}
 
-                      {/* HERO — the single, verifiable non-custodial + caps guarantee */}
-                      <div className="relative border border-new-mint/25 bg-new-mint/[0.05] rounded-lg px-4 py-3.5 mb-4">
-                        <span className="font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-new-mint flex items-center gap-1.5 mb-2">
-                          <span className="w-1.5 h-1.5 rounded-full bg-new-mint" /> Non-custodial
+                      {/* HERO — non-custodial + leverage cap, one line (verify lives in the drawer) */}
+                      <div className="border border-new-mint/25 bg-new-mint/[0.05] rounded-lg px-4 py-3 mb-4 flex items-baseline gap-2">
+                        <span className="font-display font-[800] text-2xl text-white leading-none tabular-nums">
+                          {card.maxLeverage}<span className="text-vermilion">×</span>
                         </span>
-                        <div className="flex items-baseline gap-2">
-                          <span className="font-display font-[800] text-3xl text-white leading-none tabular-nums">
-                            {card.maxLeverage}<span className="text-vermilion">×</span>
-                          </span>
-                          <span className="text-[13px] text-gray-300 leading-snug">
-                            max — <span className="text-white font-semibold">can&apos;t withdraw a cent.</span>
-                          </span>
-                        </div>
-                        <a
-                          href={SUISCAN_OBJ(card.id)} target="_blank" rel="noreferrer"
-                          onClick={(e) => e.stopPropagation()}
-                          className="mt-2 inline-block font-mono text-[10px] text-gray-500 hover:text-new-mint transition-colors"
-                        >
-                          verify caps on-chain ↗
-                        </a>
+                        <span className="text-[12.5px] text-gray-300 leading-snug">
+                          max — <span className="text-new-mint font-semibold">can&apos;t withdraw a cent.</span>
+                        </span>
                       </div>
 
                       {/* caps row — the concrete enforced numbers */}
@@ -426,19 +414,13 @@ export default function StrategiesPage() {
                         <CapStat label="Copiers" value={card.subscribers > 0 ? String(card.subscribers) : '—'} unit="" />
                       </div>
 
-                      {/* track record — honest, within data we have */}
-                      {card.copyTrades === 0 ? (
-                        <p className="font-mono text-[11px] text-gray-600 mb-5">No copy-trades settled yet. You&apos;d be first.</p>
+                      {/* track record — one compact line (new agents just show the NEW chip) */}
+                      {card.copyTrades > 0 ? (
+                        <p className="font-mono text-[11px] text-gray-500 mb-5">
+                          {card.copyTrades} copy-trades{card.realizedTrades > 0 ? ` · P&L ${card.realizedPnl >= 0 ? '+' : ''}${fmtDusdc(card.realizedPnl)}` : ''} · {ago(card.lastActive)}
+                        </p>
                       ) : (
-                        <div className="grid grid-cols-3 gap-3 mb-5">
-                          <CapStat label="Copy-trades" value={String(card.copyTrades)} unit="" />
-                          <CapStat
-                            label={card.realizedTrades > 0 ? 'Realized P&L' : 'Volume'}
-                            value={card.realizedTrades > 0 ? `${card.realizedPnl >= 0 ? '+' : ''}${fmtDusdc(card.realizedPnl)}` : fmtDusdc(card.volumeCopied)}
-                            unit="DUSDC"
-                          />
-                          <CapStat label="Last active" value={ago(card.lastActive) || 'never'} unit="" />
-                        </div>
+                        <div className="mb-5" />
                       )}
 
                       {/* single CTA → opens the copy drawer */}
