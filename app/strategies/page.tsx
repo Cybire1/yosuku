@@ -50,12 +50,6 @@ function tierOf(c: StrategyCard): Tier {
   return { key: 'new', label: 'New · no track record yet', tone: 'gray' };
 }
 
-const TONE = {
-  gray: 'text-gray-400 border-white/15',
-  vermilion: 'text-vermilion border-vermilion/35',
-  white: 'text-gray-100 border-white/30',
-} as const;
-
 const TABS = [
   { key: 'all', label: 'All' },
   { key: 'settled', label: 'Settled' },
@@ -116,6 +110,7 @@ export default function StrategiesPage() {
     [subscriptions],
   );
   const visible = useMemo(() => filterSort(strategies, tab), [strategies, tab]);
+  const totalCopiers = strategies.reduce((s, c) => s + (c.subscribers || 0), 0);
   const drawerCard = drawerId ? strategies.find((s) => s.id === drawerId) ?? null : null;
   const walletDusdc = dusdcCoins.reduce((s, c) => s + c.balance, BigInt(0));
   const walletDusdcNum = Number(walletDusdc) / DUSDC_MULTIPLIER;
@@ -283,38 +278,40 @@ export default function StrategiesPage() {
       <GrainOverlay />
 
       <main className="container pt-[120px] pb-12">
-        {/* breadcrumb */}
-        <div className="font-mono text-[11px] tracking-[0.18em] uppercase text-gray-500 mb-7 flex items-center gap-3">
-          <a href="/" className="hover:text-white transition-colors">Yosuku</a>
-          <span className="text-gray-700">/</span>
-          <span className="text-white">Strategies</span>
-        </div>
-
-        {/* title + the hook */}
-        <div className="font-mono text-[11px] tracking-[0.2em] uppercase text-gray-500 mb-3">Agent Strategies · 戦略</div>
-        <h1 className="font-display font-[800] text-4xl md:text-5xl text-white tracking-tight leading-[1.05] mb-3">
-          Copy AI traders.<br /><span className="text-gray-500">Without giving them custody.</span>
-        </h1>
-        {/* the flow, in plain words */}
-        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 mt-4 mb-5 font-mono text-[12px] text-gray-400">
-          {['Pick a trader', 'see its record', 'set a Copy Balance', 'copy it'].map((s) => (
-            <span key={s} className="inline-flex items-center gap-2.5">{s}<span className="text-vermilion">→</span></span>
-          ))}
-          <span className="text-white font-semibold">stop anytime</span>
-        </div>
-
-        {/* standing capability + risk bar */}
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mb-9 font-mono text-[11px]">
-          <span className="inline-flex items-center gap-2 text-new-mint">
-            <span className="w-1.5 h-1.5 rounded-full bg-new-mint" />
-            Non-custodial · caps enforced on Sui
+        {/* masthead — dateline with live counts */}
+        <div className="border-t border-white/10 pt-3 flex items-center justify-between gap-4 font-mono text-[10px] md:text-[11px] uppercase tracking-[0.28em] text-white/40">
+          <span><span className="text-vermilion">⊙</span> Yosuku Ledger · <span className="font-jp">戦略</span></span>
+          <span className="tabular-nums flex items-center gap-2">
+            <span className="hidden sm:inline">Est. on Sui ·</span>
+            <span className="text-white">{strategies.length}</span> listed
+            <span className="text-white/20">·</span>
+            <span className="inline-flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-vermilion animate-pulse" /><span className="text-white">{totalCopiers}</span> copying</span>
           </span>
-          <span className="text-gray-600">Past results don&apos;t guarantee future.</span>
+        </div>
+
+        {/* nameplate + standfirst */}
+        <div className="grid md:grid-cols-[1fr_300px] gap-6 md:gap-10 items-end mt-7 pb-6 border-b border-white/15">
+          <h1 className="font-display font-[800] text-[2.6rem] leading-[0.95] md:text-7xl text-white tracking-tight">
+            Copy AI traders.<br /><span className="text-white/40">Without giving them custody.</span>
+          </h1>
+          <div className="md:border-l md:border-white/10 md:pl-7">
+            <div className="font-mono text-[12px] leading-[1.95] text-white/55">
+              {['Pick a trader', 'See its record', 'Set a Copy Balance', 'Copy it'].map((s, i) => (
+                <span key={s} className="mr-3 inline-block whitespace-nowrap"><span className="text-vermilion">{String(i + 1).padStart(2, '0')}</span> {s}</span>
+              ))}
+              <span className="text-white font-semibold">Stop anytime.</span>
+            </div>
+          </div>
+        </div>
+
+        {/* trust dateline — the dot-leader line that replaces the old pill */}
+        <div className="font-mono text-[10px] md:text-[11px] uppercase tracking-[0.22em] text-white/40 mt-4 mb-8">
+          Non-custodial · Caps enforced on Sui · Past results do not guarantee future
         </div>
 
         {/* control bar — curated tabs (replaces the dead leaderboard) */}
         <div className="sticky top-[64px] z-20 -mx-4 px-4 py-3 mb-7 bg-bg/85 backdrop-blur-md border-b border-white/[0.06]">
-          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
+          <div className="flex items-center gap-5 overflow-x-auto no-scrollbar">
             {TABS.map((t) => {
               const on = tab === t.key;
               const n = tabCount(t.key);
@@ -322,12 +319,12 @@ export default function StrategiesPage() {
                 <button
                   key={t.key}
                   onClick={() => setTab(t.key)}
-                  className={`shrink-0 rounded-full px-3.5 py-1.5 font-mono text-[11px] tracking-[0.08em] transition-colors border ${
-                    on ? 'bg-white text-black border-white' : 'border-white/12 text-gray-400 hover:text-white hover:border-white/30'
+                  className={`shrink-0 px-1 pb-2 font-mono text-[11px] uppercase tracking-[0.12em] border-b-2 transition-colors ${
+                    on ? 'text-white border-vermilion' : 'text-white/40 hover:text-white border-transparent'
                   }`}
                 >
                   {t.label}
-                  <span className={`ml-1.5 tabular-nums ${on ? 'text-black/50' : 'text-gray-600'}`}>{n}</span>
+                  <span className={`ml-1.5 tabular-nums ${on ? 'text-white/30' : 'text-white/20'}`}>{n}</span>
                 </button>
               );
             })}
@@ -340,102 +337,107 @@ export default function StrategiesPage() {
           <>
             {/* 01 — the marketplace grid (primary) */}
             {visible.length === 0 ? (
-              <div className="border border-white/[0.08] rounded-xl bg-bg p-16 text-center">
-                <div className="w-16 h-16 mx-auto mb-6 border border-white/10 rounded-full flex items-center justify-center">
-                  <span className="font-jp text-2xl text-gray-500">戦</span>
-                </div>
-                <h2 className="font-display font-[700] text-xl text-white mb-2">
-                  {strategies.length === 0 ? 'No agents listed yet' : `No ${tab} agents`}
+              <div className="border border-white/[0.08] bg-white/[0.02] p-16 text-center">
+                <div className="font-mono text-[11px] uppercase tracking-[0.3em] text-white/40 mb-4"><span className="text-vermilion">⊙</span> Yosuku Ledger</div>
+                <h2 className="font-display font-[800] text-2xl text-white mb-2">
+                  {strategies.length === 0 ? 'No editions filed yet' : `No ${tab} agents`}
                 </h2>
-                <p className="text-gray-500 text-sm max-w-md mx-auto leading-relaxed">
+                <p className="text-white/40 text-sm max-w-md mx-auto leading-relaxed">
                   {loadError
                     ? "Couldn't reach the chain — retrying every 30s."
                     : strategies.length === 0
-                      ? 'Copyable agents appear here the moment a creator publishes one. Every agent is bound to hard risk limits on Sui before a single dollar of yours can move.'
+                      ? 'Copyable agents appear here the moment a creator publishes one. Every agent is bound to hard risk caps on Sui before a dollar of yours can move.'
                       : 'Nothing matches this filter yet — try another tab.'}
                 </p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-                {visible.map((card) => {
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-px bg-white/[0.06] border border-white/[0.06]">
+                {visible.map((card, i) => {
                   const tier = tierOf(card);
                   const sub = subscriptionByStrategy.get(card.id);
+                  const folio = String(i + 1).padStart(2, '0');
                   return (
                     <div
                       key={card.id}
                       id={`strategy-${card.id}`}
-                      className="group border border-white/[0.08] rounded-xl bg-bg p-5 flex flex-col transition-all duration-200 hover:border-white/[0.18] hover:-translate-y-0.5"
+                      className="group relative bg-bg p-5 flex flex-col transition-colors duration-200 hover:bg-white/[0.02]"
                     >
-                      {/* identity */}
-                      <div className="flex items-center gap-3 mb-4">
-                        <div className="w-10 h-10 shrink-0 border border-white/10 rounded-full flex items-center justify-center">
-                          <span className="font-jp text-lg text-vermilion">{glyphFromAddress(card.agent)}</span>
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <h3 className="font-display font-[800] text-base text-white truncate leading-tight">{codenameFromAddress(card.agent)}</h3>
-                          <a
-                            href={SUISCAN_ACC(card.agent)} target="_blank" rel="noreferrer"
-                            className="font-mono text-[11px] text-gray-500 hover:text-gray-300 transition-colors"
-                          >
-                            {fmtAddr(card.agent)}
-                          </a>
-                        </div>
-                        <span className={`shrink-0 font-mono text-[9px] uppercase tracking-[0.14em] rounded-full px-2 py-1 border ${TONE[tier.tone]}`}>
-                          {tier.key}
+                      <Crosshairs />
+
+                      {/* dateline: folio · tier — last filed */}
+                      <div className="flex items-center justify-between font-mono text-[10px] uppercase tracking-[0.25em] pb-3 mb-4 border-b border-white/[0.08]">
+                        <span className="flex items-center gap-3">
+                          <span className="text-white/30">Nº {folio}</span>
+                          <TierWord tier={tier} />
                         </span>
+                        <span className="text-white/40">{ago(card.lastActive) || '—'}</span>
                       </div>
 
-                      {/* capability chips — portable memory / Walrus playbook (MemWal + Walrus) */}
+                      {/* identity — ruled square glyph that ignites on hover */}
+                      <div className="flex items-start gap-3">
+                        <div className="w-11 h-11 shrink-0 border border-white/10 flex items-center justify-center transition-transform duration-200 group-hover:scale-[1.04] group-hover:drop-shadow-[0_0_22px_rgba(224,77,38,0.3)]">
+                          <span className="font-jp text-xl text-vermilion">{glyphFromAddress(card.agent)}</span>
+                        </div>
+                        <div className="min-w-0 flex-1 pt-0.5">
+                          <h3 className="font-display font-[800] text-xl text-white truncate tracking-tight leading-[1.05]">{codenameFromAddress(card.agent)}</h3>
+                          <a href={SUISCAN_ACC(card.agent)} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
+                            className="font-mono text-[11px] text-white/40 hover:text-white transition-colors">{fmtAddr(card.agent)}</a>
+                        </div>
+                      </div>
+
+                      {/* filed stamps — agent memory / Walrus playbook */}
                       {(card.hasMemory || card.hasCapsule) && (
-                        <div className="flex flex-wrap gap-1.5 mb-4 -mt-1">
+                        <div className="flex flex-wrap gap-1.5 mt-3">
                           {card.hasMemory && (
-                            <span className="inline-flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.14em] text-new-mint border border-new-mint/25 rounded px-2 py-1">◈ Portable memory</span>
+                            <span className="inline-flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.18em] text-vermilion border border-vermilion/40 px-2 py-1">◈ Agent memory</span>
                           )}
                           {card.hasCapsule && (
-                            <span className="inline-flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.14em] text-gray-300 border border-white/15 rounded px-2 py-1">▤ Walrus playbook</span>
+                            <span className="inline-flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.18em] text-white/40 border border-white/15 px-2 py-1">▤ Walrus playbook</span>
                           )}
                         </div>
                       )}
 
-                      {/* leverage cap (non-custodial framing lives in the header + drawer) */}
-                      <div className="border border-white/[0.08] bg-white/[0.02] rounded-lg px-4 py-3 mb-4 flex items-baseline gap-2">
-                        <span className="font-display font-[800] text-2xl text-white leading-none tabular-nums">
-                          {card.maxLeverage}<span className="text-vermilion">×</span>
-                        </span>
-                        <span className="text-[12.5px] text-gray-500 leading-snug">max leverage</span>
+                      {/* leverage pull-quote — the focal mass that carries sparse cards */}
+                      <div className="border-l-2 border-vermilion pl-3 my-5">
+                        <div className="font-display font-[800] text-3xl text-white leading-none tabular-nums">{card.maxLeverage}<span className="text-vermilion">×</span></div>
+                        <div className="font-mono text-[9px] uppercase tracking-[0.2em] text-white/40 mt-1.5">Max leverage</div>
                       </div>
 
-                      {/* caps row — the concrete enforced numbers */}
-                      <div className="grid grid-cols-3 gap-3 pb-4 mb-4 border-b border-white/[0.06]">
-                        <CapStat label="Max / trade" value={`${fmtDusdc(card.maxMargin)}`} unit="DUSDC" />
-                        <CapStat label="Fee" value={card.subFee === 0 ? 'Free' : fmtDusdc(card.subFee)} unit={card.subFee === 0 ? '' : 'DUSDC'} />
-                        <CapStat label="Copiers" value={card.subscribers > 0 ? String(card.subscribers) : '—'} unit="" />
+                      {/* ruled stat table */}
+                      <div className="grid grid-cols-3 border-y border-white/[0.08]">
+                        <LedgerStat label="Max / trade" value={`${fmtDusdc(card.maxMargin)}`} />
+                        <LedgerStat label="Fee" value={card.subFee === 0 ? 'Free' : fmtDusdc(card.subFee)} divide />
+                        <LedgerStat label="Copiers" value={card.subscribers > 0 ? String(card.subscribers) : '—'} divide />
                       </div>
 
-                      {/* track record — one compact line (new agents just show the NEW chip) */}
-                      {card.copyTrades > 0 ? (
-                        <p className="font-mono text-[11px] text-gray-500 mb-5">
-                          {card.copyTrades} copy-trades{card.realizedTrades > 0 ? ` · P&L ${card.realizedPnl >= 0 ? '+' : ''}${fmtDusdc(card.realizedPnl)}` : ''} · {ago(card.lastActive)}
-                        </p>
-                      ) : (
-                        <div className="mb-5" />
-                      )}
+                      {/* record line — never blank */}
+                      <div className="font-mono text-[10px] uppercase tracking-[0.18em] py-4 mb-1">
+                        {card.copyTrades > 0 ? (
+                          <span className="inline-flex items-center gap-2">
+                            <span className="text-white/60 tabular-nums">{card.copyTrades} copy-trades</span>
+                            {card.realizedTrades > 0 && (
+                              <>
+                                <span className="text-white/20">·</span>
+                                <span className="text-white tabular-nums">{card.realizedPnl >= 0 ? '▲' : '▼'} {card.realizedPnl >= 0 ? '+' : ''}{fmtDusdc(card.realizedPnl)}</span>
+                              </>
+                            )}
+                          </span>
+                        ) : (
+                          <span className="text-white/40 tracking-[0.22em]">[ Awaiting first copy ]</span>
+                        )}
+                      </div>
 
-                      {/* single CTA → opens the copy drawer */}
+                      {/* CTA */}
                       <div className="mt-auto">
                         {sub ? (
-                          <button
-                            onClick={() => openDrawer(card.id)}
-                            className="w-full py-3 rounded-full text-sm font-semibold border border-new-mint/30 bg-new-mint/[0.06] text-new-mint hover:bg-new-mint/[0.12] transition-colors inline-flex items-center justify-center gap-2"
-                          >
-                            <span className="w-1.5 h-1.5 rounded-full bg-new-mint" /> Copying — manage
+                          <button onClick={() => openDrawer(card.id)}
+                            className="w-full py-3 font-mono text-[11px] uppercase tracking-[0.14em] font-semibold border border-white/20 text-white hover:border-white/40 hover:bg-white/[0.03] transition-colors inline-flex items-center justify-center gap-2">
+                            <span className="w-1.5 h-1.5 rounded-full bg-vermilion" /> Copying — manage
                           </button>
                         ) : (
-                          <button
-                            onClick={() => openDrawer(card.id)}
-                            className="w-full py-3 rounded-full text-sm font-semibold bg-vermilion text-white hover:bg-vermilion-d shadow-[0_6px_28px_-8px_var(--vermilion)] transition-all"
-                          >
-                            Copy this agent →
+                          <button onClick={() => openDrawer(card.id)}
+                            className="group/cta w-full py-3 text-sm font-semibold bg-vermilion text-white hover:bg-vermilion-d transition-colors inline-flex items-center justify-center gap-2">
+                            Copy this agent <span className="transition-transform group-hover/cta:translate-x-0.5">→</span>
                           </button>
                         )}
                       </div>
@@ -448,13 +450,13 @@ export default function StrategiesPage() {
             {/* 02 — recent copy-trades (slimmed; liveness + on-chain proof) */}
             <section className="mt-14">
               <div className="flex items-center gap-3 mb-4">
-                <h2 className="font-mono text-[11px] uppercase tracking-[0.22em] text-gray-400">Recent copy-trades</h2>
+                <h2 className="font-mono text-[11px] uppercase tracking-[0.22em] text-white/40">Recent copy-trades</h2>
                 <div className="h-px flex-1 bg-white/10" />
-                <span className="font-mono text-[11px] text-gray-600 tabular-nums">{copyTrades.length}</span>
+                <span className="font-mono text-[11px] text-white/30 tabular-nums">{copyTrades.length}</span>
               </div>
-              <div className="border border-white/[0.08] rounded-xl bg-bg divide-y divide-white/[0.05] overflow-hidden">
+              <div className="border border-white/[0.08] bg-bg divide-y divide-white/[0.05] overflow-hidden">
                 {copyTrades.length === 0 ? (
-                  <div className="font-mono text-xs text-gray-600 px-5 py-8 text-center">No copy-trades settled yet — be the first to put an agent to work.</div>
+                  <div className="font-mono text-[11px] uppercase tracking-[0.2em] text-white/30 px-5 py-8 text-center">No copy-trades settled yet — be the first.</div>
                 ) : (
                   copyTrades.map((t, i) => {
                     const inner = (
@@ -464,14 +466,14 @@ export default function StrategiesPage() {
                         <a
                           href={SUISCAN_ACC(t.subscriber)} target="_blank" rel="noreferrer"
                           onClick={(e) => e.stopPropagation()}
-                          className="font-mono text-[12px] text-gray-500 hover:text-white transition-colors hidden sm:inline"
+                          className="font-mono text-[12px] text-white/40 hover:text-white transition-colors hidden sm:inline"
                         >
                           {fmtAddr(t.subscriber)}
                         </a>
                         <span className="flex-1" />
-                        <span className="font-mono text-[12px] text-gray-300 tabular-nums">{fmtDusdc(t.notional)} DUSDC</span>
-                        <span className="font-mono text-[11px] text-gray-500 w-10 text-right shrink-0 tabular-nums">{t.leverageBps / 10000}×</span>
-                        <span className="font-mono text-[11px] text-gray-600 w-14 text-right shrink-0">{ago(t.ts)}</span>
+                        <span className="font-mono text-[12px] text-white/70 tabular-nums">{fmtDusdc(t.notional)} DUSDC</span>
+                        <span className="font-mono text-[11px] text-white/40 w-10 text-right shrink-0 tabular-nums">{t.leverageBps / 10000}×</span>
+                        <span className="font-mono text-[11px] text-white/30 w-14 text-right shrink-0">{ago(t.ts)}</span>
                         <span className="font-mono text-[11px] text-vermilion w-4 text-right shrink-0">{t.digest ? '↗' : ''}</span>
                       </div>
                     );
@@ -616,6 +618,36 @@ function CapStat({ label, value, unit }: { label: string; value: string; unit: s
   );
 }
 
+// Crosshair registration ticks — four L-corners that ignite vermilion on card/panel hover.
+function Crosshairs() {
+  const t = 'pointer-events-none absolute w-2 h-2 opacity-0 transition-all duration-200 group-hover:opacity-100';
+  return (
+    <>
+      <span className={`${t} left-1.5 top-1.5 border-l border-t border-vermilion`} />
+      <span className={`${t} right-1.5 top-1.5 border-r border-t border-vermilion`} />
+      <span className={`${t} left-1.5 bottom-1.5 border-l border-b border-vermilion`} />
+      <span className={`${t} right-1.5 bottom-1.5 border-r border-b border-vermilion`} />
+    </>
+  );
+}
+
+// Tier as an editorial dateline word — never a colored pill. Color never encodes win/loss.
+function TierWord({ tier }: { tier: Tier }) {
+  if (tier.key === 'settled') return <span className="text-white"><span className="text-vermilion">⊙</span> Settled</span>;
+  if (tier.key === 'active') return <span className="text-white/70"><span className="text-vermilion">●</span> Active</span>;
+  return <span className="text-white/40">New</span>;
+}
+
+// One ruled cell of the card's stat table.
+function LedgerStat({ label, value, divide }: { label: string; value: string; divide?: boolean }) {
+  return (
+    <div className={`px-3 py-3 ${divide ? 'border-l border-white/[0.06]' : ''}`}>
+      <div className="font-mono text-[9px] uppercase tracking-[0.18em] text-white/40 mb-1">{label}</div>
+      <div className="font-mono text-sm text-white tabular-nums">{value}</div>
+    </div>
+  );
+}
+
 // ── Copy drawer: the focused subscribe flow (review → size → worked example → confirm) ──
 function CopyDrawer(props: {
   card: StrategyCard;
@@ -674,19 +706,17 @@ function CopyDrawer(props: {
             <h2 className="font-display font-[800] text-lg text-white truncate">{codenameFromAddress(card.agent)}</h2>
             <a href={SUISCAN_ACC(card.agent)} target="_blank" rel="noreferrer" className="font-mono text-[11px] text-gray-500 hover:text-gray-300">{fmtAddr(card.agent)}</a>
           </div>
-          <span className={`ml-auto shrink-0 font-mono text-[9px] uppercase tracking-[0.14em] rounded-full px-2 py-1 border ${TONE[tier.tone]}`}>{tier.key}</span>
+          <span className="ml-auto shrink-0 font-mono text-[10px] uppercase tracking-[0.2em]"><TierWord tier={tier} /></span>
         </div>
 
         {/* the guarantee */}
-        <div className="border border-new-mint/25 bg-new-mint/[0.05] rounded-lg px-4 py-3 mb-4">
-          <span className="font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-new-mint flex items-center gap-1.5 mb-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-new-mint" /> Non-custodial
-          </span>
-          <p className="text-[12.5px] text-gray-300 leading-snug">
+        <div className="border-l-2 border-vermilion pl-4 mb-5">
+          <span className="font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-vermilion mb-1.5 block">Non-custodial</span>
+          <p className="text-[12.5px] text-white/70 leading-snug">
             Your balance stays in your vault. The agent can open positions for you under hard caps, but it
             <span className="text-white font-semibold"> cannot withdraw or divert it.</span>
           </p>
-          <a href={SUISCAN_OBJ(card.id)} target="_blank" rel="noreferrer" className="mt-2 inline-block font-mono text-[10px] text-gray-500 hover:text-new-mint transition-colors">verify caps on-chain ↗</a>
+          <a href={SUISCAN_OBJ(card.id)} target="_blank" rel="noreferrer" className="mt-2 inline-block font-mono text-[10px] text-white/40 hover:text-white transition-colors">verify caps on-chain ↗</a>
         </div>
 
         {/* caps + record */}
@@ -701,16 +731,16 @@ function CopyDrawer(props: {
           <CapStat label="Last active" value={ago(card.lastActive) || 'never'} unit="" />
         </div>
         {(card.hasMemory || card.hasCapsule) && (
-          <div className="border border-new-mint/20 bg-new-mint/[0.04] rounded-lg px-4 py-3 mb-4">
-            <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-new-mint mb-1.5">◈ Portable agent memory</p>
-            <p className="text-[12px] text-gray-300 leading-snug">
-              This agent carries a MemWal memory pointer and a Walrus playbook reference. Its strategy history travels with it, while trading caps stay enforced on Sui.
+          <div className="border border-vermilion/30 px-4 py-3 mb-4">
+            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-vermilion mb-1.5">◈ Agent memory</p>
+            <p className="text-[12px] text-white/70 leading-snug">
+              This agent keeps its own trading memory on Walrus — open, verifiable, and (with a pass) readable. It guides the agent&apos;s decisions but can never touch your funds.
             </p>
             <div className="flex flex-wrap gap-3 mt-2">
               {card.hasMemory && (
-                <a href={SUISCAN_ACC(card.memoryAccount)} target="_blank" rel="noreferrer" className="font-mono text-[10px] text-gray-500 hover:text-new-mint transition-colors">verify memory ↗</a>
+                <a href={SUISCAN_ACC(card.memoryAccount)} target="_blank" rel="noreferrer" className="font-mono text-[10px] text-white/40 hover:text-white transition-colors">verify memory ↗</a>
               )}
-              {card.hasCapsule && <span className="font-mono text-[10px] text-gray-500">▤ Walrus playbook</span>}
+              {card.hasCapsule && <span className="font-mono text-[10px] text-white/40">▤ Walrus playbook</span>}
             </div>
           </div>
         )}
@@ -722,12 +752,12 @@ function CopyDrawer(props: {
             </div>
             {memoryInfo.ownsPass ? (
               <div>
-                <p className="text-[12px] text-new-mint leading-snug mb-2">✓ You own a Memory Pass — your on-chain access right to this agent&apos;s memory.</p>
+                <p className="text-[12px] text-vermilion leading-snug mb-2">● Pass held — your on-chain access right to this agent&apos;s memory.</p>
                 {memoryInfo.hasCapsule && !memoryText && (
                   <button
                     onClick={onReadMemory}
                     disabled={readingMemory}
-                    className="w-full rounded-full py-2 text-[12px] font-semibold border border-new-mint/30 text-new-mint hover:bg-new-mint/[0.08] transition-colors disabled:opacity-60"
+                    className="w-full py-2 text-[12px] font-semibold border border-vermilion/40 text-vermilion hover:bg-vermilion/[0.08] transition-colors disabled:opacity-60"
                   >
                     {readingMemory ? 'Decrypting…' : 'Read the playbook →'}
                   </button>
@@ -764,9 +794,9 @@ function CopyDrawer(props: {
         {sub ? (
           /* manage / exit */
           <div>
-            <div className="border border-new-mint/25 bg-new-mint/[0.06] rounded-lg p-4 mb-4">
-              <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-new-mint mb-1">● Copying</p>
-              <p className="text-[12.5px] text-gray-300 leading-relaxed">
+            <div className="border-l-2 border-vermilion pl-4 mb-4">
+              <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-vermilion mb-1"><span className="inline-block w-1.5 h-1.5 rounded-full bg-vermilion mr-1.5 align-middle" />Copying</p>
+              <p className="text-[12.5px] text-white/70 leading-relaxed">
                 Future trades are copied at up to {fmtDusdc(sub.maxMargin)} DUSDC each, max {sub.maxLeverageBps / 10_000}×.
               </p>
             </div>
