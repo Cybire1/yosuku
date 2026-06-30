@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback, useMemo, type ReactNode } from 'react';
-import { useCurrentAccount, ConnectButton } from '@mysten/dapp-kit';
+import { useCurrentAccount, useSuiClient, useSignPersonalMessage, ConnectButton } from '@mysten/dapp-kit';
 import { Share2, X } from 'lucide-react';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
@@ -31,7 +31,7 @@ import {
   type CopyTrade,
   type StrategySubscription,
 } from '@/lib/sui/strategyClient';
-import { fetchMemoryMarket, buildBuyPassTx, type MemoryMarketInfo } from '@/lib/sui/memoryMarketClient';
+import { fetchMemoryMarket, buildBuyPassTx, readMemory, type MemoryMarketInfo } from '@/lib/sui/memoryMarketClient';
 import { DUSDC_MULTIPLIER } from '@/lib/sui/constants';
 import { getSponsorStatus, type SponsorStatus } from '@/lib/sponsor';
 import { useSmartSubmit } from '@/lib/sui/useSmartSubmit';
@@ -85,6 +85,8 @@ export default function StrategiesPage() {
   const { coins: dusdcCoins, refresh: refreshDusdc } = useDUSDCBalance();
   const { toast } = useToast();
   const { submit } = useSmartSubmit();
+  const suiClient = useSuiClient();
+  const { mutateAsync: signPersonalMessage } = useSignPersonalMessage();
 
   const [strategies, setStrategies] = useState<StrategyCard[]>([]);
   const [copyTrades, setCopyTrades] = useState<CopyTrade[]>([]);
@@ -101,6 +103,8 @@ export default function StrategiesPage() {
   const [budget, setBudget] = useState(''); // copy-budget in the drawer (additive, never forced)
   const [memoryInfo, setMemoryInfo] = useState<MemoryMarketInfo | null>(null);
   const [buyingMemory, setBuyingMemory] = useState(false);
+  const [memoryText, setMemoryText] = useState<string | null>(null);
+  const [readingMemory, setReadingMemory] = useState(false);
 
   // creator: "list a strategy" form (demoted to a footer affordance)
   const [showList, setShowList] = useState(false);
@@ -160,7 +164,7 @@ export default function StrategiesPage() {
   }, [refreshSocialVaultBalance, refreshSubscriptions]);
 
   // open/close the copy drawer: reset budget, lock scroll, Esc to close.
-  const openDrawer = (id: string) => { setBudget(''); setDrawerId(id); };
+  const openDrawer = (id: string) => { setBudget(''); setMemoryText(null); setDrawerId(id); };
   const closeDrawer = useCallback(() => setDrawerId(null), []);
   useEffect(() => {
     if (!drawerId) return;
@@ -193,6 +197,17 @@ export default function StrategiesPage() {
     } catch (e) {
       toast(`Could not buy memory: ${String(e instanceof Error ? e.message : e).slice(0, 140)}`, 'error');
     } finally { setBuyingMemory(false); }
+  }
+
+  async function readMemoryHandler() {
+    if (!address || !memoryInfo?.passId) return;
+    setReadingMemory(true);
+    try {
+      const text = await readMemory({ suiClient, walletAddress: address, listingId: memoryInfo.listingId, passId: memoryInfo.passId, signPersonalMessage });
+      setMemoryText(text);
+    } catch (e) {
+      toast(`Couldn't read the playbook: ${String(e instanceof Error ? e.message : e).slice(0, 140)}`, 'error');
+    } finally { setReadingMemory(false); }
   }
 
   // Subscriber: top up the capped budget + authorize the agent to copy-trade under hard caps.
@@ -280,13 +295,8 @@ export default function StrategiesPage() {
         <h1 className="font-display font-[800] text-4xl md:text-5xl text-white tracking-tight leading-[1.05] mb-3">
           Copy AI traders.<br /><span className="text-gray-500">Without giving them custody.</span>
         </h1>
-        <p className="text-gray-300 text-[15px] leading-relaxed max-w-2xl mb-4">
-          Pick an AI trader, fund a Copy Balance you control, and it trades it under hard caps.
-          You keep your money the whole time — <span className="text-white">it can never withdraw a cent.</span>
-        </p>
-
         {/* the flow, in plain words */}
-        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 mb-5 font-mono text-[12px] text-gray-400">
+        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 mt-4 mb-5 font-mono text-[12px] text-gray-400">
           {['Pick a trader', 'see its record', 'set a Copy Balance', 'copy it'].map((s) => (
             <span key={s} className="inline-flex items-center gap-2.5">{s}<span className="text-vermilion">→</span></span>
           ))}
@@ -299,8 +309,7 @@ export default function StrategiesPage() {
             <span className="w-1.5 h-1.5 rounded-full bg-new-mint" />
             Non-custodial · caps enforced on Sui
           </span>
-          <span className="text-gray-500">Portable agent memory · MemWal + Walrus</span>
-          <span className="text-gray-600">Past copy-trades don&apos;t guarantee future results.</span>
+          <span className="text-gray-600">Past results don&apos;t guarantee future.</span>
         </div>
 
         {/* control bar — curated tabs (replaces the dead leaderboard) */}
@@ -595,6 +604,9 @@ export default function StrategiesPage() {
           memoryInfo={memoryInfo}
           onBuyMemory={buyMemoryPass}
           buyingMemory={buyingMemory}
+          onReadMemory={readMemoryHandler}
+          readingMemory={readingMemory}
+          memoryText={memoryText}
         />
       )}
     </div>
@@ -643,8 +655,11 @@ function CopyDrawer(props: {
   memoryInfo: MemoryMarketInfo | null;
   onBuyMemory: () => void;
   buyingMemory: boolean;
+  onReadMemory: () => void;
+  readingMemory: boolean;
+  memoryText: string | null;
 }) {
-  const { card, sub, address, sponsor, currentVaultDusdc, walletDusdcNum, budget, setBudget, busy, canceling, onConfirm, onPause, onShare, onClose, memoryInfo, onBuyMemory, buyingMemory } = props;
+  const { card, sub, address, sponsor, currentVaultDusdc, walletDusdcNum, budget, setBudget, busy, canceling, onConfirm, onPause, onShare, onClose, memoryInfo, onBuyMemory, buyingMemory, onReadMemory, readingMemory, memoryText } = props;
   const tier = tierOf(card);
   const maxTarget = currentVaultDusdc + Math.max(0, walletDusdcNum - card.subFee);
   const target = Number(budget.replace(',', '.'));
@@ -726,7 +741,21 @@ function CopyDrawer(props: {
               <span className="font-mono text-[10px] text-gray-500">{memoryInfo.passesSold} sold</span>
             </div>
             {memoryInfo.ownsPass ? (
-              <p className="text-[12px] text-new-mint leading-snug">✓ You own a Memory Pass for this agent — your on-chain access right to its memory.</p>
+              <div>
+                <p className="text-[12px] text-new-mint leading-snug mb-2">✓ You own a Memory Pass — your on-chain access right to this agent&apos;s memory.</p>
+                {memoryInfo.hasCapsule && !memoryText && (
+                  <button
+                    onClick={onReadMemory}
+                    disabled={readingMemory}
+                    className="w-full rounded-full py-2 text-[12px] font-semibold border border-new-mint/30 text-new-mint hover:bg-new-mint/[0.08] transition-colors disabled:opacity-60"
+                  >
+                    {readingMemory ? 'Decrypting…' : 'Read the playbook →'}
+                  </button>
+                )}
+                {memoryText && (
+                  <pre className="mt-1 whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-gray-300 border border-white/10 rounded p-3 bg-black/30">{memoryText}</pre>
+                )}
+              </div>
             ) : !address ? (
               <>
                 <p className="text-[12px] text-gray-300 leading-snug mb-2">Own this agent&apos;s memory as a tradable on-chain asset — {fmtDusdc(memoryInfo.price)} DUSDC.</p>
