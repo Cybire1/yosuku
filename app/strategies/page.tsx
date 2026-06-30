@@ -31,6 +31,7 @@ import {
   type CopyTrade,
   type StrategySubscription,
 } from '@/lib/sui/strategyClient';
+import { fetchMemoryMarket, buildBuyPassTx, type MemoryMarketInfo } from '@/lib/sui/memoryMarketClient';
 import { DUSDC_MULTIPLIER } from '@/lib/sui/constants';
 import { getSponsorStatus, type SponsorStatus } from '@/lib/sponsor';
 import { useSmartSubmit } from '@/lib/sui/useSmartSubmit';
@@ -98,6 +99,8 @@ export default function StrategiesPage() {
   const [tab, setTab] = useState<TabKey>('all');
   const [drawerId, setDrawerId] = useState<string | null>(null);
   const [budget, setBudget] = useState(''); // copy-budget in the drawer (additive, never forced)
+  const [memoryInfo, setMemoryInfo] = useState<MemoryMarketInfo | null>(null);
+  const [buyingMemory, setBuyingMemory] = useState(false);
 
   // creator: "list a strategy" form (demoted to a footer affordance)
   const [showList, setShowList] = useState(false);
@@ -167,6 +170,30 @@ export default function StrategiesPage() {
     document.addEventListener('keydown', onKey);
     return () => { document.body.style.overflow = prev; document.removeEventListener('keydown', onKey); };
   }, [drawerId, closeDrawer]);
+
+  // memory market: is this agent's memory for sale, and do you already hold a pass?
+  useEffect(() => {
+    if (!drawerId) { setMemoryInfo(null); return; }
+    let live = true;
+    fetchMemoryMarket(drawerId, address).then((m) => { if (live) setMemoryInfo(m); });
+    return () => { live = false; };
+  }, [drawerId, address]);
+
+  async function buyMemoryPass() {
+    if (!address || !memoryInfo || !drawerId) return;
+    const priceMicro = BigInt(Math.round(memoryInfo.price * DUSDC_MULTIPLIER));
+    const walletMicro = dusdcCoins.reduce((s, c) => s + c.balance, BigInt(0));
+    if (walletMicro < priceMicro) { toast(`Wallet DUSDC too low — needs ${memoryInfo.price} for the memory pass`, 'error'); return; }
+    setBuyingMemory(true);
+    try {
+      await submit(() => buildBuyPassTx({ listingId: memoryInfo.listingId, coinIds: dusdcCoins.map((c) => c.coinObjectId), priceMicro, owner: address }));
+      toast('Memory Pass bought — playbook unlocked', 'success');
+      setMemoryInfo(await fetchMemoryMarket(drawerId, address));
+      refreshDusdc();
+    } catch (e) {
+      toast(`Could not buy memory: ${String(e instanceof Error ? e.message : e).slice(0, 140)}`, 'error');
+    } finally { setBuyingMemory(false); }
+  }
 
   // Subscriber: top up the capped budget + authorize the agent to copy-trade under hard caps.
   async function subscribe(card: StrategyCard, budgetStr: string) {
@@ -565,6 +592,9 @@ export default function StrategiesPage() {
           onPause={cancelSubscription}
           onShare={() => postToX(buildStrategyShareText(drawerCard))}
           onClose={closeDrawer}
+          memoryInfo={memoryInfo}
+          onBuyMemory={buyMemoryPass}
+          buyingMemory={buyingMemory}
         />
       )}
     </div>
@@ -610,8 +640,11 @@ function CopyDrawer(props: {
   onPause: (sub: StrategySubscription) => void;
   onShare: () => void;
   onClose: () => void;
+  memoryInfo: MemoryMarketInfo | null;
+  onBuyMemory: () => void;
+  buyingMemory: boolean;
 }) {
-  const { card, sub, address, sponsor, currentVaultDusdc, walletDusdcNum, budget, setBudget, busy, canceling, onConfirm, onPause, onShare, onClose } = props;
+  const { card, sub, address, sponsor, currentVaultDusdc, walletDusdcNum, budget, setBudget, busy, canceling, onConfirm, onPause, onShare, onClose, memoryInfo, onBuyMemory, buyingMemory } = props;
   const tier = tierOf(card);
   const maxTarget = currentVaultDusdc + Math.max(0, walletDusdcNum - card.subFee);
   const target = Number(budget.replace(',', '.'));
@@ -684,6 +717,35 @@ function CopyDrawer(props: {
               )}
               {card.hasCapsule && <span className="font-mono text-[10px] text-gray-500">▤ Walrus playbook</span>}
             </div>
+          </div>
+        )}
+        {memoryInfo && (
+          <div className="border border-vermilion/25 bg-vermilion/[0.05] rounded-lg px-4 py-3 mb-4">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="font-mono text-[10px] font-bold uppercase tracking-[0.16em] text-vermilion">◇ Memory market</span>
+              <span className="font-mono text-[10px] text-gray-500">{memoryInfo.passesSold} sold</span>
+            </div>
+            {memoryInfo.ownsPass ? (
+              <p className="text-[12px] text-new-mint leading-snug">✓ You own a Memory Pass — this agent&apos;s full playbook is unlocked.</p>
+            ) : !address ? (
+              <>
+                <p className="text-[12px] text-gray-300 leading-snug mb-2">Own this agent&apos;s playbook as a tradable on-chain asset — {fmtDusdc(memoryInfo.price)} DUSDC.</p>
+                <ConnectButton />
+              </>
+            ) : (
+              <>
+                <p className="text-[12px] text-gray-300 leading-snug mb-2.5">
+                  Own this agent&apos;s playbook as a tradable on-chain asset. The creator earns; the pass is yours to keep or resell.
+                </p>
+                <button
+                  onClick={onBuyMemory}
+                  disabled={buyingMemory}
+                  className="w-full rounded-full py-2.5 text-[13px] font-semibold bg-vermilion text-white hover:bg-vermilion-d transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {buyingMemory ? 'Buying…' : `Buy Memory Pass · ${fmtDusdc(memoryInfo.price)} DUSDC`}
+                </button>
+              </>
+            )}
           </div>
         )}
         {tier.key === 'new' && (
