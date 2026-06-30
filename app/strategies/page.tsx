@@ -187,7 +187,7 @@ export default function StrategiesPage() {
     setBuyingMemory(true);
     try {
       await submit(() => buildBuyPassTx({ listingId: memoryInfo.listingId, coinIds: dusdcCoins.map((c) => c.coinObjectId), priceMicro, owner: address }));
-      toast('Memory Pass bought — playbook unlocked', 'success');
+      toast('Memory Pass bought', 'success');
       setMemoryInfo(await fetchMemoryMarket(drawerId, address));
       refreshDusdc();
     } catch (e) {
@@ -726,16 +726,16 @@ function CopyDrawer(props: {
               <span className="font-mono text-[10px] text-gray-500">{memoryInfo.passesSold} sold</span>
             </div>
             {memoryInfo.ownsPass ? (
-              <p className="text-[12px] text-new-mint leading-snug">✓ You own a Memory Pass — this agent&apos;s full playbook is unlocked.</p>
+              <p className="text-[12px] text-new-mint leading-snug">✓ You own a Memory Pass for this agent — your on-chain access right to its memory.</p>
             ) : !address ? (
               <>
-                <p className="text-[12px] text-gray-300 leading-snug mb-2">Own this agent&apos;s playbook as a tradable on-chain asset — {fmtDusdc(memoryInfo.price)} DUSDC.</p>
+                <p className="text-[12px] text-gray-300 leading-snug mb-2">Own this agent&apos;s memory as a tradable on-chain asset — {fmtDusdc(memoryInfo.price)} DUSDC.</p>
                 <ConnectButton />
               </>
             ) : (
               <>
                 <p className="text-[12px] text-gray-300 leading-snug mb-2.5">
-                  Own this agent&apos;s playbook as a tradable on-chain asset. The creator earns; the pass is yours to keep or resell.
+                  Own this agent&apos;s memory as a tradable on-chain asset. The creator earns; the pass is yours to keep or transfer.
                 </p>
                 <button
                   onClick={onBuyMemory}

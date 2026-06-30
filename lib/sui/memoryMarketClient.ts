@@ -5,7 +5,8 @@
 import { Transaction } from '@mysten/sui/transactions';
 import { DUSDC_MULTIPLIER } from './constants';
 
-export const MEMORY_MARKET_PKG = '0x715988713ec0c8878d1bd948d55126a011c9a06811325d99f9ea8aafcf015418';
+// Hardened pkg (admin-gated listing + exact-price/refund). Replaces 0x71598871 (open-listing flaw).
+export const MEMORY_MARKET_PKG = '0x601895033b49cf24935f76a5ad796be8e8b93b91fa85ee89671d4405c7ed6061';
 const DUSDC_TYPE = '0xe95040085976bfd54a1a07225cd46c8a2b4e8e2b6732f140a0fc49850ba73e1a::dusdc::DUSDC';
 const RPC_URL = process.env.NEXT_PUBLIC_SUI_RPC_URL || 'https://fullnode.testnet.sui.io:443';
 const MEMORY_LISTED = `${MEMORY_MARKET_PKG}::memory_market::MemoryListed`;
@@ -32,12 +33,20 @@ export type MemoryMarketInfo = {
 /** The memory listing for a strategy (or null if its memory isn't for sale), + whether `owner` holds a pass. */
 export async function fetchMemoryMarket(strategyId: string, owner: string | null): Promise<MemoryMarketInfo | null> {
   try {
-    const ev = await rpc<{ data?: Array<{ parsedJson?: Record<string, any> }> }>(
-      'suix_queryEvents', [{ MoveEventType: MEMORY_LISTED }, null, 50, true],
-    );
-    const node = (ev?.data ?? []).find((e) => e.parsedJson?.strategy === strategyId);
-    if (!node?.parsedJson?.listing) return null;
-    const listingId = String(node.parsedJson.listing);
+    // find the listing for this strategy, paginating MemoryListed events (admin-gated, so all
+    // listings are vetted; pagination keeps older ones discoverable as volume grows).
+    let listingId: string | null = null;
+    let cursor: unknown = null;
+    for (let page = 0; page < 10 && !listingId; page++) {
+      const ev = await rpc<{ data?: Array<{ parsedJson?: Record<string, any> }>; hasNextPage?: boolean; nextCursor?: unknown }>(
+        'suix_queryEvents', [{ MoveEventType: MEMORY_LISTED }, cursor, 50, true],
+      );
+      const node = (ev?.data ?? []).find((e) => e.parsedJson?.strategy === strategyId);
+      if (node?.parsedJson?.listing) listingId = String(node.parsedJson.listing);
+      if (!ev?.hasNextPage) break;
+      cursor = ev.nextCursor;
+    }
+    if (!listingId) return null;
 
     const obj = await rpc<{ data?: { content?: { fields?: Record<string, any> } } }>(
       'sui_getObject', [listingId, { showContent: true }],
@@ -45,12 +54,18 @@ export async function fetchMemoryMarket(strategyId: string, owner: string | null
     const f = obj?.data?.content?.fields;
     if (!f) return null;
 
+    // ownsPass: paginate owned MemoryPass objects so a pass past the first page isn't missed (→ no double-buy).
     let ownsPass = false;
     if (owner) {
-      const owned = await rpc<{ data?: Array<{ data?: { content?: { fields?: Record<string, any> } } }> }>(
-        'suix_getOwnedObjects', [owner, { filter: { StructType: PASS_TYPE }, options: { showContent: true } }],
-      );
-      ownsPass = (owned?.data ?? []).some((o) => o.data?.content?.fields?.listing === listingId);
+      let pc: unknown = null;
+      for (let page = 0; page < 10 && !ownsPass; page++) {
+        const owned = await rpc<{ data?: Array<{ data?: { content?: { fields?: Record<string, any> } } }>; hasNextPage?: boolean; nextCursor?: unknown }>(
+          'suix_getOwnedObjects', [owner, { filter: { StructType: PASS_TYPE }, options: { showContent: true } }, pc, 50],
+        );
+        if ((owned?.data ?? []).some((o) => o.data?.content?.fields?.listing === listingId)) ownsPass = true;
+        if (!owned?.hasNextPage) break;
+        pc = owned.nextCursor;
+      }
     }
 
     return {
