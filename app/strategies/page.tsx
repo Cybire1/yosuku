@@ -58,9 +58,10 @@ const TONE = {
 const TABS = [
   { key: 'all', label: 'All' },
   { key: 'settled', label: 'Settled' },
-  { key: 'new', label: 'New' },
+  { key: 'memwal', label: 'Has memory' },
   { key: 'copied', label: 'Most copied' },
   { key: 'safest', label: 'Safest' },
+  { key: 'new', label: 'New' },
 ] as const;
 type TabKey = (typeof TABS)[number]['key'];
 
@@ -68,6 +69,7 @@ function filterSort(list: StrategyCard[], tab: TabKey): StrategyCard[] {
   let out = [...list];
   if (tab === 'settled') out = out.filter((c) => tierOf(c).key === 'settled');
   else if (tab === 'new') out = out.filter((c) => tierOf(c).key === 'new');
+  else if (tab === 'memwal') out = out.filter((c) => c.hasMemory);
   const settledFirst = (a: StrategyCard, b: StrategyCard) =>
     (tierOf(b).key === 'settled' ? 1 : 0) - (tierOf(a).key === 'settled' ? 1 : 0);
   if (tab === 'copied') out.sort((a, b) => b.subscribers - a.subscribers || b.copyTrades - a.copyTrades);
@@ -252,9 +254,17 @@ export default function StrategiesPage() {
           Copy AI traders.<br /><span className="text-gray-500">Without giving them custody.</span>
         </h1>
         <p className="text-gray-300 text-[15px] leading-relaxed max-w-2xl mb-4">
-          Fund a capped balance and an agent trades it for you — it can never withdraw a cent.
-          <span className="text-gray-500"> Pause anytime. Verify every cap on Sui.</span>
+          Pick an AI trader, set the most you&apos;re willing to lose, and it trades for you.
+          You keep your money the whole time — <span className="text-white">it can never withdraw a cent.</span>
         </p>
+
+        {/* the flow, in plain words */}
+        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 mb-5 font-mono text-[12px] text-gray-400">
+          {['Pick a trader', 'see its record', 'set your max loss', 'copy it'].map((s) => (
+            <span key={s} className="inline-flex items-center gap-2.5">{s}<span className="text-vermilion">→</span></span>
+          ))}
+          <span className="text-white font-semibold">stop anytime</span>
+        </div>
 
         {/* standing capability + risk bar */}
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mb-9 font-mono text-[11px]">
@@ -666,7 +676,7 @@ function CopyDrawer(props: {
           <div className="border border-new-mint/20 bg-new-mint/[0.04] rounded-lg px-4 py-3 mb-4">
             <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-new-mint mb-1.5">◈ Portable agent memory</p>
             <p className="text-[12px] text-gray-300 leading-snug">
-              This agent carries verifiable memory + playbook on Walrus — its reasoning travels with it, readable on-chain.
+              This agent remembers how it trades. Its playbook lives on Walrus — not locked in a private server — and you can check it on-chain.
             </p>
             <div className="flex flex-wrap gap-3 mt-2">
               {card.hasMemory && (
@@ -710,7 +720,7 @@ function CopyDrawer(props: {
               <span className="font-mono text-[10px] text-gray-600">in vault: {fmtDusdc(currentVaultDusdc)} DUSDC</span>
             </div>
             <p className="font-mono text-[10px] text-gray-600 leading-relaxed mb-2">
-              One balance, shared across every agent you copy — each agent is capped per-trade.
+              This is the most you can lose — the agent trades it under hard caps and can never withdraw it. One balance, shared across the agents you copy.
             </p>
             <div className="rounded-xl border border-white/[0.08] bg-black/30 px-4 py-2.5 transition-colors focus-within:border-vermilion/50">
               <div className="flex items-center justify-between">
