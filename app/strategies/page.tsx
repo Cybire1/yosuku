@@ -624,7 +624,7 @@ function CopyDrawer(props: {
 
   const cta = topUp > 0.000001
     ? `Add ${fmtDusdc(topUp)} DUSDC & start copying`
-    : free ? 'Start copying — gas-free' : `Start copying · ${fmtDusdc(card.subFee)} DUSDC`;
+    : `Start copying with current Copy Balance${free ? ' · gas-free' : ''}`;
 
   return (
     <div className="fixed inset-0 z-[9999] flex justify-end" onClick={onClose}>
@@ -720,7 +720,7 @@ function CopyDrawer(props: {
               <span className="font-mono text-[10px] text-gray-600">in vault: {fmtDusdc(currentVaultDusdc)} DUSDC</span>
             </div>
             <p className="font-mono text-[10px] text-gray-600 leading-relaxed mb-2">
-              Choose how much to keep in your Copy Balance — the total at risk across the agents you copy. Each agent is capped per trade and can never withdraw it.
+              Add funds to your shared Copy Balance. Your current balance remains at risk across copied agents until you withdraw or pause them.
             </p>
             <div className="rounded-xl border border-white/[0.08] bg-black/30 px-4 py-2.5 transition-colors focus-within:border-vermilion/50">
               <div className="flex items-center justify-between">

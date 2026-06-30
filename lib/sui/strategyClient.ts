@@ -179,7 +179,7 @@ export function buildCopyTradeShareText(t: CopyTrade, card?: StrategyCard): stri
     memory,
     t.digest ? `Proof: ${t.digest.slice(0, 10)}…${t.digest.slice(-6)}` : 'Proof: indexed on-chain',
     '',
-    'Copy verified strategy memory on Yosuku.',
+    card?.hasMemory ? 'Copy verified strategy memory on Yosuku.' : 'Copy this agent on Yosuku.',
   ].join('\n');
 }
 
