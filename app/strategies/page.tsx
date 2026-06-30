@@ -397,14 +397,12 @@ export default function StrategiesPage() {
                         </div>
                       )}
 
-                      {/* HERO — non-custodial + leverage cap, one line (verify lives in the drawer) */}
-                      <div className="border border-new-mint/25 bg-new-mint/[0.05] rounded-lg px-4 py-3 mb-4 flex items-baseline gap-2">
+                      {/* leverage cap (non-custodial framing lives in the header + drawer) */}
+                      <div className="border border-white/[0.08] bg-white/[0.02] rounded-lg px-4 py-3 mb-4 flex items-baseline gap-2">
                         <span className="font-display font-[800] text-2xl text-white leading-none tabular-nums">
                           {card.maxLeverage}<span className="text-vermilion">×</span>
                         </span>
-                        <span className="text-[12.5px] text-gray-300 leading-snug">
-                          max — <span className="text-new-mint font-semibold">can&apos;t withdraw a cent.</span>
-                        </span>
+                        <span className="text-[12.5px] text-gray-500 leading-snug">max leverage</span>
                       </div>
 
                       {/* caps row — the concrete enforced numbers */}
