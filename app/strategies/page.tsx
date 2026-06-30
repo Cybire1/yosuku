@@ -254,13 +254,13 @@ export default function StrategiesPage() {
           Copy AI traders.<br /><span className="text-gray-500">Without giving them custody.</span>
         </h1>
         <p className="text-gray-300 text-[15px] leading-relaxed max-w-2xl mb-4">
-          Pick an AI trader, set the most you&apos;re willing to lose, and it trades for you.
+          Pick an AI trader, fund a Copy Balance you control, and it trades it under hard caps.
           You keep your money the whole time — <span className="text-white">it can never withdraw a cent.</span>
         </p>
 
         {/* the flow, in plain words */}
         <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 mb-5 font-mono text-[12px] text-gray-400">
-          {['Pick a trader', 'see its record', 'set your max loss', 'copy it'].map((s) => (
+          {['Pick a trader', 'see its record', 'set a Copy Balance', 'copy it'].map((s) => (
             <span key={s} className="inline-flex items-center gap-2.5">{s}<span className="text-vermilion">→</span></span>
           ))}
           <span className="text-white font-semibold">stop anytime</span>
@@ -349,14 +349,14 @@ export default function StrategiesPage() {
                         </span>
                       </div>
 
-                      {/* capability chips — portable memory / on-chain playbook (MemWal + Walrus) */}
+                      {/* capability chips — portable memory / Walrus playbook (MemWal + Walrus) */}
                       {(card.hasMemory || card.hasCapsule) && (
                         <div className="flex flex-wrap gap-1.5 mb-4 -mt-1">
                           {card.hasMemory && (
                             <span className="inline-flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.14em] text-new-mint border border-new-mint/25 rounded px-2 py-1">◈ Portable memory</span>
                           )}
                           {card.hasCapsule && (
-                            <span className="inline-flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.14em] text-gray-300 border border-white/15 rounded px-2 py-1">▤ On-chain playbook</span>
+                            <span className="inline-flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.14em] text-gray-300 border border-white/15 rounded px-2 py-1">▤ Walrus playbook</span>
                           )}
                         </div>
                       )}
@@ -655,7 +655,7 @@ function CopyDrawer(props: {
             <span className="w-1.5 h-1.5 rounded-full bg-new-mint" /> Non-custodial
           </span>
           <p className="text-[12.5px] text-gray-300 leading-snug">
-            Your budget stays in your vault. The agent can open and close positions for you, but it
+            Your balance stays in your vault. The agent can open positions for you under hard caps, but it
             <span className="text-white font-semibold"> cannot withdraw or divert it.</span>
           </p>
           <a href={SUISCAN_OBJ(card.id)} target="_blank" rel="noreferrer" className="mt-2 inline-block font-mono text-[10px] text-gray-500 hover:text-new-mint transition-colors">verify caps on-chain ↗</a>
@@ -676,13 +676,13 @@ function CopyDrawer(props: {
           <div className="border border-new-mint/20 bg-new-mint/[0.04] rounded-lg px-4 py-3 mb-4">
             <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-new-mint mb-1.5">◈ Portable agent memory</p>
             <p className="text-[12px] text-gray-300 leading-snug">
-              This agent remembers how it trades. Its playbook lives on Walrus — not locked in a private server — and you can check it on-chain.
+              This agent carries a MemWal memory pointer and a Walrus playbook reference. Its strategy history travels with it, while trading caps stay enforced on Sui.
             </p>
             <div className="flex flex-wrap gap-3 mt-2">
               {card.hasMemory && (
                 <a href={SUISCAN_ACC(card.memoryAccount)} target="_blank" rel="noreferrer" className="font-mono text-[10px] text-gray-500 hover:text-new-mint transition-colors">verify memory ↗</a>
               )}
-              {card.hasCapsule && <span className="font-mono text-[10px] text-gray-500">▤ on-chain playbook</span>}
+              {card.hasCapsule && <span className="font-mono text-[10px] text-gray-500">▤ Walrus playbook</span>}
             </div>
           </div>
         )}
@@ -720,7 +720,7 @@ function CopyDrawer(props: {
               <span className="font-mono text-[10px] text-gray-600">in vault: {fmtDusdc(currentVaultDusdc)} DUSDC</span>
             </div>
             <p className="font-mono text-[10px] text-gray-600 leading-relaxed mb-2">
-              This is the most you can lose — the agent trades it under hard caps and can never withdraw it. One balance, shared across the agents you copy.
+              Choose how much to keep in your Copy Balance — the total at risk across the agents you copy. Each agent is capped per trade and can never withdraw it.
             </p>
             <div className="rounded-xl border border-white/[0.08] bg-black/30 px-4 py-2.5 transition-colors focus-within:border-vermilion/50">
               <div className="flex items-center justify-between">
