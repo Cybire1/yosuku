@@ -1,5 +1,6 @@
 // Memory Market client — an agent's MemWal memory listed as a priced, tradable on-chain asset.
-// Buy a MemoryPass (the transferable asset) → the creator earns, you unlock the playbook.
+// Buy a MemoryPass (the transferable on-chain asset) → the creator earns; the pass is your access
+// right to the agent's memory (Seal-gated in-browser reading is the next step).
 // Pkg deployed + proven on testnet (memory_market::memory_market). Reads via JSON-RPC (reliable;
 // the GraphQL event index lags — same reason strategyClient falls back to JSON-RPC).
 import { Transaction } from '@mysten/sui/transactions';
