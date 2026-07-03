@@ -1,0 +1,708 @@
+// DeepBook Predict `predict-testnet-6-24` — browser-safe data + tx client.
+//
+// The 6-24 deployment is a full rewrite of the integration layer (NOT an ID swap):
+//   • custody moved to the `account` package — one shared AccountWrapper per owner
+//     (deterministic derived address) + an `Auth` hot-potato generated per tx;
+//   • pricing needs a per-PTB `Pricer` built from FOUR oracle feeds
+//     (expiry_market::load_live_pricer) chained in the SAME transaction;
+//   • markets are rolling per-expiry cadence markets (1m/5m/1h) discovered from the
+//     beta indexer, each selling European cash-or-nothing RANGE DIGITALS;
+//   • native leverage: `leverage` (1e9 = 1x) sets a financed floor; payout on a win
+//     is quantity − floor.
+//
+// SAFETY: this client only ever uses the OWNER auth path (`account::generate_auth`,
+// tied to the tx sender). It never touches app auth (`generate_auth_as_app`) — that
+// is a full-custody bearer credential. Delegated/agent custody is expressed on-chain
+// via object-owned wrappers (see the vault624 Move module), not here.
+//
+// CORS: BOTH hosts (predict-server-beta + propbook) serve
+// `access-control-allow-origin: *` (verified 2026-07-03), so the browser fetches
+// them directly — no /api proxy route is needed.
+//
+// Everything here follows the strategyClient/modernClients idioms: reads via
+// GraphQL/gRPC (gql/grpc) with a JSON-RPC fallback where testnet GraphQL is
+// unreliable; writes are wallet-signed `Transaction` builders (no keys, no node
+// imports — browser-safe).
+//
+// Proven-on-chain reference flows: suioverflow/x-relay/spike-624.mjs (owner path),
+// spike-624b.mjs (delegated vault path), predict624.mjs (the node twin of this file).
+
+import { Transaction } from '@mysten/sui/transactions';
+import { gql, grpc } from './modernClients';
+import { DUSDC_TYPE, CLOCK_ID, DUSDC_MULTIPLIER } from './constants';
+
+// ─── strike-tick sentinels (vendor predict source, constants.move) ───
+//   tick_bits!() = 30                            (constants.move:149)
+//   pos_inf_tick!() = (1u64 << tick_bits!()) - 1 (constants.move:155) = 1_073_741_823
+//   lower_tick 0 = −inf sentinel                 (constants.move:161, order.move:56)
+// Mint admission exempts both sentinels from the $1 admission grid, but the FULL
+// open range (0, pos_inf_tick) is rejected on-chain (order.move:211 EInvalidRange).
+export const POS_INF_TICK = (1n << 30n) - 1n; // 1073741823n
+export const NEG_INF_TICK = 0n;
+
+// ─── deployment constants (predict-testnet-6-24, deployment.testnet.json updatedAt 2026-06-25) ───
+
+export const PREDICT624 = {
+  /** `predict` package — expiry_market / plp / registry / protocol_config. */
+  predictPackage: '0xdb3ef5a5129920e59c9b2ae25a77eddb48acd0e1c6307b97073f0e076016446e',
+  /** `account` package — custody (AccountWrapper + Auth). */
+  accountPackage: '0xb9389eac8d59170ffd1427c1a66e5c8306263464fcc6615e825c1f5b3e15da3b',
+  /** predict::protocol_config::ProtocolConfig (shared). */
+  protocolConfig: '0x2325224629b4bd96d1f1d7ee937e07f8a06f861018a130bbb26db09cb0394cb6',
+  /** account::account_registry::AccountRegistry (shared) — wrapper derivation root. */
+  accountRegistry: '0x3c54d5b8b6bca376fc289121838ad02f8a5b3843242b9ad7e8f8245720e685a2',
+  /** propbook::registry::OracleRegistry (shared). */
+  oracleRegistry: '0xf3deaff68cbd081a35ec21653af6f671d2ad5f012f3b4d817d81752843374136',
+  /** BTC_USD oracle feed objects — ALL FOUR feed the per-PTB Pricer. */
+  pythFeed: '0xc78d7de16217d46d21b92ae475da799448be30b71a758dc6d7bb3ac2f1c35afb',
+  bsSpotFeed: '0xcdc5fa7364e60fd2504aa96f65b707dc0734e507a919b1a7d7d63164fd67b745',
+  bsForwardFeed: '0xe72c734ea8d8dcbc9183d9d8f96f51aaa1fb5034d5ed33ac60d67d261e15b48a',
+  bsSviFeed: '0xdc2f8270676bd05fb28491e8d4a41a495722fda7a454926dd66dbba256a21c69',
+  /** Framework AccumulatorRoot (fund settlement) — required on every account-touching call. */
+  accumulatorRoot: '0x0000000000000000000000000000000000000000000000000000000000000acc',
+  clock: CLOCK_ID,
+  dusdcType: DUSDC_TYPE,
+  /** Beta indexer for THIS deployment (the old predict-server is the 4-16 one). */
+  indexer: 'https://predict-server-beta.testnet.mystenlabs.com',
+  /** Oracle (propbook) indexer — off-chain pyth observations + feed discovery. */
+  propbook: 'https://propbook.api.testnet.mystenlabs.com',
+  /** Open-ended range sentinels (tick indices): lower 0 = −inf, higher 2^30−1 = +inf. */
+  POS_INF_TICK,
+  NEG_INF_TICK,
+} as const;
+
+/** 1e9 fixed-point scale used for probabilities and leverage (1e9 = 1x / 100%). */
+export const FLOAT_SCALING_624 = 1_000_000_000;
+
+// ─── tick math ───
+// Markets run a $0.01 tick grid (tick_size 1e7) with mint admission snapped to a $1
+// grid (admission_tick_size 1e9) → tick index = whole-dollars × 100.
+
+/** Whole-dollar USD strike → raw tick index on the $0.01 grid ($1 admission ⇒ ×100). */
+export function usdToTick(usd: number): bigint {
+  return BigInt(Math.round(usd)) * 100n;
+}
+
+/** Tick index → USD strike. */
+export function tickToUsd(tick: number | bigint): number {
+  return Number(tick) / 100;
+}
+
+// ─── market discovery (beta indexer) ───
+
+export type Cadence624 = '1m' | '5m' | '1h';
+
+export interface Market624 {
+  /** ExpiryMarket object id. */
+  id: string;
+  /** Expiry, ms epoch. */
+  expiry: number;
+  /** Minutes until expiry at fetch time. */
+  minsOut: number;
+  /** Best-effort cadence classification (see inferCadence624). */
+  cadence: Cadence624;
+  /** Market tick size (1e9-scaled USD per tick; 1e7 = $0.01). */
+  tickSize: number;
+  /** Admission tick size (1e9-scaled; 1e9 = $1 strike grid). */
+  admissionTickSize: number;
+  /** Max admission leverage, 1e9-scaled (3e9 = 3x). */
+  maxLeverage1e9: number;
+}
+
+interface IndexerMarketRow {
+  expiry_market_id: string;
+  expiry: number | string;
+  tick_size: string | number;
+  admission_tick_size: string | number;
+  max_admission_leverage: number | string;
+}
+
+/**
+ * Best-effort cadence classification. /markets rows carry NO cadence field, so we
+ * infer from expiry alignment: on-the-hour ⇒ '1h', on-a-5min ⇒ '5m', else '1m'.
+ * (A 1m/5m market whose expiry happens to land on a coarser boundary classifies
+ * coarser — acceptable for "pick the soonest tradeable market".)
+ */
+export function inferCadence624(expiryMs: number): Cadence624 {
+  return expiryMs % 3_600_000 === 0 ? '1h' : expiryMs % 300_000 === 0 ? '5m' : '1m';
+}
+
+/** Future-only markets from the beta indexer, deduped by id, soonest-expiry first. */
+export async function fetchMarkets624(): Promise<Market624[]> {
+  const res = await fetch(`${PREDICT624.indexer}/markets`, { headers: { accept: 'application/json' } });
+  if (!res.ok) throw new Error(`predict624 indexer /markets ${res.status}`);
+  const rows = (await res.json()) as IndexerMarketRow[];
+  const now = Date.now();
+  const seen = new Set<string>();
+  const out: Market624[] = [];
+  for (const m of Array.isArray(rows) ? rows : []) {
+    const id = String(m.expiry_market_id ?? '');
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    const expiry = Number(m.expiry);
+    if (expiry <= now) continue; // future-only
+    out.push({
+      id,
+      expiry,
+      minsOut: (expiry - now) / 60_000,
+      cadence: inferCadence624(expiry),
+      tickSize: Number(m.tick_size),
+      admissionTickSize: Number(m.admission_tick_size),
+      maxLeverage1e9: Number(m.max_admission_leverage),
+    });
+  }
+  return out.sort((a, b) => a.expiry - b.expiry);
+}
+
+/**
+ * Pick the soonest market expiring within (minMinutes, maxMinutes) from now.
+ * The proven-on-chain mintable window is ~3.5–11 min out (too close to expiry the
+ * pricer aborts / probability collapses). `cadence` is a SOFT filter (inferred —
+ * see inferCadence624): if no market of that cadence is in the window the filter
+ * is dropped rather than failing. Returns null when the window is empty (markets
+ * roll every minute — retry shortly).
+ */
+export async function pickMarket624(
+  p: { minMinutes?: number; maxMinutes?: number; cadence?: Cadence624 } = {},
+): Promise<Market624 | null> {
+  const { minMinutes = 3.5, maxMinutes = 11, cadence } = p;
+  const markets = await fetchMarkets624();
+  let candidates = markets.filter((m) => m.minsOut > minMinutes && m.minsOut < maxMinutes);
+  if (cadence) {
+    const only = candidates.filter((m) => m.cadence === cadence);
+    if (only.length) candidates = only;
+  }
+  return candidates[0] ?? null; // already soonest-first
+}
+
+// ─── spot price (the EXACT pyth feed that settles these markets, via propbook) ───
+
+interface PythLatest {
+  price_magnitude: string | number;
+  exponent_magnitude: string | number;
+  exponent_is_negative?: boolean;
+  price_is_negative?: boolean;
+}
+
+/**
+ * Pyth observation history from the SETTLEMENT feed (propbook), OLDEST-FIRST for
+ * charting: [{ usd, tsMs }]. Observations land roughly once per second, so
+ * `limit` ≈ seconds of lookback. Same parse as the proven node twin
+ * (suioverflow/x-relay/predict624.mjs pythHistory), reversed for drawing.
+ */
+export async function fetchPythHistory624(limit = 120): Promise<{ usd: number; tsMs: number }[]> {
+  const res = await fetch(
+    `${PREDICT624.propbook}/oracles/${PREDICT624.pythFeed}/pyth?limit=${limit}`,
+    { headers: { accept: 'application/json' } },
+  );
+  if (!res.ok) throw new Error(`propbook pyth history ${res.status}`);
+  const rows = (await res.json()) as Array<Record<string, unknown>>;
+  return (Array.isArray(rows) ? rows : [])
+    .map((r) => ({
+      usd:
+        r.normalized_spot != null
+          ? Number(r.normalized_spot) / 1e9
+          : Number(r.price_magnitude) / 10 ** Number(r.exponent_magnitude),
+      tsMs: Number(r.source_timestamp_ms ?? r.update_timestamp_ms),
+    }))
+    .filter((r) => Number.isFinite(r.usd) && r.usd > 0)
+    .reverse(); // newest-first from the API → oldest-first for charts
+}
+
+/** Latest BTC/USD spot from the settlement pyth feed → USD number. */
+export async function fetchSpot624(): Promise<number> {
+  const res = await fetch(
+    `${PREDICT624.propbook}/oracles/${PREDICT624.pythFeed}/pyth/latest`,
+    { headers: { accept: 'application/json' } },
+  );
+  if (!res.ok) throw new Error(`propbook pyth/latest ${res.status}`);
+  const j = (await res.json()) as PythLatest;
+  const exp = Number(j.exponent_magnitude);
+  const scale = j.exponent_is_negative === false ? 10 ** exp : 10 ** -exp;
+  const price = Number(j.price_magnitude) * scale * (j.price_is_negative ? -1 : 1);
+  if (!Number.isFinite(price) || price <= 0) throw new Error('pyth spot unavailable');
+  return price;
+}
+
+// ─── tx builders (OWNER path — wallet signs; Auth is generated in-PTB, tied to the sender) ───
+
+/**
+ * One-time: create the sender's canonical derived AccountWrapper and share it.
+ * Aborts on-chain if the wrapper already exists (use findWrapperId624 first).
+ */
+export function buildCreateAccountTx(): Transaction {
+  const tx = new Transaction();
+  const wrapper = tx.moveCall({
+    target: `${PREDICT624.accountPackage}::account_registry::new`,
+    arguments: [tx.object(PREDICT624.accountRegistry)],
+  });
+  tx.moveCall({
+    target: `${PREDICT624.accountPackage}::account::share`,
+    arguments: [wrapper],
+  });
+  return tx;
+}
+
+/** Deposit DUSDC into the sender's account (merge coins → split exact → deposit_funds). */
+export function buildDepositTx(p: {
+  wrapperId: string;
+  coinIds: string[];
+  amountMicro: bigint;
+}): Transaction {
+  if (p.coinIds.length === 0) throw new Error('no DUSDC coins to deposit');
+  const tx = new Transaction();
+  const primary = tx.object(p.coinIds[0]);
+  if (p.coinIds.length > 1) tx.mergeCoins(primary, p.coinIds.slice(1).map((id) => tx.object(id)));
+  const [pay] = tx.splitCoins(primary, [tx.pure.u64(p.amountMicro)]);
+  const auth = tx.moveCall({
+    target: `${PREDICT624.accountPackage}::account::generate_auth`,
+    arguments: [],
+  });
+  tx.moveCall({
+    target: `${PREDICT624.accountPackage}::account::deposit_funds`,
+    typeArguments: [PREDICT624.dusdcType],
+    arguments: [tx.object(p.wrapperId), auth, pay, tx.object(PREDICT624.accumulatorRoot), tx.object(PREDICT624.clock)],
+  });
+  return tx;
+}
+
+/** Withdraw DUSDC from the sender's account back to their wallet (owner-gated by Auth). */
+export function buildWithdrawTx(p: {
+  wrapperId: string;
+  amountMicro: bigint;
+  /** Where the withdrawn coin goes — the connected wallet address. */
+  recipient: string;
+}): Transaction {
+  const tx = new Transaction();
+  const auth = tx.moveCall({
+    target: `${PREDICT624.accountPackage}::account::generate_auth`,
+    arguments: [],
+  });
+  const coin = tx.moveCall({
+    target: `${PREDICT624.accountPackage}::account::withdraw_funds`,
+    typeArguments: [PREDICT624.dusdcType],
+    arguments: [tx.object(p.wrapperId), auth, tx.pure.u64(p.amountMicro), tx.object(PREDICT624.accumulatorRoot), tx.object(PREDICT624.clock)],
+  });
+  tx.transferObjects([coin], tx.pure.address(p.recipient));
+  return tx;
+}
+
+/**
+ * Mint a (possibly leveraged) range digital: chains `load_live_pricer` (all four
+ * oracle feeds) → `generate_auth` → `mint_exact_quantity` in ONE PTB — the Pricer
+ * is PTB-local and must be built in the same tx.
+ *
+ * Gotchas (proven on-chain): net_premium = prob × qty ÷ leverage must be ≥ 1 DUSDC
+ * (protocol min); the leverage cap scales DOWN as entry probability rises, so
+ * high-probability wide ranges reject 2x — tighten the range or drop leverage.
+ * Open-ended ranges use the sentinels (NEG_INF_TICK / POS_INF_TICK), but the FULL
+ * open range is rejected on-chain (order.move EInvalidRange) — guarded here too.
+ */
+export function buildMintTx(p: {
+  marketId: string;
+  wrapperId: string;
+  /** Tick indices on the $0.01 grid, $1-snapped (use usdToTick) or a sentinel. */
+  lowerTick: number | bigint;
+  higherTick: number | bigint;
+  /** Contracts = DUSDC 6dp units of max payout. */
+  qtyMicro: bigint;
+  /** 1e9-scaled; 1e9 = 1x (no floor). */
+  leverage1e9: bigint;
+  /** Slippage: caps the ALL-IN withdrawal (net premium + fees + penalty), micro DUSDC. */
+  maxCostMicro: bigint;
+  /** Caps the quoted per-contract probability before fees, 1e9-scaled. */
+  maxProb1e9: bigint;
+}): Transaction {
+  const lower = BigInt(p.lowerTick);
+  const higher = BigInt(p.higherTick);
+  if (lower === NEG_INF_TICK && higher === POS_INF_TICK) {
+    throw new Error('full open range (−inf, +inf) is prohibited on-chain (EInvalidRange)');
+  }
+  const tx = new Transaction();
+  const pricer = tx.moveCall({
+    target: `${PREDICT624.predictPackage}::expiry_market::load_live_pricer`,
+    arguments: [
+      tx.object(p.marketId),
+      tx.object(PREDICT624.protocolConfig),
+      tx.object(PREDICT624.oracleRegistry),
+      tx.object(PREDICT624.pythFeed),
+      tx.object(PREDICT624.bsSpotFeed),
+      tx.object(PREDICT624.bsForwardFeed),
+      tx.object(PREDICT624.bsSviFeed),
+      tx.object(PREDICT624.clock),
+    ],
+  });
+  const auth = tx.moveCall({
+    target: `${PREDICT624.accountPackage}::account::generate_auth`,
+    arguments: [],
+  });
+  tx.moveCall({
+    target: `${PREDICT624.predictPackage}::expiry_market::mint_exact_quantity`,
+    arguments: [
+      tx.object(p.marketId),
+      tx.object(p.wrapperId),
+      auth,
+      tx.object(PREDICT624.protocolConfig),
+      pricer,
+      tx.pure.u64(lower),
+      tx.pure.u64(higher),
+      tx.pure.u64(p.qtyMicro),
+      tx.pure.u64(p.leverage1e9),
+      tx.pure.u64(p.maxCostMicro),
+      tx.pure.u64(p.maxProb1e9),
+      tx.object(PREDICT624.accumulatorRoot),
+      tx.object(PREDICT624.clock),
+    ],
+  });
+  return tx;
+}
+
+/** A REAL mint quote — dry-runs the exact mint PTB with UNCAPPED guards and reads OrderMinted.
+ *  This is the number predict will actually charge (net premium + trader fee + builder fee +
+ *  EWMA penalty), not an estimate; probability on short cadences moves too much to estimate
+ *  (a $20 band is ~0.55 on 5m but 0.75–0.9 on 1m — estimates abort EMintCostAboveMax(4)). */
+export interface MintQuote624 {
+  costMicro: number;        // the all-in debit the mint will take
+  winMicro: number;         // payout on a win = qty − financed floor
+  entryProb: number;        // 0..1
+  netPremiumMicro: number;
+  feeMicro: number;         // trader-paid fee (after subsidy) + builder fee
+  penaltyMicro: number;
+}
+export async function quoteMint624(p: {
+  sender: string;
+  marketId: string;
+  wrapperId: string;
+  lowerTick: number | bigint;
+  higherTick: number | bigint;
+  qtyMicro: bigint;
+  leverage1e9: bigint;
+}): Promise<MintQuote624 | { error: string }> {
+  try {
+    const tx = buildMintTx({
+      marketId: p.marketId, wrapperId: p.wrapperId, lowerTick: p.lowerTick, higherTick: p.higherTick,
+      qtyMicro: p.qtyMicro, leverage1e9: p.leverage1e9,
+      maxCostMicro: 18446744073709551615n, maxProb1e9: 990_000_000n, // uncapped guards: pure price discovery
+    });
+    tx.setSender(p.sender);
+    const bytes = await tx.build({ client: grpc }); // resolution simulates; throws on protocol rejects
+    const b64 = typeof Buffer !== 'undefined' ? Buffer.from(bytes).toString('base64') : btoa(String.fromCharCode(...bytes));
+    const r = await fetch('https://fullnode.testnet.sui.io:443', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'sui_dryRunTransactionBlock', params: [b64] }),
+    }).then((x) => x.json());
+    const ev = (r?.result?.events ?? []).find((e: { type?: string }) => String(e.type).includes('OrderMinted'))?.parsedJson as Record<string, string> | undefined;
+    if (!ev) {
+      const err = r?.result?.effects?.status?.error ?? 'no OrderMinted in dry run';
+      return { error: String(err).slice(0, 160) };
+    }
+    const n = (k: string) => Number(ev[k] ?? 0);
+    const netPremium = n('net_premium');
+    const fee = n('trading_fee') - n('fee_incentive_subsidy') + n('builder_fee');
+    const penalty = n('penalty_fee');
+    const entryProb = n('entry_probability') / FLOAT_SCALING_624;
+    const qty = Number(p.qtyMicro);
+    // financed floor = entry_value − net_premium; a win pays qty − floor.
+    const entryValue = entryProb * qty;
+    const winMicro = Math.max(0, Math.round(qty - (entryValue - netPremium)));
+    return { costMicro: netPremium + fee + penalty, winMicro, entryProb, netPremiumMicro: netPremium, feeMicro: fee, penaltyMicro: penalty };
+  } catch (e) {
+    return { error: String(e instanceof Error ? e.message : e).slice(0, 160) };
+  }
+}
+
+/**
+ * Redeem a position on a SETTLED market — permissionless, no Auth, no Pricer;
+ * the payout force-lands in the position owner's account regardless of who cranks.
+ * Full close only (pass the position's full quantity).
+ */
+export function buildRedeemSettledTx(p: {
+  marketId: string;
+  wrapperId: string;
+  /** Packed u256 order id (from OrderMinted). */
+  orderId: bigint;
+  /** Micro-DUSDC quantity of the position. */
+  qty: bigint;
+}): Transaction {
+  const tx = new Transaction();
+  tx.moveCall({
+    target: `${PREDICT624.predictPackage}::expiry_market::redeem_settled`,
+    arguments: [
+      tx.object(p.marketId),
+      tx.object(PREDICT624.accountRegistry),
+      tx.object(p.wrapperId),
+      tx.object(PREDICT624.protocolConfig),
+      tx.object(PREDICT624.oracleRegistry),
+      tx.object(PREDICT624.pythFeed),
+      tx.pure.u256(p.orderId),
+      tx.pure.u64(p.qty),
+      tx.object(PREDICT624.accumulatorRoot),
+      tx.object(PREDICT624.clock),
+    ],
+  });
+  return tx;
+}
+
+// ─── reads ───
+
+const RPC_URL = process.env.NEXT_PUBLIC_SUI_RPC_URL || 'https://fullnode.testnet.sui.io:443';
+
+async function jsonRpc<T>(method: string, params: unknown[]): Promise<T | null> {
+  try {
+    const r = await fetch(RPC_URL, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
+    });
+    const j = await r.json();
+    return (j.result ?? null) as T | null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The account's STORED DUSDC balance as a display number, read from the wrapper's
+ * `account.balances` Bag via raw JSON-RPC dynamic-field walk (getObject wrapper →
+ * balances Bag id → getDynamicFields → CoinKey<DUSDC> entry → its `value` field) —
+ * the exact reader proven in predict624.mjs. Mint debits and redeem payouts are
+ * synchronous stored-balance ops, so this is exact for the trade path (only async
+ * LP fills lag until the next account-touching call sweeps the accumulator).
+ * Returns 0 on any read failure (missing wrapper, empty bag, RPC hiccup).
+ */
+export async function fetchAccountBalance624(wrapperId: string): Promise<number> {
+  const obj = await jsonRpc<{ data?: { content?: { fields?: Record<string, any> } } }>('sui_getObject', [
+    wrapperId,
+    { showContent: true },
+  ]);
+  const bagId = obj?.data?.content?.fields?.account?.fields?.balances?.fields?.id?.id;
+  if (!bagId) return 0;
+  const dfs = await jsonRpc<{ data?: Array<Record<string, any>> }>('suix_getDynamicFields', [bagId, null, 20]);
+  const rows = dfs?.data ?? [];
+  const hit =
+    rows.find(
+      (f) =>
+        String(f.name?.type ?? '').includes('CoinKey') &&
+        String(f.objectType ?? f.name?.type ?? '').toLowerCase().includes('dusdc'),
+    ) ?? rows[0];
+  if (!hit) return 0;
+  const v = await jsonRpc<{ data?: { content?: { fields?: { value?: string | number } } } }>('sui_getObject', [
+    hit.objectId,
+    { showContent: true },
+  ]);
+  return Number(v?.data?.content?.fields?.value ?? 0) / DUSDC_MULTIPLIER;
+}
+
+// ─── per-account order/position feeds (live beta indexer — routes VERIFIED 2026-07-03) ───
+//
+// The deployed predict-server-beta keys every per-user feed by the wrapper's INNER
+// `account.account_id` field — NOT the AccountWrapper object id and NOT the owner
+// address (both 404/empty). Verified against the proven spike account:
+//   GET /accounts/{account_id}/orders?limit=N            → interleaved event feed
+//       (kinds: order_minted / settled_order_redeemed / live_order_redeemed /
+//        liquidated_order_redeemed), newest first
+//   GET /accounts/{account_id}/positions?status=<s>      → order_state rows
+//       (statuses: open | replaced | closed | liquidated | liquidated_redeemed |
+//        settled_redeemed; DEFAULT open when the param is omitted)
+//   GET /markets/{market_id}/state                        → { market, reference_tick,
+//        mint_paused, settlement } — `settlement.settlement_price` is 1e9-scaled USD
+// (The `/managers/…` routes in the predict-testnet-6-24 source are NOT deployed.)
+
+/** Read the wrapper's INNER `account.account_id` — the id the indexer feeds key on. */
+export async function fetchInnerAccountId624(wrapperId: string): Promise<string | null> {
+  const obj = await jsonRpc<{ data?: { content?: { fields?: Record<string, any> } } }>('sui_getObject', [
+    wrapperId,
+    { showContent: true },
+  ]);
+  const id = obj?.data?.content?.fields?.account?.fields?.account_id?.id;
+  return typeof id === 'string' && id.startsWith('0x') ? id : null;
+}
+
+/** One `order_state` row from /accounts/{account_id}/positions. */
+export interface Position624 {
+  marketId: string;
+  /** Packed u256 order id as a decimal string (expiry-local — pair with marketId). */
+  orderId: string;
+  status: string;
+  /** Raw $0.01-grid tick indices; sentinels: 0 = −inf, 2^30−1 = +inf. */
+  lowerTick: number;
+  higherTick: number;
+  /** Max payout, micro DUSDC. */
+  qtyMicro: bigint;
+  leverage1e9: number;
+  entryProb1e9: number;
+  netPremiumMicro: bigint;
+  openedAtMs: number;
+}
+
+function rowToPosition624(r: Record<string, any>): Position624 {
+  return {
+    marketId: String(r.expiry_market_id ?? ''),
+    orderId: String(r.order_id ?? ''),
+    status: String(r.status ?? ''),
+    lowerTick: Number(r.lower_tick ?? 0),
+    higherTick: Number(r.higher_tick ?? 0),
+    qtyMicro: BigInt(r.quantity ?? 0),
+    leverage1e9: Number(r.leverage ?? FLOAT_SCALING_624),
+    entryProb1e9: Number(r.entry_probability ?? 0),
+    netPremiumMicro: BigInt(r.net_premium ?? 0),
+    openedAtMs: Number(r.opened_at_ms ?? 0),
+  };
+}
+
+/** OPEN positions for one inner account id (indexer default status). */
+export async function fetchOpenPositions624(accountId: string): Promise<Position624[]> {
+  const res = await fetch(`${PREDICT624.indexer}/accounts/${accountId}/positions?status=open`, {
+    headers: { accept: 'application/json' },
+  });
+  if (!res.ok) throw new Error(`predict624 indexer /accounts/…/positions ${res.status}`);
+  const rows = (await res.json()) as Array<Record<string, any>>;
+  return (Array.isArray(rows) ? rows : []).map(rowToPosition624);
+}
+
+/** One event row from the /accounts/{account_id}/orders interleaved feed. */
+export interface OrderRow624 {
+  /** order_minted | settled_order_redeemed | live_order_redeemed | liquidated_order_redeemed */
+  kind: string;
+  marketId: string;
+  orderId: string;
+  tsMs: number;
+  digest: string;
+  /** order_minted rows */
+  lowerTick?: number;
+  higherTick?: number;
+  qtyMicro?: bigint;
+  leverage1e9?: number;
+  netPremiumMicro?: bigint;
+  /** *_redeemed rows */
+  payoutMicro?: bigint;
+  quantityClosedMicro?: bigint;
+  settlementUsd?: number;
+}
+
+/** Newest-first order event feed for one inner account id. */
+export async function fetchAccountOrders624(accountId: string, limit = 40): Promise<OrderRow624[]> {
+  const res = await fetch(`${PREDICT624.indexer}/accounts/${accountId}/orders?limit=${limit}`, {
+    headers: { accept: 'application/json' },
+  });
+  if (!res.ok) throw new Error(`predict624 indexer /accounts/…/orders ${res.status}`);
+  const rows = (await res.json()) as Array<Record<string, any>>;
+  return (Array.isArray(rows) ? rows : []).map((r) => ({
+    kind: String(r.kind ?? ''),
+    marketId: String(r.expiry_market_id ?? ''),
+    orderId: String(r.order_id ?? ''),
+    tsMs: Number(r.checkpoint_timestamp_ms ?? 0),
+    digest: String(r.digest ?? ''),
+    lowerTick: r.lower_tick != null ? Number(r.lower_tick) : undefined,
+    higherTick: r.higher_tick != null ? Number(r.higher_tick) : undefined,
+    qtyMicro: r.quantity != null ? BigInt(r.quantity) : undefined,
+    leverage1e9: r.leverage != null ? Number(r.leverage) : undefined,
+    netPremiumMicro: r.net_premium != null ? BigInt(r.net_premium) : undefined,
+    payoutMicro: r.payout_amount != null ? BigInt(r.payout_amount) : undefined,
+    quantityClosedMicro: r.quantity_closed != null ? BigInt(r.quantity_closed) : undefined,
+    settlementUsd: r.settlement_price != null ? Number(r.settlement_price) / FLOAT_SCALING_624 : undefined,
+  }));
+}
+
+/** Settlement snapshot for one market, from /markets/{id}/state. */
+export interface MarketState624 {
+  settled: boolean;
+  /** Oracle settlement price in USD (1e9-descaled), null until settled. */
+  settlementUsd: number | null;
+  expiry: number;
+}
+
+export async function fetchMarketState624(marketId: string): Promise<MarketState624> {
+  const res = await fetch(`${PREDICT624.indexer}/markets/${marketId}/state`, {
+    headers: { accept: 'application/json' },
+  });
+  if (!res.ok) throw new Error(`predict624 indexer /markets/…/state ${res.status}`);
+  const j = (await res.json()) as Record<string, any>;
+  const settlement = j?.settlement ?? null;
+  return {
+    settled: settlement != null,
+    settlementUsd: settlement?.settlement_price != null ? Number(settlement.settlement_price) / FLOAT_SCALING_624 : null,
+    expiry: Number(j?.market?.expiry ?? 0),
+  };
+}
+
+const toHexAddress = (bytes: Uint8Array | number[]): string =>
+  `0x${Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('')}`;
+
+/**
+ * Find `owner`'s canonical derived AccountWrapper id, or null if they haven't
+ * created one.
+ *
+ * APPROACH CHOSEN: on-chain derivation via gRPC simulation of the registry's
+ * read-only view fns — `derived_wrapper_exists(registry, owner)` (bool) then
+ * `derived_wrapper_address(registry, owner)` (address BCS, 32 bytes) — the repo's
+ * modern replacement for devInspect (see modernClients.simulateReturnU64s).
+ * Chosen over the AccountCreated-event scan because derivation is DETERMINISTIC:
+ * no indexer lag right after account creation and no event-window pagination
+ * fragility as usage grows (an owner's event can fall outside any fixed `last` N).
+ * The event scan (GraphQL → JSON-RPC suix_queryEvents, strategyClient's exact
+ * fallback dance) is kept only as a safety net for when simulation is unavailable.
+ */
+export async function findWrapperId624(owner: string): Promise<string | null> {
+  // 1) gRPC simulate the two registry view fns in one tx.
+  try {
+    const tx = new Transaction();
+    tx.moveCall({
+      target: `${PREDICT624.accountPackage}::account_registry::derived_wrapper_exists`,
+      arguments: [tx.object(PREDICT624.accountRegistry), tx.pure.address(owner)],
+    });
+    tx.moveCall({
+      target: `${PREDICT624.accountPackage}::account_registry::derived_wrapper_address`,
+      arguments: [tx.object(PREDICT624.accountRegistry), tx.pure.address(owner)],
+    });
+    tx.setSenderIfNotSet(owner);
+    const res = await grpc.simulateTransaction({ transaction: tx, include: { commandResults: true } });
+    const cmds = res.commandResults ?? [];
+    const existsBytes = cmds[0]?.returnValues?.[0]?.bcs;
+    if (existsBytes && existsBytes[0] === 0) return null; // definitively: no wrapper yet
+    const addrBytes = cmds[1]?.returnValues?.[0]?.bcs;
+    if (existsBytes?.[0] === 1 && addrBytes && addrBytes.length === 32) return toHexAddress(addrBytes);
+  } catch {
+    /* fall through to events */
+  }
+
+  // 2) AccountCreated events, owner-matched (newest first; GraphQL → JSON-RPC).
+  const type = `${PREDICT624.accountPackage}::account_events::AccountCreated`;
+  const nodes = await queryEvents624(type, 200);
+  const want = owner.toLowerCase();
+  for (const j of nodes) {
+    if (String(j.owner ?? '').toLowerCase() === want && j.self_owned !== true) {
+      const id = String(j.wrapper_id ?? '');
+      if (id) return id;
+    }
+  }
+  return null;
+}
+
+// GraphQL events with JSON-RPC fallback — same reliability dance as strategyClient
+// (testnet GraphQL event indexing lags/windows; suix_queryEvents is the safety net).
+const EVENTS_624_Q = `query Ev($t: String!, $last: Int!) {
+  events(last: $last, filter: { type: $t }) {
+    nodes { contents { json } }
+  }
+}`;
+
+async function queryEvents624(type: string, last = 100): Promise<Array<Record<string, unknown>>> {
+  try {
+    const { data, errors } = await gql.query<{ events: { nodes: Array<{ contents: { json: Record<string, unknown> } }> } }>({
+      query: EVENTS_624_Q,
+      variables: { t: type, last },
+    });
+    const nodes = data?.events?.nodes ?? [];
+    if (!errors?.length && nodes.length) return nodes.map((n) => n.contents?.json ?? {}).reverse(); // newest first
+  } catch {
+    /* fall through */
+  }
+  const r = await jsonRpc<{ data?: Array<{ parsedJson?: Record<string, unknown> }> }>('suix_queryEvents', [
+    { MoveEventType: type },
+    null,
+    last,
+    true,
+  ]);
+  return (r?.data ?? []).map((e) => e.parsedJson ?? {});
+}

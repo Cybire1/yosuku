@@ -24,14 +24,14 @@ const steps: TutorialStep[] = [
     description: 'A prediction market on BTC. Pick a side, the oracle settles at the bell, the math decides. This is testnet — test funds only, no real money.',
   },
   {
-    title: 'How a round works',
+    title: 'How a market works',
     jp: '方向を選ぶ',
-    description: 'Every market asks one question: will BTC be above your line when the round closes? Go UP for above, DOWN for below. Get it right and you are paid automatically. Gas is on us, and there is no seed phrase.',
+    description: 'Markets settle every 1, 5, or 60 minutes on the oracle print. Tap UP or DOWN — each side is its own question with its own line and its own live price from the venue, so the two sides don’t add up to $1. The ticket shows the exact cost before you sign.',
   },
   {
-    title: 'Setup is automatic',
+    title: 'Your trading account',
     jp: '準備完了',
-    description: 'No seed phrase, no setup screen, no gas. We create and fund your on-chain account in the background — the three steps in the corner tick off as you go. Then it is one tap to bet.',
+    description: 'Your bets settle into an on-chain trading account that only your wallet can withdraw from. Connect, create it in one tap, fund it with testnet DUSDC — then betting is one tap. You sign your own transactions on the new venue.',
   },
   {
     title: 'Your Trading Balance',

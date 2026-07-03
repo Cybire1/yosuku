@@ -3,9 +3,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Loader2, LogOut } from 'lucide-react';
 import { useCurrentAccount } from '@mysten/dapp-kit';
-import { useManager, useManagerBalance } from '@/lib/sui/hooks';
+import { useManager, useManagerBalance, useTradingVaultBalance } from '@/lib/sui/hooks';
 import { useSmartSubmit } from '@/lib/sui/useSmartSubmit';
-import { redeemPositionTx } from '@/lib/sui/predictClient';
+import { redeemPositionToTradingBalanceTx } from '@/lib/sui/predictClient';
 import { fetchOnChainQuote } from '@/lib/sui/onchainQuote';
 import { loadPositions, removePosition, type LocalPosition } from '@/lib/roundHelpers';
 import { recordPnl } from '@/lib/dailyStop';
@@ -35,6 +35,7 @@ export default function CashOut({ oracleId, expiry, isActive, embedded = false }
   const { submit } = useSmartSubmit();
   const { manager } = useManager();
   const { refresh: refreshManagerBalance } = useManagerBalance(manager?.manager_id ?? null);
+  const { refresh: refreshTradingVaultBalance } = useTradingVaultBalance();
   const { toast } = useToast();
 
   const [positions, setPositions] = useState<QuotedPosition[]>([]);
@@ -74,17 +75,19 @@ export default function CashOut({ oracleId, expiry, isActive, embedded = false }
     setBusy(p.timestamp);
     setError('');
     try {
-      await submit(() => redeemPositionTx(
+      await submit(() => redeemPositionToTradingBalanceTx(
         manager.manager_id,
         oracleId,
         BigInt(p.expiry),
         BigInt(p.strike),
         p.direction,
         BigInt(p.quantity),
+        address!,
       ));
       removePosition(p.oracleId, p.timestamp);
       if (p.exitValue !== null) recordPnl(p.exitValue - p.cost / DUSDC_MULTIPLIER);
       refreshManagerBalance();
+      refreshTradingVaultBalance();
       toast(
         `Cashed out ${p.exitValue !== null ? p.exitValue.toFixed(2) : ''} DUSDC to your trading account.`,
         'success',

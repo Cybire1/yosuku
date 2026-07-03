@@ -24,6 +24,64 @@ export const STRATEGY_PKG = NET.strategyPackage;
 // The shared social vault that custodies subscriber balances (no-divert primitive).
 export const SOCIAL_VAULT_ID = NET.socialVaultId;
 
+// ─── Attested strategies (option C: Yosuku runs the agent inside its Nitro enclave) ───
+// When a creator picks "run it attested", the strategy's on-chain agent = this sealed
+// enclave address. The enclave holds the signing key INSIDE the TEE (durably sealed,
+// verified identical across restarts), decides the side from live oracle data it fetches
+// itself, and refuses any trade outside the on-chain caps or against its own read. The
+// creator supplies only a STRATEGY SPEC — a preset + two knobs, never code — which keeps
+// the enclave's attestation stable. This exact address signs every attested copy on Sui.
+export const ATTESTED_AGENT =
+  '0xd4428ac17dcd558bf8cf82a8aa8d9ca7d83c1c2fb19a5b91c297cf85d608d30d';
+
+/** A creator's strategy expressed as DATA the fixed enclave engine evaluates (not code). */
+export type PresetKey = 'momentum' | 'reversion';
+export interface StrategySpec {
+  preset: PresetKey;
+  lookback: number;      // # of recent 15-min samples the engine reads (2–12)
+  thresholdBps: number;  // minimum move (bps) to act on; below it → sit the round out
+}
+
+export const PRESETS: Record<PresetKey, { name: string; tagline: string; how: string }> = {
+  momentum: {
+    name: 'Momentum',
+    tagline: 'Follow the trend',
+    how: 'Reads the last few prices. If the market moved up past the threshold it bets UP — and DOWN if it fell. It rides whichever way price is already going.',
+  },
+  reversion: {
+    name: 'Mean-reversion',
+    tagline: 'Fade the move',
+    how: 'The opposite instinct. If the market ran up past the threshold it bets DOWN, expecting a pullback — and UP after a sharp drop. It bets against the last move.',
+  },
+};
+
+/** Plain-language description of exactly what the enclave will do with this spec. */
+export function describeSpec(s: StrategySpec): string {
+  const dir = s.preset === 'momentum' ? 'with' : 'against';
+  const mins = s.lookback * 15;
+  const win = mins >= 60 ? `${(mins / 60).toFixed(mins % 60 ? 1 : 0)}h` : `${mins}m`;
+  const pct = (s.thresholdBps / 100).toFixed(2).replace(/\.?0+$/, '');
+  return `Every 15 min it reads the last ${s.lookback} prices (~${win}). If BTC moved at least ${pct}%, it bets ${dir} that move. Otherwise it sits out.`;
+}
+
+/** Compact, deterministic serialization for the attested keeper + enclave. */
+export function encodeSpec(s: StrategySpec): string {
+  return JSON.stringify({ p: s.preset, lb: s.lookback, th: s.thresholdBps });
+}
+
+/** Register a spec so the attested keeper knows what this agent trades. Caps are already
+ *  enforced on-chain; the spec is only the direction logic the enclave evaluates. */
+export async function recordAgentSpec(p: {
+  strategyId: string; agent: string; spec: StrategySpec; creator: string;
+}): Promise<void> {
+  const res = await fetch('/api/agent-spec', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(p),
+  });
+  if (!res.ok) throw new Error(`spec registry ${res.status}`);
+}
+
 // StrategyListed/StrategySubscribed are typed at the strategy module's package.
 // CopyTraded/Subscribed were ADDED to social_vault in upgrade #2, so they are ALSO
 // typed at the new package id (the 0xf3c3c446 type returns 0 for these — verified).
@@ -279,6 +337,18 @@ async function queryEvents(type: string, last = 100): Promise<EvNode[]> {
 
 function num(v: unknown): number {
   return Number((v as string | number) ?? 0);
+}
+
+/** Resolve the Strategy id a publish tx created, by matching its StrategyListed event to the
+ *  digest. Retries a few times to ride out indexer lag right after the tx lands. */
+export async function strategyIdFromDigest(digest: string, tries = 6): Promise<string | null> {
+  for (let i = 0; i < tries; i++) {
+    const listed = await queryEvents(STRATEGY_LISTED, 30);
+    const hit = listed.find((n) => n.transaction?.digest === digest);
+    if (hit) return String(hit.contents?.json?.strategy ?? '') || null;
+    await new Promise((r) => setTimeout(r, 1500));
+  }
+  return null;
 }
 
 /** Parse a raw CopyTraded event payload into a typed CopyTrade. */

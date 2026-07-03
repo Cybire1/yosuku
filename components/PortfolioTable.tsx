@@ -13,7 +13,14 @@ import { useCurrentAccount } from '@mysten/dapp-kit';
 import { useSmartSubmit } from '@/lib/sui/useSmartSubmit';
 import { useManager, usePositions, useManagerBalance, getPositionDirection, getPositionStrike, useSviPricing, useVaultStats, useTradingVaultBalance } from '@/lib/sui/hooks';
 import { useOracles, useOraclePrices } from '@/lib/sui/hooks';
-import { redeemPositionTx, redeemRangePositionTx, redeemPermissionlessTx, redeemAllPermissionlessToTradingBalanceTx, type ClaimablePosition } from '@/lib/sui/predictClient';
+import {
+  redeemPositionToTradingBalanceTx,
+  redeemRangePositionTx,
+  redeemRangePositionToTradingBalanceTx,
+  redeemPermissionlessTx,
+  redeemAllPermissionlessToTradingBalanceTx,
+  type ClaimablePosition,
+} from '@/lib/sui/predictClient';
 import { sweepManagerToTradingBalanceTx, withdrawTradingBalanceTx } from '@/lib/sui/tradingVaultClient';
 import { FLOAT_SCALING, DUSDC_MULTIPLIER } from '@/lib/sui/constants';
 import { computeSviPrice, computeRangePrice, computeFeeBreakdown } from '@/lib/sui/sviPricing';
@@ -178,14 +185,24 @@ export default function PortfolioTable() {
       const redeemQty = quantity ?? BigInt(pos.quantity);
 
       if (direction === 'RANGE') {
-        await submit(() => redeemRangePositionTx(
-          manager.manager_id,
-          pos.oracle_id,
-          BigInt(pos.expiry),
-          BigInt(pos.lower_strike),
-          BigInt(pos.higher_strike),
-          redeemQty,
-        ));
+        await submit(() => settled
+          ? redeemRangePositionTx(
+              manager.manager_id,
+              pos.oracle_id,
+              BigInt(pos.expiry),
+              BigInt(pos.lower_strike),
+              BigInt(pos.higher_strike),
+              redeemQty,
+            )
+          : redeemRangePositionToTradingBalanceTx(
+              manager.manager_id,
+              pos.oracle_id,
+              BigInt(pos.expiry),
+              BigInt(pos.lower_strike),
+              BigInt(pos.higher_strike),
+              redeemQty,
+              address!,
+            ));
       } else {
         const strike = BigInt(getPositionStrike(pos.lower_strike, pos.higher_strike));
         // Settled → gas-negative permissionless redeem; live → owner redeem (early close).
@@ -198,13 +215,14 @@ export default function PortfolioTable() {
               direction,
               quantity: redeemQty,
             })
-          : redeemPositionTx(
+          : redeemPositionToTradingBalanceTx(
               manager.manager_id,
               pos.oracle_id,
               BigInt(pos.expiry),
               strike,
               direction,
               redeemQty,
+              address!,
             ));
       }
       setExpandedKey(null);

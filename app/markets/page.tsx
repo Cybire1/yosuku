@@ -1,411 +1,467 @@
 'use client';
 
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+// /markets — THE FLAGSHIP market browser, re-powered by DeepBook Predict 6-24.
+//
+// The face is unchanged (cards, sparkline charts, cent odds, green/red UP/DOWN,
+// the hero chart) — the ENGINE is the new venue: rolling cadence markets
+// (1-minute / 5-minute / 1-hour; this deployment has NO 15-minute cadence, so we
+// don't show one), REAL odds from house dry-run quotes (unsigned simulations —
+// no keys), and a tap-to-bet TICKET DRAWER running the founder-validated
+// /markets-live machinery (shared lib/sui/ticket624 — one implementation).
+//
+// The previous testnet's 15-minute rounds live under a collapsed "Previous venue"
+// section at the bottom — routes to /markets/[id] keep working.
+
+import { useState, useEffect, useRef, useMemo } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { useCurrentAccount } from '@mysten/dapp-kit';
 import { useOracles } from '@/lib/sui/hooks';
 import { type PriceData } from '@/lib/sui/predictApi';
-import { getTimeRemaining, formatCountdown } from '@/lib/roundHelpers';
 import { getCanonicalMarketLine } from '@/lib/marketLine';
 import { useBtcPrice } from '@/lib/hooks/useBtcPrice';
-import { drawPriceLine, genCandles } from '@/lib/charts/canvasChart';
-import { fetchPriceHistory } from '@/lib/sui/predictApi';
+import { drawPriceLine } from '@/lib/charts/canvasChart';
 import { FLOAT_SCALING } from '@/lib/sui/constants';
-import { Search, X, ChevronDown, Clock, Maximize2 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { useKeyboardShortcuts } from '@/lib/hooks/useKeyboardShortcuts';
-import { loadFavorites, toggleFavorite } from '@/lib/favorites';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import Marquee from '@/components/Marquee';
 import GrainOverlay from '@/components/GrainOverlay';
 import MarketCard from '@/components/MarketCard';
-import TradePanel from '@/components/TradePanel';
 import SectionHeader from '@/components/SectionHeader';
 import TheBell from '@/components/TheBell';
 import Tutorial from '@/components/Tutorial';
+import Ticket624Drawer from '@/components/Ticket624Drawer';
+import {
+  fetchMarkets624,
+  fetchSpot624,
+  fetchPythHistory624,
+  quoteMint624,
+  type Cadence624,
+  type Market624,
+} from '@/lib/sui/predict624Client';
+import { BAND_USD, MIN_MINT_MS, strike624, ticks624, type Dir624 } from '@/lib/sui/ticket624';
 
-// Quick probability estimate from forward vs the resolved fixed market line.
-function computeQuickProb(p: PriceData, marketStrike: number, expiry: number, nowMs: number) {
-  const fwd = p.forward / FLOAT_SCALING;
-  const strike = marketStrike / FLOAT_SCALING;
-  const diff = (fwd - strike) / (strike || 1);
-  const secsLeft = Math.max(60, (expiry - nowMs) / 1000);
-  const sigma = 0.001 * Math.sqrt(secsLeft / 60);
-  const z = diff / (sigma || 0.01);
-  return Math.max(1, Math.min(99, 100 / (1 + Math.exp(-1.7 * z))));
+// ─── house quoting (display odds) ───
+// Dry-runs are UNSIGNED simulations against a funded house account — no keys are
+// involved, and nothing is ever executed. The user's own bets quote with their
+// own account in the ticket drawer.
+const HOUSE_SENDER = '0x0099f97251af2d072fc492316ae30de3ab5639beb09073509d54bf49197513b4';
+const HOUSE_WRAPPER = '0xc820ff1e36d8810f29d80ad81415fd064e02b7f20c41a4469e2f4400d514e706';
+// 2 DUSDC payout @1× — the venue's smallest quotable ticket (min net premium is
+// 1 DUSDC; a 1 DUSDC quote aborts). Cents shown = cost per $1 of payout.
+const ODDS_QTY_MICRO = 2_000_000n;
+const ODDS_STALE_MS = 18_000; // per-market cache — effective ~20s refresh
+const ODDS_TICK_MS = 3_000; // sweep cadence (each sweep skips fresh markets)
+const ODDS_STAGGER_MS = 350; // gap between per-market quote pairs
+
+const CADENCE_WORD: Record<Cadence624, string> = { '1m': '1-minute', '5m': '5-minute', '1h': '1-hour' };
+const CADENCES: Cadence624[] = ['1m', '5m', '1h'];
+const LIVE_HORIZON_LABELS = ['15-min', '30-min', '45-min', '1-hr'] as const; // previous venue only
+
+const fmtUsd0 = (n: number) => `$${Math.round(n).toLocaleString('en-US')}`;
+
+function fmtCountdown(msLeft: number): string {
+  if (msLeft <= 0) return 'settling';
+  const s = Math.max(0, Math.floor(msLeft / 1000));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const ss = s % 60;
+  return h > 0
+    ? `${h}:${String(m).padStart(2, '0')}:${String(ss).padStart(2, '0')}`
+    : `${String(m).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
 }
 
-const LIVE_HORIZON_LABELS = ['15-min', '30-min', '45-min', '1-hr'] as const;
+interface HouseOdds {
+  upCents: number | null;
+  downCents: number | null;
+  /** The line the UP ticket will actually use (spot−$20 at quote time). */
+  strikeUpUsd: number | null;
+  /** The line the DOWN ticket will actually use (spot+$20 at quote time). */
+  strikeDownUsd: number | null;
+  at: number;
+}
 
-// Later rounds per asset, as live countdown chips. One shared 1s ticker.
-function BellChips({ rows }: { rows: ReadonlyArray<readonly [string, { oracle_id: string; expiry: number }[]]> }) {
-  const [nowMs, setNowMs] = useState(0);
+/**
+ * REAL cent odds per market: house dry-run quote of a minimum ticket for each
+ * band, normalised to cost per $1 of payout. Staggered + cached per market.
+ * UP and DOWN are DIFFERENT bands (each with a $20 cushion) so they will not
+ * sum to $1 — that is honest, not a bug.
+ */
+function useHouseOdds624(markets: Market624[], spot: number | null) {
+  const [odds, setOdds] = useState<Record<string, HouseOdds>>({});
+  const oddsRef = useRef(odds);
+  oddsRef.current = odds;
+  const marketsRef = useRef(markets);
+  marketsRef.current = markets;
+  const spotRef = useRef(spot);
+  spotRef.current = spot;
+  const inflight = useRef(false);
+
   useEffect(() => {
-    const tick = () => setNowMs(Date.now());
-    tick();
-    const iv = setInterval(tick, 1000);
-    return () => clearInterval(iv);
+    let dead = false;
+
+    const quoteSide = async (marketId: string, dir: Dir624, spotNow: number): Promise<number | null> => {
+      const { lowerTick, higherTick } = ticks624(spotNow, dir);
+      const q = await quoteMint624({
+        sender: HOUSE_SENDER,
+        wrapperId: HOUSE_WRAPPER,
+        marketId,
+        lowerTick,
+        higherTick,
+        qtyMicro: ODDS_QTY_MICRO,
+        leverage1e9: 1_000_000_000n,
+      });
+      if ('error' in q) return null;
+      return Math.max(1, Math.min(99, Math.round((q.costMicro / Number(ODDS_QTY_MICRO)) * 100)));
+    };
+
+    const sweep = async () => {
+      if (dead || inflight.current || spotRef.current == null) return;
+      inflight.current = true;
+      try {
+        const nowMs = Date.now();
+        const list = marketsRef.current.filter((m) => m.expiry - nowMs > MIN_MINT_MS);
+        for (const m of list) {
+          if (dead) break;
+          const cached = oddsRef.current[m.id];
+          if (cached && Date.now() - cached.at < ODDS_STALE_MS) continue;
+          const spotNow = spotRef.current;
+          if (spotNow == null) break;
+          const [up, down] = await Promise.all([quoteSide(m.id, 'up', spotNow), quoteSide(m.id, 'down', spotNow)]);
+          if (dead) break;
+          setOdds((o) => ({
+            ...o,
+            [m.id]: {
+              upCents: up ?? o[m.id]?.upCents ?? null,
+              downCents: down ?? o[m.id]?.downCents ?? null,
+              strikeUpUsd: up != null ? strike624(spotNow, 'up') : o[m.id]?.strikeUpUsd ?? null,
+              strikeDownUsd: down != null ? strike624(spotNow, 'down') : o[m.id]?.strikeDownUsd ?? null,
+              at: Date.now(),
+            },
+          }));
+          await new Promise((r) => setTimeout(r, ODDS_STAGGER_MS));
+        }
+      } finally {
+        inflight.current = false;
+      }
+    };
+
+    const t = setTimeout(() => void sweep(), 600); // fast first paint once data lands
+    const iv = setInterval(() => void sweep(), ODDS_TICK_MS);
+    return () => {
+      dead = true;
+      clearTimeout(t);
+      clearInterval(iv);
+    };
   }, []);
-  const fmt = (ms: number) => {
-    const s = Math.max(0, Math.floor(ms / 1000));
-    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), ss = s % 60;
-    return h > 0
-      ? `${h}:${String(m).padStart(2, '0')}:${String(ss).padStart(2, '0')}`
-      : `${String(m).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
-  };
+
+  return odds;
+}
+
+// ─── the 6-24 market card — the flagship card face, new engine ───
+
+function Spark624({ series, target }: { series: number[]; target: number | null }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    if (series.length >= 2) {
+      drawPriceLine(ref.current, series, { target: target ?? undefined, verdict: true, padX: 4, padTop: 6, padBot: 6 });
+    }
+  }, [series, target]);
+  return <canvas ref={ref} />;
+}
+
+function Market624Card({
+  market,
+  spot,
+  series,
+  deltaPct,
+  odds,
+  now,
+  onOpen,
+}: {
+  market: Market624;
+  spot: number | null;
+  series: number[];
+  deltaPct: number | null;
+  odds: HouseOdds | undefined;
+  now: number;
+  onOpen: (market: Market624, side: Dir624 | null) => void;
+}) {
+  const msLeft = now > 0 ? market.expiry - now : null;
+  const closing = msLeft != null && msLeft < MIN_MINT_MS;
+  const urgent = !closing && msLeft != null && msLeft < 5 * 60 * 1000;
+  const strikeUp = odds?.strikeUpUsd ?? (spot != null ? spot - BAND_USD : null);
+  const strikeDown = odds?.strikeDownUsd ?? (spot != null ? spot + BAND_USD : null);
+  const question = strikeUp != null ? `BTC holds above ${fmtUsd0(strikeUp)}?` : 'BTC market';
+
   return (
-    <div className="later-bells">
-      {rows.map(([asset, list]) => (
-        <div key={asset} className="later-bells-row">
-          <span className="later-bells-asset">{asset}</span>
-          <div className="later-bells-chips">
-            {list.slice(0, 8).map(o => (
-              <Link key={o.oracle_id} href={`/markets/${o.oracle_id}`} className="bell-chip" data-cursor="hover">
-                {fmt(o.expiry - nowMs)}
-              </Link>
-            ))}
-            {list.length > 8 && <span className="bell-chip more">+{list.length - 8}</span>}
-          </div>
+    <article
+      className={`market-card ${urgent ? 'urgent' : ''}`}
+      role="button"
+      tabIndex={0}
+      aria-label={`${question} Opens the bet ticket.`}
+      onClick={() => onOpen(market, null)}
+      onKeyDown={(e) => {
+        if (e.target !== e.currentTarget) return;
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onOpen(market, null);
+        }
+      }}
+      data-cursor="hover"
+    >
+      <div className="mc-head">
+        <span className="mc-asset">
+          <span className="glyph">₿</span>
+          BTC · {CADENCE_WORD[market.cadence]}
+        </span>
+        <span className={`mc-countdown ${urgent || closing ? 'urgent' : ''}`}>
+          <span className="clock-dot" />
+          {closing ? 'Settling' : msLeft != null ? fmtCountdown(msLeft) : '—'}
+        </span>
+      </div>
+
+      <div className="mc-body">
+        <div className="mc-question">
+          {strikeUp != null ? (
+            <>BTC holds above {fmtUsd0(strikeUp)}?</>
+          ) : (
+            <>BTC holds above <span className="strike-loading">···</span></>
+          )}
+          <span className="strike-dot" />
         </div>
-      ))}
-    </div>
+
+        <div className="mc-pricebar">
+          <div className="px">
+            <span className="big">{spot != null ? fmtUsd0(spot) : '—'}</span>
+            {deltaPct !== null && (
+              <span className={`chg ${deltaPct >= 0 ? 'up' : 'down'}`}>
+                {deltaPct >= 0 ? '+' : ''}
+                {deltaPct.toFixed(2)}%
+              </span>
+            )}
+          </div>
+          <span className="strike-meta">UP LINE {strikeUp != null ? fmtUsd0(strikeUp) : '···'}</span>
+        </div>
+
+        <div className="mc-spark">
+          <Spark624 series={series} target={strikeUp} />
+        </div>
+
+        {!closing ? (
+          <div className="mc-strip">
+            <span>{odds?.upCents != null ? 'LIVE · VENUE-QUOTED' : 'QUOTING THE VENUE…'}</span>
+            <span className="ramp">
+              <span>UP</span>
+              <span className="bar">
+                <span className="fill" style={{ width: `${Math.min(99, Math.max(1, odds?.upCents ?? 50))}%` }} />
+              </span>
+              <span className="pct">{odds?.upCents != null ? `${odds.upCents}¢` : '—'}</span>
+            </span>
+          </div>
+        ) : (
+          <div className="mc-strip">
+            <span>SETTLING · AWAITING THE ORACLE&apos;S PRINT</span>
+          </div>
+        )}
+      </div>
+
+      {!closing && (
+        <div className="mc-foot">
+          <button
+            type="button"
+            className="mc-side up"
+            data-cursor="up"
+            aria-label={`Bet UP${odds?.upCents != null ? ` at ${odds.upCents} cents per dollar` : ''} — wins if BTC settles over ${strikeUp != null ? fmtUsd0(strikeUp) : 'the line'}`}
+            title={strikeUp != null ? `wins if BTC settles over ${fmtUsd0(strikeUp)}` : undefined}
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpen(market, 'up');
+            }}
+          >
+            <span>UP</span>
+            <span className="price">{odds?.upCents != null ? `${odds.upCents}¢` : '···'}</span>
+          </button>
+          <button
+            type="button"
+            className="mc-side down"
+            data-cursor="hover"
+            aria-label={`Bet DOWN${odds?.downCents != null ? ` at ${odds.downCents} cents per dollar` : ''} — wins if BTC settles under ${strikeDown != null ? fmtUsd0(strikeDown) : 'the line'}`}
+            title={strikeDown != null ? `wins if BTC settles under ${fmtUsd0(strikeDown)}` : undefined}
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpen(market, 'down');
+            }}
+          >
+            <span>DOWN</span>
+            <span className="price">{odds?.downCents != null ? `${odds.downCents}¢` : '···'}</span>
+          </button>
+        </div>
+      )}
+    </article>
   );
 }
+
+// ─── page ───
 
 export default function MarketsPage() {
-  const account = useCurrentAccount();
-  const address = account?.address ?? null;
-  const router = useRouter();
-  const { active, settled, loading, error } = useOracles();
-  const [prices, setPrices] = useState<Record<string, PriceData>>({});
-  const { price: btcPrice } = useBtcPrice();
-  const heroCanvasRef = useRef<HTMLCanvasElement>(null);
-  const heroStrikeRef = useRef<number | null>(null);
-  const heroStrikeSourceRef = useRef<string | null>(null);
-  // Cache the hero price series per oracle so live ticks redraw without
-  // re-fetching /prices — this effect runs on every btcPrice/prices change.
-  const heroSeriesRef = useRef<{ id: string; series: number[] } | null>(null);
-  const [filter, setFilter] = useState('all');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [sortBy, setSortBy] = useState<'closing' | 'probability'>('closing');
-  const [sortOpen, setSortOpen] = useState(false);
-  const searchRef = useRef<HTMLInputElement>(null);
-  const [favorites, setFavorites] = useState<Set<string>>(new Set());
-
-  // Keyboard shortcuts
-  useKeyboardShortcuts(useMemo(() => ({
-    '/': () => searchRef.current?.focus(),
-  }), []));
-
-  // Load favorites from localStorage on mount
+  // clock
+  const [now, setNow] = useState(0);
   useEffect(() => {
-    setFavorites(loadFavorites());
+    setNow(Date.now());
+    const iv = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(iv);
   }, []);
 
-  const handleToggleFavorite = useCallback((oracleId: string) => {
-    const updated = toggleFavorite(oracleId);
-    setFavorites(new Set(updated));
-  }, []);
-
-  // Fetch prices via combined server route (avoids proxy bottleneck)
+  // 6-24 markets (poll 15s)
+  const [markets, setMarkets] = useState<Market624[]>([]);
+  const [marketsErr, setMarketsErr] = useState<string | null>(null);
   useEffect(() => {
-    let cancelled = false;
-    async function loadPrices() {
+    let dead = false;
+    const load = async () => {
       try {
-        const res = await fetch('/api/oracles?prices=1');
-        if (!res.ok) return;
-        const data = await res.json();
-        if (!cancelled && data.prices) {
-          setPrices(data.prices as Record<string, PriceData>);
+        const all = await fetchMarkets624();
+        if (!dead) {
+          setMarkets(all.filter((m) => m.minsOut < 65));
+          setMarketsErr(null);
         }
-      } catch { /* ignore */ }
-    }
-    loadPrices();
-    const interval = setInterval(loadPrices, 10_000);
-    return () => { cancelled = true; clearInterval(interval); };
+      } catch (e) {
+        if (!dead) setMarketsErr(String(e instanceof Error ? e.message : e).slice(0, 120));
+      }
+    };
+    load();
+    const iv = setInterval(load, 15_000);
+    return () => {
+      dead = true;
+      clearInterval(iv);
+    };
   }, []);
 
-  // Hero chart — use real BTC price history from first BTC oracle
-  const [heroChartDelta, setHeroChartDelta] = useState<string | null>(null);
-  const [heroYesProb, setHeroYesProb] = useState<number | null>(null);
-  // The hero chart IS the headline live market — tradable, not decoration.
-  const [heroOracle, setHeroOracle] = useState<{ id: string; expiry: number; strike: number; strikeDollars: number } | null>(null);
-  // Raw OracleData for the hero market — feeds the embedded TradePanel (same panel the detail page uses).
-  const heroRawOracle = useMemo(
-    () => (heroOracle ? active.find(o => o.oracle_id === heroOracle.id) ?? null : null),
-    [active, heroOracle],
+  // live spot from the SETTLEMENT pyth feed (poll 5s)
+  const [spot, setSpot] = useState<number | null>(null);
+  useEffect(() => {
+    let dead = false;
+    const load = async () => {
+      try {
+        const s = await fetchSpot624();
+        if (!dead) setSpot(s);
+      } catch {
+        /* keep last good spot */
+      }
+    };
+    load();
+    const iv = setInterval(load, 5_000);
+    return () => {
+      dead = true;
+      clearInterval(iv);
+    };
+  }, []);
+
+  // one shared price series for the hero + every sparkline — all markets settle
+  // on the SAME BTC pyth feed (~1 observation/sec, ≈2 min lookback)
+  const [series, setSeries] = useState<number[]>([]);
+  useEffect(() => {
+    let dead = false;
+    const load = async () => {
+      try {
+        const h = await fetchPythHistory624(120);
+        if (!dead && h.length > 5) setSeries(h.map((x) => x.usd));
+      } catch {
+        /* keep last series */
+      }
+    };
+    load();
+    const iv = setInterval(load, 15_000);
+    return () => {
+      dead = true;
+      clearInterval(iv);
+    };
+  }, []);
+  const liveSeries = useMemo(
+    () => (spot != null && series.length > 1 ? [...series, spot] : series),
+    [series, spot],
   );
-  // Expand the hero market into a full detail modal (click the card → morph open).
-  const [expanded, setExpanded] = useState(false);
+  const deltaPct = useMemo(() => {
+    if (liveSeries.length < 2) return null;
+    const first = liveSeries[0];
+    const last = liveSeries[liveSeries.length - 1];
+    return first > 0 ? ((last - first) / first) * 100 : null;
+  }, [liveSeries]);
+
+  // the rail: soonest MINTABLE market of each cadence, plus the next ones (max 6
+  // cards). Markets inside the 90s pricer window are dropped, not shown dead —
+  // on a 1-minute cadence the very soonest expiry is always un-mintable.
+  const railMarkets = useMemo(() => {
+    const by: Record<Cadence624, Market624[]> = { '1m': [], '5m': [], '1h': [] };
+    for (const m of markets) {
+      if (now === 0 || m.expiry - now > MIN_MINT_MS) by[m.cadence].push(m);
+    }
+    const rail: Market624[] = [];
+    for (const rank of [0, 1]) {
+      for (const c of CADENCES) {
+        const m = by[c][rank];
+        if (m) rail.push(m);
+      }
+    }
+    return rail.slice(0, 6);
+  }, [markets, now]);
+
+  // REAL odds — house dry-run quotes, staggered, ~20s per-market refresh
+  const odds = useHouseOdds624(railMarkets, spot);
+
+  // hero = the soonest market still comfortably mintable
+  const heroMarket = useMemo(
+    () => markets.find((m) => now === 0 || m.expiry - now > MIN_MINT_MS) ?? null,
+    [markets, now],
+  );
+  const heroOdds = heroMarket ? odds[heroMarket.id] : undefined;
+  const heroStrike = heroOdds?.strikeUpUsd ?? (spot != null ? spot - BAND_USD : null);
+  const heroMsLeft = heroMarket && now > 0 ? heroMarket.expiry - now : null;
+
+  // ticket drawer
+  const [ticket, setTicket] = useState<{ market: Market624; side: Dir624 | null } | null>(null);
+  const openTicket = (market: Market624, side: Dir624 | null) => setTicket({ market, side });
+  // keep the drawer's market row fresh (countdown source) as polls roll in
+  const ticketMarket = useMemo(
+    () => (ticket ? markets.find((m) => m.id === ticket.market.id) ?? ticket.market : null),
+    [ticket, markets],
+  );
+
+  // hero chart — the same living chart treatment as before, on the settlement feed
+  const heroCanvasRef = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    if (!heroCanvasRef.current || liveSeries.length < 2) return;
+    let raf = 0;
+    const drawFrame = (t: number) => {
+      if (!heroCanvasRef.current) return;
+      drawPriceLine(heroCanvasRef.current, liveSeries, {
+        target: heroStrike ?? undefined,
+        targetLabel: heroStrike != null ? `UP line · $${Math.round(heroStrike).toLocaleString()}` : undefined,
+        verdict: true,
+        gridLines: true,
+        axisRight: 60,
+        padX: 14,
+        padTop: 12,
+        padBot: 12,
+        motion: true,
+        now: t,
+      });
+      raf = window.requestAnimationFrame(drawFrame);
+    };
+    raf = window.requestAnimationFrame(drawFrame);
+    return () => window.cancelAnimationFrame(raf);
+  }, [liveSeries, heroStrike]);
+
+  // fade the scroll cue once scrolling starts
   const [scrolled, setScrolled] = useState(false);
-  const modalCanvasRef = useRef<HTMLCanvasElement>(null);
-  // Fade the "scroll for markets" cue once the user starts scrolling.
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 60);
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
-  // Lock body scroll + close on Escape while the modal is open.
-  useEffect(() => {
-    if (!expanded) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setExpanded(false); };
-    document.addEventListener('keydown', onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = prev; };
-  }, [expanded]);
-  // Draw the expanded chart from the cached hero series (+ live tick), retrying until the canvas mounts.
-  useEffect(() => {
-    if (!expanded || !heroOracle) return;
-    let raf = 0;
-    const tryDraw = () => {
-      if (!modalCanvasRef.current) { raf = requestAnimationFrame(tryDraw); return; }
-      const base = heroSeriesRef.current?.series ?? [];
-      const series = btcPrice ? [...base, btcPrice] : base;
-      if (series.length >= 2) {
-        drawPriceLine(modalCanvasRef.current, series, {
-          target: heroOracle.strikeDollars,
-          targetLabel: `Win line · $${Math.round(heroOracle.strikeDollars).toLocaleString()}`,
-          verdict: true, gridLines: true, axisRight: 64, padX: 18, padTop: 16, padBot: 16,
-        });
-      }
-    };
-    tryDraw();
-    return () => cancelAnimationFrame(raf);
-  }, [expanded, heroOracle, btcPrice]);
-  const [nowMs, setNowMs] = useState(0);
-  useEffect(() => {
-    const tick = () => setNowMs(Date.now());
-    tick();
-    const iv = setInterval(tick, 1000);
-    return () => clearInterval(iv);
-  }, []);
 
-  useEffect(() => {
-    if (!heroCanvasRef.current) return;
-    let cancelled = false;
-    let raf = 0;
+  // previous venue (collapsed by default — mounts its hooks only when opened)
+  const [prevOpen, setPrevOpen] = useState(false);
 
-    async function renderHeroChart() {
-      // Soonest BTC round that is still TRADABLE — skip expired-but-unsettled
-      // rounds so the hero rotates at the bell instead of going stale.
-      const btcOracle = active
-        .filter(o => o.underlying_asset === 'BTC' && (!nowMs || o.expiry > nowMs))
-        .sort((a, b) => a.expiry - b.expiry)[0];
-      if (btcOracle) {
-        // New round → forget the previous round's pinned strike and series.
-        if (heroSeriesRef.current && heroSeriesRef.current.id !== btcOracle.oracle_id) {
-          heroSeriesRef.current = null;
-          heroStrikeRef.current = null;
-          heroStrikeSourceRef.current = null;
-        }
-        try {
-          // Fetch history once per oracle; live ticks reuse the cached series.
-          let series = heroSeriesRef.current?.id === btcOracle.oracle_id
-            ? heroSeriesRef.current.series
-            : null;
-          if (!series) {
-            const history = await fetchPriceHistory(btcOracle.oracle_id, 100);
-            if (!cancelled && history.length > 5) {
-              series = history
-                .slice()
-                .sort((a, b) => a.timestamp - b.timestamp)
-                .map(h => h.spot / FLOAT_SCALING);
-              heroSeriesRef.current = { id: btcOracle.oracle_id, series };
-            }
-          }
-          if (series && series.length > 1) {
-            // Append the live oracle price as the newest tick so the end-dot + delta
-            // track the header price instead of lagging on the historical series.
-            const liveSeries = (btcPrice && Number.isFinite(btcPrice)) ? [...series, btcPrice] : series;
-            const first = liveSeries[0];
-            const last = liveSeries[liveSeries.length - 1];
-            const delta = first > 0 ? ((last - first) / first * 100).toFixed(2) : '0.00';
-            if (!cancelled) setHeroChartDelta(`${Number(delta) >= 0 ? '+' : ''}${delta}%`);
-
-            const p0 = prices[btcOracle.oracle_id];
-            const refP = p0?.forward || p0?.spot || (btcPrice ? btcPrice * FLOAT_SCALING : null);
-            const line = getCanonicalMarketLine({
-              oracle: btcOracle,
-              settledOracles: settled,
-              referencePrice: refP,
-            });
-            if (
-              line &&
-              line.source !== 'grid-fallback' &&
-              (heroStrikeRef.current === null ||
-                (heroStrikeSourceRef.current !== 'previous-settlement' && line.source === 'previous-settlement'))
-            ) {
-              heroStrikeRef.current = line.strike;
-              heroStrikeSourceRef.current = line.source;
-            }
-            const midStrike = heroStrikeRef.current;
-            if (midStrike === null) {
-              if (!cancelled) setHeroOracle(null);
-              return;
-            }
-            const midDollars = midStrike / FLOAT_SCALING;
-            if (!cancelled) {
-              // Functional update with identity bail-out — returning a fresh
-              // object unconditionally here loops the render cycle to death
-              // (effect deps get new identities every render).
-              setHeroOracle(prev =>
-                prev && prev.id === btcOracle.oracle_id && prev.expiry === btcOracle.expiry && prev.strike === midStrike
-                  ? prev
-                  : { id: btcOracle.oracle_id, expiry: btcOracle.expiry, strike: midStrike, strikeDollars: midDollars },
-              );
-            }
-
-            if (!cancelled) {
-              // Compute yes probability from forward
-              const p = prices[btcOracle.oracle_id];
-              const fwdScaled = p?.forward || p?.spot || (btcPrice ? btcPrice * FLOAT_SCALING : null);
-              if (fwdScaled) {
-                const fwd = fwdScaled / FLOAT_SCALING;
-                const diff = (fwd - midDollars) / midDollars;
-                const secsLeft = Math.max(60, (btcOracle.expiry - nowMs) / 1000);
-                const sigma = 0.001 * Math.sqrt(secsLeft / 60);
-                const z = diff / (sigma || 0.01);
-                setHeroYesProb(Math.round(Math.max(1, Math.min(99, 100 / (1 + Math.exp(-1.7 * z))))));
-              }
-            }
-
-            if (!cancelled && heroCanvasRef.current) {
-              const drawFrame = (now: number) => {
-                if (cancelled || !heroCanvasRef.current) return;
-                drawPriceLine(heroCanvasRef.current, liveSeries, {
-                  target: midDollars,
-                  targetLabel: `Win line · $${Math.round(midDollars).toLocaleString()}`,
-                  verdict: true,
-                  gridLines: true,
-                  axisRight: 60,
-                  padX: 14,
-                  padTop: 12,
-                  padBot: 12,
-                  motion: true,
-                  now,
-                });
-                raf = window.requestAnimationFrame(drawFrame);
-              };
-              raf = window.requestAnimationFrame(drawFrame);
-              return;
-            }
-          }
-        } catch { /* ignore, fall through to fallback */ }
-      }
-
-      // Fallback — generate a series from the live BTC stream
-      if (!cancelled && heroCanvasRef.current) {
-        const spot = btcPrice || 80000;
-        const series = genCandles(42, 60, spot - spot * 0.008, spot, spot * 0.003).map(c => c.close);
-        drawPriceLine(heroCanvasRef.current, series, {
-          target: spot,
-          targetLabel: `Win line · $${Math.round(spot).toLocaleString()}`,
-          gridLines: true,
-          axisRight: 60,
-          padX: 14,
-          padTop: 12,
-          padBot: 12,
-        });
-      }
-    }
-
-    renderHeroChart();
-    return () => { cancelled = true; if (raf) window.cancelAnimationFrame(raf); };
-  }, [btcPrice, active, settled, prices, nowMs]);
-
-  const recentSettled = settled.slice(0, 6);
-
-  // Determine next expiry for TheBell
-  const nextExpiry = useMemo(() => {
-    if (active.length === 0) return undefined;
-    const sorted = [...active].sort((a, b) => a.expiry - b.expiry);
-    return sorted[0]?.expiry;
-  }, [active]);
-
-  // Filter + search + sort
-  const filterOracles = useCallback((oracles: typeof active) => {
-    let result = oracles;
-    if (filter === 'FAV') {
-      result = result.filter(o => favorites.has(o.oracle_id));
-    } else if (filter !== 'all') {
-      result = result.filter(o => o.underlying_asset === filter);
-    }
-    if (searchQuery.trim()) {
-      const q = searchQuery.trim().toLowerCase();
-      result = result.filter(o =>
-        (o.underlying_asset || '').toLowerCase().includes(q) ||
-        o.oracle_id.toLowerCase().includes(q)
-      );
-    }
-    if (sortBy === 'closing') {
-      result = [...result].sort((a, b) => a.expiry - b.expiry);
-    } else if (sortBy === 'probability') {
-      // Sort by forward-based logistic probability (descending)
-      result = [...result].sort((a, b) => {
-        const pA = prices[a.oracle_id];
-        const pB = prices[b.oracle_id];
-        const refA = pA?.forward || pA?.spot || (btcPrice ? btcPrice * FLOAT_SCALING : null);
-        const refB = pB?.forward || pB?.spot || (btcPrice ? btcPrice * FLOAT_SCALING : null);
-        const lineA = getCanonicalMarketLine({ oracle: a, settledOracles: settled, referencePrice: refA });
-        const lineB = getCanonicalMarketLine({ oracle: b, settledOracles: settled, referencePrice: refB });
-        const probA = pA && lineA && nowMs ? computeQuickProb(pA, lineA.strike, a.expiry, nowMs) : 50;
-        const probB = pB && lineB && nowMs ? computeQuickProb(pB, lineB.strike, b.expiry, nowMs) : 50;
-        // Sort by distance from 50% (most decisive first)
-        return Math.abs(probB - 50) - Math.abs(probA - 50);
-      });
-    }
-    return result;
-  }, [filter, searchQuery, sortBy, prices, favorites, nowMs, settled, btcPrice]);
-
-  // Show the next four tradable bells as the active ladder. Predict still runs
-  // 15-minute rounds; the labels describe how far out each round closes.
-  const filteredActive = useMemo(() => filterOracles(active), [filterOracles, active]);
-  const byAsset = useMemo(() => {
-    const m = new Map<string, typeof active>();
-    for (const o of filteredActive) {
-      const a = o.underlying_asset || 'BTC';
-      if (!m.has(a)) m.set(a, []);
-      m.get(a)!.push(o);
-    }
-    for (const list of m.values()) list.sort((a, b) => a.expiry - b.expiry);
-    return m;
-  }, [filteredActive]);
-  // Computed per render (the 1s clock tick re-renders) so the live ladder
-  // rotates to the next round the moment one expires — never stuck on
-  // "Expired" while the oracle waits for its settlement print.
-  const liveLadder = [...filteredActive]
-    .filter(o => o.expiry > nowMs)
-    .sort((a, b) => a.expiry - b.expiry)
-    .slice(0, LIVE_HORIZON_LABELS.length)
-    .map((oracle, index) => ({
-      oracle,
-      horizonLabel: LIVE_HORIZON_LABELS[index] ?? `${(index + 1) * 15}-min`,
-    }));
-  const liveLadderIds = new Set(liveLadder.map(({ oracle }) => oracle.oracle_id));
-  const laterBells = Array.from(byAsset.entries())
-    .map(([asset, list]) => [asset, list.filter(o => o.expiry > nowMs && !liveLadderIds.has(o.oracle_id))] as const)
-    .filter(([, list]) => list.length > 0);
-
-  // Close sort dropdown on outside click
-  useEffect(() => {
-    if (!sortOpen) return;
-    const close = () => setSortOpen(false);
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') close();
-    };
-    document.addEventListener('click', close);
-    document.addEventListener('keydown', closeOnEscape);
-    return () => {
-      document.removeEventListener('click', close);
-      document.removeEventListener('keydown', closeOnEscape);
-    };
-  }, [sortOpen]);
-
-  const FILTERS = ['all', 'FAV', 'BTC'];
-  const favCount = active.filter(o => favorites.has(o.oracle_id)).length;
+  const nextExpiry = markets[0]?.expiry;
 
   return (
     <div className="min-h-screen relative">
@@ -433,8 +489,8 @@ export default function MarketsPage() {
           <span className="ln">FLOOR · OPEN</span>
         </span>
         <span className="hero-meta br">
-          R/N 015-2026-Q2
-          <span className="ln">15 MIN CADENCE</span>
+          R/N 624-2026-Q3
+          <span className="ln">1M / 5M / 1H CADENCE</span>
         </span>
 
         <div className="container">
@@ -445,105 +501,136 @@ export default function MarketsPage() {
           </div>
 
           <div className="hero-grid hero-grid-mini">
-            {/* Hero chart */}
-            <div
-              className="hero-chart"
-              role={heroOracle ? 'button' : undefined}
-              tabIndex={heroOracle ? 0 : undefined}
-              aria-label={heroOracle ? 'Expand this market' : undefined}
-              data-cursor={heroOracle ? 'hover' : undefined}
-              style={{ cursor: heroOracle ? 'zoom-in' : undefined }}
-              onClick={() => { if (heroOracle) setExpanded(true); }}
-              onKeyDown={(e) => { if (e.key === 'Enter' && heroOracle) setExpanded(true); }}
-            >
+            {/* Hero chart — the soonest live market */}
+            <div className="hero-chart">
               <div className="hero-chart-head">
                 <div>
                   <div className="flex items-center gap-3 mb-2.5">
                     <span className="font-mono text-[9px] tracking-[0.16em] uppercase px-2.5 py-1 rounded-full border text-vermilion bg-vermilion/10 border-vermilion/20">Live</span>
-                    <span className="font-mono text-[10px] tracking-[0.1em] uppercase text-gray-600">BTC</span>
+                    <span className="font-mono text-[10px] tracking-[0.1em] uppercase text-gray-600">
+                      BTC{heroMarket ? ` · ${CADENCE_WORD[heroMarket.cadence]}` : ''}
+                    </span>
                   </div>
                   <h2 className="font-display font-[800] text-3xl sm:text-4xl text-white tracking-tight leading-[1.05]">
-                    {heroOracle ? (
-                      <>BTC above <span className="text-vermilion">{`$${heroOracle.strikeDollars.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}</span>?</>
-                    ) : 'BTC · USD'}
+                    {heroStrike != null ? (
+                      <>BTC holds above <span className="text-vermilion">{fmtUsd0(heroStrike)}</span>?</>
+                    ) : (
+                      'BTC · USD'
+                    )}
                   </h2>
-                  {heroOracle && btcPrice != null && (
+                  {heroStrike != null && spot != null && (
                     <div className="flex items-center gap-2 mt-2.5 font-mono text-sm sm:text-base">
-                      <span className={btcPrice >= heroOracle.strikeDollars ? 'text-profit font-semibold' : 'text-loss font-semibold'}>
-                        {btcPrice >= heroOracle.strikeDollars
-                          ? `$${Math.round(btcPrice - heroOracle.strikeDollars).toLocaleString()} above your line`
-                          : `needs +$${Math.round(heroOracle.strikeDollars - btcPrice).toLocaleString()} to win`}
+                      <span className={spot >= heroStrike ? 'text-profit font-semibold' : 'text-loss font-semibold'}>
+                        {spot >= heroStrike
+                          ? `$${Math.round(spot - heroStrike).toLocaleString()} above the UP line`
+                          : `needs +$${Math.round(heroStrike - spot).toLocaleString()} for UP to win`}
                       </span>
-                      <span className="text-gray-600">·</span>
-                      <span className="text-gray-400">{formatCountdown(getTimeRemaining(heroOracle.expiry))} left</span>
+                      {heroMsLeft != null && (
+                        <>
+                          <span className="text-gray-600">·</span>
+                          <span className="text-gray-400">{fmtCountdown(heroMsLeft)} left</span>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>
-                {heroOracle && (
+                {heroMarket && (
                   <div className="text-right shrink-0">
-                    <span className="font-mono text-[9px] tracking-[0.16em] uppercase text-gray-600 block mb-1">Expires in</span>
-                    <span className="font-mono text-2xl sm:text-3xl font-semibold text-white tabular-nums">{formatCountdown(getTimeRemaining(heroOracle.expiry))}</span>
+                    <span className="font-mono text-[9px] tracking-[0.16em] uppercase text-gray-600 block mb-1">Settles in</span>
+                    <span className="font-mono text-2xl sm:text-3xl font-semibold text-white tabular-nums">
+                      {heroMsLeft != null ? fmtCountdown(heroMsLeft) : '—'}
+                    </span>
                   </div>
                 )}
               </div>
               <div className="hero-chart-canvas">
                 <canvas ref={heroCanvasRef} />
-                {heroOracle && (
-                  <button
-                    type="button"
-                    className="hero-expand-btn"
-                    aria-label="Expand market"
-                    onClick={(e) => { e.stopPropagation(); setExpanded(true); }}
-                  >
-                    <Maximize2 />
-                  </button>
-                )}
               </div>
               <div className="hero-chart-foot">
-                <span>WINNING SIDE PAYS $1 · PRICE-ORACLE SETTLED</span>
+                <span>ORACLE-SETTLED · EACH SIDE PRICED FOR ITS OWN BAND</span>
                 <span className="ramp">
-                  <span>YES</span>
-                  <span className="bar"><span className="fill" style={{ width: heroYesProb != null ? `${heroYesProb}%` : '50%' }} /></span>
-                  <span style={{ color: 'var(--vermilion)' }}>{heroYesProb != null ? `${heroYesProb}¢` : '—'}</span>
+                  <span>UP</span>
+                  <span className="bar">
+                    <span className="fill" style={{ width: heroOdds?.upCents != null ? `${heroOdds.upCents}%` : '50%' }} />
+                  </span>
+                  <span style={{ color: 'var(--vermilion)' }}>{heroOdds?.upCents != null ? `${heroOdds.upCents}¢` : '—'}</span>
                 </span>
               </div>
-              {heroOracle && (
+              {heroMarket && (
                 <div className="hero-yesno">
-                  <Link
-                    href={`/markets/${heroOracle.id}?strike=${heroOracle.strike}&side=UP`}
+                  <button
+                    type="button"
                     className="hyn hyn-yes font-display"
-                    aria-label="Bet Yes"
-                    onClick={(e) => e.stopPropagation()}
+                    aria-label="Bet UP"
+                    onClick={() => openTicket(heroMarket, 'up')}
+                    data-cursor="hover"
                   >
-                    <span className="hyn-label">YES</span>
-                    <span className="hyn-price">{heroYesProb != null ? `${heroYesProb}¢` : '—'}</span>
-                  </Link>
-                  <Link
-                    href={`/markets/${heroOracle.id}?strike=${heroOracle.strike}&side=DOWN`}
+                    <span className="hyn-label">UP</span>
+                    <span className="hyn-price">{heroOdds?.upCents != null ? `${heroOdds.upCents}¢` : '—'}</span>
+                  </button>
+                  <button
+                    type="button"
                     className="hyn hyn-no font-display"
-                    aria-label="Bet No"
-                    onClick={(e) => e.stopPropagation()}
+                    aria-label="Bet DOWN"
+                    onClick={() => openTicket(heroMarket, 'down')}
+                    data-cursor="hover"
                   >
-                    <span className="hyn-label">NO</span>
-                    <span className="hyn-price">{heroYesProb != null ? `${100 - heroYesProb}¢` : '—'}</span>
-                  </Link>
+                    <span className="hyn-label">DOWN</span>
+                    <span className="hyn-price">{heroOdds?.downCents != null ? `${heroOdds.downCents}¢` : '—'}</span>
+                  </button>
                 </div>
               )}
             </div>
 
-            {/* Mini bet panel — the same TradePanel the full market page uses */}
+            {/* Mini call panel — taps open the ticket drawer (desktop) */}
             <div className="hero-mini-panel">
-              {heroRawOracle ? (
-                <TradePanel
-                  oracle={heroRawOracle}
-                  spotPrice={prices[heroRawOracle.oracle_id]?.spot ?? null}
-                  forwardPrice={prices[heroRawOracle.oracle_id]?.forward ?? null}
-                  defaultSide="UP"
-                  initialStrike={heroOracle?.strike ?? null}
-                  initialMode="simple"
-                />
+              {heroMarket ? (
+                <div className="border border-white/[0.1] bg-white/[0.02] p-5">
+                  <div className="flex items-center justify-between pb-3 mb-4 border-b border-white/[0.08]">
+                    <span className="font-mono text-[10px] uppercase tracking-[0.25em] text-white/40">
+                      <span className="text-vermilion">⊙</span> Make the call
+                    </span>
+                    <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/30 tabular-nums">
+                      {heroMsLeft != null ? fmtCountdown(heroMsLeft) : '—'}
+                    </span>
+                  </div>
+                  <p className="font-mono text-[11px] text-white/50 leading-relaxed mb-4">
+                    BTC · {CADENCE_WORD[heroMarket.cadence]} market — settles on the oracle print. Tap a side; you size the bet in the ticket.
+                  </p>
+                  <div className="space-y-2.5">
+                    <button
+                      type="button"
+                      className="mc-side up w-full"
+                      style={{ padding: '14px' }}
+                      onClick={() => openTicket(heroMarket, 'up')}
+                      data-cursor="up"
+                    >
+                      <span>UP</span>
+                      <span className="price">{heroOdds?.upCents != null ? `${heroOdds.upCents}¢ / $1` : '···'}</span>
+                    </button>
+                    <div className="font-mono text-[9.5px] text-white/35 px-1 -mt-1">
+                      wins if BTC settles over {heroOdds?.strikeUpUsd != null ? fmtUsd0(heroOdds.strikeUpUsd) : spot != null ? fmtUsd0(spot - BAND_USD) : '—'}
+                    </div>
+                    <button
+                      type="button"
+                      className="mc-side down w-full"
+                      style={{ padding: '14px' }}
+                      onClick={() => openTicket(heroMarket, 'down')}
+                      data-cursor="hover"
+                    >
+                      <span>DOWN</span>
+                      <span className="price">{heroOdds?.downCents != null ? `${heroOdds.downCents}¢ / $1` : '···'}</span>
+                    </button>
+                    <div className="font-mono text-[9.5px] text-white/35 px-1 -mt-1">
+                      wins if BTC settles under {heroOdds?.strikeDownUsd != null ? fmtUsd0(heroOdds.strikeDownUsd) : spot != null ? fmtUsd0(spot + BAND_USD) : '—'}
+                    </div>
+                  </div>
+                  <p className="font-mono text-[9.5px] leading-relaxed text-white/30 mt-4 pt-3 border-t border-white/[0.06]">
+                    Each side is priced by the venue for its own band — UP and DOWN don&apos;t sum to $1. Testnet DUSDC; you can lose your stake.
+                  </p>
+                </div>
               ) : (
-                <div className="hero-mini-loading">Loading live market…</div>
+                <div className="hero-mini-loading">{marketsErr ? 'Reconnecting to the venue…' : 'Reading live markets…'}</div>
               )}
             </div>
           </div>
@@ -559,283 +646,253 @@ export default function MarketsPage() {
         </button>
       </section>
 
-      {/* Expanded market modal — morphs open from the hero card */}
-      <AnimatePresence>
-        {expanded && heroOracle && heroRawOracle && (
-          <motion.div
-            className="market-modal-backdrop"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            onClick={() => setExpanded(false)}
-          >
-            <motion.div
-              className="market-modal"
-              initial={{ opacity: 0, scale: 0.96, y: 14 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.97, y: 10 }}
-              transition={{ type: 'spring', stiffness: 320, damping: 32 }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="market-modal-head">
-                <div className="mm-title">
-                  <span className="glyph">B</span>
-                  <div>
-                    <div className="mm-q">{`BTC above $${heroOracle.strikeDollars.toLocaleString(undefined, { maximumFractionDigits: 0 })}?`}</div>
-                    <div className="hero-chart-tags">
-                      <span className="hc-countdown"><Clock />Closes in <b>{formatCountdown(getTimeRemaining(heroOracle.expiry))}</b></span>
-                      <span className="hc-chip">Oracle-settled</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="mm-head-right">
-                  <div className="mm-price">
-                    <span className="price">{btcPrice ? `$${btcPrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '—'}</span>
-                    <span className="delta">{heroChartDelta || '—'}</span>
-                  </div>
-                  <button type="button" className="mm-close" aria-label="Close" onClick={() => setExpanded(false)}><X /></button>
-                </div>
-              </div>
-              <div className="market-modal-body">
-                <div className="market-modal-chart">
-                  <canvas ref={modalCanvasRef} />
-                  <div className="mm-chart-foot">
-                    <span>WINNING SIDE PAYS $1 · PRICE-ORACLE SETTLED</span>
-                    <Link href={`/markets/${heroOracle.id}`} className="mm-fullpage" data-cursor="hover">Open full page →</Link>
-                  </div>
-                </div>
-                <div className="market-modal-panel">
-                  <TradePanel
-                    oracle={heroRawOracle}
-                    spotPrice={prices[heroRawOracle.oracle_id]?.spot ?? null}
-                    forwardPrice={prices[heroRawOracle.oracle_id]?.forward ?? null}
-                    defaultSide="UP"
-                    initialStrike={heroOracle?.strike ?? null}
-                    initialMode="pro"
-                    onSuccess={() => setExpanded(false)}
-                  />
-                </div>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Filter bar (sticky) */}
-      <div className="filter-bar">
-        <div className="container">
-          <div className="filter-row">
-            <div className="filter-tabs">
-              {FILTERS.map(f => (
-                <button
-                  key={f}
-                  type="button"
-                  className={`filter-tab ${filter === f ? 'active' : ''}`}
-                  onClick={() => setFilter(f)}
-                  aria-pressed={filter === f}
-                >
-                  {f === 'all' ? 'All' : f === 'FAV' ? '★' : f}
-                  <span className="ct">
-                    {f === 'all'
-                      ? String(active.length).padStart(2, '0')
-                      : f === 'FAV'
-                        ? String(favCount).padStart(2, '0')
-                        : String(active.filter(o => o.underlying_asset === f).length).padStart(2, '0')
-                    }
-                  </span>
-                </button>
-              ))}
-            </div>
-
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              {/* Search */}
-              <div className="search-box">
-                <Search />
-                <input
-                  ref={searchRef}
-                  type="text"
-                  aria-label="Search markets"
-                  placeholder="Search markets…"
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                />
-                {searchQuery ? (
-                  <button
-                    type="button"
-                    aria-label="Clear market search"
-                    onClick={() => setSearchQuery('')}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex' }}
-                  >
-                    <X style={{ width: 12, height: 12, color: 'var(--gray-500)' }} />
-                  </button>
-                ) : (
-                  <span className="kbd">/</span>
-                )}
-              </div>
-
-              {/* Sort */}
-              <div style={{ position: 'relative', userSelect: 'none' }}>
-                <button
-                  type="button"
-                  className="sort-select"
-                  onClick={() => setSortOpen(!sortOpen)}
-                  aria-haspopup="menu"
-                  aria-expanded={sortOpen}
-                  aria-label={`Sort markets by ${sortBy === 'closing' ? 'closing soon' : 'top probability'}`}
-                >
-                  <span className="lbl">Sort</span>
-                  <span className="val">{sortBy === 'closing' ? 'Closing Soon' : 'Top Probability'}</span>
-                  <ChevronDown aria-hidden="true" />
-                </button>
-                {sortOpen && (
-                  <div
-                    role="menu"
-                    style={{
-                      position: 'absolute', top: 'calc(100% + 6px)', right: 0,
-                      background: 'rgba(20,20,20,0.96)', border: '1px solid rgba(255,255,255,0.08)',
-                      borderRadius: '12px', padding: '4px', zIndex: 900, minWidth: '160px',
-                      backdropFilter: 'blur(12px)',
-                    }}
-                  >
-                    {([['closing', 'Closing Soon'], ['probability', 'Top Probability']] as const).map(([key, label]) => (
-                      <button
-                        key={key}
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); setSortBy(key); setSortOpen(false); }}
-                        role="menuitemradio"
-                        aria-checked={sortBy === key}
-                        style={{
-                          display: 'block', width: '100%', textAlign: 'left',
-                          padding: '8px 12px', background: sortBy === key ? 'rgba(255,255,255,0.06)' : 'transparent',
-                          border: 'none', color: sortBy === key ? 'var(--white)' : 'var(--gray-400)',
-                          fontSize: '12px', fontFamily: 'var(--font-body)', cursor: 'pointer',
-                          borderRadius: '8px', transition: 'background 150ms',
-                        }}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* Main content */}
       <main>
         <div className="container">
-          {/* Loading */}
-          {loading && (
+          {/* Loading / error */}
+          {markets.length === 0 && !marketsErr && (
             <div className="empty-state">
               <div className="jp">予</div>
-              <h3>Loading markets...</h3>
-              <p>Fetching oracles from DeepBook Predict</p>
+              <h3>Reading live markets…</h3>
+              <p>Fetching cadence markets from DeepBook Predict</p>
             </div>
           )}
-
-          {/* Error */}
-          {error && !loading && (
+          {markets.length === 0 && marketsErr && (
             <div className="empty-state">
               <div className="jp">誤</div>
               <h3>Connection error</h3>
-              <p>{error}</p>
+              <p>Couldn&apos;t reach the market feed — retrying every 15s.</p>
             </div>
           )}
 
-          {/* No markets */}
-          {!loading && !error && active.length === 0 && (
-            <div className="empty-state">
-              <div className="jp">空</div>
-              <h3>No active markets</h3>
-              <p>New oracle rounds are created every 15 minutes</p>
-            </div>
-          )}
-
-          {/* Live ladder — next four tradable bells */}
-          {liveLadder.length > 0 && (
-            <section className="markets-section" data-section="closing">
+          {/* Live now — the venue's rolling cadence markets */}
+          {railMarkets.length > 0 && (
+            <section className="markets-section" data-section="live">
               <SectionHeader
                 number="01"
                 title="Live now"
                 jp="開催中"
                 live
-                meta={`${liveLadder.length} ${liveLadder.length === 1 ? 'horizon' : 'horizons'} · 15 / 30 / 45 / 60 min`}
+                meta="1-minute / 5-minute / 1-hour · rolling"
               />
               <div className="markets-grid markets-grid-live">
-                {liveLadder.map(({ oracle, horizonLabel }) => {
-                  const price = prices[oracle.oracle_id];
-                  const referencePrice = price?.forward || price?.spot || (btcPrice ? btcPrice * FLOAT_SCALING : null);
-                  const line = getCanonicalMarketLine({
-                    oracle,
-                    settledOracles: settled,
-                    referencePrice,
-                  });
-                  return (
-                  <MarketCard
-                    key={oracle.oracle_id}
-                    oracle={oracle}
-                    spotPrice={price?.spot}
-                    forwardPrice={price?.forward}
-                    seedStrike={line?.source === 'grid-fallback' ? null : line?.strike}
-                    horizonLabel={horizonLabel}
-                    isFavorite={favorites.has(oracle.oracle_id)}
-                    onToggleFavorite={handleToggleFavorite}
-                  />
-                  );
-                })}
-              </div>
-            </section>
-          )}
-
-          {/* Later bells — same question, later rounds, as time chips */}
-          {laterBells.length > 0 && (
-            <section className="markets-section" data-section="later">
-              <SectionHeader
-                number="02"
-                title="Upcoming"
-                jp="今後"
-                meta={`${laterBells.reduce((n, [, l]) => n + l.length, 0)} rounds · tap a time to trade it`}
-              />
-              <BellChips rows={laterBells} />
-            </section>
-          )}
-
-          {/* Recently Settled */}
-          {recentSettled.length > 0 && (
-            <section className="markets-section settled" data-section="settled" style={{ paddingTop: '96px' }}>
-              <SectionHeader
-                number="03"
-                title="Recently settled"
-                jp="確定済"
-                desc="Last 60 minutes. Receipts on Suiscan, payouts in DUSDC."
-                meta="last 60 minutes"
-              />
-              <div className="markets-grid">
-                {recentSettled.map(oracle => (
-                  <MarketCard
-                    key={oracle.oracle_id}
-                    oracle={oracle}
-                    isFavorite={favorites.has(oracle.oracle_id)}
-                    onToggleFavorite={handleToggleFavorite}
+                {railMarkets.map((m) => (
+                  <Market624Card
+                    key={m.id}
+                    market={m}
+                    spot={spot}
+                    series={liveSeries}
+                    deltaPct={deltaPct}
+                    odds={odds[m.id]}
+                    now={now}
+                    onOpen={openTicket}
                   />
                 ))}
               </div>
+              <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+                <p className="font-mono text-[10px] leading-relaxed text-gray-600 max-w-2xl">
+                  Each side is priced live by the venue for its own $20-cushion band — UP and DOWN are
+                  different questions and don&apos;t sum to $1. Oracle-settled testnet markets; you can lose your stake.
+                </p>
+                <a href="/markets-live" className="font-mono text-[10px] text-gray-600 hover:text-gray-400 transition-colors whitespace-nowrap" data-cursor="hover">
+                  focused trading view ↗
+                </a>
+              </div>
             </section>
           )}
+
+          {/* Previous venue — the old 15-minute rounds, collapsed */}
+          <section className="markets-section" data-section="previous" id="previous-venue" style={{ paddingBottom: prevOpen ? 0 : 24 }}>
+            <SectionHeader
+              number="02"
+              title="Previous venue"
+              jp="旧市場"
+              desc="The 15-minute rounds on the previous DeepBook Predict testnet — kept for receipts and old positions. New bets belong above."
+              meta={prevOpen ? 'shown' : 'collapsed'}
+            />
+            <button
+              type="button"
+              className="w-full border border-white/[0.08] bg-white/[0.015] hover:bg-white/[0.03] transition-colors px-5 py-3.5 flex items-center justify-between font-mono text-[11px] uppercase tracking-[0.18em] text-white/50 hover:text-white"
+              onClick={() => setPrevOpen((v) => !v)}
+              aria-expanded={prevOpen}
+              data-cursor="hover"
+            >
+              <span>{prevOpen ? 'Hide the previous venue' : 'Show the previous venue'}</span>
+              <span>{prevOpen ? '↑' : '↓'}</span>
+            </button>
+            {prevOpen && <PreviousVenue />}
+          </section>
         </div>
       </main>
 
       {/* Footer */}
       <Footer />
 
-      {/* The Bell */}
+      {/* The Bell — rings at the next 6-24 settle */}
       {nextExpiry && <TheBell targetTime={nextExpiry} />}
 
       {/* First-visit tutorial */}
       <Tutorial />
+
+      {/* Ticket drawer — the founder-validated markets-live machinery */}
+      <Ticket624Drawer
+        market={ticketMarket}
+        side={ticket?.side ?? null}
+        spot={spot}
+        onClose={() => setTicket(null)}
+      />
+    </div>
+  );
+}
+
+// ─── previous venue (old 15-min rounds) — mounts only when expanded ───
+
+function BellChips({ rows }: { rows: ReadonlyArray<readonly [string, { oracle_id: string; expiry: number }[]]> }) {
+  const [nowMs, setNowMs] = useState(0);
+  useEffect(() => {
+    const tick = () => setNowMs(Date.now());
+    tick();
+    const iv = setInterval(tick, 1000);
+    return () => clearInterval(iv);
+  }, []);
+  return (
+    <div className="later-bells">
+      {rows.map(([asset, list]) => (
+        <div key={asset} className="later-bells-row">
+          <span className="later-bells-asset">{asset}</span>
+          <div className="later-bells-chips">
+            {list.slice(0, 8).map((o) => (
+              <Link key={o.oracle_id} href={`/markets/${o.oracle_id}`} className="bell-chip" data-cursor="hover">
+                {fmtCountdown(o.expiry - nowMs)}
+              </Link>
+            ))}
+            {list.length > 8 && <span className="bell-chip more">+{list.length - 8}</span>}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function PreviousVenue() {
+  const { active, settled, loading, error } = useOracles();
+  const [prices, setPrices] = useState<Record<string, PriceData>>({});
+  const { price: btcPrice } = useBtcPrice();
+  const [nowMs, setNowMs] = useState(0);
+  useEffect(() => {
+    const tick = () => setNowMs(Date.now());
+    tick();
+    const iv = setInterval(tick, 1000);
+    return () => clearInterval(iv);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadPrices() {
+      try {
+        const res = await fetch('/api/oracles?prices=1');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled && data.prices) setPrices(data.prices as Record<string, PriceData>);
+      } catch {
+        /* ignore */
+      }
+    }
+    loadPrices();
+    const interval = setInterval(loadPrices, 15_000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, []);
+
+  const liveLadder = [...active]
+    .filter((o) => o.expiry > nowMs)
+    .sort((a, b) => a.expiry - b.expiry)
+    .slice(0, LIVE_HORIZON_LABELS.length)
+    .map((oracle, index) => ({ oracle, horizonLabel: LIVE_HORIZON_LABELS[index] ?? `${(index + 1) * 15}-min` }));
+  const ladderIds = new Set(liveLadder.map(({ oracle }) => oracle.oracle_id));
+  const byAsset = new Map<string, typeof active>();
+  for (const o of active) {
+    if (o.expiry <= nowMs || ladderIds.has(o.oracle_id)) continue;
+    const a = o.underlying_asset || 'BTC';
+    if (!byAsset.has(a)) byAsset.set(a, []);
+    byAsset.get(a)!.push(o);
+  }
+  for (const list of byAsset.values()) list.sort((a, b) => a.expiry - b.expiry);
+  const laterBells = Array.from(byAsset.entries()).filter(([, list]) => list.length > 0);
+  const recentSettled = settled.slice(0, 6);
+
+  return (
+    <div className="pt-8 space-y-12">
+      {loading && (
+        <div className="empty-state">
+          <div className="jp">予</div>
+          <h3>Loading previous venue…</h3>
+          <p>Fetching oracles from the old DeepBook Predict testnet</p>
+        </div>
+      )}
+      {error && !loading && (
+        <div className="empty-state">
+          <div className="jp">誤</div>
+          <h3>Previous venue unreachable</h3>
+          <p>{error}</p>
+        </div>
+      )}
+      {!loading && !error && active.length === 0 && recentSettled.length === 0 && (
+        <div className="empty-state">
+          <div className="jp">空</div>
+          <h3>No rounds on the previous venue</h3>
+          <p>The old testnet may have wound down — new markets live above.</p>
+        </div>
+      )}
+
+      {liveLadder.length > 0 && (
+        <div>
+          <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/40 mb-4">
+            Still running · 15 / 30 / 45 / 60 min rounds
+          </div>
+          <div className="markets-grid markets-grid-live">
+            {liveLadder.map(({ oracle, horizonLabel }) => {
+              const price = prices[oracle.oracle_id];
+              const referencePrice = price?.forward || price?.spot || (btcPrice ? btcPrice * FLOAT_SCALING : null);
+              const line = getCanonicalMarketLine({ oracle, settledOracles: settled, referencePrice });
+              return (
+                <MarketCard
+                  key={oracle.oracle_id}
+                  oracle={oracle}
+                  spotPrice={price?.spot}
+                  forwardPrice={price?.forward}
+                  seedStrike={line?.source === 'grid-fallback' ? null : line?.strike}
+                  horizonLabel={horizonLabel}
+                />
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {laterBells.length > 0 && (
+        <div>
+          <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/40 mb-4">
+            Upcoming rounds · tap a time to open it
+          </div>
+          <BellChips rows={laterBells} />
+        </div>
+      )}
+
+      {recentSettled.length > 0 && (
+        <div>
+          <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/40 mb-4">
+            Recently settled · receipts on Suiscan, payouts in DUSDC
+          </div>
+          <div className="markets-grid">
+            {recentSettled.map((oracle) => (
+              <MarketCard key={oracle.oracle_id} oracle={oracle} />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

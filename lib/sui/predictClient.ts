@@ -168,6 +168,47 @@ export function redeemPositionTx(
   return tx;
 }
 
+/**
+ * Redeem a live binary position, then sweep the manager's free DUSDC into
+ * TradingVault so cashout appears in the user's Trading Balance immediately.
+ */
+export function redeemPositionToTradingBalanceTx(
+  managerId: string,
+  oracleId: string,
+  expiry: bigint,
+  strike: bigint,
+  direction: 'UP' | 'DOWN',
+  quantity: bigint,
+  owner: string,
+): Transaction {
+  const tx = new Transaction();
+  const marketKey = marketKeyArgs(tx, oracleId, expiry, strike, direction);
+  tx.moveCall({
+    target: `${PACKAGE_ID}::predict::redeem`,
+    typeArguments: [DUSDC_TYPE],
+    arguments: [
+      tx.object(PREDICT_ID),
+      tx.object(managerId),
+      tx.object(oracleId),
+      marketKey,
+      tx.pure.u64(quantity),
+      tx.object(CLOCK_ID),
+    ],
+  });
+  const [balance] = tx.moveCall({
+    target: `${PACKAGE_ID}::predict_manager::balance`,
+    typeArguments: [DUSDC_TYPE],
+    arguments: [tx.object(managerId)],
+  });
+  const funds = tx.moveCall({
+    target: `${PACKAGE_ID}::predict_manager::withdraw`,
+    typeArguments: [DUSDC_TYPE],
+    arguments: [tx.object(managerId), balance],
+  });
+  creditAvailableForCall(tx, owner, funds);
+  return tx;
+}
+
 export interface ClaimablePosition {
   managerId: string;
   oracleId: string;
@@ -444,6 +485,43 @@ export function redeemRangePositionTx(
       tx.object(CLOCK_ID),
     ],
   });
+  return tx;
+}
+
+export function redeemRangePositionToTradingBalanceTx(
+  managerId: string,
+  oracleId: string,
+  expiry: bigint,
+  lowerStrike: bigint,
+  higherStrike: bigint,
+  quantity: bigint,
+  owner: string,
+): Transaction {
+  const tx = new Transaction();
+  const rangeKey = rangeKeyDirect(tx, oracleId, expiry, lowerStrike, higherStrike);
+  tx.moveCall({
+    target: `${PACKAGE_ID}::predict::redeem_range`,
+    typeArguments: [DUSDC_TYPE],
+    arguments: [
+      tx.object(PREDICT_ID),
+      tx.object(managerId),
+      tx.object(oracleId),
+      rangeKey,
+      tx.pure.u64(quantity),
+      tx.object(CLOCK_ID),
+    ],
+  });
+  const [balance] = tx.moveCall({
+    target: `${PACKAGE_ID}::predict_manager::balance`,
+    typeArguments: [DUSDC_TYPE],
+    arguments: [tx.object(managerId)],
+  });
+  const funds = tx.moveCall({
+    target: `${PACKAGE_ID}::predict_manager::withdraw`,
+    typeArguments: [DUSDC_TYPE],
+    arguments: [tx.object(managerId), balance],
+  });
+  creditAvailableForCall(tx, owner, funds);
   return tx;
 }
 
