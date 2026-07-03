@@ -655,6 +655,7 @@ export default function TradePanel({
       savePrivateBetTickets(nextAll);
       setPrivateTickets(nextAll.filter((t) => t.owner.toLowerCase() === ticket.owner.toLowerCase()));
       setTxDigest(updated.cashoutDigest ?? '');
+      refreshTradingVaultBalance();
       setStep('success');
       toast('Cashed out — winnings added to your Trading Balance.', 'success');
       setTimeout(() => setStep('idle'), 5000);
@@ -665,7 +666,7 @@ export default function TradePanel({
       setErrorDetail(friendly.detail);
       toast(friendly.title, 'error');
     }
-  }, [privateStatus, step, toast]);
+  }, [privateStatus, refreshTradingVaultBalance, step, toast]);
 
   const quickAmounts = [5, 10, 25, 50, 100];
   const strikeDollars = selectedStrike ? selectedStrike / FLOAT_SCALING : 0;
@@ -1173,7 +1174,7 @@ export default function TradePanel({
                 <p className="text-[11px] leading-snug text-gray-400">
                   {privateStatus.mode === 'unconfigured'
                     ? 'Private mode is unavailable right now — try again shortly.'
-                    : 'Your main wallet stays off this trade. Winnings land in your Private Balance, and you choose when to withdraw.'}
+                    : 'Your main wallet stays off this trade. Cashouts land in your Trading Balance, ready to reuse or withdraw.'}
                 </p>
               </div>
               {privateRouteIssue && (
@@ -1429,7 +1430,7 @@ export default function TradePanel({
                 <>
                   <p className="text-sm font-bold text-white">Private ticket opened</p>
                   <p className="text-xs text-gray-400 mt-1">
-                    Your wallet stays off this trade. Cashout credits your Private Balance.
+                    Your wallet stays off this trade. Cashout credits your Trading Balance.
                   </p>
                   {txDigest && (
                     <p className="text-xs text-new-mint mt-1">

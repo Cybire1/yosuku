@@ -12,6 +12,7 @@ import {
 } from '@/lib/sui/tradingVaultClient';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
+import Portfolio624Section from '@/components/Portfolio624Section';
 import Marquee from '@/components/Marquee';
 import GrainOverlay from '@/components/GrainOverlay';
 import CustomCursor from '@/components/CustomCursor';
@@ -280,6 +281,16 @@ export default function PortfolioPage() {
           </div>
         ) : (
           <div className="space-y-8">
+            {/* ── New venue (DeepBook Predict 6-24) — balance, open positions, settled history ── */}
+            <Portfolio624Section />
+
+            {/* ── Previous venue — everything below runs on the original deployment ── */}
+            <div className="flex items-center gap-3 pt-2">
+              <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/40">Previous venue</span>
+              <div className="h-px flex-1 bg-white/10" />
+              <span className="font-mono text-[10px] text-white/30">original DeepBook Predict · balances &amp; positions below</span>
+            </div>
+
             {/* Ledger Plate — stats overview */}
             <div className="ledger-plate">
               <div className="flex flex-wrap items-center justify-between gap-4 mb-6">

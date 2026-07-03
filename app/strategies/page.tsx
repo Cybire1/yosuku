@@ -1,8 +1,10 @@
 'use client';
 
 import { useEffect, useState, useCallback, useMemo, type ReactNode } from 'react';
-import { useCurrentAccount, useSuiClient, useSignPersonalMessage, ConnectButton } from '@mysten/dapp-kit';
+import { useCurrentAccount, useSuiClient, useSignPersonalMessage, useSignTransaction, ConnectButton } from '@mysten/dapp-kit';
+import type { Transaction } from '@mysten/sui/transactions';
 import { Share2, X } from 'lucide-react';
+import Image from 'next/image';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import Marquee from '@/components/Marquee';
@@ -19,19 +21,41 @@ import {
   buildCancelSubscriptionTx,
   buildStrategyShareText,
   fetchSocialVaultBalance,
+  strategyIdFromDigest,
+  recordAgentSpec,
+  describeSpec,
+  ATTESTED_AGENT,
+  PRESETS,
   fmtDusdc,
   fmtAddr,
   ago,
-  glyphFromAddress,
   codenameFromAddress,
+  glyphFromAddress,
   SUISCAN_TX,
   SUISCAN_ACC,
   xIntentUrl,
   type StrategyCard,
   type CopyTrade,
   type StrategySubscription,
+  type PresetKey,
+  type StrategySpec,
 } from '@/lib/sui/strategyClient';
 import { fetchMemoryMarket, buildBuyPassTx, readMemory, type MemoryMarketInfo } from '@/lib/sui/memoryMarketClient';
+import {
+  VAULT624,
+  LEV_1X_624,
+  buildVaultDeposit624,
+  buildVaultWithdraw624,
+  buildSubscribe624,
+  buildCancel624,
+  fetchLedger624,
+  fetchSub624,
+  fetchVaultTrades624,
+  friendlyVault624Error,
+  type Sub624,
+  type VaultEvent624,
+} from '@/lib/sui/vault624Client';
+import { grpc, buildSignExecute } from '@/lib/sui/modernClients';
 import { DUSDC_MULTIPLIER } from '@/lib/sui/constants';
 import { getSponsorStatus, type SponsorStatus } from '@/lib/sponsor';
 import { useSmartSubmit } from '@/lib/sui/useSmartSubmit';
@@ -39,6 +63,38 @@ import { useSmartSubmit } from '@/lib/sui/useSmartSubmit';
 const ZERO_ADDR = '0x0000000000000000000000000000000000000000000000000000000000000000';
 const SUISCAN_OBJ = (id: string) => `https://suiscan.xyz/testnet/object/${id}`;
 const DAY = 86_400_000;
+
+const AGENT_PORTRAITS = [
+  '/agents/agent-cobalt.jpg',
+  '/agents/agent-amber.jpg',
+  '/agents/agent-mint.jpg',
+  '/agents/agent-vermilion.jpg',
+  '/agents/agent-cyan.jpg',
+] as const;
+
+function portraitFromSeed(seed: string): string {
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) hash = ((hash << 5) - hash + seed.charCodeAt(i)) | 0;
+  return AGENT_PORTRAITS[Math.abs(hash) % AGENT_PORTRAITS.length];
+}
+
+function AgentPortrait({ seed, name, size = 'card' }: { seed: string; name: string; size?: 'small' | 'card' | 'drawer' }) {
+  const dimensions = size === 'small' ? 'h-8 w-8' : size === 'drawer' ? 'h-16 w-16' : 'h-16 w-16';
+  const sizes = size === 'small' ? '32px' : '64px';
+  return (
+    <div className={`relative shrink-0 overflow-hidden border border-white/10 bg-white/[0.03] ${dimensions}`}>
+      <Image
+        src={portraitFromSeed(seed)}
+        alt={`${name} agent portrait`}
+        fill
+        sizes={sizes}
+        className="object-cover saturate-[0.82] contrast-[1.06] transition-transform duration-500 ease-out group-hover:scale-105"
+      />
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-white/[0.04]" />
+      <span className="absolute bottom-1 right-1 h-1.5 w-1.5 rounded-full border border-black/70 bg-vermilion shadow-[0_0_8px_rgba(224,77,38,0.8)]" />
+    </div>
+  );
+}
 
 type Tier = { key: 'new' | 'active' | 'settled'; label: string; tone: 'gray' | 'vermilion' | 'white' };
 
@@ -100,10 +156,24 @@ export default function StrategiesPage() {
   const [memoryText, setMemoryText] = useState<string | null>(null);
   const [readingMemory, setReadingMemory] = useState(false);
 
-  // creator: "list a strategy" form (demoted to a footer affordance)
+  // creator: "launch an agent" flow — pick a preset, turn two knobs, set hard caps, publish.
   const [showList, setShowList] = useState(false);
   const [listing, setListing] = useState(false);
-  const [form, setForm] = useState({ agent: '', memoryAccount: '', capsuleBlob: '', maxLeverage: '3', maxMargin: '5', subFee: '0.1' });
+  const [form, setForm] = useState({
+    preset: 'momentum' as PresetKey,
+    lookback: 6,          // # of 15-min samples the enclave reads (2–12)
+    thresholdPct: '0.2',  // minimum BTC move to act on
+    hosting: 'attested' as 'attested' | 'self',
+    agent: '',            // self-host only: the creator's own bot wallet
+    maxLeverage: '3',
+    maxMargin: '5',
+    subFee: '0.1',
+  });
+  const draftSpec: StrategySpec = {
+    preset: form.preset,
+    lookback: form.lookback,
+    thresholdBps: Math.round((parseFloat(form.thresholdPct) || 0) * 100),
+  };
 
   const subscriptionByStrategy = useMemo(
     () => new Map(subscriptions.map((sub) => [sub.strategy, sub])),
@@ -226,7 +296,7 @@ export default function StrategiesPage() {
         coinIds: dusdcCoins.map((c) => c.coinObjectId),
         topUpMicro, subFeeMicro: feeMicro,
       }));
-      toast(`Now copying ${codenameFromAddress(card.agent)}`, 'success');
+      toast(`Now copying ${codenameFromAddress(card.id)}`, 'success');
       closeDrawer();
       await load(); refreshSocialVaultBalance(); refreshSubscriptions(); refreshDusdc();
     } catch (e) {
@@ -239,7 +309,7 @@ export default function StrategiesPage() {
     setCancelingId(sub.id);
     try {
       await submit(() => buildCancelSubscriptionTx(sub.id));
-      toast(`Paused future copies for ${codenameFromAddress(sub.agent)}`, 'success');
+      toast(`Paused future copies for ${codenameFromAddress(sub.strategy)}`, 'success');
       refreshSubscriptions();
     } catch (e) {
       toast(`Pause failed: ${String(e instanceof Error ? e.message : e).slice(0, 140)}`, 'error');
@@ -251,19 +321,33 @@ export default function StrategiesPage() {
     const maxLeverageBps = Math.round(parseFloat(form.maxLeverage || '0') * 10_000);
     const maxMarginMicro = BigInt(Math.floor(parseFloat(form.maxMargin || '0') * DUSDC_MULTIPLIER));
     const subFeeMicro = BigInt(Math.floor(parseFloat(form.subFee || '0') * DUSDC_MULTIPLIER));
-    const agent = form.agent.trim() || address;
-    const memoryAccount = form.memoryAccount.trim() || ZERO_ADDR;
-    let capsuleBlob = BigInt(0);
-    try { capsuleBlob = BigInt(form.capsuleBlob.trim() || '0'); }
-    catch { toast('Playbook file ID must be a number, or blank', 'error'); return; }
+    const attested = form.hosting === 'attested';
+    // Attested → the agent IS the sealed enclave; it runs the spec inside the TEE.
+    // Self-host → the creator's own bot wallet signs (advanced).
+    const agent = attested ? ATTESTED_AGENT : (form.agent.trim() || address);
     if (maxLeverageBps < 10_000) { toast('Max leverage must be at least 1×', 'error'); return; }
     if (maxMarginMicro <= BigInt(0)) { toast('Max budget per trade must be greater than 0', 'error'); return; }
-    if (!/^0x[0-9a-fA-F]{64}$/.test(agent)) { toast('Agent must be a 0x… address', 'error'); return; }
-    if (memoryAccount !== ZERO_ADDR && !/^0x[0-9a-fA-F]{64}$/.test(memoryAccount)) { toast('Memory must be a 0x… address, or blank', 'error'); return; }
+    if (!attested && !/^0x[0-9a-fA-F]{64}$/.test(agent)) { toast('Agent wallet must be a 0x… address', 'error'); return; }
     setListing(true);
     try {
-      await submit(() => buildListStrategyTx({ agent, capsuleBlob, memoryAccount, maxLeverageBps, maxMarginMicro, subFeeMicro, creator: address }));
-      toast('Strategy published — users can now copy it', 'success');
+      const { digest } = await submit(() =>
+        buildListStrategyTx({ agent, capsuleBlob: BigInt(0), memoryAccount: ZERO_ADDR, maxLeverageBps, maxMarginMicro, subFeeMicro, creator: address }));
+      // Register the direction logic with the attested keeper (caps are already on-chain).
+      if (attested) {
+        const strategyId = await strategyIdFromDigest(digest);
+        if (strategyId) {
+          try {
+            await recordAgentSpec({ strategyId, agent, spec: draftSpec, creator: address });
+            toast('Agent launched — running attested. Users can copy it now.', 'success');
+          } catch {
+            toast('Agent listed on-chain. Attested execution activates once the keeper picks up its spec.', 'success');
+          }
+        } else {
+          toast('Agent listed on-chain — indexing. It will appear in the catalogue shortly.', 'success');
+        }
+      } else {
+        toast('Strategy published — users can now copy it.', 'success');
+      }
       setShowList(false); await load();
     } catch (e) {
       toast(`Publish failed: ${String(e instanceof Error ? e.message : e).slice(0, 140)}`, 'error');
@@ -291,9 +375,14 @@ export default function StrategiesPage() {
 
         {/* nameplate + standfirst */}
         <div className="grid md:grid-cols-[1fr_300px] gap-6 md:gap-10 items-end mt-7 pb-6 border-b border-white/15">
-          <h1 className="font-display font-[800] text-[2.6rem] leading-[0.95] md:text-7xl text-white tracking-tight">
-            Copy AI traders.<br /><span className="text-white/40">Without giving them custody.</span>
-          </h1>
+          <div className="max-w-5xl">
+            <h1 className="font-display font-[800] text-[2.5rem] leading-[0.92] md:text-[4.25rem] xl:text-[4.75rem] text-white tracking-tight">
+              Copy trading agents.<br /><span className="text-white/60">Keep custody.</span>
+            </h1>
+            <p className="mt-5 max-w-xl text-sm leading-relaxed text-white/55">
+              They trade within hard caps and can never withdraw your funds.
+            </p>
+          </div>
           <div className="md:border-l md:border-white/10 md:pl-7">
             <div className="font-mono text-[12px] leading-[1.95] text-white/55">
               {['Pick a trader', 'See its record', 'Set a Copy Balance', 'Copy it'].map((s, i) => (
@@ -307,6 +396,15 @@ export default function StrategiesPage() {
         {/* trust dateline — the dot-leader line that replaces the old pill */}
         <div className="font-mono text-[10px] md:text-[11px] uppercase tracking-[0.22em] text-white/40 mt-4 mb-8">
           Non-custodial · Caps enforced on Sui · Past results do not guarantee future
+        </div>
+
+        {/* ── THE LIVE DESK — copy-trading on the NEW venue (vault624 on predict-testnet-6-24) ── */}
+        <LiveDesk />
+
+        {/* previous-venue dateline — the catalogue below is real history on the old deployment */}
+        <div className="flex items-center gap-3 mt-14 mb-2">
+          <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/30">Previous venue — records preserved</span>
+          <div className="h-px flex-1 bg-white/10" />
         </div>
 
         {/* control bar — curated tabs (replaces the dead leaderboard) */}
@@ -356,6 +454,7 @@ export default function StrategiesPage() {
                   const tier = tierOf(card);
                   const sub = subscriptionByStrategy.get(card.id);
                   const folio = String(i + 1).padStart(2, '0');
+                  const agentName = codenameFromAddress(card.id);
                   return (
                     <div
                       key={card.id}
@@ -373,15 +472,13 @@ export default function StrategiesPage() {
                         <span className="text-white/40">{ago(card.lastActive) || '—'}</span>
                       </div>
 
-                      {/* identity — ruled square glyph that ignites on hover */}
+                      {/* Strategy identity is seeded from the strategy object, not the shared executor. */}
                       <div className="flex items-start gap-3">
-                        <div className="w-11 h-11 shrink-0 border border-white/10 flex items-center justify-center transition-transform duration-200 group-hover:scale-[1.04] group-hover:drop-shadow-[0_0_22px_rgba(224,77,38,0.3)]">
-                          <span className="font-jp text-xl text-vermilion">{glyphFromAddress(card.agent)}</span>
-                        </div>
-                        <div className="min-w-0 flex-1 pt-0.5">
-                          <h3 className="font-display font-[800] text-xl text-white truncate tracking-tight leading-[1.05]">{codenameFromAddress(card.agent)}</h3>
+                        <AgentPortrait seed={card.id} name={agentName} />
+                        <div className="min-w-0 flex-1 pt-1">
+                          <h3 className="font-display font-[800] text-xl text-white truncate tracking-tight leading-[1.05]">{agentName}</h3>
                           <a href={SUISCAN_ACC(card.agent)} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
-                            className="font-mono text-[11px] text-white/40 hover:text-white transition-colors">{fmtAddr(card.agent)}</a>
+                            className="mt-1 inline-block font-mono text-[10px] uppercase tracking-[0.12em] text-white/35 hover:text-white transition-colors">Executor {fmtAddr(card.agent)}</a>
                         </div>
                       </div>
 
@@ -459,10 +556,11 @@ export default function StrategiesPage() {
                   <div className="font-mono text-[11px] uppercase tracking-[0.2em] text-white/30 px-5 py-8 text-center">No copy-trades settled yet — be the first.</div>
                 ) : (
                   copyTrades.map((t, i) => {
+                    const tradeName = codenameFromAddress(t.strategy || t.agent);
                     const inner = (
                       <div className="flex items-center gap-3 px-5 py-3 hover:bg-white/[0.02] transition-colors">
-                        <span className="font-jp text-sm text-vermilion w-5 shrink-0 text-center">{glyphFromAddress(t.agent || t.strategy)}</span>
-                        <span className="font-display font-[700] text-[13px] text-white w-28 shrink-0 truncate">{codenameFromAddress(t.agent || t.strategy)}</span>
+                        <AgentPortrait seed={t.strategy || t.agent} name={tradeName} size="small" />
+                        <span className="font-display font-[700] text-[13px] text-white w-28 shrink-0 truncate">{tradeName}</span>
                         <a
                           href={SUISCAN_ACC(t.subscriber)} target="_blank" rel="noreferrer"
                           onClick={(e) => e.stopPropagation()}
@@ -495,14 +593,15 @@ export default function StrategiesPage() {
               </div>
             </section>
 
-            {/* creator mode — demoted to a quiet footer affordance */}
-            <section className="mt-12">
-              <div className="border border-white/[0.08] rounded-xl bg-bg p-5 flex flex-wrap items-center gap-4 justify-between">
+            {/* ── creator studio: launch an attested agent ── */}
+            <section className="mt-14">
+              <div className="flex flex-wrap items-end justify-between gap-4 border-b border-white/[0.08] pb-4">
                 <div className="min-w-0">
-                  <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-vermilion mb-1">For builders</div>
-                  <p className="text-[13px] text-gray-300 max-w-md leading-snug">
-                    Run an agent? Publish it as a copyable strategy — set the hard caps, earn a fee, and
-                    users keep custody the whole time.
+                  <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-vermilion mb-1.5">Creator studio</div>
+                  <h2 className="font-display font-[800] text-2xl sm:text-[26px] text-white leading-none">Launch an agent</h2>
+                  <p className="text-[13px] text-gray-400 mt-2.5 max-w-md leading-snug">
+                    Pick a strategy, set the caps it can never cross, publish. Yosuku&apos;s enclave runs it —
+                    it can trade your copiers&apos; funds but can never touch them.
                   </p>
                 </div>
                 {address ? (
@@ -510,47 +609,161 @@ export default function StrategiesPage() {
                     onClick={() => setShowList((v) => !v)}
                     className="shrink-0 rounded-full border border-vermilion/40 bg-vermilion/[0.07] px-5 py-2.5 text-[13px] font-semibold text-vermilion hover:bg-vermilion/[0.14] transition-colors"
                   >
-                    {showList ? '× Close' : 'Publish a strategy →'}
+                    {showList ? '× Close' : 'Launch an agent →'}
                   </button>
                 ) : (
-                  <span className="shrink-0 font-mono text-[12px] text-gray-600">Connect a wallet to publish.</span>
+                  <span className="shrink-0 font-mono text-[12px] text-gray-600">Connect a wallet to launch.</span>
                 )}
               </div>
 
               {address && showList && (
-                <div className="border border-white/[0.08] rounded-xl bg-bg p-5 mt-4 max-w-2xl">
-                  <h3 className="font-display font-[700] text-sm text-white mb-1">Publish an agent strategy</h3>
-                  <p className="text-gray-500 text-xs leading-relaxed mb-5">
-                    These limits become the hard ceiling your agent is bound to on every subscriber&apos;s
-                    funds. It can trade only inside them and can never withdraw user money. Memory and
-                    playbook files are optional.
-                  </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <Field label="Agent wallet">
-                      <input value={form.agent} onChange={(e) => setForm((f) => ({ ...f, agent: e.target.value }))} placeholder="0x… (defaults to you)" className={INPUT} />
-                    </Field>
-                    <Field label="Subscription fee (DUSDC)">
-                      <input type="number" min="0" step="0.1" value={form.subFee} onChange={(e) => setForm((f) => ({ ...f, subFee: e.target.value }))} className={INPUT_NUM} />
-                    </Field>
-                    <Field label="Agent memory (optional)">
-                      <input value={form.memoryAccount} onChange={(e) => setForm((f) => ({ ...f, memoryAccount: e.target.value }))} placeholder="0x… optional" className={INPUT} />
-                    </Field>
-                    <Field label="Playbook file (optional)">
-                      <input value={form.capsuleBlob} onChange={(e) => setForm((f) => ({ ...f, capsuleBlob: e.target.value }))} placeholder="optional file id" className={INPUT} />
-                    </Field>
-                    <Field label="Max leverage (×)">
-                      <input type="number" min="1" step="1" value={form.maxLeverage} onChange={(e) => setForm((f) => ({ ...f, maxLeverage: e.target.value }))} className={INPUT_NUM} />
-                    </Field>
-                    <Field label="Max budget / trade (DUSDC)">
-                      <input type="number" min="0" step="1" value={form.maxMargin} onChange={(e) => setForm((f) => ({ ...f, maxMargin: e.target.value }))} className={INPUT_NUM} />
-                    </Field>
+                <div className="mt-7 grid lg:grid-cols-[1fr_20rem] gap-7 items-start">
+                  {/* the builder */}
+                  <div className="space-y-8">
+                    {/* 01 — strategy */}
+                    <StudioStep n="01" title="Strategy" hint="the instinct it trades on">
+                      <div className="grid sm:grid-cols-2 gap-3">
+                        {(Object.keys(PRESETS) as PresetKey[]).map((k) => {
+                          const p = PRESETS[k];
+                          const active = form.preset === k;
+                          const comingSoon = k === 'reversion'; // enclave honors the momentum rule only today
+                          return (
+                            <button
+                              key={k} type="button"
+                              aria-disabled={comingSoon}
+                              onClick={() => { if (!comingSoon) setForm((f) => ({ ...f, preset: k })); }}
+                              className={`group relative text-left rounded-xl border p-4 transition-colors ${comingSoon ? 'border-white/[0.06] opacity-60 cursor-not-allowed' : active ? 'border-vermilion bg-vermilion/[0.06]' : 'border-white/[0.08] hover:border-white/20'}`}
+                            >
+                              <Crosshairs />
+                              <div className="flex items-baseline justify-between gap-2">
+                                <span className="font-display font-[700] text-[15px] text-white">{p.name}</span>
+                                <span className={`font-mono text-[9px] uppercase tracking-[0.16em] ${active ? 'text-vermilion' : 'text-white/30'}`}>{active ? 'Selected' : p.tagline}</span>
+                              </div>
+                              <p className="text-[12px] text-gray-400 leading-snug mt-2">{p.how}</p>
+                              {comingSoon && (
+                                <div className="font-mono text-[9px] uppercase tracking-[0.16em] text-white/30 mt-2">Soon — enclave runs momentum today</div>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </StudioStep>
+
+                    {/* 02 — tune */}
+                    <StudioStep n="02" title="Tune" hint="two knobs — everything else is fixed and reviewed">
+                      <div className="grid sm:grid-cols-2 gap-5">
+                        <div>
+                          <div className="flex items-baseline justify-between mb-2">
+                            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500">Lookback</span>
+                            <span className="font-mono text-[12px] text-white tabular-nums">{form.lookback}<span className="text-white/40"> × 15m</span></span>
+                          </div>
+                          <input type="range" min={2} max={12} step={1} value={form.lookback}
+                            onChange={(e) => setForm((f) => ({ ...f, lookback: Number(e.target.value) }))}
+                            className="w-full accent-vermilion" />
+                          <div className="font-mono text-[10px] text-white/30 mt-1">how far back it reads</div>
+                        </div>
+                        <div>
+                          <div className="flex items-baseline justify-between mb-2">
+                            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500">Threshold</span>
+                            <span className="font-mono text-[12px] text-white tabular-nums">{form.thresholdPct || '0'}%</span>
+                          </div>
+                          <div className="flex gap-1.5">
+                            {['0.1', '0.2', '0.5', '1'].map((v) => (
+                              <button key={v} type="button" onClick={() => setForm((f) => ({ ...f, thresholdPct: v }))}
+                                className={`flex-1 py-1.5 rounded font-mono text-[11px] border transition-colors ${form.thresholdPct === v ? 'border-vermilion text-vermilion bg-vermilion/[0.06]' : 'border-white/[0.08] text-white/50 hover:border-white/20'}`}>{v}%</button>
+                            ))}
+                          </div>
+                          <div className="font-mono text-[10px] text-white/30 mt-1.5">smallest move worth a bet</div>
+                        </div>
+                      </div>
+                      <div className="mt-4 rounded-lg border border-white/[0.08] bg-white/[0.02] px-4 py-3">
+                        <div className="font-mono text-[9px] uppercase tracking-[0.18em] text-vermilion mb-1.5">In plain words</div>
+                        <p className="text-[13px] text-gray-200 leading-snug">{describeSpec(draftSpec)}</p>
+                      </div>
+                    </StudioStep>
+
+                    {/* 03 — hard caps */}
+                    <StudioStep n="03" title="Hard caps" hint="the ceilings it is bound to on Sui — forever">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <Field label="Max leverage">
+                          <div className="flex gap-1.5">
+                            {['1', '2', '3', '5', '10'].map((v) => (
+                              <button key={v} type="button" onClick={() => setForm((f) => ({ ...f, maxLeverage: v }))}
+                                className={`flex-1 py-2 rounded font-mono text-[11px] border transition-colors ${form.maxLeverage === v ? 'border-vermilion text-vermilion bg-vermilion/[0.06]' : 'border-white/[0.08] text-white/50 hover:border-white/20'}`}>{v}×</button>
+                            ))}
+                          </div>
+                        </Field>
+                        <Field label="Max budget / trade (DUSDC)">
+                          <input type="number" min="0" step="1" value={form.maxMargin} onChange={(e) => setForm((f) => ({ ...f, maxMargin: e.target.value }))} className={INPUT_NUM} />
+                        </Field>
+                        <Field label="Subscription fee (DUSDC)">
+                          <input type="number" min="0" step="0.1" value={form.subFee} onChange={(e) => setForm((f) => ({ ...f, subFee: e.target.value }))} className={INPUT_NUM} />
+                        </Field>
+                      </div>
+                    </StudioStep>
+
+                    {/* 04 — who runs it */}
+                    <StudioStep n="04" title="Who runs it">
+                      <div className="grid sm:grid-cols-2 gap-3">
+                        <HostingOption active={form.hosting === 'attested'} onClick={() => setForm((f) => ({ ...f, hosting: 'attested' }))}
+                          badge="Recommended" title="Run it attested"
+                          body="Yosuku's Nitro enclave runs it. The signing key is sealed in the chip — even we can't tamper with it or misuse it." />
+                        <HostingOption active={form.hosting === 'self'} onClick={() => setForm((f) => ({ ...f, hosting: 'self' }))}
+                          badge="Advanced" title="Run your own bot"
+                          body="You host the agent and hold its key. Register its wallet; it copies under the same on-chain caps." />
+                      </div>
+                      {form.hosting === 'self' && (
+                        <div className="mt-3 max-w-sm">
+                          <Field label="Agent wallet">
+                            <input value={form.agent} onChange={(e) => setForm((f) => ({ ...f, agent: e.target.value }))} placeholder="0x… your bot's address" className={INPUT} />
+                          </Field>
+                        </div>
+                      )}
+                    </StudioStep>
                   </div>
-                  <button
-                    onClick={listStrategy} disabled={listing}
-                    className="w-full mt-5 py-3 rounded-full text-sm font-semibold bg-vermilion hover:bg-vermilion-d text-white transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-                  >
-                    {listing ? 'publishing…' : 'Publish strategy'}
-                  </button>
+
+                  {/* live preview + publish (sticky) */}
+                  <aside className="lg:sticky lg:top-24 space-y-4">
+                    <div className="group relative rounded-xl border border-white/[0.1] bg-bg p-5 overflow-hidden">
+                      <Crosshairs />
+                      <div className="flex items-center justify-between">
+                        <div className="font-mono text-[9px] uppercase tracking-[0.18em] text-white/40">Preview</div>
+                        {form.hosting === 'attested' && (
+                          <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-vermilion border border-vermilion/40 rounded-full px-2 py-0.5">⊙ Attested</span>
+                        )}
+                      </div>
+                      {(() => {
+                        const previewAgent = form.hosting === 'attested' ? ATTESTED_AGENT : (form.agent.trim() || address || ZERO_ADDR);
+                        const valid = /^0x[0-9a-fA-F]{64}$/.test(previewAgent);
+                        const previewSeed = `${previewAgent}:${form.preset}:${form.lookback}:${form.thresholdPct}`;
+                        const previewName = valid ? codenameFromAddress(previewSeed) : 'Your agent';
+                        return (
+                          <div className="mt-3 flex items-center gap-3">
+                            {valid ? <AgentPortrait seed={previewSeed} name={previewName} size="small" /> : <span className="text-2xl leading-none">—</span>}
+                            <div className="min-w-0">
+                              <div className="font-display font-[700] text-[15px] text-white truncate">{previewName}</div>
+                              <div className="font-mono text-[10px] text-white/40">{PRESETS[form.preset].name} · {form.maxLeverage}× cap</div>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                      <div className="grid grid-cols-2 mt-4 border-t border-white/[0.08]">
+                        <LedgerStat label="Budget / trade" value={`${form.maxMargin || '0'}`} />
+                        <LedgerStat label="Sub fee" value={`${form.subFee || '0'}`} divide />
+                      </div>
+                      <p className="text-[12px] text-gray-400 leading-snug mt-4">{describeSpec(draftSpec)}</p>
+                    </div>
+
+                    <button
+                      onClick={listStrategy} disabled={listing}
+                      className="w-full py-3 rounded-full text-sm font-semibold bg-vermilion hover:bg-vermilion-d text-white transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      {listing ? 'launching…' : form.hosting === 'attested' ? 'Launch attested agent' : 'Publish strategy'}
+                    </button>
+                    <p className="font-mono text-[10px] leading-relaxed text-gray-600">
+                      Caps are enforced on Sui. The agent trades only inside them and can never withdraw a copier&apos;s funds.
+                    </p>
+                  </aside>
                 </div>
               )}
             </section>
@@ -607,6 +820,35 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
+// One numbered step of the creator studio — editorial index + rule.
+function StudioStep({ n, title, hint, children }: { n: string; title: string; hint?: string; children: ReactNode }) {
+  return (
+    <div>
+      <div className="flex items-baseline gap-3 mb-3">
+        <span className="font-mono text-[11px] text-vermilion tabular-nums">{n}</span>
+        <h3 className="font-display font-[700] text-[15px] text-white">{title}</h3>
+        {hint ? <span className="font-mono text-[10px] text-white/30 hidden sm:block">— {hint}</span> : null}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+// A selectable hosting card (attested vs self-host).
+function HostingOption({ active, onClick, badge, title, body }: { active: boolean; onClick: () => void; badge: string; title: string; body: string }) {
+  return (
+    <button type="button" onClick={onClick}
+      className={`group relative text-left rounded-xl border p-4 transition-colors ${active ? 'border-vermilion bg-vermilion/[0.06]' : 'border-white/[0.08] hover:border-white/20'}`}>
+      <Crosshairs />
+      <div className="flex items-center justify-between gap-2 mb-1.5">
+        <span className="font-display font-[700] text-[14px] text-white">{title}</span>
+        <span className={`font-mono text-[9px] uppercase tracking-[0.14em] ${active ? 'text-vermilion' : 'text-white/30'}`}>{badge}</span>
+      </div>
+      <p className="text-[12px] text-gray-400 leading-snug">{body}</p>
+    </button>
+  );
+}
+
 function CapStat({ label, value, unit }: { label: string; value: string; unit: string }) {
   return (
     <div>
@@ -648,6 +890,394 @@ function LedgerStat({ label, value, divide }: { label: string; value: string; di
   );
 }
 
+// ── The Live Desk: copy-trading on the NEW venue (yosuku_spike::vault624, predict-testnet-6-24) ──
+//
+// One attested desk: the enclave agent trades subscribers' pooled-but-ledgered DUSDC
+// on the new DeepBook Predict under per-user hard caps. Deposits credit YOUR ledger
+// entry; the agent has no funds-out path; settles force-credit the position owner;
+// withdraw pays the sender only. TX PATH: plain wallet signing — the Onara sponsor
+// only allowlists old-deployment targets, so nothing here routes through it.
+function LiveDesk() {
+  const account = useCurrentAccount();
+  const address = account?.address ?? null;
+  const { toast } = useToast();
+  const { mutateAsync: signTransaction } = useSignTransaction();
+  const { balance: walletMicro, coins: dusdcCoins, refresh: refreshWallet } = useDUSDCBalance();
+  const walletDusdc = walletMicro / DUSDC_MULTIPLIER;
+
+  const deskName = codenameFromAddress(VAULT624.enclaveAgent);
+  const deskGlyph = glyphFromAddress(VAULT624.enclaveAgent);
+
+  const [ledger, setLedger] = useState(0);
+  const [sub, setSub] = useState<Sub624 | null>(null);
+  const [feed, setFeed] = useState<VaultEvent624[]>([]);
+  const [feedLoaded, setFeedLoaded] = useState(false);
+
+  const [depositStr, setDepositStr] = useState('');   // ADDITIVE chips only — never pre-decided
+  const [withdrawStr, setWithdrawStr] = useState('');
+  const [capStr, setCapStr] = useState('');           // per-trade cap — empty, placeholder suggests 2
+  const [levCap, setLevCap] = useState(1);            // leverage ceiling the agent may use: 1× | 2×
+  const [busy, setBusy] = useState<string | null>(null);
+
+  const submitTx = useCallback(async (tx: Transaction): Promise<string> => {
+    const r = await buildSignExecute(tx, ({ transaction }) =>
+      signTransaction({ transaction }).then((s) => ({ bytes: s.bytes, signature: s.signature })));
+    await grpc.waitForTransaction({ digest: r.digest });
+    return r.digest;
+  }, [signTransaction]);
+
+  const refreshDesk = useCallback(async () => {
+    try { setFeed(await fetchVaultTrades624(40)); } catch { /* next poll wins */ } finally { setFeedLoaded(true); }
+  }, []);
+  const refreshUser = useCallback(async () => {
+    if (!address) { setLedger(0); setSub(null); return; }
+    const [l, s] = await Promise.all([fetchLedger624(address), fetchSub624(address)]);
+    setLedger(l); setSub(s);
+  }, [address]);
+
+  useEffect(() => { refreshDesk(); const id = setInterval(refreshDesk, 20_000); return () => clearInterval(id); }, [refreshDesk]);
+  useEffect(() => { refreshUser(); const id = setInterval(refreshUser, 15_000); return () => clearInterval(id); }, [refreshUser]);
+
+  // desk record, derived from on-chain events (trades + settles only in the panel)
+  const deskFeed = useMemo(() => feed.filter((e) => e.kind === 'trade' || e.kind === 'settle'), [feed]);
+  const openedCount = useMemo(() => feed.filter((e) => e.kind === 'trade').length, [feed]);
+  const paidTotal = useMemo(() => feed.reduce((s, e) => s + (e.kind === 'settle' ? e.payoutMicro : 0), 0) / DUSDC_MULTIPLIER, [feed]);
+  const copiers = useMemo(() => new Set(feed.filter((e) => e.kind === 'trade').map((e) => e.user)).size, [feed]);
+
+  const copying = !!sub?.active;
+  const subLev = sub ? sub.maxLeverage1e9 / Number(LEV_1X_624) : 0;
+  const addChip = (set: (fn: (s: string) => string) => void) => (n: number) =>
+    set((s) => String(Math.max(0, (parseFloat(s || '0') || 0) + n)));
+  const addDeposit = addChip(setDepositStr);
+
+  async function deposit() {
+    if (!address || busy) return;
+    const amt = parseFloat(depositStr.replace(',', '.'));
+    if (!Number.isFinite(amt) || amt <= 0) { toast('Enter a deposit amount above 0', 'error'); return; }
+    if (amt > walletDusdc) { toast(`Wallet DUSDC too low — you hold ${fmtDusdc(walletDusdc)}`, 'error'); return; }
+    if (dusdcCoins.length === 0) { toast('No DUSDC coins in this wallet', 'error'); return; }
+    setBusy('deposit');
+    try {
+      await submitTx(buildVaultDeposit624({
+        coinIds: dusdcCoins.map((c) => c.coinObjectId),
+        amountMicro: BigInt(Math.floor(amt * DUSDC_MULTIPLIER)),
+      }));
+      toast(`Deposited ${fmtDusdc(amt)} DUSDC to your desk ledger`, 'success');
+      setDepositStr('');
+      refreshWallet(); refreshUser(); refreshDesk();
+    } catch (e) {
+      toast(`Deposit failed: ${friendlyVault624Error(String(e instanceof Error ? e.message : e))}`, 'error');
+    } finally { setBusy(null); }
+  }
+
+  async function withdraw() {
+    if (!address || busy) return;
+    const amt = parseFloat(withdrawStr.replace(',', '.'));
+    if (!Number.isFinite(amt) || amt <= 0) { toast('Enter a withdraw amount above 0', 'error'); return; }
+    if (amt > ledger + 0.000001) { toast(`Your desk ledger is ${fmtDusdc(ledger)} DUSDC`, 'error'); return; }
+    setBusy('withdraw');
+    try {
+      await submitTx(buildVaultWithdraw624({ amountMicro: BigInt(Math.floor(amt * DUSDC_MULTIPLIER)) }));
+      toast(`Withdrew ${fmtDusdc(amt)} DUSDC to your wallet`, 'success');
+      setWithdrawStr('');
+      refreshWallet(); refreshUser(); refreshDesk();
+    } catch (e) {
+      toast(`Withdraw failed: ${friendlyVault624Error(String(e instanceof Error ? e.message : e))}`, 'error');
+    } finally { setBusy(null); }
+  }
+
+  async function startCopying() {
+    if (!address || busy) return;
+    const cap = parseFloat(capStr.replace(',', '.'));
+    if (!Number.isFinite(cap) || cap <= 0) { toast('Set a max per-trade cap above 0 (2 is a sane start)', 'error'); return; }
+    setBusy('subscribe');
+    try {
+      await submitTx(buildSubscribe624({
+        agent: VAULT624.enclaveAgent,
+        maxMarginMicro: BigInt(Math.floor(cap * DUSDC_MULTIPLIER)),
+        maxLeverage1e9: BigInt(levCap) * LEV_1X_624,
+      }));
+      toast(`${sub ? 'Caps updated' : 'Copying started'} — ${deskName} trades under ${fmtDusdc(cap)} DUSDC/trade at ≤${levCap}×`, 'success');
+      setCapStr('');
+      refreshUser();
+    } catch (e) {
+      toast(`Could not subscribe: ${friendlyVault624Error(String(e instanceof Error ? e.message : e))}`, 'error');
+    } finally { setBusy(null); }
+  }
+
+  async function pause() {
+    if (!address || busy) return;
+    setBusy('pause');
+    try {
+      await submitTx(buildCancel624());
+      toast('Paused — no new trades. Your balance stays yours; withdraw anytime.', 'success');
+      refreshUser();
+    } catch (e) {
+      toast(`Pause failed: ${friendlyVault624Error(String(e instanceof Error ? e.message : e))}`, 'error');
+    } finally { setBusy(null); }
+  }
+
+  const chipCls = 'rounded-md border border-white/15 px-2 py-0.5 font-mono text-[10px] text-gray-300 hover:border-vermilion/50 hover:text-white transition-colors';
+
+  return (
+    <section className="mt-2 mb-4">
+      {/* section dateline */}
+      <div className="flex items-center gap-3 mb-4">
+        <h2 className="font-mono text-[11px] uppercase tracking-[0.22em] text-white/40"><span className="text-vermilion">⊙</span> The live desk</h2>
+        <div className="h-px flex-1 bg-white/10" />
+        <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-vermilion">New venue · DeepBook Predict 6-24</span>
+      </div>
+
+      <div className="group/desk relative border border-white/[0.1] bg-bg">
+        <div className="grid lg:grid-cols-[1.15fr_1fr] divide-y lg:divide-y-0 lg:divide-x divide-white/[0.08]">
+          {/* ── left: the desk + join flow ── */}
+          <div className="p-5 sm:p-6">
+            {/* hero identity */}
+            <div className="flex items-start gap-4 pb-5 border-b border-white/[0.08]">
+              <div className="shrink-0 h-16 w-16 border border-vermilion/40 bg-vermilion/[0.06] flex items-center justify-center">
+                <span className="font-jp text-3xl text-vermilion leading-none">{deskGlyph}</span>
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                  <h3 className="font-display font-[800] text-2xl text-white tracking-tight leading-none">{deskName}</h3>
+                  <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-vermilion border border-vermilion/40 px-2 py-0.5">⊙ Attested</span>
+                </div>
+                <a href={SUISCAN_ACC(VAULT624.enclaveAgent)} target="_blank" rel="noreferrer"
+                  className="mt-1 inline-block font-mono text-[10px] uppercase tracking-[0.12em] text-white/35 hover:text-white transition-colors">
+                  Agent {fmtAddr(VAULT624.enclaveAgent)} ↗
+                </a>
+                <p className="text-[12.5px] text-white/70 leading-snug mt-2">
+                  Signs inside an AWS Nitro enclave — it decides from oracle data it fetches itself, and it{' '}
+                  <span className="text-white font-semibold">can never withdraw your funds</span>.
+                </p>
+              </div>
+            </div>
+
+            {/* honest mechanism line */}
+            <p className="font-mono text-[10px] leading-relaxed text-white/40 py-4 border-b border-white/[0.08]">
+              It trades 1-minute BTC markets on a momentum rule — algorithmic, not magic. Trades win or lose;
+              you can lose what you deposit. Withdraw anytime. Every trade is a Sui tx you can verify.
+            </p>
+
+            {!address ? (
+              <div className="pt-5">
+                <p className="text-[13px] text-gray-400 leading-snug mb-4 max-w-md">
+                  Deposits sit in an on-chain ledger under your address — the agent can trade them
+                  inside your caps but only you can withdraw. Connect to join the desk.
+                </p>
+                <ConnectButton />
+              </div>
+            ) : (
+              <div className="pt-5 space-y-7">
+                {/* 01 — fund */}
+                <div>
+                  <div className="flex items-baseline gap-3 mb-2.5">
+                    <span className="font-mono text-[11px] text-vermilion tabular-nums">01</span>
+                    <span className="font-display font-[700] text-[14px] text-white">Fund the desk</span>
+                    <span className="font-mono text-[10px] text-white/30 hidden sm:inline">— wallet {fmtDusdc(walletDusdc)} DUSDC</span>
+                  </div>
+                  <div className="flex flex-col sm:flex-row sm:items-stretch gap-3">
+                    <div className="flex-1 max-w-xs rounded-xl border border-white/[0.08] bg-black/30 px-4 py-2 transition-colors focus-within:border-vermilion/50">
+                      <div className="flex items-center justify-between">
+                        <input
+                          inputMode="decimal" placeholder="0.00" value={depositStr}
+                          onChange={(e) => setDepositStr(e.target.value.replace(/[^0-9.]/g, ''))}
+                          className="w-full bg-transparent font-display text-xl font-bold text-white outline-none placeholder:text-gray-600"
+                        />
+                        <span className="font-mono text-[10px] font-semibold text-gray-300 shrink-0">DUSDC</span>
+                      </div>
+                      <div className="mt-1.5 flex items-center justify-between">
+                        <span className="font-mono text-[9px] text-gray-600">Your amount — edit it freely.</span>
+                        <div className="flex gap-1.5">
+                          {[1, 5].map((n) => (
+                            <button key={n} onClick={() => addDeposit(n)} className={chipCls}>+{n}</button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={deposit} disabled={busy === 'deposit'}
+                      className="shrink-0 self-start sm:self-center rounded-full bg-vermilion hover:bg-vermilion-d text-white text-[13px] font-semibold px-5 py-2.5 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      {busy === 'deposit' ? 'Depositing…' : 'Deposit →'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* 02 — caps + start copying */}
+                <div>
+                  <div className="flex items-baseline gap-3 mb-2.5">
+                    <span className="font-mono text-[11px] text-vermilion tabular-nums">02</span>
+                    <span className="font-display font-[700] text-[14px] text-white">Set your caps</span>
+                    <span className="font-mono text-[10px] text-white/30 hidden sm:inline">— hard ceilings, enforced on Sui</span>
+                  </div>
+                  {copying && (
+                    <div className="mb-3 border-l-2 border-vermilion pl-3 py-0.5">
+                      <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-vermilion">
+                        <span className="inline-block w-1.5 h-1.5 rounded-full bg-vermilion mr-1.5 align-middle" />Copying
+                      </span>
+                      <p className="font-mono text-[11px] text-white/60 mt-1 tabular-nums">
+                        ≤ {fmtDusdc((sub?.maxMarginMicro ?? 0) / DUSDC_MULTIPLIER)} DUSDC per trade · ≤ {subLev}× leverage
+                      </p>
+                    </div>
+                  )}
+                  {sub && !copying && (
+                    <p className="mb-3 font-mono text-[10px] uppercase tracking-[0.18em] text-white/40">Paused — set caps to resume.</p>
+                  )}
+                  <div className="flex flex-wrap items-end gap-3">
+                    <label className="block">
+                      <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 block mb-1.5">Max per trade</span>
+                      <div className="w-40 rounded-xl border border-white/[0.08] bg-black/30 px-3 py-2 transition-colors focus-within:border-vermilion/50 flex items-center justify-between">
+                        <input
+                          inputMode="decimal" placeholder="2 (suggested)" value={capStr}
+                          onChange={(e) => setCapStr(e.target.value.replace(/[^0-9.]/g, ''))}
+                          className="w-full bg-transparent font-mono text-[13px] font-semibold text-white outline-none placeholder:text-gray-600"
+                        />
+                        <span className="font-mono text-[9px] text-gray-500 shrink-0 ml-1">DUSDC</span>
+                      </div>
+                    </label>
+                    <div>
+                      <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 block mb-1.5">Leverage cap</span>
+                      <div className="flex gap-1.5">
+                        {[1, 2].map((v) => (
+                          <button key={v} onClick={() => setLevCap(v)}
+                            className={`w-14 py-2 rounded font-mono text-[12px] border transition-colors ${levCap === v ? 'border-vermilion text-vermilion bg-vermilion/[0.06]' : 'border-white/[0.08] text-white/50 hover:border-white/20'}`}>
+                            {v}×
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={startCopying} disabled={busy === 'subscribe'}
+                        className="rounded-full bg-vermilion hover:bg-vermilion-d text-white text-[13px] font-semibold px-5 py-2.5 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                      >
+                        {busy === 'subscribe' ? 'Signing…' : copying ? 'Update caps' : sub ? 'Resume copying →' : 'Start copying →'}
+                      </button>
+                      {copying && (
+                        <button
+                          onClick={pause} disabled={busy === 'pause'}
+                          className="rounded-full border border-white/15 text-gray-300 hover:text-white hover:border-white/30 text-[12px] font-semibold px-4 py-2 transition-colors disabled:opacity-50"
+                        >
+                          {busy === 'pause' ? 'Pausing…' : 'Pause'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <p className="font-mono text-[10px] text-white/30 leading-relaxed mt-2 max-w-md">
+                    The agent can never spend more than your per-trade cap or exceed your leverage cap — the vault aborts the trade on-chain.
+                  </p>
+                </div>
+
+                {/* 03 — your ledger + withdraw */}
+                <div>
+                  <div className="flex items-baseline gap-3 mb-2.5">
+                    <span className="font-mono text-[11px] text-vermilion tabular-nums">03</span>
+                    <span className="font-display font-[700] text-[14px] text-white">Your ledger</span>
+                    <span className="font-mono text-[10px] text-white/30 hidden sm:inline">— live on-chain balance; only you can withdraw it</span>
+                  </div>
+                  <div className="grid grid-cols-2 max-w-md border border-white/[0.08] bg-white/[0.02] mb-3">
+                    <LedgerStat label="Desk balance" value={`${fmtDusdc(ledger)} DUSDC`} />
+                    <LedgerStat label="Status" value={copying ? 'Copying' : sub ? 'Paused' : 'Not copying'} divide />
+                  </div>
+                  <div className="flex flex-col sm:flex-row sm:items-stretch gap-3">
+                    <div className="flex-1 max-w-xs rounded-xl border border-white/[0.08] bg-black/30 px-4 py-2 transition-colors focus-within:border-vermilion/50">
+                      <div className="flex items-center justify-between">
+                        <input
+                          inputMode="decimal" placeholder="0.00" value={withdrawStr}
+                          onChange={(e) => setWithdrawStr(e.target.value.replace(/[^0-9.]/g, ''))}
+                          className="w-full bg-transparent font-display text-xl font-bold text-white outline-none placeholder:text-gray-600"
+                        />
+                        <span className="font-mono text-[10px] font-semibold text-gray-300 shrink-0">DUSDC</span>
+                      </div>
+                      <div className="mt-1.5 flex items-center justify-between">
+                        <span className="font-mono text-[9px] text-gray-600">To your connected wallet only.</span>
+                        {ledger > 0 && (
+                          <button onClick={() => setWithdrawStr(ledger.toFixed(2))} className={chipCls}>max</button>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      onClick={withdraw} disabled={busy === 'withdraw'}
+                      className="shrink-0 self-start sm:self-center rounded-full border border-white/15 text-gray-200 hover:text-white hover:border-white/30 text-[13px] font-semibold px-5 py-2.5 transition-colors disabled:opacity-50"
+                    >
+                      {busy === 'withdraw' ? 'Withdrawing…' : 'Withdraw'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* ── right: desk record (live on-chain feed) ── */}
+          <div className="flex flex-col">
+            <div className="flex items-center justify-between px-5 py-3 border-b border-white/[0.08]">
+              <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/40">Desk record</span>
+              <span className="font-mono text-[10px] text-white/30 tabular-nums">
+                {openedCount} trades · {copiers} copier{copiers === 1 ? '' : 's'} · {fmtDusdc(paidTotal)} paid out
+              </span>
+            </div>
+            <div className="flex-1 divide-y divide-white/[0.05]">
+              {!feedLoaded ? (
+                <div className="font-mono text-[11px] uppercase tracking-[0.2em] text-white/30 px-5 py-10 text-center">reading the chain…</div>
+              ) : deskFeed.length === 0 ? (
+                <div className="px-5 py-10 text-center">
+                  <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-white/30">No trades filed yet</p>
+                  <p className="text-[12px] text-white/40 mt-2 max-w-xs mx-auto leading-snug">
+                    The desk trades when its momentum read clears the bar — otherwise it sits out. Every fill lands here with its Sui tx.
+                  </p>
+                </div>
+              ) : (
+                deskFeed.slice(0, 8).map((e, i) => {
+                  const isTrade = e.kind === 'trade';
+                  const won = !isTrade && e.payoutMicro > 0;
+                  const row = (
+                    <div className="flex items-center gap-3 px-5 py-3 hover:bg-white/[0.02] transition-colors">
+                      <span className={`font-mono text-[10px] uppercase tracking-[0.16em] w-[86px] shrink-0 ${isTrade ? 'text-vermilion' : won ? 'text-white' : 'text-white/40'}`}>
+                        {isTrade ? '● Opened' : won ? '⊙ Settled' : 'Settled'}
+                      </span>
+                      <span className="font-mono text-[11.5px] text-white/70 tabular-nums min-w-0 truncate">
+                        {isTrade
+                          ? `cost ${fmtDusdc(e.costMicro / DUSDC_MULTIPLIER)} · pays up to ${fmtDusdc(e.qtyMicro / DUSDC_MULTIPLIER)} · ${e.leverage1e9 / Number(LEV_1X_624)}×`
+                          : won
+                            ? `paid ${fmtDusdc(e.payoutMicro / DUSDC_MULTIPLIER)} DUSDC to its owner`
+                            : 'no payout — loss taken honestly'}
+                      </span>
+                      <span className="flex-1" />
+                      <span className="font-mono text-[10px] text-white/30 shrink-0">{e.ts ? ago(e.ts) : ''}</span>
+                      <span className="font-mono text-[11px] text-vermilion w-4 text-right shrink-0">{e.digest ? '↗' : ''}</span>
+                    </div>
+                  );
+                  return e.digest ? (
+                    <a key={`${e.kind}-${i}`} href={SUISCAN_TX(e.digest)} target="_blank" rel="noreferrer" className="block">
+                      {row}
+                    </a>
+                  ) : (
+                    <div key={`${e.kind}-${i}`}>{row}</div>
+                  );
+                })
+              )}
+            </div>
+            <div className="px-5 py-3 border-t border-white/[0.08]">
+              <p className="font-mono text-[9.5px] leading-relaxed text-white/30">
+                Costs are the exact on-chain debit, never estimates. Settles force-credit the position
+                owner&apos;s ledger — a 0 payout is a loss, recorded as honestly as a win.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* standing disclosure for the desk */}
+      <p className="mt-3 font-mono text-[10px] leading-relaxed text-gray-600 max-w-3xl">
+        Testnet DUSDC on the new DeepBook Predict (6-24) — oracle-settled, no committee. Copied trades
+        can lose; only fund what you can afford to lose. The agent trades inside your caps and has no
+        withdraw path — verify the vault and every trade on Sui.
+      </p>
+    </section>
+  );
+}
+
 // ── Copy drawer: the focused subscribe flow (review → size → worked example → confirm) ──
 function CopyDrawer(props: {
   card: StrategyCard;
@@ -681,6 +1311,7 @@ function CopyDrawer(props: {
   const cap = valid ? Math.min(target, card.maxMargin) : 0;
   const free = card.subFee === 0 && !!sponsor;
   const add = (n: number) => setBudget(String(Math.max(0, (parseFloat(budget || '0') || 0) + n)));
+  const agentName = codenameFromAddress(card.id);
 
   const cta = topUp > 0.000001
     ? `Add ${fmtDusdc(topUp)} DUSDC & start copying`
@@ -699,12 +1330,10 @@ function CopyDrawer(props: {
 
         {/* identity */}
         <div className="flex items-center gap-3 mb-5 pr-8">
-          <div className="w-11 h-11 shrink-0 border border-white/10 rounded-full flex items-center justify-center">
-            <span className="font-jp text-xl text-vermilion">{glyphFromAddress(card.agent)}</span>
-          </div>
+          <AgentPortrait seed={card.id} name={agentName} size="drawer" />
           <div className="min-w-0">
-            <h2 className="font-display font-[800] text-lg text-white truncate">{codenameFromAddress(card.agent)}</h2>
-            <a href={SUISCAN_ACC(card.agent)} target="_blank" rel="noreferrer" className="font-mono text-[11px] text-gray-500 hover:text-gray-300">{fmtAddr(card.agent)}</a>
+            <h2 className="font-display font-[800] text-xl text-white truncate">{agentName}</h2>
+            <a href={SUISCAN_ACC(card.agent)} target="_blank" rel="noreferrer" className="font-mono text-[10px] uppercase tracking-[0.12em] text-gray-500 hover:text-gray-300">Executor {fmtAddr(card.agent)}</a>
           </div>
           <span className="ml-auto shrink-0 font-mono text-[10px] uppercase tracking-[0.2em]"><TierWord tier={tier} /></span>
         </div>
