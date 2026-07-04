@@ -47,6 +47,7 @@ import {
 } from '@/lib/sui/vault624Client';
 import { grpc, buildSignExecute } from '@/lib/sui/modernClients';
 import { DUSDC_MULTIPLIER } from '@/lib/sui/constants';
+import EquitySparkline, { type EquityPoint } from '@/components/EquitySparkline';
 
 const M = DUSDC_MULTIPLIER;
 const DEFAULT_CAP = 2; // suggested per-fill guardrail — always user-editable
@@ -93,6 +94,7 @@ export default function LiveDesk() {
   const [capStr, setCapStr] = useState('');           // guardrail — empty, placeholder suggests 2
   const [levCap, setLevCap] = useState(1);            // leverage ceiling the agent may use: 1× | 2×
   const [showGuardrails, setShowGuardrails] = useState(false);
+  const [joinOpen, setJoinOpen] = useState(false); // pre-join footprint stays small until the user opts in
   const [manage, setManage] = useState<'add' | 'withdraw' | 'caps' | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [fauceting, setFauceting] = useState(false);
@@ -136,30 +138,48 @@ export default function LiveDesk() {
   }, [refreshWallet, refreshUser, refreshDesk]);
 
   // ── the desk's record, derived from on-chain events — losses counted, always ──
+  // Also builds the equity curve: cumulative net P&L across settled trades,
+  // oldest→newest, so the sparkline draws every win AND every drawdown.
   const stats = useMemo(() => {
     const trades = feed.filter((e) => e.kind === 'trade');
     const settles = feed.filter((e) => e.kind === 'settle');
     const wins = settles.filter((s) => s.payoutMicro > 0).length;
     const losses = settles.length - wins;
     const byOrder = new Map(trades.filter((t) => t.orderId).map((t) => [t.orderId, t]));
-    let netMicro = 0; let matched = 0;
-    for (const s of settles) {
-      const t = s.orderId ? byOrder.get(s.orderId) : undefined;
-      if (t) { netMicro += s.payoutMicro - t.costMicro; matched += 1; }
-    }
+
+    // Match each settle to its opening trade so a leg contributes payout − cost.
+    // Order the matched legs oldest→newest for the curve (settle ts, then trade ts).
+    const matchedLegs = settles
+      .map((s) => {
+        const t = s.orderId ? byOrder.get(s.orderId) : undefined;
+        return t ? { deltaMicro: s.payoutMicro - t.costMicro, ts: s.ts || t.ts || 0 } : null;
+      })
+      .filter((x): x is { deltaMicro: number; ts: number } => x !== null)
+      .sort((a, b) => a.ts - b.ts);
+
+    let running = 0;
+    const curve: EquityPoint[] = matchedLegs.map((leg) => {
+      running += leg.deltaMicro;
+      return { t: leg.ts, cum: running / M };
+    });
+    const netMicro = matchedLegs.reduce((a, l) => a + l.deltaMicro, 0);
+    const matched = matchedLegs.length;
+
     const costs = trades.map((t) => t.costMicro).sort((a, b) => a - b);
     const typicalCost = (costs.length ? costs[Math.floor(costs.length / 2)] : 0) / M;
     const paid = settles.reduce((s, e) => s + e.payoutMicro, 0) / M;
     const copiers = new Set(trades.map((e) => e.user)).size;
-    return { opened: trades.length, settled: settles.length, wins, losses, netMicro, matched, typicalCost, paid, copiers };
+    return { opened: trades.length, settled: settles.length, wins, losses, netMicro, matched, typicalCost, paid, copiers, curve };
   }, [feed]);
 
-  // The visible record: fills + results for everyone, plus YOUR money moves.
-  const deskFeed = useMemo(
-    () => feed.filter((e) =>
-      e.kind === 'trade' || e.kind === 'settle' ||
-      ((e.kind === 'deposit' || e.kind === 'withdraw') && !!address && e.user === address)),
-    [feed, address],
+  // The last three SETTLED results, newest first — a tight strip, not a log.
+  // Only settles carry a win/loss outcome, which is the one thing this strip says.
+  const latest3 = useMemo(
+    () => feed
+      .filter((e) => e.kind === 'settle')
+      .sort((a, b) => (b.ts || 0) - (a.ts || 0))
+      .slice(0, 3),
+    [feed],
   );
 
   const copying = !!sub?.active;
@@ -323,79 +343,88 @@ export default function LiveDesk() {
     </button>
   );
 
-  // The record strip — wins AND losses at the decision moment, never ROI-only.
-  const recordStrip = (
-    <div className="border border-white/[0.08] bg-white/[0.02]">
-      <div className="flex items-center justify-between px-3 py-2 border-b border-white/[0.06]">
-        <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-white/40">Its record — losses included</span>
-        <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-white/25 tabular-nums">last {stats.opened} trades</span>
-      </div>
+  const netUp = stats.netMicro >= 0;
+  const netStr = `${netUp ? '+' : '−'}${fmtDusdc(Math.abs(stats.netMicro) / M)}`;
+
+  // ── the record, as a curve + a tight trio — the striking honest visual ──
+  // A cumulative-P&L sparkline (rises on wins, drops into drawdown on losses)
+  // sitting over exactly three numbers: Won · Lost · Net. Losses are never hidden
+  // — the curve draws them and the net can read negative in muted white.
+  const recordCard = (
+    <div className="rounded-lg border border-white/[0.08] bg-white/[0.015] overflow-hidden">
       {stats.settled === 0 ? (
-        <p className="px-3 py-2.5 font-mono text-[10px] text-white/40">No finished trades on record yet — you&apos;d be early. Size accordingly.</p>
-      ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-4 [&>*:nth-child(n+3)]:max-sm:border-t [&>*:nth-child(n+3)]:max-sm:border-white/[0.06]">
-          <MicroStat label="Won" value={String(stats.wins)} />
-          <MicroStat label="Lost" value={String(stats.losses)} divide />
-          <MicroStat label={`Net of ${stats.matched}`} value={`${stats.netMicro >= 0 ? '▲ +' : '▼ −'}${fmtDusdc(Math.abs(stats.netMicro) / M)}`} divide />
-          <MicroStat label="Paid out" value={fmtDusdc(stats.paid)} divide />
+        <div className="px-4 py-6 text-center">
+          <p className="text-[13px] text-white/55 leading-snug">No finished trades yet — you&apos;d be early.</p>
+          <p className="font-mono text-[10px] text-white/30 mt-1">The record fills as trades settle on Sui.</p>
         </div>
+      ) : (
+        <>
+          {/* framing: young + public. The net can read negative — that's transparency, not spin. */}
+          <div className="flex items-center justify-between px-4 pt-3">
+            <span className="font-mono text-[9px] uppercase tracking-[0.18em] text-white/40">Track record · every trade public</span>
+            <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-white/30">{stats.settled} trades · early days</span>
+          </div>
+          <div className="px-4 pt-2 pb-2">
+            <EquitySparkline points={stats.curve} width={520} height={64} className="w-full h-[64px]" />
+          </div>
+          <div className="grid grid-cols-3 divide-x divide-white/[0.07] border-t border-white/[0.07]">
+            <RecordStat label="Won" value={String(stats.wins)} />
+            <RecordStat label="Lost" value={String(stats.losses)} />
+            <RecordStat label="Net so far" value={netStr} accent={netUp ? 'up' : 'down'} />
+          </div>
+        </>
       )}
     </div>
   );
 
   return (
     <section className="mt-2 mb-4">
-      {/* section dateline */}
-      <div className="flex items-center gap-3 mb-4">
-        <h2 className="font-mono text-[11px] uppercase tracking-[0.22em] text-white/40"><span className="text-vermilion">⊙</span> The live desk</h2>
+      {/* section dateline — one label, one live tag */}
+      <div className="flex items-center gap-3 mb-5">
+        <h2 className="font-mono text-[11px] uppercase tracking-[0.22em] text-white/45"><span className="text-vermilion">⊙</span> The live desk</h2>
         <div className="h-px flex-1 bg-white/10" />
-        <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-vermilion">Live · DeepBook Predict · testnet</span>
+        <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/35">DeepBook Predict · testnet</span>
       </div>
 
-      <div className="group/desk relative border border-white/[0.1] bg-bg">
-        <div className="grid lg:grid-cols-[1.15fr_1fr] divide-y lg:divide-y-0 lg:divide-x divide-white/[0.08]">
-          {/* ── left: the desk + join flow (min-w-0 stops the mobile grid blowout) ── */}
-          <div className="p-5 sm:p-6 min-w-0">
-            {/* hero identity */}
-            <div className="flex items-start gap-4 pb-5 border-b border-white/[0.08]">
-              <div className="shrink-0 h-16 w-16 border border-vermilion/40 bg-vermilion/[0.06] flex items-center justify-center">
-                <span className="font-jp text-3xl text-vermilion leading-none">{deskGlyph}</span>
+      <div className="group/desk relative rounded-xl border border-white/[0.1] bg-bg overflow-hidden">
+        <div className="grid lg:grid-cols-[1.15fr_0.85fr] divide-y lg:divide-y-0 lg:divide-x divide-white/[0.08]">
+          {/* ── left: the hero card + join flow (min-w-0 stops the mobile grid blowout) ── */}
+          <div className="p-6 sm:p-7 min-w-0">
+            {/* hero identity — glyph · name · ONE attested chip · one line of what it does */}
+            <div className="flex items-start gap-4">
+              <div className="shrink-0 h-14 w-14 rounded-lg border border-vermilion/40 bg-vermilion/[0.07] flex items-center justify-center">
+                <span className="font-jp text-2xl text-vermilion leading-none">{deskGlyph}</span>
               </div>
               <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-                  <h3 className="font-display font-[800] text-2xl text-white tracking-tight leading-none">{deskName}</h3>
-                  <span className="inline-flex items-baseline gap-1.5">
-                    <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-vermilion border border-vermilion/40 px-2 py-0.5">⊙ Attested</span>
-                    <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-white/35">runs in sealed hardware</span>
+                <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+                  <h3 className="font-display font-[800] text-[1.7rem] text-white tracking-tight leading-none">{deskName}</h3>
+                  <span className="inline-flex items-center gap-1 rounded-full border border-vermilion/40 bg-vermilion/[0.06] px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.14em] text-vermilion">
+                    ⊙ Attested
                   </span>
                 </div>
-                <a href={SUISCAN_ACC(VAULT624.enclaveAgent)} target="_blank" rel="noreferrer"
-                  className="mt-1 inline-block font-mono text-[10px] uppercase tracking-[0.12em] text-white/35 hover:text-white transition-colors">
-                  Verify it on Sui ↗
-                </a>
-                <p className="text-[12.5px] text-white/70 leading-snug mt-2 break-words">
-                  An automated trader running on sealed hardware — no human holds its key, and it{' '}
-                  <span className="text-white font-semibold">can never withdraw your money</span>.
+                <p className="text-[13.5px] text-white/70 leading-snug mt-2 break-words">
+                  An automated strategy that follows Bitcoin&apos;s trend, up or down.
                 </p>
+                <a href={SUISCAN_ACC(VAULT624.enclaveAgent)} target="_blank" rel="noreferrer"
+                  className="mt-1.5 inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.12em] text-white/35 hover:text-vermilion transition-colors">
+                  Runs in sealed hardware · verify on Sui ↗
+                </a>
               </div>
             </div>
 
-            {/* honest mechanism line */}
-            <p className="font-mono text-[10px] leading-relaxed text-white/40 py-4 border-b border-white/[0.08] break-words">
-              Every minute it checks whether Bitcoin is trending, and bets up or down when it is —
-              a fixed rule, not magic. Trades win or lose; you can lose what you put on. Withdraw
-              anytime. Every trade is public on Sui.
+            {/* the record — a curve, not a log: the striking visual */}
+            <div className="mt-6">{recordCard}</div>
+
+            {/* the anchor line — stated ONCE, the whole brand in one sentence */}
+            <p className="mt-5 text-[15px] sm:text-[16px] font-display font-[600] text-white/90 leading-snug tracking-tight">
+              It trades your money. <span className="text-vermilion">It cannot take it.</span>
             </p>
 
             {!address ? (
-              /* ── state: disconnected ── */
-              <div className="pt-5">
-                <div className="mb-4">{recordStrip}</div>
-                <p className="text-[13px] text-gray-400 leading-snug mb-4 max-w-md">
-                  Your money sits under your own address on Sui — the desk can trade it inside
-                  limits you set, but only you can take it out. Connect to join.
-                </p>
+              /* ── state: disconnected — small footprint, one CTA ── */
+              <div className="mt-5">
                 <ConnectButton />
+                <p className="font-mono text-[10px] text-white/30 mt-3">Withdraw anytime · testnet · you can lose what you put on.</p>
               </div>
             ) : copying ? (
               /* ── state: COPYING — the living moment-after ── */
@@ -406,9 +435,7 @@ export default function LiveDesk() {
                       className="absolute right-2 top-2 font-mono text-[11px] text-white/40 hover:text-white px-1.5 transition-colors">×</button>
                     <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-vermilion mb-1">⊙ You&apos;re on the desk</p>
                     <p className="text-[12.5px] text-white/80 leading-snug pr-6">
-                      One signature did it all — your money is live under {deskName}. Its next trade
-                      carries you; watch it land in the record{' '}
-                      <span className="lg:inline hidden">to the right</span><span className="lg:hidden inline">below</span>.
+                      One signature did it. Your money is live under {deskName} — its next trade carries you.
                     </p>
                     {joinedFlash.digest && (
                       <a href={SUISCAN_TX(joinedFlash.digest)} target="_blank" rel="noreferrer"
@@ -423,8 +450,7 @@ export default function LiveDesk() {
                     Copying — watching Bitcoin for the next signal
                   </span>
                   <p className="font-mono text-[10px] text-white/40 mt-1 leading-relaxed break-words">
-                    It only trades when its rule fires — sometimes minutes apart, sometimes hours.
-                    Wins and losses land straight in your desk balance below.
+                    Wins and losses land straight in your balance below.
                   </p>
                 </div>
 
@@ -509,8 +535,7 @@ export default function LiveDesk() {
                 )}
 
                 <p className="font-mono text-[10px] text-white/30 leading-relaxed max-w-md break-words">
-                  Pause stops new trades instantly; whatever is open finishes and pays into your balance.
-                  Withdraw anytime — the desk never holds your exit hostage.
+                  Pause stops new trades; anything open finishes and pays into your balance.
                 </p>
               </div>
             ) : sub ? (
@@ -551,59 +576,60 @@ export default function LiveDesk() {
                   </div>
                 )}
               </div>
+            ) : !joinOpen ? (
+              /* ── state: JOIN (collapsed) — one CTA, small footprint ── */
+              <div className="mt-5">
+                <button onClick={() => setJoinOpen(true)}
+                  className="w-full sm:w-auto rounded-full bg-vermilion hover:bg-vermilion-d text-white text-[13px] font-semibold px-7 py-3 transition-colors">
+                  Copy this strategy →
+                </button>
+                <p className="font-mono text-[10px] text-white/30 mt-3">
+                  One signature to join · withdraw anytime · you can lose what you put on.
+                </p>
+              </div>
             ) : (
-              /* ── state: JOIN — one decision (the amount), one signature ── */
-              <div className="pt-5 space-y-5">
-                {/* 01 — the one decision */}
+              /* ── state: JOIN (open) — one decision (the amount), one signature ── */
+              <div className="mt-5 space-y-4">
+                {/* the one decision — amount */}
                 <div>
-                  <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 mb-2.5">
-                    <span className="font-mono text-[11px] text-vermilion tabular-nums">01</span>
+                  <div className="flex items-baseline justify-between mb-2">
                     <span className="font-display font-[700] text-[14px] text-white">How much goes on the desk?</span>
-                    <span className="font-mono text-[10px] text-white/30">— wallet: {fmtDusdc(walletDusdc)} test USDC</span>
+                    <button onClick={() => { setJoinOpen(false); setShowGuardrails(false); }}
+                      className="font-mono text-[10px] uppercase tracking-[0.12em] text-white/35 hover:text-white transition-colors">back</button>
                   </div>
                   <AmountRow
                     value={depositStr} onChange={setDepositStr}
                     hint={walletDusdc <= 0
                       ? <span className="inline-flex flex-wrap items-center gap-1.5">Wallet empty — no problem: {faucetChip}</span>
-                      : <span>Your amount — edit it freely.</span>}
+                      : <span>Wallet: {fmtDusdc(walletDusdc)} test USDC — edit freely.</span>}
                     chips={[1, 5]} onChip={addDeposit} chipCls={chipCls}
                   />
                   {ledger > 0 && (
                     <p className="font-mono text-[10px] text-white/40 mt-2">
-                      Already on the desk: {fmtDusdc(ledger)} test USDC — leave the box empty to start copying with just that.
+                      Already on the desk: {fmtDusdc(ledger)} — leave empty to copy with just that.
                     </p>
                   )}
                   {stats.typicalCost > 0 && (
                     <p className="font-mono text-[10px] text-white/30 mt-2 break-words">
-                      Recent trades cost ~{fmtDusdc(stats.typicalCost)} each — put on at least that much or the desk will skip you.
+                      Recent trades cost ~{fmtDusdc(stats.typicalCost)} each — put on at least that or the desk skips you.
                     </p>
                   )}
                 </div>
 
-                {/* 02 — guardrails: defaulted safety, not homework */}
-                <div>
-                  <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 mb-2">
-                    <span className="font-mono text-[11px] text-vermilion tabular-nums">02</span>
-                    <span className="font-display font-[700] text-[14px] text-white">Your safety limits — already set</span>
-                    <button onClick={() => setShowGuardrails((v) => !v)}
-                      className="font-mono text-[10px] uppercase tracking-[0.14em] text-white/40 hover:text-vermilion transition-colors underline decoration-white/20 underline-offset-2">
-                      {showGuardrails ? 'done' : 'adjust'}
-                    </button>
-                  </div>
-                  <p className="text-[12px] text-white/60 leading-snug max-w-md break-words">
-                    It may risk at most <span className="text-white font-semibold">{fmtDusdc(capValue)} test USDC per trade</span> at{' '}
-                    <span className="text-white font-semibold">{levCap}×</span>{levCap === 2 ? ' (doubled exposure — wins and losses count twice)' : ' (plain bets, no multiplier)'}.
-                    The vault blocks anything above this on-chain — and it can never withdraw.
-                  </p>
+                {/* guardrails — defaulted safety, one quiet line + adjust */}
+                <div className="text-[12.5px] text-white/60 leading-snug max-w-md break-words">
+                  Risks at most <span className="text-white font-semibold">{fmtDusdc(capValue)} per trade</span> at{' '}
+                  <span className="text-white font-semibold">{levCap}×</span>, enforced on-chain.{' '}
+                  <button onClick={() => setShowGuardrails((v) => !v)}
+                    className="font-mono text-[10px] uppercase tracking-[0.12em] text-white/40 hover:text-vermilion transition-colors underline decoration-white/20 underline-offset-2">
+                    {showGuardrails ? 'done' : 'adjust limits'}
+                  </button>
                   {showGuardrails && (
                     <div className="mt-3 max-w-md">
                       <CapsEditor capStr={capStr} setCapStr={setCapStr} levCap={levCap} setLevCap={setLevCap} suggested={DEFAULT_CAP} />
                     </div>
                   )}
                 </div>
-
-                {/* the record at the decision moment — never hidden */}
-                <div className="max-w-md">{recordStrip}</div>
 
                 {/* one CTA, one signature */}
                 <div>
@@ -612,99 +638,78 @@ export default function LiveDesk() {
                     {busy === 'join'
                       ? 'One signature…'
                       : depositValue > 0
-                        ? `Put ${fmtDusdc(depositValue)} on & start copying →`
+                        ? `Put ${fmtDusdc(depositValue)} on & copy →`
                         : ledger > 0
-                          ? `Start copying with your ${fmtDusdc(ledger)} →`
+                          ? `Copy with your ${fmtDusdc(ledger)} →`
                           : 'Enter an amount to join'}
                   </button>
-                  <p className="font-mono text-[10px] text-white/30 mt-2 break-words">
-                    One wallet approval — deposit and copy-permission in a single transaction. Withdraw anytime.
-                  </p>
+                  <p className="font-mono text-[10px] text-white/30 mt-2">Deposit and copy-permission in one signature.</p>
                 </div>
               </div>
             )}
           </div>
 
-          {/* ── right: desk record (live on-chain feed; min-w-0 stops the mobile blowout) ── */}
-          <div className="flex flex-col min-w-0">
-            <div className="flex items-center justify-between gap-3 px-5 py-3 border-b border-white/[0.08]">
-              <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/40 shrink-0">Desk record</span>
-              <span className="font-mono text-[10px] text-white/30 tabular-nums text-right min-w-0 truncate">
-                {stats.opened} trades · {stats.wins} won · {stats.losses} lost · {stats.copiers} copier{stats.copiers === 1 ? '' : 's'}
+          {/* ── right: last 3 trades — a tight strip, not a scrolling log ── */}
+          <div className="flex flex-col min-w-0 bg-white/[0.012]">
+            <div className="flex items-center justify-between gap-3 px-5 py-3.5 border-b border-white/[0.08]">
+              {copying ? (
+                <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-vermilion">
+                  <span className="inline-block w-1 h-1 rounded-full bg-vermilion mr-1.5 align-middle animate-pulse" />
+                  Watching for the next signal
+                </span>
+              ) : (
+                <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/40 shrink-0">Latest trades</span>
+              )}
+              <span className="font-mono text-[10px] text-white/30 tabular-nums shrink-0">
+                {stats.copiers} copying
               </span>
             </div>
-            {copying && (
-              <div className="px-5 py-2 border-b border-white/[0.08] bg-vermilion/[0.03]">
-                <span className="font-mono text-[9.5px] uppercase tracking-[0.18em] text-vermilion">
-                  <span className="inline-block w-1 h-1 rounded-full bg-vermilion mr-1.5 align-middle animate-pulse" />
-                  Watching — its next trade lands here with your money on it
-                </span>
-              </div>
-            )}
-            <div className="flex-1 divide-y divide-white/[0.05]">
+            <div className="flex-1 flex flex-col divide-y divide-white/[0.05]">
               {!feedLoaded ? (
-                <div className="font-mono text-[11px] uppercase tracking-[0.2em] text-white/30 px-5 py-10 text-center">reading the chain…</div>
-              ) : deskFeed.length === 0 ? (
-                <div className="px-5 py-10 text-center">
-                  <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-white/30">No trades filed yet</p>
-                  <p className="text-[12px] text-white/40 mt-2 max-w-xs mx-auto leading-snug">
-                    When Bitcoin is trending it trades; otherwise it sits out. Every trade lands here with its Sui receipt.
-                  </p>
+                <div className="flex-1 flex items-center justify-center font-mono text-[11px] uppercase tracking-[0.2em] text-white/30 px-5">reading the chain…</div>
+              ) : latest3.length === 0 ? (
+                <div className="flex-1 flex items-center justify-center px-5 text-center">
+                  <p className="text-[13px] text-white/45 leading-snug">Nothing yet — it sits out until Bitcoin trends.</p>
                 </div>
               ) : (
-                deskFeed.slice(0, 8).map((e, i) => {
-                  const yours = !!address && e.user === address;
-                  const isTrade = e.kind === 'trade';
-                  const isMoney = e.kind === 'deposit' || e.kind === 'withdraw';
-                  const won = e.kind === 'settle' && e.payoutMicro > 0;
+                latest3.map((e, i) => {
+                  const won = e.payoutMicro > 0;
                   const row = (
-                    <div className={`flex items-center gap-3 px-5 py-3 hover:bg-white/[0.02] transition-colors ${yours ? 'bg-vermilion/[0.03]' : ''}`}>
-                      <span className={`font-mono text-[10px] uppercase tracking-[0.16em] w-[86px] shrink-0 ${
-                        isMoney ? 'text-white/60' : isTrade ? 'text-vermilion' : won ? 'text-white' : 'text-white/40'}`}>
-                        {isMoney ? (e.kind === 'deposit' ? '＋ Funded' : '－ Withdrew') : isTrade ? '● Opened' : won ? '⊙ Won' : 'Lost'}
+                    <div className="flex items-center gap-3 px-5 py-4 w-full h-full hover:bg-white/[0.02] transition-colors">
+                      <span className={`inline-flex items-center justify-center h-8 w-8 rounded-full shrink-0 font-mono text-[12px] ${
+                        won ? 'border border-vermilion/50 text-vermilion' : 'border border-white/15 text-white/40'}`}>
+                        {won ? '↑' : '↓'}
                       </span>
-                      <span className="font-mono text-[11.5px] text-white/70 tabular-nums min-w-0 whitespace-normal break-words leading-snug">
-                        {yours && <span className="text-vermilion font-semibold mr-1.5">YOU</span>}
-                        {isMoney
-                          ? (e.kind === 'deposit'
-                            ? `put ${fmtDusdc(e.amountMicro / M)} on the desk`
-                            : `took ${fmtDusdc(e.amountMicro / M)} back to the wallet`)
-                          : isTrade
-                            ? `risked ${fmtDusdc(e.costMicro / M)} → pays ${fmtDusdc(e.qtyMicro / M)} if right · ${e.leverage1e9 / Number(LEV_1X_624)}×`
-                            : won
-                              ? `${fmtDusdc(e.payoutMicro / M)} paid to its owner`
-                              : 'nothing back — a loss, shown honestly'}
-                      </span>
-                      <span className="flex-1" />
-                      <span className="font-mono text-[10px] text-white/30 shrink-0">{e.ts ? ago(e.ts) : ''}</span>
-                      <span className="font-mono text-[11px] text-vermilion w-4 text-right shrink-0">{e.digest ? '↗' : ''}</span>
+                      <div className="min-w-0 flex-1">
+                        <div className="font-mono text-[13px] text-white tabular-nums leading-tight">
+                          {won ? `Won ${fmtDusdc(e.payoutMicro / M)}` : 'Lost — nothing back'}
+                        </div>
+                        <div className="font-mono text-[10px] text-white/35 mt-0.5">{e.ts ? ago(e.ts) : 'settled'}</div>
+                      </div>
+                      <span className="font-mono text-[12px] text-vermilion w-4 text-right shrink-0">{e.digest ? '↗' : ''}</span>
                     </div>
                   );
                   return e.digest ? (
-                    <a key={`${e.kind}-${i}`} href={SUISCAN_TX(e.digest)} target="_blank" rel="noreferrer" className="block">
-                      {row}
-                    </a>
+                    <a key={`s-${i}`} href={SUISCAN_TX(e.digest)} target="_blank" rel="noreferrer" className="flex-1 flex items-stretch">{row}</a>
                   ) : (
-                    <div key={`${e.kind}-${i}`}>{row}</div>
+                    <div key={`s-${i}`} className="flex-1 flex items-stretch">{row}</div>
                   );
                 })
               )}
             </div>
-            <div className="px-5 py-3 border-t border-white/[0.08]">
-              <p className="font-mono text-[9.5px] leading-relaxed text-white/30 break-words">
-                Amounts are the exact on-chain figures, never estimates. Wins are paid straight into
-                their owner&apos;s desk balance — and a 0.00 payout is a loss, shown as plainly as a win.
-              </p>
-            </div>
+            {latest3.length > 0 && (
+              <div className="px-5 py-3 border-t border-white/[0.08]">
+                <p className="font-mono text-[10px] text-white/30">Tap any trade to verify on Sui ↗</p>
+              </div>
+            )}
           </div>
         </div>
       </div>
 
-      {/* standing disclosure for the desk */}
+      {/* standing disclosure — the one place testnet / can-lose / oracle-settled is said */}
       <p className="mt-3 font-mono text-[10px] leading-relaxed text-gray-600 max-w-3xl break-words">
-        Play-money USDC on Sui testnet — nothing here is real dollars. Markets settle from a price
-        oracle, not a committee vote. Copied trades can lose; only put on what you can afford to
-        lose. The desk has no way to withdraw your balance — verify the vault and any trade on Sui.
+        Play-money USDC on Sui testnet — not real dollars. Markets settle from a price oracle, not
+        a committee vote. Copied trades can lose; only put on what you can afford to lose.
       </p>
     </section>
   );
@@ -788,13 +793,16 @@ function CapsEditor(props: {
   );
 }
 
-// One ruled cell of the record strip. NEVER truncate — the net-loss figure is the most
-// honesty-critical number on the page; it wraps to a 2×2 grid on mobile instead of clipping.
-function MicroStat({ label, value, divide }: { label: string; value: string; divide?: boolean }) {
+// One cell of the record trio under the sparkline — the honest 3-stat row.
+// The Net figure is the most honesty-critical number on the page: a loss reads in
+// muted white (never green, never alarm-red) — a fact, not a scare. A win reads in
+// vermilion. Numbers are the loud element; the label sits small and quiet above.
+function RecordStat({ label, value, accent }: { label: string; value: string; accent?: 'up' | 'down' }) {
+  const valueTone = accent === 'up' ? 'text-vermilion' : accent === 'down' ? 'text-white/80' : 'text-white';
   return (
-    <div className={`px-3 py-2.5 min-w-0 ${divide ? 'sm:border-l sm:border-white/[0.06]' : ''}`}>
-      <div className="font-mono text-[8.5px] uppercase tracking-[0.16em] text-white/40 mb-1 whitespace-normal">{label}</div>
-      <div className="font-mono text-[12px] sm:text-[13px] text-white tabular-nums whitespace-normal break-words">{value}</div>
+    <div className="px-4 py-3.5 min-w-0 text-center sm:text-left">
+      <div className="font-mono text-[9px] uppercase tracking-[0.18em] text-white/40 mb-1.5 whitespace-normal">{label}</div>
+      <div className={`font-display font-[800] text-[1.4rem] leading-none tabular-nums whitespace-normal break-words ${valueTone}`}>{value}</div>
     </div>
   );
 }
