@@ -361,7 +361,7 @@ export default function StrategiesPage() {
             desk's own anchor line; no re-teaching here. */}
         <div className="mt-7 pb-7 border-b border-white/15">
           <h1 className="font-display font-[800] text-[2.5rem] leading-[0.92] md:text-[4.25rem] xl:text-[5.25rem] text-white tracking-tight max-w-5xl">
-            Copy trading agents.<br /><span className="text-white/60">Keep custody.</span>
+            Copy a strategy.<br /><span className="text-white/60">Keep your money.</span>
           </h1>
         </div>
 

@@ -435,7 +435,7 @@ export default function LiveDesk() {
                       className="absolute right-2 top-2 font-mono text-[11px] text-white/40 hover:text-white px-1.5 transition-colors">×</button>
                     <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-vermilion mb-1">⊙ You&apos;re on the desk</p>
                     <p className="text-[12.5px] text-white/80 leading-snug pr-6">
-                      One signature did it. Your money is live under {deskName} — its next trade carries you.
+                      One signature did it. You&apos;re following {deskName} now — its next trade carries you.
                     </p>
                     {joinedFlash.digest && (
                       <a href={SUISCAN_TX(joinedFlash.digest)} target="_blank" rel="noreferrer"
@@ -474,7 +474,7 @@ export default function LiveDesk() {
                     <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-vermilion mb-1">Too low to catch the next trade</p>
                     <p className="text-[12px] text-white/70 leading-snug break-words">
                       Recent trades cost about {fmtDusdc(stats.typicalCost)} each and your balance is{' '}
-                      {fmtDusdc(ledger)} — the desk will skip you until you add more.
+                      {fmtDusdc(ledger)} — the strategy will skip you until you add more.
                     </p>
                     <div className="mt-2 flex items-center gap-2">
                       <button onClick={() => setManage('add')} className="rounded-md border border-vermilion/50 bg-vermilion/[0.06] px-2.5 py-0.5 font-mono text-[10px] text-vermilion hover:bg-vermilion/[0.12] transition-colors">Add money →</button>
@@ -611,7 +611,7 @@ export default function LiveDesk() {
                   )}
                   {stats.typicalCost > 0 && (
                     <p className="font-mono text-[10px] text-white/30 mt-2 break-words">
-                      Recent trades cost ~{fmtDusdc(stats.typicalCost)} each — put on at least that or the desk skips you.
+                      Recent trades cost ~{fmtDusdc(stats.typicalCost)} each — put on at least that or the strategy skips you.
                     </p>
                   )}
                 </div>
