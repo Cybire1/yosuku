@@ -357,29 +357,12 @@ export default function StrategiesPage() {
           </span>
         </div>
 
-        {/* nameplate + standfirst */}
-        <div className="grid md:grid-cols-[1fr_300px] gap-6 md:gap-10 items-end mt-7 pb-6 border-b border-white/15">
-          <div className="max-w-5xl">
-            <h1 className="font-display font-[800] text-[2.5rem] leading-[0.92] md:text-[4.25rem] xl:text-[4.75rem] text-white tracking-tight">
-              Copy trading agents.<br /><span className="text-white/60">Keep custody.</span>
-            </h1>
-            <p className="mt-5 max-w-xl text-sm leading-relaxed text-white/55">
-              They trade within hard caps and can never withdraw your funds.
-            </p>
-          </div>
-          <div className="md:border-l md:border-white/10 md:pl-7">
-            <div className="font-mono text-[12px] leading-[1.95] text-white/55">
-              {['Pick a trader', 'See its record', 'Set a Copy Balance', 'Copy it'].map((s, i) => (
-                <span key={s} className="mr-3 inline-block whitespace-nowrap"><span className="text-vermilion">{String(i + 1).padStart(2, '0')}</span> {s}</span>
-              ))}
-              <span className="text-white font-semibold">Stop anytime.</span>
-            </div>
-          </div>
-        </div>
-
-        {/* trust dateline — the dot-leader line that replaces the old pill */}
-        <div className="font-mono text-[10px] md:text-[11px] uppercase tracking-[0.22em] text-white/40 mt-4 mb-8">
-          It can&apos;t touch your funds · Limits enforced on Sui · Past results do not guarantee future
+        {/* nameplate — one headline idea, full-width for air. Custody is carried ONCE by the
+            desk's own anchor line; no re-teaching here. */}
+        <div className="mt-7 pb-7 border-b border-white/15">
+          <h1 className="font-display font-[800] text-[2.5rem] leading-[0.92] md:text-[4.25rem] xl:text-[5.25rem] text-white tracking-tight max-w-5xl">
+            Copy trading agents.<br /><span className="text-white/60">Keep custody.</span>
+          </h1>
         </div>
 
         {/* ── THE LIVE DESK — copy-trading on the NEW venue (vault624 on predict-testnet-6-24) ── */}
