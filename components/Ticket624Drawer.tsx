@@ -16,13 +16,15 @@ import { type Market624 } from '@/lib/sui/predict624Client';
 import {
   BAND_USD,
   EST_PROB,
-  EST_PROB_HIGH,
   MIN_MINT_MS,
+  MIN_STAKE,
   friendlyMintAbort,
   placeMint624,
+  qtyForStake,
   strike624,
   useAccount624,
   useMintQuote624,
+  winForQty,
   type Dir624,
 } from '@/lib/sui/ticket624';
 
@@ -66,7 +68,7 @@ export default function Ticket624Drawer({
   const { address, wrapperId, wrapperChecked, acctBalance } = acct;
 
   const [dir, setDir] = useState<Dir624 | null>(side);
-  const [payoutStr, setPayoutStr] = useState('');
+  const [stakeStr, setStakeStr] = useState(''); // what you BET (the amount you pay) — user-owned
   const [lev, setLev] = useState(1);
   const [fundStr, setFundStr] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
@@ -85,7 +87,7 @@ export default function Ticket624Drawer({
   useEffect(() => {
     if (!market) return;
     setDir(side);
-    setPayoutStr('');
+    setStakeStr('');
     setFundStr('');
     setLev(1);
     setPlaced(null);
@@ -106,43 +108,44 @@ export default function Ticket624Drawer({
     };
   }, [market, onClose]);
 
-  const qty = useMemo(() => {
-    const n = parseFloat(payoutStr.replace(',', '.'));
+  // STAKE = what the user bets (what they pay). The venue's parameter is a payout quantity,
+  // which we derive from the stake so "you bet X" is exactly what they typed.
+  const stake = useMemo(() => {
+    const n = parseFloat(stakeStr.replace(',', '.'));
     return Number.isFinite(n) && n > 0 ? n : 0;
-  }, [payoutStr]);
-  const addPayout = (n: number) => setPayoutStr((s) => String(Math.max(0, (parseFloat(s || '0') || 0) + n)));
+  }, [stakeStr]);
+  const addStake = (n: number) => setStakeStr((s) => String(Math.max(0, (parseFloat(s || '0') || 0) + n)));
   const addFund = (n: number) => setFundStr((s) => String(Math.max(0, (parseFloat(s || '0') || 0) + n)));
 
   const msLeft = market && now > 0 ? market.expiry - now : null;
   const closing = msLeft != null && msLeft < MIN_MINT_MS;
-  // even the high estimate misses min_net_premium (1 DUSDC) — hard stop
-  const belowMinHard = qty > 0 && (EST_PROB_HIGH * qty) / lev < 1;
+  const belowMinHard = stake > 0 && stake < MIN_STAKE;
   const strikeUsd = spot != null && dir ? strike624(spot, dir) : null;
 
+  // Quote a STABLE payout qty derived from the stake via EST_PROB (non-circular). We read the
+  // live probability from the quote, then derive the real payout qty + win from that.
+  const qtyForQuote = qtyForStake(stake, lev, EST_PROB);
   const { quote, quoteErr, quoting } = useMintQuote624({
     address,
     wrapperId,
     marketId: market?.id ?? null,
     dir,
-    qty,
+    qty: qtyForQuote,
     lev,
     spot,
     enabled: !closing && !belowMinHard && !placed,
   });
-  const quotedCost = quote ? quote.costMicro / DUSDC_MULTIPLIER : null;
-  const quotedWin = quote ? quote.winMicro / DUSDC_MULTIPLIER : null;
-  const needsDeposit = quotedCost != null && quotedCost > acctBalance;
 
-  // Numbers ALWAYS show. Client-side estimate the instant a side + amount are set (no wallet
-  // needed) → upgraded to the exact live venue quote once connected. Empty → a worked example.
-  const EX_PAYOUT = 5;
-  const estCost = qty > 0 ? (EST_PROB * qty) / lev : (EST_PROB * EX_PAYOUT) / lev;
-  const estWin = qty > 0 ? qty - EST_PROB * qty * (1 - 1 / lev) : EX_PAYOUT - EST_PROB * EX_PAYOUT * (1 - 1 / lev);
-  const showLive = quote != null && qty > 0;           // exact venue numbers
-  const showEstimate = !showLive && qty > 0;           // client estimate (pre-connect / quoting)
-  const showExample = qty === 0;                        // worked example, dimmed
-  const payNow = showLive ? quotedCost! : estCost;
-  const winAmt = showLive ? quotedWin! : estWin;
+  // Numbers ALWAYS show: worked example (empty) → estimate (typed) → live (connected + quoted).
+  const EX_STAKE = 5;
+  const showLive = quote != null && stake > 0;
+  const showEstimate = !showLive && stake > 0;
+  const showExample = stake === 0;
+  const probUsed = quote?.entryProb ?? EST_PROB;
+  const betAmt = showExample ? EX_STAKE : stake;            // what you pay
+  const payoutQty = qtyForStake(betAmt, lev, probUsed);     // costs betAmt at this probability
+  const winAmt = winForQty(payoutQty, lev, probUsed);       // what a win returns
+  const needsDeposit = stake > 0 && stake > acctBalance;
   const numTone = showExample ? 'text-white/45' : showEstimate ? 'text-white/75' : 'text-white';
 
   const blocker: string | null = closing
@@ -155,18 +158,18 @@ export default function Ticket624Drawer({
           ? 'Set up your account below'
           : !dir
             ? 'Call UP or DOWN'
-            : qty <= 0
-              ? 'Enter a payout amount'
+            : stake <= 0
+              ? 'Enter your bet'
               : belowMinHard
-                ? 'Below the 1 test-USDC minimum'
+                ? `Bet at least ${fmt2(MIN_STAKE)} test USDC`
                 : spot == null
                   ? 'Waiting for the oracle price…'
                   : needsDeposit
-                    ? `Add ${fmt2(quotedCost! - acctBalance)} test USDC below first`
+                    ? `Add ${fmt2(stake - acctBalance)} test USDC below first`
                     : quoteErr
                       ? 'Quote failed — see below'
-                      : quotedCost == null
-                        ? 'Quoting the live price…'
+                      : !quote
+                        ? 'Getting the live price…'
                         : null;
 
   const createAccount = useCallback(async () => {
@@ -215,12 +218,12 @@ export default function Ticket624Drawer({
         wrapperId,
         marketId: market.id,
         dir,
-        qty,
+        qty: payoutQty, // payout quantity derived so the entry cost ≈ the user's bet
         lev,
         spot,
         acctBalance,
       });
-      setPlaced({ digest: r.digest, dir, strikeUsd: r.strikeUsd, qty, lev, costDusdc: r.costDusdc, expiry: market.expiry });
+      setPlaced({ digest: r.digest, dir, strikeUsd: r.strikeUsd, qty: winAmt, lev, costDusdc: r.costDusdc, expiry: market.expiry });
       toast(`Bet placed — ${dir.toUpperCase()} ${dir === 'up' ? 'over' : 'under'} ${fmtUsd0(r.strikeUsd)}`, 'success');
       acct.refreshAcctBalance();
     } catch (e) {
@@ -228,7 +231,7 @@ export default function Ticket624Drawer({
     } finally {
       setBusy(null);
     }
-  }, [blocker, address, wrapperId, market, dir, spot, busy, quote, acct, qty, lev, acctBalance, toast]);
+  }, [blocker, address, wrapperId, market, dir, spot, busy, quote, acct, payoutQty, winAmt, lev, acctBalance, toast]);
 
   if (!market) return null;
 
@@ -280,8 +283,8 @@ export default function Ticket624Drawer({
                 {placed.dir === 'up' ? '▲ UP' : '▼ DOWN'} — BTC {placed.dir === 'up' ? 'over' : 'under'} {fmtUsd0(placed.strikeUsd)}
               </div>
               <div className="mt-3 space-y-1.5 font-mono text-[11px] text-white/70">
-                <div className="flex justify-between"><span className="text-white/40 uppercase tracking-[0.14em] text-[9.5px]">You paid</span><span className="tabular-nums">{fmt2(placed.costDusdc)} test USDC</span></div>
-                <div className="flex justify-between"><span className="text-white/40 uppercase tracking-[0.14em] text-[9.5px]">Payout if it lands</span><span className="tabular-nums text-white">{fmt2(placed.qty)} test USDC{placed.lev > 1 ? ' − financed floor' : ''}</span></div>
+                <div className="flex justify-between"><span className="text-white/40 uppercase tracking-[0.14em] text-[9.5px]">You bet</span><span className="tabular-nums">{fmt2(placed.costDusdc)} test USDC</span></div>
+                <div className="flex justify-between"><span className="text-white/40 uppercase tracking-[0.14em] text-[9.5px]">You win if it lands</span><span className="tabular-nums text-vermilion">{fmt2(placed.qty)} test USDC{placed.lev > 1 ? ' (before knockout)' : ''}</span></div>
                 <div className="flex justify-between"><span className="text-white/40 uppercase tracking-[0.14em] text-[9.5px]">Settles</span><span className="tabular-nums">{now > 0 ? fmtCountdown(placed.expiry - now) : '—'}</span></div>
               </div>
               <a href={SUISCAN_TX(placed.digest)} target="_blank" rel="noreferrer" className="mt-3 inline-block font-mono text-[10px] text-white/40 hover:text-white transition-colors" data-cursor="hover">
@@ -296,7 +299,7 @@ export default function Ticket624Drawer({
               View in Portfolio →
             </a>
             <button
-              onClick={() => { setPlaced(null); setPayoutStr(''); }}
+              onClick={() => { setPlaced(null); setStakeStr(''); }}
               className="mt-2.5 w-full rounded-full border border-white/15 text-white/70 hover:text-white hover:border-white/30 text-sm font-semibold px-6 py-3 transition-colors"
               data-cursor="hover"
             >
@@ -342,10 +345,10 @@ export default function Ticket624Drawer({
               })}
             </div>
 
-            {/* payout size — user-owned, chips ADD, never pre-decided */}
+            {/* the bet — user-owned, chips ADD, never pre-decided */}
             <div className="mb-5">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400">If you win, you get</span>
+                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400">How much do you want to bet?</span>
                 <span className="font-mono text-[10px] text-gray-600">in your account: {fmt2(acctBalance)}</span>
               </div>
               <div className="rounded-2xl border border-white/[0.1] bg-white/[0.02] px-4 pt-3.5 pb-3 transition-all focus-within:border-vermilion/60 focus-within:bg-vermilion/[0.03] focus-within:shadow-[0_0_0_3px_rgba(224,77,38,0.08)]">
@@ -353,20 +356,20 @@ export default function Ticket624Drawer({
                   <input
                     inputMode="decimal"
                     placeholder="0.00"
-                    value={payoutStr}
-                    onChange={(e) => setPayoutStr(e.target.value.replace(/[^0-9.]/g, ''))}
+                    value={stakeStr}
+                    onChange={(e) => setStakeStr(e.target.value.replace(/[^0-9.]/g, ''))}
                     className="min-w-0 flex-1 bg-transparent font-display text-[2.1rem] leading-none font-bold text-white tabular-nums outline-none placeholder:text-white/20 caret-vermilion"
-                    aria-label="Payout amount in test USDC"
+                    aria-label="Bet amount in test USDC"
                   />
                   <span className="shrink-0 font-mono text-[11px] font-semibold uppercase tracking-wider text-gray-400">test USDC</span>
                 </div>
                 <div className="mt-3 flex items-center justify-between border-t border-white/[0.06] pt-2.5">
                   <span className="font-mono text-[10px] text-gray-500">
-                    {qty > 0 ? <>costs <span className="text-white/70 tabular-nums">{fmt2(payNow)}</span> to enter</> : 'you pay the entry cost, not the payout'}
+                    {stake > 0 ? <>win <span className="text-vermilion tabular-nums font-semibold">{fmt2(winAmt)}</span> if you&apos;re right</> : 'you win more than you bet'}
                   </span>
                   <div className="flex gap-1.5">
                     {[1, 5, 20].map((n) => (
-                      <button key={n} onClick={() => addPayout(n)} className="rounded-lg border border-white/15 px-2.5 py-1 font-mono text-[10px] font-semibold text-gray-300 hover:border-vermilion/60 hover:bg-vermilion/[0.08] hover:text-white transition-colors active:scale-95" data-cursor="hover">
+                      <button key={n} onClick={() => addStake(n)} className="rounded-lg border border-white/15 px-2.5 py-1 font-mono text-[10px] font-semibold text-gray-300 hover:border-vermilion/60 hover:bg-vermilion/[0.08] hover:text-white transition-colors active:scale-95" data-cursor="hover">
                         +{n}
                       </button>
                     ))}
@@ -375,7 +378,7 @@ export default function Ticket624Drawer({
               </div>
               {belowMinHard && (
                 <p className="font-mono text-[10px] text-vermilion mt-2">
-                  Too small for the venue — raise the payout{lev > 1 ? ' or lower the leverage' : ''} (about 2 test USDC at 1×).
+                  Bet at least {fmt2(MIN_STAKE)} test USDC — that&apos;s the venue&apos;s minimum.
                 </p>
               )}
             </div>
@@ -412,19 +415,19 @@ export default function Ticket624Drawer({
                   {showLive ? '● live quote' : showEstimate ? (quoting ? 'quoting…' : 'estimate') : 'example'}
                 </span>
               </div>
-              <QuoteRow k="You pay now" v={`${fmt2(payNow)}${showLive ? ` · max ${fmt2(payNow * 1.1)}` : ''}`} tone={numTone} />
+              <QuoteRow k="You bet" v={fmt2(betAmt)} tone={numTone} />
               <QuoteRow k="If you win" v={`${fmt2(winAmt)} back`} strong tone={showExample ? numTone : 'text-vermilion'} />
-              <QuoteRow k="If you lose" v={`${fmt2(payNow)} — your stake, gone`} tone={numTone} />
-              {showLive && <QuoteRow k="Chance to win" v={`${(quote!.entryProb * 100).toFixed(0)}%`} tone={numTone} />}
+              <QuoteRow k="If you lose" v={`${fmt2(betAmt)} — your bet, gone`} tone={numTone} />
+              {showLive && <QuoteRow k="Chance to win" v={`${(probUsed * 100).toFixed(0)}%`} tone={numTone} />}
             </div>
             <p className="font-mono text-[9.5px] leading-relaxed text-white/35 mb-4">
               {showLive
-                ? 'Live venue quote, refreshed every 12s. You never pay more than the max — if the price moves while you sign, the bet safely rejects instead.'
+                ? 'Live venue price, refreshed every 12s. You never pay more than you bet — if the price moves while you sign, it safely rejects instead.'
                 : quoteErr
                   ? `Quote failed: ${quoteErr}`
                   : showEstimate
-                    ? (address ? 'Estimate — locking the exact live price…' : 'Estimate. Connect your wallet for the exact live price before you bet.')
-                    : `Example at a ${EX_PAYOUT} test USDC payout — type your own amount above.`}
+                    ? (address ? 'Estimate — getting the exact live price…' : 'Estimate. Connect your wallet for the exact live price before you bet.')
+                    : `Example at a ${EX_STAKE} test USDC bet — type your own amount above.`}
             </p>
 
             {/* account gates, inline */}
@@ -456,7 +459,7 @@ export default function Ticket624Drawer({
               <div className="border border-vermilion/25 bg-vermilion/[0.04] p-4 mb-4">
                 <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-vermilion mb-1.5">Top up to place this</div>
                 <p className="font-mono text-[10px] text-gray-500 mb-2.5">
-                  Account holds {fmt2(acctBalance)} · this bet costs {fmt2(quotedCost!)} · wallet holds {fmt2(acct.walletMicro / DUSDC_MULTIPLIER)} test USDC
+                  Account holds {fmt2(acctBalance)} · this bet is {fmt2(stake)} · wallet holds {fmt2(acct.walletMicro / DUSDC_MULTIPLIER)} test USDC
                 </p>
                 <div className="rounded-xl border border-white/[0.08] bg-black/30 px-3 py-2 focus-within:border-vermilion/50">
                   <div className="flex items-center justify-between">

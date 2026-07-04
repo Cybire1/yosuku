@@ -45,7 +45,9 @@ import {
 import {
   BAND_USD,
   EST_PROB,
-  EST_PROB_HIGH,
+  MIN_STAKE,
+  qtyForStake,
+  winForQty,
   MIN_MINT_MS,
   friendlyMintAbort,
   placeMint624,
@@ -256,33 +258,29 @@ export default function MarketsLivePage() {
     if (selected && selected.cadence !== tier) setSelectedId(null);
   }, [selected, tier]);
 
-  // ── ticket math: estimates while sizing; the REAL number comes from a dry-run quote ──
-  const qty = useMemo(() => { const n = parseFloat(payoutStr.replace(',', '.')); return Number.isFinite(n) && n > 0 ? n : 0; }, [payoutStr]);
-  const estCost = qty > 0 ? (EST_PROB * qty) / lev : 0;
-  const estFloor = qty > 0 ? EST_PROB * qty * (1 - 1 / lev) : 0; // financed floor: a win pays qty − floor
-  const estWin = qty > 0 ? qty - estFloor : 0;
-  const belowMinHard = qty > 0 && (EST_PROB_HIGH * qty) / lev < 1; // even the high estimate misses min_net_premium (1 DUSDC)
-  const belowMinSoft = qty > 0 && !belowMinHard && (EST_PROB * qty) / lev < 1;
+  // ── ticket math: STAKE-first (you bet X, we derive the payout) ──
+  const stake = useMemo(() => { const n = parseFloat(payoutStr.replace(',', '.')); return Number.isFinite(n) && n > 0 ? n : 0; }, [payoutStr]);
+  const belowMinHard = stake > 0 && stake < MIN_STAKE;
   const strikeUsd = spot != null && dir ? (dir === 'up' ? spot - BAND_USD : spot + BAND_USD) : null;
   const msLeft = selected && now > 0 ? selected.expiry - now : null;
 
-  // the REAL quote — the SHARED loop (dry-runs the exact mint, 12s refresh).
-  // Probability on 1m cadences is far above the 5m estimate (a $20 band ≈ 0.75–0.9),
-  // so estimates both mislead and abort EMintCostAboveMax — the quote is what
-  // predict will actually charge.
+  // Quote a STABLE payout qty derived from the stake via EST_PROB (non-circular); read the live
+  // probability from it, then derive the real payout qty + win from that.
+  const qtyForQuote = qtyForStake(stake, lev, EST_PROB);
   const { quote, quoteErr, quoting } = useMintQuote624({
     address,
     wrapperId,
     marketId: selected?.id ?? null,
     dir,
-    qty,
+    qty: qtyForQuote,
     lev,
     spot,
     enabled: !belowMinHard && !(msLeft != null && msLeft < MIN_MINT_MS),
   });
 
-  const quotedCost = quote ? quote.costMicro / DUSDC_MULTIPLIER : null;
-  const quotedWin = quote ? quote.winMicro / DUSDC_MULTIPLIER : null;
+  const probUsed = quote?.entryProb ?? EST_PROB;
+  const payoutQty = qtyForStake(stake, lev, probUsed);     // costs `stake` at this probability
+  const winAmt = winForQty(payoutQty, lev, probUsed);      // what a win returns
 
   const blocker: string | null = !address
     ? 'Connect a wallet'
@@ -294,18 +292,18 @@ export default function MarketsLivePage() {
           ? 'Market closing — pick the next one'
           : !dir
             ? 'Call UP or DOWN'
-            : qty <= 0
-              ? 'Enter a payout amount'
+            : stake <= 0
+              ? 'Enter your bet'
               : belowMinHard
-                ? 'Below the 1 DUSDC protocol minimum'
+                ? `Bet at least ${fmt2(MIN_STAKE)} test USDC`
                 : spot == null
                   ? 'Waiting for the oracle price…'
-                  : quotedCost != null && quotedCost > acctBalance
-                    ? `Deposit ${fmt2(quotedCost)} DUSDC first`
+                  : stake > acctBalance
+                    ? `Add ${fmt2(stake - acctBalance)} test USDC first`
                     : quoteErr
                       ? 'Quote failed — see below'
-                      : quotedCost == null
-                        ? 'Quoting the live price…'
+                      : !quote
+                        ? 'Getting the live price…'
                         : null;
 
   // ── actions ──
@@ -355,9 +353,9 @@ export default function MarketsLivePage() {
       // human reads a wallet popup), then ONE user-legible guard — fresh quote ×1.10,
       // never beyond your balance; maxProb stays at the protocol max.
       const r = await placeMint624({
-        submitTx, address, wrapperId, marketId: selected.id, dir, qty, lev, spot, acctBalance,
+        submitTx, address, wrapperId, marketId: selected.id, dir, qty: payoutQty, lev, spot, acctBalance,
       });
-      setPending((p) => [{ marketId: selected.id, dir, strikeUsd: r.strikeUsd, qty, lev, ts: Date.now() }, ...p]);
+      setPending((p) => [{ marketId: selected.id, dir, strikeUsd: r.strikeUsd, qty: winAmt, lev, ts: Date.now() }, ...p]);
       setPayoutStr('');
       toast(`Bet placed — ${dir.toUpperCase()} ${dir === 'up' ? `over ${fmtUsd0(r.strikeUsd)}` : `under ${fmtUsd0(r.strikeUsd)}`}`, 'success');
       refreshAcctBalance();
@@ -385,7 +383,7 @@ export default function MarketsLivePage() {
     } finally { setBusy(null); }
   }
 
-  const addPayout = (n: number) => setPayoutStr((s) => String(Math.max(0, (parseFloat(s || '0') || 0) + n)));
+  const addStake = (n: number) => setPayoutStr((s) => String(Math.max(0, (parseFloat(s || '0') || 0) + n)));
   const addFund = (n: number) => setFundStr((s) => String(Math.max(0, (parseFloat(s || '0') || 0) + n)));
 
   const openCount = positions.length + pending.length;
@@ -646,35 +644,34 @@ export default function MarketsLivePage() {
                   })}
                 </div>
 
-                {/* payout size — user-owned, chips ADD, never pre-decided */}
+                {/* the bet — user-owned, chips ADD, never pre-decided */}
                 <div className="max-w-xl">
                   <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400">Payout if you win</span>
-                    <span className="font-mono text-[10px] text-gray-600">account: {fmt2(acctBalance)} DUSDC</span>
+                    <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400">How much do you want to bet?</span>
+                    <span className="font-mono text-[10px] text-gray-600">in your account: {fmt2(acctBalance)}</span>
                   </div>
-                  <div className="rounded-xl border border-white/[0.08] bg-black/30 px-4 py-2.5 transition-colors focus-within:border-vermilion/50">
-                    <div className="flex items-center justify-between">
+                  <div className="rounded-xl border border-white/[0.1] bg-white/[0.02] px-4 py-2.5 transition-all focus-within:border-vermilion/60 focus-within:bg-vermilion/[0.03] focus-within:shadow-[0_0_0_3px_rgba(224,77,38,0.08)]">
+                    <div className="flex items-baseline gap-2">
                       <input
-                        inputMode="decimal" placeholder="0" value={payoutStr}
+                        inputMode="decimal" placeholder="0.00" value={payoutStr}
                         onChange={(e) => setPayoutStr(e.target.value.replace(/[^0-9.]/g, ''))}
-                        className="w-full bg-transparent font-display text-2xl font-bold text-white outline-none placeholder:text-gray-600"
+                        className="min-w-0 flex-1 bg-transparent font-display text-2xl font-bold text-white tabular-nums outline-none placeholder:text-white/20 caret-vermilion"
                       />
-                      <span className="font-mono text-xs font-semibold text-gray-300 shrink-0">DUSDC</span>
+                      <span className="font-mono text-[11px] font-semibold uppercase tracking-wider text-gray-400 shrink-0">test USDC</span>
                     </div>
                     <div className="mt-2 flex items-center justify-between">
-                      <span className="font-mono text-[10px] text-gray-500">Your stake is the entry cost below — smaller than the payout.</span>
+                      <span className="font-mono text-[10px] text-gray-500">
+                        {stake > 0 ? <>win <span className="text-vermilion tabular-nums font-semibold">{fmt2(winAmt)}</span> if you&apos;re right</> : 'you win more than you bet'}
+                      </span>
                       <div className="flex gap-1.5">
-                        {[1, 5].map((n) => (
-                          <button key={n} onClick={() => addPayout(n)} className="rounded-md border border-white/15 px-2 py-0.5 font-mono text-[10px] text-gray-300 hover:border-vermilion/50 hover:text-white transition-colors">+{n}</button>
+                        {[1, 5, 20].map((n) => (
+                          <button key={n} onClick={() => addStake(n)} className="rounded-lg border border-white/15 px-2.5 py-1 font-mono text-[10px] font-semibold text-gray-300 hover:border-vermilion/60 hover:bg-vermilion/[0.08] hover:text-white transition-colors active:scale-95">+{n}</button>
                         ))}
                       </div>
                     </div>
                   </div>
                   {belowMinHard && (
-                    <p className="font-mono text-[10px] text-vermilion mt-2">Protocol minimum: entry premium must be ≥ 1 DUSDC — raise the payout{lev > 1 ? ' or lower the leverage' : ''} (≈ 2 DUSDC payout at 1×).</p>
-                  )}
-                  {belowMinSoft && (
-                    <p className="font-mono text-[10px] text-white/40 mt-2">Close to the 1 DUSDC protocol minimum — the exact premium is set on-chain and may reject this size.</p>
+                    <p className="font-mono text-[10px] text-vermilion mt-2">Bet at least {fmt2(MIN_STAKE)} test USDC — that&apos;s the venue&apos;s minimum.</p>
                   )}
                 </div>
 
@@ -718,34 +715,31 @@ export default function MarketsLivePage() {
                 <TicketLine k="Leverage" v={`${lev}×`} />
               </div>
 
-              {/* the REAL quote when sized (dry-run of the exact mint); a WORKED EXAMPLE before
-                  that — the page plays without a wallet, and nothing is pre-decided. */}
+              {/* the numbers — ALWAYS shown: example (empty) → estimate (typed) → live quote */}
               {(() => {
-                const exCost = (EST_PROB * 5) / lev;
-                const exWin = 5 - EST_PROB * 5 * (1 - 1 / lev);
-                const ghost = qty === 0;
+                const EX_STAKE = 5;
+                const ghost = stake === 0;
                 const live = quote != null && !ghost;
-                const payLabel = live ? 'You pay now' : 'You pay now ≈';
-                const winLabel = live ? 'If you win' : 'If you win ≈';
+                const betShown = ghost ? EX_STAKE : stake;
                 return (
                   <>
                     <div className={`grid grid-cols-1 mt-4 border-y border-white/[0.08] divide-y divide-white/[0.06] ${ghost ? 'opacity-60' : ''}`}>
-                      <TicketStat label={payLabel} value={ghost ? `${fmt2(exCost)} DUSDC` : live ? `${fmt2(quotedCost!)} DUSDC (max ${fmt2(quotedCost! * 1.1)})` : quoting ? 'quoting…' : `${fmt2(estCost)} DUSDC`} ghost={ghost} />
-                      <TicketStat label={winLabel} value={ghost ? `${fmt2(exWin)} DUSDC` : live ? `${fmt2(quotedWin!)} DUSDC` : quoting ? 'quoting…' : `${fmt2(estWin)} DUSDC`} strong ghost={ghost} />
-                      <TicketStat label="If you lose" value={ghost ? `${fmt2(exCost)} gone` : live ? `${fmt2(quotedCost!)} gone` : '—'} ghost={ghost} />
-                      {live ? <TicketStat label="Entry probability" value={`${(quote!.entryProb * 100).toFixed(1)}%`} ghost={false} /> : null}
+                      <TicketStat label={ghost ? 'You bet · e.g.' : 'You bet'} value={`${fmt2(betShown)} test USDC`} ghost={ghost} />
+                      <TicketStat label={live ? 'If you win' : 'If you win ≈'} value={quoting && !ghost ? 'quoting…' : `${fmt2(winAmt)} back`} strong ghost={ghost} />
+                      <TicketStat label="If you lose" value={`${fmt2(betShown)} — your bet`} ghost={ghost} />
+                      {live ? <TicketStat label="Chance to win" value={`${(probUsed * 100).toFixed(0)}%`} ghost={false} /> : null}
                     </div>
                     <p className="font-mono text-[9.5px] leading-relaxed text-white/35 mt-3">
                       {ghost
-                        ? 'Example at a 5 DUSDC payout — type your own size above for a live quote.'
+                        ? `Example at a ${EX_STAKE} test USDC bet — type your own amount above.`
                         : live
-                          ? 'Live venue quote, refreshed every 12s. You never pay more than the max — if the price moves past it while you sign, the bet safely rejects instead.'
+                          ? 'Live venue price, refreshed every 12s. You never pay more than you bet — if the price moves while you sign, it safely rejects instead.'
                           : quoteErr
                             ? `Quote failed: ${quoteErr}`
                             : address
-                              ? 'Quoting the live price…'
-                              : 'Connect to see your live price.'}
-                      {lev > 1 ? ' A win pays quantity minus the financed floor; the position can knock out before expiry.' : ''}
+                              ? 'Estimate — getting the exact live price…'
+                              : 'Estimate. Connect your wallet for the exact live price.'}
+                      {lev > 1 ? ' Leverage can knock the position out before expiry.' : ''}
                     </p>
                   </>
                 );
@@ -786,7 +780,7 @@ export default function MarketsLivePage() {
                     <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-vermilion animate-pulse">confirming…</span>
                     <span className="font-display font-[700] text-[13px] text-white">{p.dir === 'up' ? '▲ UP' : '▼ DOWN'} {p.dir === 'up' ? 'over' : 'under'} {fmtUsd0(p.strikeUsd)}</span>
                     <span className="flex-1" />
-                    <span className="font-mono text-[11px] text-white/50 tabular-nums">{fmt2(p.qty)} DUSDC · {p.lev}×</span>
+                    <span className="font-mono text-[11px] text-white/50 tabular-nums">{fmt2(p.qty)} to win · {p.lev}×</span>
                   </div>
                 ))}
                 {positions.map((pos) => {
