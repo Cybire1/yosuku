@@ -15,6 +15,7 @@ import { DUSDC_MULTIPLIER } from '@/lib/sui/constants';
 import { type Market624 } from '@/lib/sui/predict624Client';
 import {
   BAND_USD,
+  EST_PROB,
   EST_PROB_HIGH,
   MIN_MINT_MS,
   friendlyMintAbort,
@@ -132,6 +133,18 @@ export default function Ticket624Drawer({
   const quotedWin = quote ? quote.winMicro / DUSDC_MULTIPLIER : null;
   const needsDeposit = quotedCost != null && quotedCost > acctBalance;
 
+  // Numbers ALWAYS show. Client-side estimate the instant a side + amount are set (no wallet
+  // needed) → upgraded to the exact live venue quote once connected. Empty → a worked example.
+  const EX_PAYOUT = 5;
+  const estCost = qty > 0 ? (EST_PROB * qty) / lev : (EST_PROB * EX_PAYOUT) / lev;
+  const estWin = qty > 0 ? qty - EST_PROB * qty * (1 - 1 / lev) : EX_PAYOUT - EST_PROB * EX_PAYOUT * (1 - 1 / lev);
+  const showLive = quote != null && qty > 0;           // exact venue numbers
+  const showEstimate = !showLive && qty > 0;           // client estimate (pre-connect / quoting)
+  const showExample = qty === 0;                        // worked example, dimmed
+  const payNow = showLive ? quotedCost! : estCost;
+  const winAmt = showLive ? quotedWin! : estWin;
+  const numTone = showExample ? 'text-white/45' : showEstimate ? 'text-white/75' : 'text-white';
+
   const blocker: string | null = closing
     ? 'Market closing — pick the next one'
     : !address
@@ -145,11 +158,11 @@ export default function Ticket624Drawer({
             : qty <= 0
               ? 'Enter a payout amount'
               : belowMinHard
-                ? 'Below the 1 DUSDC protocol minimum'
+                ? 'Below the 1 test-USDC minimum'
                 : spot == null
                   ? 'Waiting for the oracle price…'
                   : needsDeposit
-                    ? `Deposit ${fmt2(quotedCost! - acctBalance)} DUSDC below first`
+                    ? `Add ${fmt2(quotedCost! - acctBalance)} test USDC below first`
                     : quoteErr
                       ? 'Quote failed — see below'
                       : quotedCost == null
@@ -177,13 +190,13 @@ export default function Ticket624Drawer({
       return;
     }
     if (Math.floor(amt * DUSDC_MULTIPLIER) > acct.walletMicro) {
-      toast(`Wallet DUSDC too low — you hold ${fmt2(acct.walletMicro / DUSDC_MULTIPLIER)}`, 'error');
+      toast(`Wallet balance too low — you hold ${fmt2(acct.walletMicro / DUSDC_MULTIPLIER)} test USDC`, 'error');
       return;
     }
     setBusy('fund');
     try {
       await acct.deposit(BigInt(Math.floor(amt * DUSDC_MULTIPLIER)));
-      toast(`Deposited ${fmt2(amt)} DUSDC`, 'success');
+      toast(`Added ${fmt2(amt)} test USDC`, 'success');
       setFundStr('');
     } catch (e) {
       toast(`Deposit failed: ${String(e instanceof Error ? e.message : e).slice(0, 140)}`, 'error');
@@ -267,8 +280,8 @@ export default function Ticket624Drawer({
                 {placed.dir === 'up' ? '▲ UP' : '▼ DOWN'} — BTC {placed.dir === 'up' ? 'over' : 'under'} {fmtUsd0(placed.strikeUsd)}
               </div>
               <div className="mt-3 space-y-1.5 font-mono text-[11px] text-white/70">
-                <div className="flex justify-between"><span className="text-white/40 uppercase tracking-[0.14em] text-[9.5px]">You paid</span><span className="tabular-nums">{fmt2(placed.costDusdc)} DUSDC</span></div>
-                <div className="flex justify-between"><span className="text-white/40 uppercase tracking-[0.14em] text-[9.5px]">Payout if it lands</span><span className="tabular-nums text-white">{fmt2(placed.qty)} DUSDC{placed.lev > 1 ? ' − financed floor' : ''}</span></div>
+                <div className="flex justify-between"><span className="text-white/40 uppercase tracking-[0.14em] text-[9.5px]">You paid</span><span className="tabular-nums">{fmt2(placed.costDusdc)} test USDC</span></div>
+                <div className="flex justify-between"><span className="text-white/40 uppercase tracking-[0.14em] text-[9.5px]">Payout if it lands</span><span className="tabular-nums text-white">{fmt2(placed.qty)} test USDC{placed.lev > 1 ? ' − financed floor' : ''}</span></div>
                 <div className="flex justify-between"><span className="text-white/40 uppercase tracking-[0.14em] text-[9.5px]">Settles</span><span className="tabular-nums">{now > 0 ? fmtCountdown(placed.expiry - now) : '—'}</span></div>
               </div>
               <a href={SUISCAN_TX(placed.digest)} target="_blank" rel="noreferrer" className="mt-3 inline-block font-mono text-[10px] text-white/40 hover:text-white transition-colors" data-cursor="hover">
@@ -331,27 +344,29 @@ export default function Ticket624Drawer({
 
             {/* payout size — user-owned, chips ADD, never pre-decided */}
             <div className="mb-5">
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400">Payout if you win</span>
-                <span className="font-mono text-[10px] text-gray-600">account: {fmt2(acctBalance)} DUSDC</span>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400">If you win, you get</span>
+                <span className="font-mono text-[10px] text-gray-600">in your account: {fmt2(acctBalance)}</span>
               </div>
-              <div className="rounded-xl border border-white/[0.08] bg-black/30 px-4 py-2.5 transition-colors focus-within:border-vermilion/50">
-                <div className="flex items-center justify-between">
+              <div className="rounded-2xl border border-white/[0.1] bg-white/[0.02] px-4 pt-3.5 pb-3 transition-all focus-within:border-vermilion/60 focus-within:bg-vermilion/[0.03] focus-within:shadow-[0_0_0_3px_rgba(224,77,38,0.08)]">
+                <div className="flex items-baseline gap-2">
                   <input
                     inputMode="decimal"
-                    placeholder="0"
+                    placeholder="0.00"
                     value={payoutStr}
                     onChange={(e) => setPayoutStr(e.target.value.replace(/[^0-9.]/g, ''))}
-                    className="w-full bg-transparent font-display text-2xl font-bold text-white outline-none placeholder:text-gray-600"
-                    aria-label="Payout amount in DUSDC"
+                    className="min-w-0 flex-1 bg-transparent font-display text-[2.1rem] leading-none font-bold text-white tabular-nums outline-none placeholder:text-white/20 caret-vermilion"
+                    aria-label="Payout amount in test USDC"
                   />
-                  <span className="font-mono text-xs font-semibold text-gray-300 shrink-0">DUSDC</span>
+                  <span className="shrink-0 font-mono text-[11px] font-semibold uppercase tracking-wider text-gray-400">test USDC</span>
                 </div>
-                <div className="mt-2 flex items-center justify-between">
-                  <span className="font-mono text-[10px] text-gray-500">Your stake is the entry cost below.</span>
+                <div className="mt-3 flex items-center justify-between border-t border-white/[0.06] pt-2.5">
+                  <span className="font-mono text-[10px] text-gray-500">
+                    {qty > 0 ? <>costs <span className="text-white/70 tabular-nums">{fmt2(payNow)}</span> to enter</> : 'you pay the entry cost, not the payout'}
+                  </span>
                   <div className="flex gap-1.5">
-                    {[1, 5].map((n) => (
-                      <button key={n} onClick={() => addPayout(n)} className="rounded-md border border-white/15 px-2 py-0.5 font-mono text-[10px] text-gray-300 hover:border-vermilion/50 hover:text-white transition-colors" data-cursor="hover">
+                    {[1, 5, 20].map((n) => (
+                      <button key={n} onClick={() => addPayout(n)} className="rounded-lg border border-white/15 px-2.5 py-1 font-mono text-[10px] font-semibold text-gray-300 hover:border-vermilion/60 hover:bg-vermilion/[0.08] hover:text-white transition-colors active:scale-95" data-cursor="hover">
                         +{n}
                       </button>
                     ))}
@@ -360,7 +375,7 @@ export default function Ticket624Drawer({
               </div>
               {belowMinHard && (
                 <p className="font-mono text-[10px] text-vermilion mt-2">
-                  Protocol minimum: entry premium must be ≥ 1 DUSDC — raise the payout{lev > 1 ? ' or lower the leverage' : ''} (≈ 2 DUSDC payout at 1×).
+                  Too small for the venue — raise the payout{lev > 1 ? ' or lower the leverage' : ''} (about 2 test USDC at 1×).
                 </p>
               )}
             </div>
@@ -389,21 +404,27 @@ export default function Ticket624Drawer({
               )}
             </div>
 
-            {/* the REAL quote */}
-            <div className="border-y border-white/[0.08] divide-y divide-white/[0.06] mb-3">
-              <QuoteRow k="You pay now" v={quotedCost != null ? `${fmt2(quotedCost)} DUSDC (max ${fmt2(quotedCost * 1.1)})` : quoting ? 'quoting…' : '—'} />
-              <QuoteRow k="If you win" v={quotedWin != null ? `${fmt2(quotedWin)} DUSDC` : quoting ? 'quoting…' : '—'} strong />
-              <QuoteRow k="If you lose" v={quotedCost != null ? `${fmt2(quotedCost)} gone` : '—'} />
-              {quote && <QuoteRow k="Entry probability" v={`${(quote.entryProb * 100).toFixed(1)}%`} />}
+            {/* the numbers — ALWAYS shown: worked example → client estimate → exact live quote */}
+            <div className={`rounded-xl border ${showLive ? 'border-vermilion/25 bg-vermilion/[0.03]' : 'border-white/[0.08] bg-white/[0.015]'} divide-y divide-white/[0.06] mb-3 transition-colors`}>
+              <div className="flex items-center justify-between px-4 pt-2.5 pb-1">
+                <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-white/40">The numbers</span>
+                <span className={`font-mono text-[8.5px] uppercase tracking-[0.14em] rounded-full px-1.5 py-0.5 ${showLive ? 'text-vermilion border border-vermilion/40' : 'text-white/40 border border-white/15'}`}>
+                  {showLive ? '● live quote' : showEstimate ? (quoting ? 'quoting…' : 'estimate') : 'example'}
+                </span>
+              </div>
+              <QuoteRow k="You pay now" v={`${fmt2(payNow)}${showLive ? ` · max ${fmt2(payNow * 1.1)}` : ''}`} tone={numTone} />
+              <QuoteRow k="If you win" v={`${fmt2(winAmt)} back`} strong tone={showExample ? numTone : 'text-vermilion'} />
+              <QuoteRow k="If you lose" v={`${fmt2(payNow)} — your stake, gone`} tone={numTone} />
+              {showLive && <QuoteRow k="Chance to win" v={`${(quote!.entryProb * 100).toFixed(0)}%`} tone={numTone} />}
             </div>
             <p className="font-mono text-[9.5px] leading-relaxed text-white/35 mb-4">
-              {quote
-                ? 'Live venue quote, refreshed every 12s. You never pay more than the max — if the price moves past it while you sign, the bet safely rejects instead.'
+              {showLive
+                ? 'Live venue quote, refreshed every 12s. You never pay more than the max — if the price moves while you sign, the bet safely rejects instead.'
                 : quoteErr
                   ? `Quote failed: ${quoteErr}`
-                  : dir && qty > 0
-                    ? (address ? 'Quoting the live price…' : 'Connect to see your live price.')
-                    : 'Pick a side and size the payout for a live quote.'}
+                  : showEstimate
+                    ? (address ? 'Estimate — locking the exact live price…' : 'Estimate. Connect your wallet for the exact live price before you bet.')
+                    : `Example at a ${EX_PAYOUT} test USDC payout — type your own amount above.`}
             </p>
 
             {/* account gates, inline */}
@@ -435,7 +456,7 @@ export default function Ticket624Drawer({
               <div className="border border-vermilion/25 bg-vermilion/[0.04] p-4 mb-4">
                 <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-vermilion mb-1.5">Top up to place this</div>
                 <p className="font-mono text-[10px] text-gray-500 mb-2.5">
-                  Account holds {fmt2(acctBalance)} DUSDC · this bet costs {fmt2(quotedCost!)} · wallet holds {fmt2(acct.walletMicro / DUSDC_MULTIPLIER)}
+                  Account holds {fmt2(acctBalance)} · this bet costs {fmt2(quotedCost!)} · wallet holds {fmt2(acct.walletMicro / DUSDC_MULTIPLIER)} test USDC
                 </p>
                 <div className="rounded-xl border border-white/[0.08] bg-black/30 px-3 py-2 focus-within:border-vermilion/50">
                   <div className="flex items-center justify-between">
@@ -445,7 +466,7 @@ export default function Ticket624Drawer({
                       value={fundStr}
                       onChange={(e) => setFundStr(e.target.value.replace(/[^0-9.]/g, ''))}
                       className="w-full bg-transparent font-display text-xl font-bold text-white outline-none placeholder:text-gray-600"
-                      aria-label="Deposit amount in DUSDC"
+                      aria-label="Deposit amount in test USDC"
                     />
                     <div className="flex gap-1.5 shrink-0">
                       {[1, 5, 10].map((n) => (
@@ -486,7 +507,7 @@ export default function Ticket624Drawer({
             </button>
 
             <p className="font-mono text-[9.5px] leading-relaxed text-white/30 mt-3">
-              Testnet DUSDC. Oracle-settled — no committee, no vote. You can lose your full stake
+              Play-money test USDC. Settled by a price oracle — no committee, no vote. You can lose your full stake
               {lev > 1 ? '; leveraged positions can knock out before expiry' : ''}. Wallet-signed;
               payouts land in YOUR trading account only.
             </p>
@@ -497,11 +518,11 @@ export default function Ticket624Drawer({
   );
 }
 
-function QuoteRow({ k, v, strong }: { k: string; v: string; strong?: boolean }) {
+function QuoteRow({ k, v, strong, tone }: { k: string; v: string; strong?: boolean; tone?: string }) {
   return (
-    <div className="flex items-baseline justify-between px-0.5 py-2.5">
-      <span className="font-mono text-[9.5px] uppercase tracking-[0.18em] text-white/40">{k}</span>
-      <span className={`font-mono tabular-nums ${strong ? 'text-white text-[15px] font-semibold' : 'text-white/80 text-[13px]'}`}>{v}</span>
+    <div className="flex items-baseline justify-between gap-3 px-4 py-2.5">
+      <span className="font-mono text-[9.5px] uppercase tracking-[0.18em] text-white/40 shrink-0">{k}</span>
+      <span className={`font-mono tabular-nums text-right ${strong ? 'text-[17px] font-bold' : 'text-[13px]'} ${tone ?? 'text-white/80'}`}>{v}</span>
     </div>
   );
 }
