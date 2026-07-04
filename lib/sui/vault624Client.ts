@@ -131,6 +131,46 @@ export function buildSubscribe624(p: {
   return tx;
 }
 
+/** ONE-signature join: deposit + subscribe composed in a single PTB — one wallet
+ *  popup instead of two. Both moveCalls target the same shared vault, so they
+ *  compose cleanly. amountMicro = 0 skips the deposit (already-funded users who
+ *  only need to subscribe). Later top-ups / cap edits keep their own builders. */
+export function buildJoinDesk624(p: {
+  coinIds: string[];
+  amountMicro: bigint;
+  agent?: string;
+  maxMarginMicro: bigint;
+  maxLeverage1e9: bigint;
+}): Transaction {
+  const tx = new Transaction();
+  if (p.amountMicro > 0n) {
+    if (p.coinIds.length === 0) throw new Error('no test USDC coins to deposit');
+    const primary = tx.object(p.coinIds[0]);
+    if (p.coinIds.length > 1) tx.mergeCoins(primary, p.coinIds.slice(1).map((id) => tx.object(id)));
+    const [pay] = tx.splitCoins(primary, [tx.pure.u64(p.amountMicro)]);
+    tx.moveCall({
+      target: `${VAULT624.pkg}::vault624::deposit`,
+      arguments: [
+        tx.object(VAULT624.vaultId),
+        tx.object(VAULT624.wrapperId),
+        pay,
+        tx.object(VAULT624.accumulatorRoot),
+        tx.object(VAULT624.clock),
+      ],
+    });
+  }
+  tx.moveCall({
+    target: `${VAULT624.pkg}::vault624::subscribe`,
+    arguments: [
+      tx.object(VAULT624.vaultId),
+      tx.pure.address(p.agent ?? VAULT624.enclaveAgent),
+      tx.pure.u64(p.maxMarginMicro),
+      tx.pure.u64(p.maxLeverage1e9),
+    ],
+  });
+  return tx;
+}
+
 /** Deactivate the sender's subscription (terms kept for a later re-subscribe).
  *  Aborts ENoSub(0) if the sender never subscribed. */
 export function buildCancel624(): Transaction {

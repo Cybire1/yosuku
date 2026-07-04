@@ -19,13 +19,14 @@ const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(
 
 // topic each badge belongs to + the order topics appear
 const TOPIC: Record<string, string> = {
+  'LIVE DESK': 'Launch',
   'SUI TECH': 'How it works',
   LEVERAGE: 'How it works',
   'FULL PRODUCT': 'Product',
   ANCHOR: 'Manifesto',
   DRIP: 'Drip · drafts',
 };
-const TOPIC_ORDER = ['How it works', 'Product', 'Manifesto', 'Drip · drafts', 'Long-form', 'Assets'];
+const TOPIC_ORDER = ['Launch', 'How it works', 'Product', 'Manifesto', 'Drip · drafts', 'Long-form', 'Assets'];
 const topicOf = (badge: string) => TOPIC[badge] || 'More';
 const tweetCount = (s: Section) => s.units.filter((u) => u.kind === 'tweet').length || s.units.length;
 
