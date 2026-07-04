@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-04T01:23:35.767Z",
+  "generatedAt": "2026-07-04T11:42:04.081Z",
   "sections": [
     {
       "title": "Live Desk — launch (CURRENT)",
@@ -9,47 +9,47 @@
           "kind": "tweet",
           "n": "1",
           "total": "6",
-          "text": "Meet the Live Desk.\n\nAn agent that trades your money — and cannot take it.\n\nYou deposit. You set the limits. It trades 1-minute Bitcoin for you, around the clock, and every trade it makes is public. Live on Sui testnet today.",
+          "text": "Follow a strategy that trades Bitcoin for you — around the clock.\n\nThe twist that changes everything: it can never run off with your money.",
           "img": "01-hook.png"
         },
         {
           "kind": "tweet",
           "n": "2",
           "total": "6",
-          "text": "How it works, start to finish:\n\nyosuku.xyz → Strategies → the Live Desk.\nDeposit test funds. Set your limits — most per trade, most leverage. Tap Start copying.\n\nFrom that moment it trades for you. Every position lands in your portfolio. Pause or pull your money out whenever you like.",
+          "text": "Following it takes 30 seconds.\n\nAdd a few dollars. Set your limit — the most it can ever risk. Tap follow.\n\nNow it trades for you, minute after minute. Stop or cash out whenever.",
           "img": "02-primitive.png"
         },
         {
           "kind": "tweet",
           "n": "3",
           "total": "6",
-          "text": "Why you can trust it with the keys:\n\nIts signing hand lives in sealed hardware — an AWS Nitro enclave. No human holds its key. We can suggest trades. Only the hardware can sign.\n\nYesterday we told it to place a bet it disagreed with. It refused its own creators: \"decision mismatch.\" The only bet signed that minute was the one it believed in:\nA2Mr4AAAwsbdr9XHzRcpSCvKBNNDtQnc3qr8kdMR8NFF",
+          "text": "\"So I'm trusting a strategy with my money?\"\n\nNot the way you think. It can place your bets — but it can never reach your wallet to take anything out. Only you can.\n\nIt even refused an order it disagreed with, \"decision mismatch\":\nA2Mr4AAAwsbdr9XHzRcpSCvKBNNDtQnc3qr8kdMR8NFF",
           "img": "03-custody-bug.png"
         },
         {
           "kind": "tweet",
           "n": "4",
           "total": "6",
-          "text": "Its first day trading alone, it lost.\n\nIt placed a 1-minute bet, missed, closed its own books, and recorded the loss in public. Payout: zero.\n\nOpen: D4YHssYBVsnpPudKe7hTvhe1o4aHbS4XugaWfxadEaUu\nSettle: 7ARGhNh2ZyBzw7wW3Ge9eScdPsKS2W7uJfhsHZfB4X2P\n\nWins and losses go on the same record, the same way. Most funds show you a screenshot. This one can't hide.",
+          "text": "And it never hides.\n\nYesterday it lost a bet — and posted the loss in public for anyone to check. No cherry-picked wins.\n\nOpen: D4YHssYBVsnpPudKe7hTvhe1o4aHbS4XugaWfxadEaUu\nSettle: 7ARGhNh2ZyBzw7wW3Ge9eScdPsKS2W7uJfhsHZfB4X2P\nPayout: 0",
           "img": "04-source.png"
         },
         {
           "kind": "tweet",
           "n": "5",
           "total": "6",
-          "text": "The lines it physically cannot cross — go try, any wallet:\n\n▸ bet more than your limit → the chain throws it out\n▸ trade for someone who never said yes → thrown out\n▸ pull your money out → thrown out\n\nYour limits. Your withdrawals. Its trades. That's the whole deal.",
+          "text": "Still true, honestly:\n\ntestnet — the real thing comes later; you sign your own gas; a couple of features aren't on the new venue yet.\n\nIt's running right now.",
           "img": "05-took-zero.png"
         },
         {
           "kind": "tweet",
           "n": "6",
           "total": "6",
-          "text": "Rather trade yourself? Same venue: Bitcoin, up or down, settled every 1 / 5 / 60 minutes by the price feed — no judges, no \"pending.\" Exact cost shown before you tap. My own win, claimed the same afternoon as the agent's loss:\nEtZkFrXYP8Wg5c8zvf9E71Nju3zYkKCsnNZTSWazjSj1\n\nFine print: test money for now; code locks permanently before real money; no 15-min markets yet (we've asked).\n\nThe desk is trading as you read this. Watch it, copy it, or try to catch it lying.\n\nyosuku.xyz",
+          "text": "Follow the strategy. Keep your money.\n\nMy own win, the same afternoon as its loss:\nEtZkFrXYP8Wg5c8zvf9E71Nju3zYkKCsnNZTSWazjSj1\n\nyosuku.xyz",
           "img": "06-attestation.png"
         },
         {
           "kind": "reply",
-          "text": "For the skeptics — two answers before you ask:\n\"It's testnet money.\" Yes. That's why we're proving the custody property before mainnet, not after.\n\"The refusal is just an if-statement.\" Every guard is. The difference is where it runs: inside attested hardware, holding a key no one can extract, with measurements you can check."
+          "text": "For the skeptics — two answers before you ask:\n\"It's testnet money.\" Yes. That's why we're proving you keep custody before mainnet, not after.\n\"The refusal is just an if-statement.\" Every guard is. The difference is where it runs: inside sealed hardware, holding a key no one can pull out, with measurements you can check yourself."
         }
       ]
     },
