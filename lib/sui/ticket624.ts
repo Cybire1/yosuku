@@ -40,8 +40,25 @@ export const EST_PROB = 0.55;
 export const EST_PROB_HIGH = 0.62;
 /** Too close to expiry → the pricer window is over, don't offer the market. */
 export const MIN_MINT_MS = 90_000;
+/** The venue's minimum entry premium is ~1 test USDC; with fees, ~1.20 stake clears it. */
+export const MIN_STAKE = 1.2;
 
 export type Dir624 = 'up' | 'down';
+
+// ─── stake-first bet math ───
+// Consumers enter a STAKE (what they pay). The venue's on-chain parameter is a payout
+// QUANTITY whose entry cost ≈ prob·qty/lev, so the quantity that costs `stake` is
+// qty = stake·lev/prob. A win pays that quantity minus the financed leverage floor.
+
+/** Payout quantity whose entry cost equals `stake`, at this leverage + win probability. */
+export function qtyForStake(stake: number, lev: number, prob: number): number {
+  if (stake <= 0 || prob <= 0) return 0;
+  return (stake * lev) / prob;
+}
+/** What a winning payout `qty` returns: quantity minus the financed floor (= qty at 1×). */
+export function winForQty(qty: number, lev: number, prob: number): number {
+  return Math.max(0, qty * (1 - prob * (1 - 1 / lev)));
+}
 
 /** The line the ticket actually uses: spot − $20 for UP, spot + $20 for DOWN. */
 export function strike624(spot: number, dir: Dir624): number {
