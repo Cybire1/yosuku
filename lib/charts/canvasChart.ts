@@ -257,6 +257,8 @@ export function drawPriceLine(
   series: number[],
   opts: {
     target?: number | null;
+    /** Range band [lower, higher] — shaded zone + dashed edges. */
+    band?: [number, number] | null;
     color?: string;
     /** Verdict mode: line paints green above the target, red below — the
      *  chart answers "who's winning right now" at a glance. */
@@ -289,6 +291,7 @@ export function drawPriceLine(
   let lo = Math.min(...series);
   let hi = Math.max(...series);
   if (opts.target != null) { lo = Math.min(lo, opts.target); hi = Math.max(hi, opts.target); }
+  if (opts.band) { lo = Math.min(lo, opts.band[0]); hi = Math.max(hi, opts.band[1]); }
   const headroom = (hi - lo) * 0.12 || Math.max(1, hi * 0.0005);
   lo -= headroom; hi += headroom;
   const range = (hi - lo) || 1;
@@ -314,6 +317,22 @@ export function drawPriceLine(
         ctx.fillText('$' + Math.round(v).toLocaleString(), rightEdge + 6, y + 3);
       }
     }
+  }
+
+  // Range band — shaded zone between the two edges + dashed boundary lines
+  if (opts.band) {
+    const bandCol = opts.color ?? '#E04D26';
+    const yHi = yFor(opts.band[1]); // higher price = higher on canvas (smaller y)
+    const yLo = yFor(opts.band[0]);
+    ctx.fillStyle = hexA(bandCol, 0.1);
+    ctx.fillRect(padX, yHi, rightEdge - padX, yLo - yHi);
+    ctx.strokeStyle = hexA(bandCol, 0.5);
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    for (const y of [yHi, yLo]) {
+      ctx.beginPath(); ctx.moveTo(padX, y); ctx.lineTo(rightEdge, y); ctx.stroke();
+    }
+    ctx.setLineDash([]);
   }
 
   // smoothed path (quadratic midpoints) — shared by fill + stroke

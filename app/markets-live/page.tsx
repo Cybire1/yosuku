@@ -248,7 +248,8 @@ export default function MarketsLivePage() {
     [tierMarkets, tier, now],
   );
 
-  // drop a selected market once it is no longer mintable
+  // Drop a selected market only inside the short transaction-submission buffer.
+  // The market cards themselves keep counting down to the real expiry.
   const selected = useMemo(() => markets.find((m) => m.id === selectedId) ?? null, [markets, selectedId]);
   useEffect(() => {
     if (selected && now > 0 && selected.expiry - now < MIN_MINT_MS) setSelectedId(null);
@@ -594,7 +595,7 @@ export default function MarketsLivePage() {
                         {!closing && <Crosshairs />}
                         <div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.2em] mb-3">
                           <span className={on ? 'text-vermilion' : closing ? 'text-white/25' : 'text-white/40'}>{on ? '⊙ ' : ''}BTC · {CADENCE_WORD[m.cadence]}</span>
-                          <span className={closing ? 'text-vermilion/60' : 'text-white/30'}>{closing ? '● settling' : `${Math.round(m.maxLeverage1e9 / FLOAT_SCALING_624)}× max`}</span>
+                          <span className={closing ? 'text-vermilion/60' : 'text-white/30'}>{closing ? '● closing' : `${Math.round(m.maxLeverage1e9 / FLOAT_SCALING_624)}× max`}</span>
                         </div>
                         <div className={`font-display font-[800] text-2xl leading-none tabular-nums ${closing ? 'text-white/35' : 'text-white'}`}>
                           {left == null ? '—' : fmtCountdown(left)}
@@ -735,7 +736,7 @@ export default function MarketsLivePage() {
                         : live
                           ? 'Live venue price, refreshed every 12s. You never pay more than you bet — if the price moves while you sign, it safely rejects instead.'
                           : quoteErr
-                            ? `Quote failed: ${quoteErr}`
+                            ? `Quote failed: ${friendlyMintAbort(quoteErr)}`
                             : address
                               ? 'Estimate — getting the exact live price…'
                               : 'Estimate. Connect your wallet for the exact live price.'}

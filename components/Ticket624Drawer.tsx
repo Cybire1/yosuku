@@ -7,9 +7,10 @@
 // ×1.10 cost guard, friendly abort toasts. The tapped side arrives preselected —
 // the user's tap IS the choice. The amount is always theirs: empty + additive chips.
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ConnectButton } from '@mysten/dapp-kit';
 import { X } from 'lucide-react';
+import { drawPriceLine } from '@/lib/charts/canvasChart';
 import { useToast } from '@/components/Toast';
 import { DUSDC_MULTIPLIER } from '@/lib/sui/constants';
 import { type Market624 } from '@/lib/sui/predict624Client';
@@ -18,15 +19,23 @@ import {
   EST_PROB,
   MIN_MINT_MS,
   MIN_STAKE,
+  RANGE_CENTER_MAX,
+  RANGE_PRESETS,
   friendlyMintAbort,
   placeMint624,
+  placeRangeMint624,
   qtyForStake,
   strike624,
   useAccount624,
   useMintQuote624,
   winForQty,
   type Dir624,
+  type RangePresetKey,
 } from '@/lib/sui/ticket624';
+
+// A ±$30 band is trivial on a 1-minute market but a real call on 1h — BTC's
+// expected move scales with the window. Scale the preset widths per cadence.
+const CADENCE_BAND_FACTOR: Record<Market624['cadence'], number> = { '1m': 0.5, '5m': 1, '1h': 4 };
 
 const fmt2 = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtUsd0 = (n: number) => `$${Math.round(n).toLocaleString('en-US')}`;
@@ -41,10 +50,15 @@ function fmtCountdown(msLeft: number): string {
   return `${m}m ${String(s).padStart(2, '0')}s`;
 }
 
+type BetMode = 'dir' | 'range';
+
 interface Placed {
   digest: string;
-  dir: Dir624;
-  strikeUsd: number;
+  kind: BetMode;
+  dir?: Dir624;
+  strikeUsd?: number;
+  lowerUsd?: number;
+  higherUsd?: number;
   qty: number;
   lev: number;
   costDusdc: number;
@@ -54,20 +68,33 @@ interface Placed {
 export default function Ticket624Drawer({
   market,
   side,
+  sessionId,
   spot,
+  series,
+  mobileOpen = false,
   onClose,
 }: {
   market: Market624 | null;
   /** Preselected by the tap on the card — null when the card body was tapped. */
   side: Dir624 | null;
+  /** Changes only when the user explicitly opens a new ticket. */
+  sessionId: number | null;
   spot: number | null;
+  /** Live price series (same feed as the page charts) — drawn inside the ticket. */
+  series: number[];
+  /** Mobile slide-in open state. On desktop the rail is ALWAYS docked/visible. */
+  mobileOpen?: boolean;
   onClose: () => void;
 }) {
+  const chartRef = useRef<HTMLCanvasElement | null>(null);
   const { toast } = useToast();
   const acct = useAccount624();
   const { address, wrapperId, wrapperChecked, acctBalance } = acct;
 
   const [dir, setDir] = useState<Dir624 | null>(side);
+  const [mode, setMode] = useState<BetMode>('dir'); // Up/Down vs Range band
+  const [preset, setPreset] = useState<RangePresetKey>('medium'); // band width tier (scaled per cadence)
+  const [centerOffset, setCenterOffset] = useState<number>(0);     // band center vs spot
   const [stakeStr, setStakeStr] = useState(''); // what you BET (the amount you pay) — user-owned
   const [lev, setLev] = useState(1);
   const [fundStr, setFundStr] = useState('');
@@ -83,29 +110,29 @@ export default function Ticket624Drawer({
     return () => clearInterval(id);
   }, [market]);
 
-  // fresh ticket every open / re-tap — the tapped side IS the choice
+  // Fresh ticket on an explicit card tap. A same-session market rollover must
+  // preserve the side, amount, leverage, and mode the user already entered.
   useEffect(() => {
-    if (!market) return;
+    if (!market || sessionId == null) return;
     setDir(side);
+    setMode('dir');
+    setPreset('medium');
+    setCenterOffset(0);
     setStakeStr('');
     setFundStr('');
     setLev(1);
     setPlaced(null);
-  }, [market?.id, side]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [sessionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Esc + body scroll lock (the site's drawer idiom)
+  // Esc closes. No body scroll lock / backdrop — the ticket is a DOCKED panel so
+  // the charts and the rest of the page stay visible while you set up a bet.
   useEffect(() => {
     if (!market) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };
     document.addEventListener('keydown', onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.removeEventListener('keydown', onKey);
-      document.body.style.overflow = prev;
-    };
+    return () => document.removeEventListener('keydown', onKey);
   }, [market, onClose]);
 
   // STAKE = what the user bets (what they pay). The venue's parameter is a payout quantity,
@@ -122,6 +149,17 @@ export default function Ticket624Drawer({
   const belowMinHard = stake > 0 && stake < MIN_STAKE;
   const strikeUsd = spot != null && dir ? strike624(spot, dir) : null;
 
+  // range band — centered near spot, both edges finite. Wins only if BTC lands inside.
+  const isRange = mode === 'range';
+  const cadFactor = market ? CADENCE_BAND_FACTOR[market.cadence] : 1;
+  const half = Math.max(5, Math.round((RANGE_PRESETS.find((p) => p.key === preset)?.half ?? 30) * cadFactor));
+  const centerMax = Math.max(10, Math.round(RANGE_CENTER_MAX * cadFactor));
+  const clampedOffset = Math.max(-centerMax, Math.min(centerMax, centerOffset));
+  const bandCenter = spot != null ? Math.round(spot + clampedOffset) : null;
+  const lowerUsd = bandCenter != null ? bandCenter - half : null;
+  const higherUsd = bandCenter != null ? bandCenter + half : null;
+  const band = isRange && lowerUsd != null && higherUsd != null ? { lowerUsd, higherUsd } : null;
+
   // Quote a STABLE payout qty derived from the stake via EST_PROB (non-circular). We read the
   // live probability from the quote, then derive the real payout qty + win from that.
   const qtyForQuote = qtyForStake(stake, lev, EST_PROB);
@@ -129,7 +167,8 @@ export default function Ticket624Drawer({
     address,
     wrapperId,
     marketId: market?.id ?? null,
-    dir,
+    dir: isRange ? null : dir,
+    band,
     qty: qtyForQuote,
     lev,
     spot,
@@ -156,7 +195,7 @@ export default function Ticket624Drawer({
         ? 'Reading the chain…'
         : !wrapperId
           ? 'Set up your account below'
-          : !dir
+          : !isRange && !dir
             ? 'Call UP or DOWN'
             : stake <= 0
               ? 'Enter your bet'
@@ -209,53 +248,87 @@ export default function Ticket624Drawer({
   }, [acct, busy, fundStr, toast]);
 
   const place = useCallback(async () => {
-    if (blocker || !address || !wrapperId || !market || !dir || spot == null || busy || !quote) return;
+    if (blocker || !address || !wrapperId || !market || spot == null || busy || !quote) return;
     setBusy('mint');
     try {
-      const r = await placeMint624({
-        submitTx: acct.submitTx,
-        address,
-        wrapperId,
-        marketId: market.id,
-        dir,
-        qty: payoutQty, // payout quantity derived so the entry cost ≈ the user's bet
-        lev,
-        spot,
-        acctBalance,
-      });
-      setPlaced({ digest: r.digest, dir, strikeUsd: r.strikeUsd, qty: winAmt, lev, costDusdc: r.costDusdc, expiry: market.expiry });
-      toast(`Bet placed — ${dir.toUpperCase()} ${dir === 'up' ? 'over' : 'under'} ${fmtUsd0(r.strikeUsd)}`, 'success');
+      if (isRange && lowerUsd != null && higherUsd != null) {
+        const r = await placeRangeMint624({
+          submitTx: acct.submitTx,
+          address,
+          wrapperId,
+          marketId: market.id,
+          lowerUsd,
+          higherUsd,
+          qty: payoutQty, // payout quantity derived so the entry cost ≈ the user's bet
+          lev,
+          acctBalance,
+        });
+        setPlaced({ digest: r.digest, kind: 'range', lowerUsd: r.lowerUsd, higherUsd: r.higherUsd, qty: winAmt, lev, costDusdc: r.costDusdc, expiry: market.expiry });
+        toast(`Range bet placed — ${fmtUsd0(r.lowerUsd)}–${fmtUsd0(r.higherUsd)}`, 'success');
+      } else if (dir) {
+        const r = await placeMint624({
+          submitTx: acct.submitTx,
+          address,
+          wrapperId,
+          marketId: market.id,
+          dir,
+          qty: payoutQty,
+          lev,
+          spot,
+          acctBalance,
+        });
+        setPlaced({ digest: r.digest, kind: 'dir', dir, strikeUsd: r.strikeUsd, qty: winAmt, lev, costDusdc: r.costDusdc, expiry: market.expiry });
+        toast(`Bet placed — ${dir.toUpperCase()} ${dir === 'up' ? 'over' : 'under'} ${fmtUsd0(r.strikeUsd)}`, 'success');
+      }
       acct.refreshAcctBalance();
     } catch (e) {
       toast(`Bet failed: ${friendlyMintAbort(String(e instanceof Error ? e.message : e))}`, 'error');
     } finally {
       setBusy(null);
     }
-  }, [blocker, address, wrapperId, market, dir, spot, busy, quote, acct, payoutQty, winAmt, lev, acctBalance, toast]);
+  }, [blocker, address, wrapperId, market, dir, isRange, lowerUsd, higherUsd, spot, busy, quote, acct, payoutQty, winAmt, lev, acctBalance, toast]);
+
+  // draw the market's live price chart inside the ticket — strike line (verdict
+  // colors) for a side bet, shaded band for a range bet.
+  useEffect(() => {
+    const c = chartRef.current;
+    if (!c || series.length < 2) return;
+    if (isRange && lowerUsd != null && higherUsd != null) {
+      drawPriceLine(c, series, { band: [lowerUsd, higherUsd], color: '#E04D26', axisRight: 48, gridLines: true, padTop: 10, padBot: 14 });
+    } else if (strikeUsd != null) {
+      drawPriceLine(c, series, { target: strikeUsd, verdict: true, targetLabel: dir === 'up' ? 'UP line' : 'DOWN line', axisRight: 48, gridLines: true, padTop: 10, padBot: 14 });
+    } else {
+      drawPriceLine(c, series, { axisRight: 48, gridLines: true, padTop: 10, padBot: 14 });
+    }
+  }, [series, isRange, lowerUsd, higherUsd, strikeUsd, dir, placed]);
 
   if (!market) return null;
 
   return (
-    <div className="fixed inset-0 z-[9999] flex justify-end" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+    <>
+      {/* mobile-only backdrop when the ticket is slid in */}
+      {mobileOpen && (
+        <div className="lg:hidden fixed inset-0 z-[9998] bg-black/70 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
+      )}
       <div
-        className="relative h-full w-full max-w-[440px] overflow-y-auto border-l border-white/10 bg-[#0b0b0e] p-6 shadow-2xl animate-[slideIn_.22s_ease]"
+        className={`overflow-y-auto border-l border-white/10 bg-[#0b0b0e]
+          fixed top-0 right-0 z-[9999] h-full w-full max-w-[440px] p-6 shadow-2xl transition-transform duration-300 ${mobileOpen ? 'translate-x-0' : 'translate-x-full'}
+          lg:static lg:z-auto lg:h-auto lg:w-full lg:max-w-none lg:p-5 lg:overflow-visible lg:translate-x-0 lg:border lg:rounded-lg lg:shadow-none`}
         role="dialog"
-        aria-modal="true"
         aria-label="Bet ticket"
-        onClick={(e) => e.stopPropagation()}
       >
+        {/* close is mobile-only — the desktop rail is persistent */}
         <button
           onClick={onClose}
           aria-label="Close"
-          className="absolute right-4 top-4 rounded-full p-2 text-gray-600 hover:bg-white/[0.05] hover:text-white transition-colors"
+          className="lg:hidden absolute right-4 top-4 rounded-full p-2 text-gray-600 hover:bg-white/[0.05] hover:text-white transition-colors"
           data-cursor="hover"
         >
           <X className="h-4 w-4" />
         </button>
 
-        {/* head */}
-        <div className="flex items-center gap-3 mb-5 pr-8">
+        {/* head — hidden on desktop (the hero header shows the market beside this); shown in the mobile drawer */}
+        <div className="lg:hidden flex items-center gap-3 mb-5 pr-8">
           <span className="w-9 h-9 rounded-full border border-white/20 flex items-center justify-center font-mono text-sm text-white shrink-0">₿</span>
           <div className="min-w-0">
             <h2 className="font-display font-[800] text-xl text-white leading-tight">BTC · {CADENCE_WORD[market.cadence]}</h2>
@@ -275,12 +348,16 @@ export default function Ticket624Drawer({
         {placed ? (
           /* ── success state ── */
           <div>
-            <div className={`border p-5 mb-5 ${placed.dir === 'up' ? 'border-profit/40 bg-profit/[0.05]' : 'border-loss/40 bg-loss/[0.05]'}`}>
-              <div className={`font-mono text-[10px] font-bold uppercase tracking-[0.2em] mb-2 ${placed.dir === 'up' ? 'text-profit' : 'text-loss'}`}>
+            <div className={`border p-5 mb-5 ${placed.kind === 'range' ? 'border-vermilion/40 bg-vermilion/[0.05]' : placed.dir === 'up' ? 'border-profit/40 bg-profit/[0.05]' : 'border-loss/40 bg-loss/[0.05]'}`}>
+              <div className={`font-mono text-[10px] font-bold uppercase tracking-[0.2em] mb-2 ${placed.kind === 'range' ? 'text-vermilion' : placed.dir === 'up' ? 'text-profit' : 'text-loss'}`}>
                 ✓ Bet placed
               </div>
               <div className="font-display font-[800] text-2xl text-white leading-tight">
-                {placed.dir === 'up' ? '▲ UP' : '▼ DOWN'} — BTC {placed.dir === 'up' ? 'over' : 'under'} {fmtUsd0(placed.strikeUsd)}
+                {placed.kind === 'range' ? (
+                  <>◆ RANGE — BTC {fmtUsd0(placed.lowerUsd ?? 0)}–{fmtUsd0(placed.higherUsd ?? 0)}</>
+                ) : (
+                  <>{placed.dir === 'up' ? '▲ UP' : '▼ DOWN'} — BTC {placed.dir === 'up' ? 'over' : 'under'} {fmtUsd0(placed.strikeUsd ?? 0)}</>
+                )}
               </div>
               <div className="mt-3 space-y-1.5 font-mono text-[11px] text-white/70">
                 <div className="flex justify-between"><span className="text-white/40 uppercase tracking-[0.14em] text-[9.5px]">You bet</span><span className="tabular-nums">{fmt2(placed.costDusdc)} test USDC</span></div>
@@ -312,38 +389,136 @@ export default function Ticket624Drawer({
         ) : (
           /* ── the ticket ── */
           <div>
-            {/* direction — tapped side arrives preselected */}
-            <div className="grid grid-cols-2 gap-2.5 mb-5">
-              {(['up', 'down'] as const).map((d) => {
-                const on = dir === d;
-                const line = spot == null
-                  ? 'waiting for the oracle…'
-                  : d === 'up'
-                    ? `wins if BTC settles over ${fmtUsd0(spot - BAND_USD)}`
-                    : `wins if BTC settles under ${fmtUsd0(spot + BAND_USD)}`;
-                const palette = d === 'up'
-                  ? on
-                    ? 'border-profit bg-profit/[0.14] text-profit'
-                    : 'border-white/[0.1] text-white/45 hover:border-profit/50 hover:text-profit'
-                  : on
-                    ? 'border-loss bg-loss/[0.14] text-loss'
-                    : 'border-white/[0.1] text-white/45 hover:border-loss/50 hover:text-loss';
-                return (
-                  <button
-                    key={d}
-                    onClick={() => setDir(on ? null : d)}
-                    className={`text-left border rounded-lg p-4 transition-all duration-150 ${palette}`}
-                    aria-pressed={on}
-                    data-cursor="hover"
-                  >
-                    <div className="font-display font-[800] text-2xl leading-none tracking-tight">
-                      {d === 'up' ? '▲ UP' : '▼ DOWN'}
-                    </div>
-                    <div className={`font-mono text-[9.5px] leading-snug mt-2 ${on ? 'opacity-90' : 'opacity-60'}`}>{line}</div>
-                  </button>
-                );
-              })}
+            {/* live chart — mobile only; on desktop the big hero chart beside it does this job */}
+            {series.length > 1 && (
+              <div className="lg:hidden mb-4 rounded-xl border border-white/[0.08] bg-white/[0.015] overflow-hidden">
+                <canvas ref={chartRef} className="block w-full h-[128px]" />
+              </div>
+            )}
+
+            {/* mode — call a side (Up/Down) or a band (Range) */}
+            <div className="flex gap-1 mb-4 rounded-lg border border-white/[0.08] bg-white/[0.02] p-1">
+              {(['dir', 'range'] as const).map((m) => (
+                <button
+                  key={m}
+                  onClick={() => setMode(m)}
+                  className={`flex-1 py-2 rounded-md font-mono text-[10.5px] uppercase tracking-[0.16em] transition-colors ${mode === m ? 'bg-vermilion/[0.16] text-vermilion' : 'text-white/45 hover:text-white'}`}
+                  aria-pressed={mode === m}
+                  data-cursor="hover"
+                >
+                  {m === 'dir' ? 'Up / Down' : 'Range'}
+                </button>
+              ))}
             </div>
+
+            {mode === 'dir' ? (
+              /* direction — tapped side arrives preselected */
+              <div className="grid grid-cols-2 gap-2.5 mb-5">
+                {(['up', 'down'] as const).map((d) => {
+                  const on = dir === d;
+                  const line = spot == null
+                    ? 'waiting for the oracle…'
+                    : d === 'up'
+                      ? `wins if BTC settles over ${fmtUsd0(spot - BAND_USD)}`
+                      : `wins if BTC settles under ${fmtUsd0(spot + BAND_USD)}`;
+                  const palette = d === 'up'
+                    ? on
+                      ? 'border-profit bg-profit/[0.14] text-profit'
+                      : 'border-white/[0.1] text-white/45 hover:border-profit/50 hover:text-profit'
+                    : on
+                      ? 'border-loss bg-loss/[0.14] text-loss'
+                      : 'border-white/[0.1] text-white/45 hover:border-loss/50 hover:text-loss';
+                  return (
+                    <button
+                      key={d}
+                      onClick={() => setDir(on ? null : d)}
+                      className={`text-left border rounded-lg p-4 transition-all duration-150 ${palette}`}
+                      aria-pressed={on}
+                      data-cursor="hover"
+                    >
+                      <div className="font-display font-[800] text-2xl leading-none tracking-tight">
+                        {d === 'up' ? '▲ UP' : '▼ DOWN'}
+                      </div>
+                      <div className={`font-mono text-[9.5px] leading-snug mt-2 ${on ? 'opacity-90' : 'opacity-60'}`}>{line}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              /* range — pick a band near spot; tighter band pays more */
+              <div className="mb-5">
+                <div className="flex items-baseline justify-between mb-2.5">
+                  <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400">Where does BTC land?</span>
+                  <span className="font-mono text-[9.5px] text-white/45">wins if it settles in the band</span>
+                </div>
+
+                {/* price axis — the band, with the live spot marked */}
+                <div className="relative h-[92px] rounded-xl border border-white/[0.1] bg-white/[0.02] overflow-hidden mb-3">
+                  {spot != null && bandCenter != null && lowerUsd != null && higherUsd != null ? (
+                    (() => {
+                      const AXIS_HALF = Math.max(90, half + 35);
+                      const lo = spot - AXIS_HALF;
+                      const hi = spot + AXIS_HALF;
+                      const pct = (v: number) => Math.max(0, Math.min(100, ((v - lo) / (hi - lo)) * 100));
+                      const bl = pct(lowerUsd);
+                      const bh = pct(higherUsd);
+                      const sp = pct(spot);
+                      return (
+                        <>
+                          <div className="absolute inset-y-5 rounded-md bg-vermilion/[0.16] border-x-2 border-vermilion" style={{ left: `${bl}%`, right: `${100 - bh}%` }} />
+                          <div className="absolute inset-y-3 w-px bg-white/70" style={{ left: `${sp}%` }} />
+                          <div className="absolute top-1.5 font-mono text-[8px] text-white/70 -translate-x-1/2 whitespace-nowrap" style={{ left: `${Math.min(86, Math.max(14, sp))}%` }}>now · {fmtUsd0(spot)}</div>
+                          <div className="absolute bottom-1.5 font-mono text-[9px] font-semibold text-vermilion -translate-x-1/2 whitespace-nowrap" style={{ left: `${Math.max(10, bl)}%` }}>{fmtUsd0(lowerUsd)}</div>
+                          <div className="absolute bottom-1.5 font-mono text-[9px] font-semibold text-vermilion -translate-x-1/2 whitespace-nowrap" style={{ left: `${Math.min(90, bh)}%` }}>{fmtUsd0(higherUsd)}</div>
+                        </>
+                      );
+                    })()
+                  ) : (
+                    <div className="absolute inset-0 flex items-center justify-center font-mono text-[10px] text-white/30">waiting for the oracle price…</div>
+                  )}
+                </div>
+
+                {/* width presets — tighter band = higher payout */}
+                <div className="flex gap-1.5 mb-2.5">
+                  {RANGE_PRESETS.map((p) => {
+                    const on = preset === p.key;
+                    const eff = Math.max(5, Math.round(p.half * cadFactor));
+                    return (
+                      <button
+                        key={p.key}
+                        onClick={() => setPreset(p.key)}
+                        className={`flex-1 rounded-lg border py-2 transition-colors ${on ? 'border-vermilion text-vermilion bg-vermilion/[0.06]' : 'border-white/[0.1] text-white/50 hover:border-white/25 hover:text-white'}`}
+                        aria-pressed={on}
+                        data-cursor="hover"
+                      >
+                        <div className="font-display font-bold text-[13px] leading-none">{p.label}</div>
+                        <div className="font-mono text-[9px] opacity-70 mt-1">±${eff}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* aim the band — single-handle slider avoids the dual-handle confusion */}
+                <div className="rounded-lg border border-white/[0.08] bg-white/[0.015] px-3 py-2.5">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-white/40">Aim the band</span>
+                    <span className="font-mono text-[10px] text-white/70 tabular-nums">
+                      {clampedOffset === 0 ? 'centered on market' : `$${Math.abs(clampedOffset)} ${clampedOffset > 0 ? 'above' : 'below'}`}
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min={-centerMax}
+                    max={centerMax}
+                    step={5}
+                    value={clampedOffset}
+                    onChange={(e) => setCenterOffset(Number(e.target.value))}
+                    className="w-full accent-vermilion cursor-pointer"
+                    aria-label="Aim the band above or below the market price"
+                  />
+                </div>
+              </div>
+            )}
 
             {/* the bet — user-owned, chips ADD, never pre-decided */}
             <div className="mb-5">
@@ -424,7 +599,7 @@ export default function Ticket624Drawer({
               {showLive
                 ? 'Live venue price, refreshed every 12s. You never pay more than you bet — if the price moves while you sign, it safely rejects instead.'
                 : quoteErr
-                  ? `Quote failed: ${quoteErr}`
+                  ? `Quote failed: ${friendlyMintAbort(quoteErr)}`
                   : showEstimate
                     ? (address ? 'Estimate — getting the exact live price…' : 'Estimate. Connect your wallet for the exact live price before you bet.')
                     : `Example at a ${EX_STAKE} test USDC bet — type your own amount above.`}
@@ -497,16 +672,21 @@ export default function Ticket624Drawer({
               disabled={!!blocker || busy === 'mint'}
               className={`w-full py-3 text-sm font-semibold transition-all rounded ${
                 !blocker && busy !== 'mint'
-                  ? dir === 'down'
-                    ? 'bg-loss text-white hover:opacity-90 shadow-[0_6px_28px_-8px_var(--loss)]'
-                    : 'bg-profit text-black hover:opacity-90 shadow-[0_6px_28px_-8px_var(--profit)]'
+                  ? isRange
+                    ? 'bg-vermilion text-white hover:opacity-90 shadow-[0_6px_28px_-8px_var(--vermilion)]'
+                    : dir === 'down'
+                      ? 'bg-loss text-white hover:opacity-90 shadow-[0_6px_28px_-8px_var(--loss)]'
+                      : 'bg-profit text-black hover:opacity-90 shadow-[0_6px_28px_-8px_var(--profit)]'
                   : 'cursor-not-allowed bg-white/[0.06] text-gray-500'
               }`}
               data-cursor="hover"
             >
               {busy === 'mint'
                 ? 'Placing…'
-                : blocker ?? `Place ${dir === 'up' ? 'UP' : 'DOWN'} — ${strikeUsd != null ? `${dir === 'up' ? 'over' : 'under'} ${fmtUsd0(strikeUsd)}` : ''} →`}
+                : blocker ??
+                  (isRange
+                    ? `Place RANGE — ${lowerUsd != null && higherUsd != null ? `${fmtUsd0(lowerUsd)}–${fmtUsd0(higherUsd)}` : ''} →`
+                    : `Place ${dir === 'up' ? 'UP' : 'DOWN'} — ${strikeUsd != null ? `${dir === 'up' ? 'over' : 'under'} ${fmtUsd0(strikeUsd)}` : ''} →`)}
             </button>
 
             <p className="font-mono text-[9.5px] leading-relaxed text-white/30 mt-3">
@@ -517,7 +697,7 @@ export default function Ticket624Drawer({
           </div>
         )}
       </div>
-    </div>
+    </>
   );
 }
 
