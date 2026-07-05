@@ -600,7 +600,8 @@ body.urgent::before {
 
 /* ── Markets hero: mini market card (chart + the real TradePanel) — compact, capped height ── */
 .markets-hero .hero-grid.hero-grid-mini {
-  grid-template-columns: minmax(0, 1fr) 360px;
+  /* big chart + the contained bet ticket beside it */
+  grid-template-columns: minmax(0, 1fr) 400px;
   gap: 20px;
   align-items: stretch;
 }
@@ -609,7 +610,8 @@ body.urgent::before {
   height: auto;
   min-height: 460px;
 }
-.hero-mini-panel { width: 100%; min-width: 0; }
+/* the old hero make-the-call panel is superseded by the docked bet rail */
+.hero-mini-panel { display: none; }
 .hero-yesno { display: none; }
 .hero-mini-loading {
   display: flex; align-items: center; justify-content: center;
@@ -967,49 +969,38 @@ body.urgent::before {
 /* ───────── Section header — torii style ───────── */
 .markets-section { padding: 72px 0 0; }
 .section-head {
-  display: flex; align-items: stretch; justify-content: space-between;
-  gap: 24px; margin-bottom: 32px;
-  position: relative;
-}
-.section-torii {
-  position: relative;
-  width: 64px; flex-shrink: 0;
-  display: flex; flex-direction: column; align-items: center;
-  margin-right: 24px;
-}
-.section-torii::before {
-  content: '';
-  position: absolute; top: 12px; left: -8px; right: -8px;
-  height: 2px;
-  background: var(--white);
-}
-.section-torii::after {
-  content: '';
-  position: absolute; top: 22px; left: 0; right: 0;
-  height: 1px;
-  background: var(--gray-700);
-}
-.section-torii .pillar-l, .section-torii .pillar-r {
-  position: absolute; top: 8px; bottom: -16px;
-  width: 2px;
-  background: linear-gradient(180deg, var(--white) 0%, var(--gray-800) 100%);
-}
-.section-torii .pillar-l { left: 14px; }
-.section-torii .pillar-r { right: 14px; }
-.section-torii .num {
-  position: absolute; top: 32px; left: 0; right: 0;
-  text-align: center;
-  font-family: var(--font-mono); font-size: 11px;
-  color: var(--gray-500); letter-spacing: 0.1em;
-}
-.section-head-mid {
-  flex: 1;
-  display: flex; flex-direction: column; gap: 4px;
+  display: flex; align-items: flex-end; justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 32px;
   padding-bottom: 18px;
-  border-bottom: 1px solid rgba(255,255,255,0.06);
+  position: relative;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+/* vermilion accent tick anchoring the left end of the baseline rule */
+.section-head::after {
+  content: '';
+  position: absolute; left: 0; bottom: -1px;
+  width: 46px; height: 2px;
+  background: var(--vermilion);
+}
+
+.section-index {
+  flex-shrink: 0;
+  display: flex; flex-direction: column; align-items: center; gap: 7px;
+  padding-bottom: 2px; margin-right: 4px;
+}
+.section-torii-svg { display: block; }
+.section-index-num {
+  font-family: var(--font-mono); font-size: 10px;
+  color: var(--gray-500); letter-spacing: 0.24em;
+}
+
+.section-head-mid {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column; gap: 6px;
 }
 .section-head-row {
-  display: flex; align-items: baseline; gap: 18px;
+  display: flex; align-items: baseline; gap: 16px;
   flex-wrap: wrap;
 }
 .section-title-2 {
@@ -1017,10 +1008,12 @@ body.urgent::before {
   font-weight: 700;
   font-size: 30px;
   letter-spacing: -0.025em;
+  line-height: 1;
   color: var(--white);
 }
 .section-jp {
   font-family: var(--font-jp); font-size: 14px; color: var(--gray-600);
+  letter-spacing: 0.04em;
 }
 .section-meta {
   font-family: var(--font-mono);
@@ -1028,28 +1021,50 @@ body.urgent::before {
 }
 .section-desc {
   color: var(--gray-500); font-size: 13px;
-  margin-top: 4px; max-width: 50ch;
+  margin-top: 2px; max-width: 54ch; line-height: 1.5;
 }
 .section-head-right {
-  display: flex; align-items: flex-start; gap: 12px;
-  padding-bottom: 18px;
+  display: flex; align-items: center; gap: 12px;
+  flex-shrink: 0;
 }
 
+/* cadence chips — the venue's rolling windows, as discrete tokens */
+.cadence-chips { display: flex; align-items: center; gap: 7px; }
+.cadence-chip {
+  font-family: var(--font-mono); font-size: 10.5px;
+  letter-spacing: 0.03em; color: var(--gray-300);
+  padding: 4px 9px; border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.02);
+  white-space: nowrap;
+}
+.cadence-note {
+  font-family: var(--font-mono); font-size: 10px;
+  letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--gray-600); margin-left: 2px;
+}
+
+/* live pill — vermilion brand accent, with the pulsing dot the markup renders */
 .live-pill {
-  display: inline-flex; align-items: center; gap: 8px;
-  padding: 4px 10px;
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 4px 11px 4px 9px;
   border-radius: 999px;
-  border: 1px solid var(--loss);
-  background: rgba(251,113,133,0.08);
-  font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.14em;
-  color: var(--loss);
-  font-family: var(--font-body);
+  border: 1px solid rgba(224,77,38,0.5);
+  background: rgba(224,77,38,0.08);
+  font-family: var(--font-mono);
+  font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.16em;
+  color: var(--vermilion);
+  transform: translateY(-3px);
 }
 .live-pill .dot {
-  width: 5px; height: 5px; border-radius: 50%; background: var(--loss);
-  animation: pulseDot 1.4s var(--ease) infinite;
+  width: 5px; height: 5px; border-radius: 50%; background: var(--vermilion);
+  animation: pulseDot 1.6s var(--ease) infinite;
 }
-@keyframes pulseDot { 0%,100%{opacity:0.3} 50%{opacity:1} }
+@keyframes pulseDot {
+  0%   { opacity: 1;   box-shadow: 0 0 0 0 rgba(224,77,38,0.45); }
+  70%  { opacity: 0.55; box-shadow: 0 0 0 6px rgba(224,77,38,0); }
+  100% { opacity: 1;   box-shadow: 0 0 0 0 rgba(224,77,38,0); }
+}
 
 /* ───────── Market grid ───────── */
 .markets-grid {
@@ -1058,8 +1073,41 @@ body.urgent::before {
   gap: 16px;
 }
 .markets-grid-live {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
+
+/* "between rounds" placeholder — keeps a cadence lane present when it has no
+   currently-mintable market, so the three categories never blink out. */
+.market-card-pending {
+  border: 1px dashed rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.008);
+  cursor: default;
+  display: flex; flex-direction: column;
+}
+.market-card-pending .mc-countdown { color: var(--gray-500); }
+.market-card-pending .mc-countdown .clock-dot { background: var(--gray-500); }
+.mc-pending {
+  flex: 1; min-height: 200px;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center; text-align: center;
+  gap: 14px; padding: 32px 22px;
+}
+.mc-pending-dot {
+  width: 9px; height: 9px; border-radius: 50%;
+  background: var(--vermilion);
+  box-shadow: 0 0 0 0 rgba(224,77,38,0.5);
+  animation: pendingPulse 1.8s var(--ease) infinite;
+}
+@keyframes pendingPulse {
+  0%   { opacity: 1;   box-shadow: 0 0 0 0 rgba(224,77,38,0.45); }
+  70%  { opacity: 0.5; box-shadow: 0 0 0 9px rgba(224,77,38,0); }
+  100% { opacity: 1;   box-shadow: 0 0 0 0 rgba(224,77,38,0); }
+}
+.mc-pending-copy {
+  font-family: var(--font-body); font-size: 13px; line-height: 1.6;
+  color: var(--gray-500); max-width: 30ch; margin: 0;
+}
+.mc-pending-copy strong { color: var(--gray-200); font-weight: 600; }
 
 /* ───────── Market card ───────── */
 .market-card {
@@ -1220,7 +1268,8 @@ body.urgent::before {
 
 .mc-foot {
   display: flex; gap: 8px;
-  margin-top: 14px; padding-top: 12px;
+  margin: 14px 12px 12px;
+  padding-top: 12px;
   border-top: 1px solid rgba(255,255,255,0.05);
 }
 /* Outlined green/red pills — matches the markets hero `.hero-bet-btn`. */
@@ -1303,7 +1352,7 @@ body.view-list .mc-spark { width: 140px; height: 36px; flex-shrink: 0; }
 body.view-list .mc-weight { width: 220px; flex-shrink: 0; }
 body.view-list .mc-stats { display: none; }
 body.view-list .mc-foot {
-  width: 220px; margin-top: 0;
+  width: 220px; margin: 0; padding: 12px;
   border-top: 0; border-left: 1px solid rgba(255,255,255,0.04);
 }
 body.view-list .mc-badge { position: static; align-self: center; margin-left: 16px; }
@@ -3783,8 +3832,8 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
   .lb-hero-eyebrow .dash { display: none; }
   /* section headers: shrink the torii + let the right-side meta wrap below (was overflowing) */
   .section-head { flex-wrap: wrap; gap: 10px 14px; margin-bottom: 24px; }
-  .section-torii { width: 40px; margin-right: 14px; }
-  .section-head-mid { padding-bottom: 12px; }
+  .section-index { margin-right: 8px; gap: 5px; }
+  .section-torii-svg { width: 26px; height: auto; }
   /* secondary meta ("live · re-ranks every cut", market counts) — declutter on phones */
   .section-head-right { display: none; }
   .section-title-2 { font-size: 22px; }

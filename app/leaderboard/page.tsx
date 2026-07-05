@@ -1,14 +1,13 @@
 'use client';
 
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useCurrentAccount } from '@mysten/dapp-kit';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import Marquee from '@/components/Marquee';
 import GrainOverlay from '@/components/GrainOverlay';
 import SectionHeader from '@/components/SectionHeader';
-import { drawCandles, priceHistoryToCandles } from '@/lib/charts/canvasChart';
-import { useLeaderboard, usePriceHistory, useOracles } from '@/lib/sui/hooks';
+import { useLeaderboard, useOracles } from '@/lib/sui/hooks';
 import { formatAddress } from '@/lib/leaderboardStats';
 
 // Deterministic decorative kanji from an address — a light, semi-transparent
@@ -34,16 +33,22 @@ function fmtAddr(addr: string): string {
 export default function LeaderboardPage() {
   const account = useCurrentAccount();
   const address = account?.address ?? null;
-  const [period, setPeriod] = useState('week');
-  const [asset, setAsset] = useState('all');
-  const yokoChartRef = useRef<HTMLCanvasElement>(null);
 
   const { data: leaderboard, loading: lbLoading } = useLeaderboard();
   const { active: liveOracles } = useOracles();
 
   const rankings = leaderboard?.rankings ?? [];
-  const meta = leaderboard?.meta ?? { totalWallets: 0, totalVolume: 0 };
-  const records = leaderboard?.records ?? [];
+  const meta = leaderboard?.meta ?? {
+    period: '24h' as const,
+    windowStartMs: 0,
+    windowEndMs: 0,
+    rankedTraders: 0,
+    totalWallets: 0,
+    closedCalls: 0,
+    totalVolume: 0,
+    complete: false,
+    unmatchedRedemptions: 0,
+  };
 
   // Top 3 for podium
   const podiumData = useMemo(() => {
@@ -56,75 +61,43 @@ export default function LeaderboardPage() {
     ];
   }, [rankings]);
 
-  // Banzuke rows: pair rankings into east/west
+  // The podium already owns ranks 1-3. Continue the ledger from rank 4 without
+  // repeating those accounts in another oversized section.
   const banzukeData = useMemo(() => {
     const rows = [];
-    for (let i = 0; i < Math.min(rankings.length, 50); i += 2) {
-      const rank = Math.floor(i / 2) + 1;
-      const east = rankings[i];
-      const west = rankings[i + 1];
+    const field = rankings.slice(3, 50);
+    for (let i = 0; i < field.length; i += 2) {
+      const eastRank = i + 4;
+      const westRank = i + 5;
+      const east = field[i];
+      const west = field[i + 1];
       let tier = 1;
-      if (rank <= 3) tier = rank;
-      else if (rank <= 7) tier = 3;
-      else if (rank <= 12) tier = 4;
+      if (eastRank <= 7) tier = 3;
+      else if (eastRank <= 12) tier = 4;
       else tier = 5;
       rows.push({
-        rank,
-        jp: String(rank),
+        rank: eastRank,
+        jp: west ? `${eastRank}-${westRank}` : String(eastRank),
         tier,
         east: east ? {
           glyph: glyphFromAddress(east.owner),
           name: fmtAddr(east.owner),
           handle: '',
           pnl: east.pnl,
-          meta: `${east.tradeCount} rounds · ${east.winRate}%`,
+          meta: `#${eastRank} · ${east.tradeCount} calls · ${east.winRate}% wins`,
         } : null,
         west: west ? {
           glyph: glyphFromAddress(west.owner),
           name: fmtAddr(west.owner),
           handle: '',
           pnl: west.pnl,
-          meta: `${west.tradeCount} rounds · ${west.winRate}%`,
+          meta: `#${westRank} · ${west.tradeCount} calls · ${west.winRate}% wins`,
         } : null,
       });
     }
     return rows;
   }, [rankings]);
 
-
-  // Yokozuna chart — use real price history if top trader exists
-  const topTrader = rankings[0];
-  // We don't have the trader's most-traded oracle, so we use the first active oracle's price history
-  const { history: yokoHistory } = usePriceHistory(null, 60);
-
-  useEffect(() => {
-    if (!yokoChartRef.current) return;
-    if (yokoHistory.length > 5) {
-      const candles = priceHistoryToCandles(yokoHistory, 60);
-      if (candles.length > 0) {
-        const mid = candles[Math.floor(candles.length / 2)];
-        drawCandles(yokoChartRef.current, candles, {
-          strike: mid.close,
-          maxCandleW: 6,
-          gridLines: true,
-          marker: true,
-          padX: 32,
-          padTop: 22,
-          padBot: 22,
-        });
-        return;
-      }
-    }
-    // Fallback: empty chart with placeholder
-    const { ctx, w, h } = { ctx: yokoChartRef.current.getContext('2d'), w: yokoChartRef.current.clientWidth, h: yokoChartRef.current.clientHeight };
-    if (ctx) {
-      ctx.clearRect(0, 0, w, h);
-      ctx.fillStyle = 'rgba(255,255,255,0.1)';
-      ctx.font = '10px monospace';
-      ctx.textAlign = 'center';
-      ctx.fillText('Chart data loading...', w / 2, h / 2);
-    }
-  }, [yokoHistory]);
 
   // Next seal countdown — derived from nearest oracle expiry
   const [sealTime, setSealTime] = useState(0);
@@ -153,17 +126,6 @@ export default function LeaderboardPage() {
     return { rank: idx + 1, trader: rankings[idx] };
   }, [address, rankings]);
 
-  const PERIODS = [
-    { key: 'day', label: 'Today' },
-    { key: 'week', label: 'This week' },
-    { key: 'month', label: 'This month' },
-    { key: 'all', label: 'All time' },
-  ];
-  const ASSETS = [
-    { key: 'all', label: 'All', glyph: '' },
-    { key: 'btc', label: 'BTC', glyph: '\u20BF' },
-  ];
-
   return (
     <div className="min-h-screen relative">
       <Marquee />
@@ -178,7 +140,7 @@ export default function LeaderboardPage() {
               <div className="lb-hero-eyebrow">
                 <span className="dash" />
                 <span>The ranking sheet</span>
-                <span className="vermilion">— sealed nightly · 16:00 UTC</span>
+                <span className="vermilion">— live from Predict activity</span>
               </div>
               <h1 className="lb-hero-title">
                 The<br />
@@ -186,58 +148,41 @@ export default function LeaderboardPage() {
                 of names.
               </h1>
               <p className="lb-hero-sub">
-                {meta.totalWallets > 0
-                  ? `${meta.totalWallets.toLocaleString()} wallets called the bell this season. These are the ones the bell answered.`
+                {meta.rankedTraders > 0
+                  ? `${meta.rankedTraders.toLocaleString()} traders closed positions in the last 24 hours.`
                   : 'Loading rankings from on-chain trade data...'}
-                {' '}Ranks calculated on net realized P&L, sealed at every daily cut.
+                {' '}Ranks use realized P&amp;L: redemption payout minus FIFO-matched entry cost.
               </p>
             </div>
             <div className="lb-meta-col">
               <div>
-                <div>Wallets ranked</div>
-                <div className="big">{meta.totalWallets > 0 ? meta.totalWallets.toLocaleString() : '\u2014'}</div>
+                <div>Ranked traders · 24H</div>
+                <div className="big">{meta.rankedTraders > 0 ? meta.rankedTraders.toLocaleString() : '\u2014'}</div>
               </div>
               <div>
-                <div>Volume settled · season</div>
+                <div>Realized entry volume</div>
                 <div className="big">{meta.totalVolume > 0 ? `$${meta.totalVolume.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '\u2014'}</div>
               </div>
               <div>
-                <div>Next reseal in</div>
+                <div>Next market closes in</div>
                 <div className="big">{sealStr}</div>
               </div>
               <div className="stamp">
-                SEASON №04
-                <div style={{ marginTop: 4, fontSize: '8px' }}>2026 Q2</div>
+                24H BOARD
+                <div style={{ marginTop: 4, fontSize: '8px' }}>ROLLING</div>
               </div>
             </div>
           </div>
 
-          {/* Filter bar */}
+          {/* One honest scope: BTC positions closed in the rolling 24-hour window. */}
           <div className="lb-filter-bar">
-            <div className="pill-tabs">
-              {PERIODS.map(p => (
-                <button
-                  key={p.key}
-                  className={`pill-tab ${period === p.key ? 'active' : ''}`}
-                  onClick={() => setPeriod(p.key)}
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
             <div className="asset-tabs">
-              {ASSETS.map(a => (
-                <button
-                  key={a.key}
-                  className={`asset-tab ${asset === a.key ? 'active' : ''}`}
-                  onClick={() => setAsset(a.key)}
-                >
-                  {a.glyph && <span className="glyph">{a.glyph}</span>}
-                  {a.label}
-                </button>
-              ))}
+              <span className="asset-tab active"><span className="glyph">₿</span> BTC</span>
+              <span className="asset-tab">Last 24 hours</span>
             </div>
-            <div className="lb-filter-meta">{meta.totalWallets > 0 ? `${meta.totalWallets.toLocaleString()} wallets` : '\u2014'}</div>
+            <div className="lb-filter-meta">
+              {meta.complete ? `${meta.closedCalls.toLocaleString()} realized calls · complete window` : 'indexing recent closes'}
+            </div>
           </div>
         </div>
       </section>
@@ -258,8 +203,8 @@ export default function LeaderboardPage() {
               <SectionHeader
                 number="01"
                 title="The podium"
-                desc="Top three traders by net realized P&L this season."
-                meta="live · re-ranks every cut"
+                desc="Top three traders by realized P&L over the last 24 hours."
+                meta="live · refreshes automatically"
               />
 
               <div className="podium">
@@ -269,11 +214,10 @@ export default function LeaderboardPage() {
                     {p.r === 1 && <span className="sash">GRAND CHAMPION</span>}
                     <div className="podium-eyebrow">
                       <span className="ord">{p.r === 1 ? '1ST' : p.r === 2 ? '2ND' : '3RD'}</span>
-                      <span>{p.r === 1 ? `GRAND CHAMPION · ${p.bestStreak} CUTS` : p.r === 2 ? 'CHALLENGER' : 'CONTENDER'}</span>
+                      <span>{p.r === 1 ? `GRAND CHAMPION · ${p.bestStreak} WIN STREAK` : p.r === 2 ? 'CHALLENGER' : 'CONTENDER'}</span>
                     </div>
                     <div className="podium-portrait">{glyphFromAddress(p.owner)}</div>
                     <div className="podium-name">{fmtAddr(p.owner)}</div>
-                    <div className="podium-handle">{fmtAddr(p.owner)}</div>
                     <div className="podium-pnl">
                       <span className="sign">{p.pnl >= 0 ? '+' : ''}</span>{fmtPnl(p.pnl)}<span className="cur">DUSDC</span>
                     </div>
@@ -283,70 +227,26 @@ export default function LeaderboardPage() {
             </section>
           )}
 
-          {/* Section 2: Yokozuna */}
-          {topTrader && (
-            <section>
-              <SectionHeader
-                number="02"
-                title="Grand champion"
-                desc={`Top trader with ${topTrader.bestStreak} consecutive winning cuts.`}
-                meta="current season"
-              />
-
-              <div className="yokozuna">
-                <div className="yoko-left">
-                  <div className="yoko-eyebrow"><span className="dot" />Reigning · {topTrader.bestStreak} cuts best streak</div>
-                  <h3 className="yoko-name">{fmtAddr(topTrader.owner)}</h3>
-                  <div className="yoko-meta">BEST STREAK <span className="v">{topTrader.bestStreak}</span> · WIN RATE <span className="v">{topTrader.winRate}%</span></div>
-                  <p className="yoko-quote">
-                    &ldquo;The bell decides.&rdquo;
-                  </p>
-                  <div className="yoko-stats">
-                    <div className="item"><div className="lbl">Net P&L</div><div className="val up">{topTrader.pnl >= 0 ? '+' : ''}{fmtPnl(topTrader.pnl)}</div></div>
-                    <div className="item"><div className="lbl">Win rate</div><div className="val">{topTrader.winRate}%</div></div>
-                    <div className="item"><div className="lbl">Streak</div><div className="val">{topTrader.bestStreak}</div></div>
-                    <div className="item"><div className="lbl">Rounds</div><div className="val">{topTrader.tradeCount}</div></div>
-                  </div>
-                </div>
-                <div className="yoko-right">
-                  <div className="head">
-                    <h4>Season performance</h4>
-                    <span className="meta">price chart</span>
-                  </div>
-                  <div className="yoko-chart">
-                    <span className="crop-tl" /><span className="crop-tr" /><span className="crop-bl" /><span className="crop-br" />
-                    <canvas ref={yokoChartRef} />
-                  </div>
-                  <div className="yoko-replay-foot">
-                    <span>VOLUME <span className="stake">{topTrader.volume.toLocaleString('en-US', { maximumFractionDigits: 0 })} DUSDC</span></span>
-                    <span>TRADES <span className="stake">{topTrader.tradeCount}</span></span>
-                    <span>NET <span style={{ color: 'var(--vermilion)' }}>{topTrader.pnl >= 0 ? '+' : ''}{fmtPnl(topTrader.pnl)}</span></span>
-                  </div>
-                </div>
-              </div>
-            </section>
-          )}
-
-          {/* Section 3: Banzuke */}
+          {/* Section 2: ranks four onward */}
           {banzukeData.length > 0 && (
             <section>
               <SectionHeader
-                number="03"
-                title="Ranking sheet"
-                desc="Top traders of the season ranked by net realized P&L."
-                meta="east · west"
+                number="02"
+                title="The field"
+                desc="Ranks four onward, ordered by net realized P&L."
+                meta="rolling 24H"
               />
 
               <div className="banzuke-wrap">
                 <div className="banzuke-strip">
-                  <span>EAST · UP-side specialists</span>
-                  <span className="center">SEASON №04 · RANKINGS</span>
-                  <span>DOWN-side specialists · WEST</span>
+                  <span>RANKS 04-50</span>
+                  <span className="center">24H · REALIZED P&amp;L</span>
+                  <span>ON-CHAIN CLOSES</span>
                 </div>
                 <div className="banzuke-cols-head">
-                  <div className="east">↑ Long the bell</div>
-                  <div className="center">RANK</div>
-                  <div className="west">Short the bell ↓</div>
+                  <div className="east">Ranked account</div>
+                  <div className="center">RANKS</div>
+                  <div className="west">Ranked account</div>
                 </div>
                 <div>
                   {banzukeData.map((row, i) => {
@@ -400,14 +300,14 @@ export default function LeaderboardPage() {
                     <span className="lbl">Your rank</span>
                     <span>
                       <span className="val">{userRankData ? `#${userRankData.rank}` : 'Unranked'}</span>
-                      <span className="of">of {meta.totalWallets > 0 ? meta.totalWallets.toLocaleString() : '\u2014'}</span>
+                      <span className="of">of {meta.rankedTraders > 0 ? meta.rankedTraders.toLocaleString() : '\u2014'} ranked traders</span>
                     </span>
                   </div>
                   <div className="you-info">
                     <div className="you-portrait">{glyphFromAddress(address)}</div>
                     <div className="you-text">
                       <span className="name">You · {formatAddress(address)}</span>
-                      <span className="meta">{userRankData ? `top ${Math.round((userRankData.rank / Math.max(1, meta.totalWallets)) * 100)}%` : 'no trades yet'}</span>
+                      <span className="meta">{userRankData ? `top ${Math.round((userRankData.rank / Math.max(1, meta.rankedTraders)) * 100)}%` : 'no realized calls in the last 24H'}</span>
                     </div>
                   </div>
                   <div className="you-stats">
@@ -418,38 +318,6 @@ export default function LeaderboardPage() {
                   <a className="you-cta" href="/portfolio">Your ledger →</a>
                 </div>
               )}
-            </section>
-          )}
-
-          {/* Section 4: Records */}
-          {records.length > 0 && (
-            <section>
-              <SectionHeader
-                number="04"
-                title="Records of the season"
-                desc="The cuts the floor will remember."
-                meta="season №04 · sealed"
-              />
-
-              <div className="records-grid">
-                {records.map((rec, i) => {
-                  return (
-                    <div key={i} className="record" data-cursor="hover">
-                      <div className="ghost">{String(i + 1).padStart(2, '0')}</div>
-                      <div className="head">
-                        <span className="lbl">{rec.label}</span>
-                        <span className="badge">{rec.badge}</span>
-                      </div>
-                      <div className="num">{rec.value}<span className="unit">{rec.unit}</span></div>
-                      <div className="desc">{rec.desc}</div>
-                      <div className="by">
-                        <span className="av">{glyphFromAddress(rec.trader)}</span>
-                        <span>by <span className="name">{fmtAddr(rec.trader)}</span> · {rec.date}</span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
             </section>
           )}
 

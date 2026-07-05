@@ -769,8 +769,10 @@ export interface LeaderboardTrader {
   manager_id: string;
   owner: string;
   pnl: number;
+  roi: number;
   winRate: number;
   tradeCount: number;
+  settledTrades: number;
   bestStreak: number;
   volume: number;
 }
@@ -787,7 +789,17 @@ export interface LeaderboardRecord {
 
 export interface LeaderboardData {
   rankings: LeaderboardTrader[];
-  meta: { totalWallets: number; totalVolume: number };
+  meta: {
+    period: '24h';
+    windowStartMs: number;
+    windowEndMs: number;
+    rankedTraders: number;
+    totalWallets: number;
+    closedCalls: number;
+    totalVolume: number;
+    complete: boolean;
+    unmatchedRedemptions: number;
+  };
   records: LeaderboardRecord[];
 }
 

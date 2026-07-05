@@ -17,6 +17,10 @@ import { grpc, buildSignExecute } from './modernClients';
 import { DUSDC_MULTIPLIER } from './constants';
 import { useDUSDCBalance } from './hooks';
 import {
+  positionQuantityMicro624,
+  quantizePositionQuantity624,
+} from './predict624Math';
+import {
   NEG_INF_TICK,
   POS_INF_TICK,
   usdToTick,
@@ -34,14 +38,14 @@ import {
 
 /** Near-the-money band: wider strikes abort EEntryProbabilityOutOfBounds (proven). */
 export const BAND_USD = 20;
-/** Honest near-the-money estimate on this band (exact prob is set on-chain). */
-export const EST_PROB = 0.55;
+/** Conservative pre-quote probability; the $20 cushion targets at least 50%. */
+export const EST_PROB = 0.5;
 /** Upper bound used for balance checks before a live quote lands. */
 export const EST_PROB_HIGH = 0.62;
-/** Too close to expiry → the pricer window is over, don't offer the market. */
-export const MIN_MINT_MS = 90_000;
-/** The venue's minimum entry premium is ~1 test USDC; with fees, ~1.20 stake clears it. */
-export const MIN_STAKE = 1.2;
+/** Leave enough time for wallet approval and submission before the market expires. */
+export const MIN_MINT_MS = 15_000;
+/** DeepBook Predict's on-chain minimum net premium. Fees are quoted separately. */
+export const MIN_STAKE = 1;
 
 export type Dir624 = 'up' | 'down';
 
@@ -53,7 +57,7 @@ export type Dir624 = 'up' | 'down';
 /** Payout quantity whose entry cost equals `stake`, at this leverage + win probability. */
 export function qtyForStake(stake: number, lev: number, prob: number): number {
   if (stake <= 0 || prob <= 0) return 0;
-  return (stake * lev) / prob;
+  return quantizePositionQuantity624((stake * lev) / prob);
 }
 /** What a winning payout `qty` returns: quantity minus the financed floor (= qty at 1×). */
 export function winForQty(qty: number, lev: number, prob: number): number {
@@ -73,9 +77,33 @@ export function ticks624(spot: number, dir: Dir624): { lowerTick: bigint; higher
     : { lowerTick: NEG_INF_TICK, higherTick: usdToTick(strike) };
 }
 
+// ─── range (band) bets ───
+// The venue's mint takes an arbitrary [lowerTick, higherTick]; the directional
+// bets above just pin one end to ±inf. A RANGE bet gives BOTH ends a finite
+// price — it wins only if settlement lands INSIDE the band, so a tighter band is
+// less likely and pays more. The band must sit near spot (far strikes abort
+// EEntryProbabilityOutOfBounds), which the UI clamps.
+
+/** Suggested band half-widths (± USD from center). Tighter → higher payout. */
+export const RANGE_PRESETS = [
+  { key: 'tight', label: 'Tight', half: 15 },
+  { key: 'medium', label: 'Medium', half: 30 },
+  { key: 'wide', label: 'Wide', half: 55 },
+] as const;
+export type RangePresetKey = (typeof RANGE_PRESETS)[number]['key'];
+/** How far the band CENTER may drift from spot (keeps both edges near-the-money). */
+export const RANGE_CENTER_MAX = 35;
+
+/** Both-finite band ticks: bet BTC settles INSIDE [lowerUsd, higherUsd]. */
+export function rangeTicks624(lowerUsd: number, higherUsd: number): { lowerTick: bigint; higherTick: bigint } {
+  return { lowerTick: usdToTick(lowerUsd), higherTick: usdToTick(higherUsd) };
+}
+
 /** Translate the venue's mint aborts into plain words (codes from expiry_market.move). */
 export function friendlyMintAbort(raw: string): string {
-  return /abort code:?\s*4/.test(raw)
+  return /::order::assert_valid_quantity|::order::.*abort code:?\s*4/i.test(raw)
+    ? 'This bet size was not on the venue lot grid. The quote has been corrected — try again.'
+    : /abort code:?\s*4/.test(raw)
     ? 'The price moved past your max while you were signing — nothing was charged. Quote refreshed, try again.'
     : /abort code:?\s*5/.test(raw)
       ? 'The odds moved past the cap while you were signing — nothing was charged. Try again.'
@@ -255,6 +283,8 @@ export function useMintQuote624(p: {
   wrapperId: string | null;
   marketId: string | null;
   dir: Dir624 | null;
+  /** Range band (both finite). When set it OVERRIDES dir — a range bet. */
+  band?: { lowerUsd: number; higherUsd: number } | null;
   /** Payout quantity, DUSDC display units. */
   qty: number;
   lev: number;
@@ -268,24 +298,28 @@ export function useMintQuote624(p: {
   const spotRef = useRef(p.spot);
   spotRef.current = p.spot;
   const enabled = p.enabled !== false;
+  const hasBand = p.band != null && p.band.lowerUsd < p.band.higherUsd;
 
   useEffect(() => {
     setQuote(null);
     setQuoteErr(null);
-    if (!enabled || !p.address || !p.wrapperId || !p.marketId || !p.dir || p.qty <= 0 || p.spot == null) return;
+    if (!enabled || !p.address || !p.wrapperId || !p.marketId || p.qty <= 0 || p.spot == null) return;
+    if (!hasBand && !p.dir) return;
     let dead = false;
     const run = async () => {
       const spot = spotRef.current;
       if (spot == null) return;
       setQuoting(true);
-      const { lowerTick, higherTick } = ticks624(spot, p.dir!);
+      const { lowerTick, higherTick } = hasBand
+        ? rangeTicks624(p.band!.lowerUsd, p.band!.higherUsd)
+        : ticks624(spot, p.dir!);
       const q = await quoteMint624({
         sender: p.address!,
         marketId: p.marketId!,
         wrapperId: p.wrapperId!,
         lowerTick,
         higherTick,
-        qtyMicro: BigInt(Math.round(p.qty * DUSDC_MULTIPLIER)),
+        qtyMicro: positionQuantityMicro624(p.qty),
         leverage1e9: BigInt(p.lev) * 1_000_000_000n,
       });
       if (dead) return;
@@ -306,7 +340,7 @@ export function useMintQuote624(p: {
       clearInterval(iv);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, p.address, p.wrapperId, p.marketId, p.dir, p.qty, p.lev, p.spot != null]);
+  }, [enabled, p.address, p.wrapperId, p.marketId, p.dir, hasBand, p.band?.lowerUsd, p.band?.higherUsd, p.qty, p.lev, p.spot != null]);
 
   return { quote, quoteErr, quoting };
 }
@@ -336,7 +370,7 @@ export async function placeMint624(p: {
 }): Promise<{ digest: string; strikeUsd: number; costDusdc: number }> {
   const strikeUsd = strike624(p.spot, p.dir);
   const { lowerTick, higherTick } = ticks624(p.spot, p.dir);
-  const qtyMicro = BigInt(Math.floor(p.qty * DUSDC_MULTIPLIER));
+  const qtyMicro = positionQuantityMicro624(p.qty);
   const leverage1e9 = BigInt(p.lev) * 1_000_000_000n;
 
   const fresh = await quoteMint624({
@@ -366,4 +400,53 @@ export async function placeMint624(p: {
     }),
   );
   return { digest, strikeUsd, costDusdc: freshCost };
+}
+
+/**
+ * Place a RANGE bet — same fresh-quote-at-click ×1.10 guard as placeMint624, but
+ * with both band ends finite so it wins only if settlement lands inside [lower, higher].
+ */
+export async function placeRangeMint624(p: {
+  submitTx: (tx: Transaction) => Promise<string>;
+  address: string;
+  wrapperId: string;
+  marketId: string;
+  lowerUsd: number;
+  higherUsd: number;
+  /** Payout quantity, DUSDC display units. */
+  qty: number;
+  lev: number;
+  acctBalance: number;
+}): Promise<{ digest: string; lowerUsd: number; higherUsd: number; costDusdc: number }> {
+  const { lowerTick, higherTick } = rangeTicks624(p.lowerUsd, p.higherUsd);
+  const qtyMicro = positionQuantityMicro624(p.qty);
+  const leverage1e9 = BigInt(p.lev) * 1_000_000_000n;
+
+  const fresh = await quoteMint624({
+    sender: p.address,
+    marketId: p.marketId,
+    wrapperId: p.wrapperId,
+    lowerTick,
+    higherTick,
+    qtyMicro,
+    leverage1e9,
+  });
+  if ('error' in fresh) throw new Error(`quote: ${fresh.error}`);
+  const freshCost = fresh.costMicro / DUSDC_MULTIPLIER;
+  const maxCost = Math.min(p.acctBalance, freshCost * 1.1);
+  if (maxCost < freshCost) throw new Error('balance below the live cost — deposit a little more');
+
+  const digest = await p.submitTx(
+    buildMintTx({
+      marketId: p.marketId,
+      wrapperId: p.wrapperId,
+      lowerTick,
+      higherTick,
+      qtyMicro,
+      leverage1e9,
+      maxCostMicro: BigInt(Math.floor(maxCost * DUSDC_MULTIPLIER)),
+      maxProb1e9: BigInt(990_000_000),
+    }),
+  );
+  return { digest, lowerUsd: p.lowerUsd, higherUsd: p.higherUsd, costDusdc: freshCost };
 }

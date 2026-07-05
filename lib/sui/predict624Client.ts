@@ -99,8 +99,11 @@ export interface Market624 {
   expiry: number;
   /** Minutes until expiry at fetch time. */
   minsOut: number;
-  /** Best-effort cadence classification (see inferCadence624). */
+  /** Cadence, read from the real trading window (see cadenceFromWindow624). */
   cadence: Cadence624;
+  /** Total trading window in minutes (expiry − created). windowSize×cadence ≈ 3×
+   *  cadence in the 6-24 deployment, so this is the max the countdown ever reads. */
+  windowMin: number;
   /** Market tick size (1e9-scaled USD per tick; 1e7 = $0.01). */
   tickSize: number;
   /** Admission tick size (1e9-scaled; 1e9 = $1 strike grid). */
@@ -112,24 +115,36 @@ export interface Market624 {
 interface IndexerMarketRow {
   expiry_market_id: string;
   expiry: number | string;
+  /** market_created checkpoint time (ms) — the market's open time. */
+  checkpoint_timestamp_ms?: string | number;
   tick_size: string | number;
   admission_tick_size: string | number;
   max_admission_leverage: number | string;
 }
 
 /**
- * Best-effort cadence classification. /markets rows carry NO cadence field, so we
- * infer from expiry alignment: on-the-hour ⇒ '1h', on-a-5min ⇒ '5m', else '1m'.
- * (A 1m/5m market whose expiry happens to land on a coarser boundary classifies
- * coarser — acceptable for "pick the soonest tradeable market".)
+ * Canonical cadence classification — matches Mysten's own dashboard
+ * (`_owner_cadence`): a market's cadence is the COARSEST cadence whose period
+ * divides its expiry (an on-the-hour expiry is owned by 1h even though 1m and 5m
+ * divide it too). The venue mints exactly one market per expiry timestamp, owned
+ * by that cadence, so this is exact — not a heuristic. Each market then trades
+ * for windowSize×cadence (= 3× cadence in the 6-24 deployment), which is why a
+ * 1m market's countdown can read up to ~3 min.
  */
 export function inferCadence624(expiryMs: number): Cadence624 {
   return expiryMs % 3_600_000 === 0 ? '1h' : expiryMs % 300_000 === 0 ? '5m' : '1m';
 }
 
-/** Future-only markets from the beta indexer, deduped by id, soonest-expiry first. */
+/** Future-only markets from the beta indexer, deduped by id, soonest-expiry first.
+ *
+ * NOTE the `limit`: /markets returns recent `market_created` events newest-first,
+ * and 1-minute markets are created every minute — with the indexer's small default
+ * limit they flood the page and push the nearer 1-hour (and 5-minute) creations off
+ * the list, so those lanes falsely appear empty. A generous limit keeps every open
+ * cadence in view (max market window is ~3h; 500 events ≈ 7h of creations). */
+const MARKETS_FETCH_LIMIT = 500;
 export async function fetchMarkets624(): Promise<Market624[]> {
-  const res = await fetch(`${PREDICT624.indexer}/markets`, { headers: { accept: 'application/json' } });
+  const res = await fetch(`${PREDICT624.indexer}/markets?limit=${MARKETS_FETCH_LIMIT}`, { headers: { accept: 'application/json' } });
   if (!res.ok) throw new Error(`predict624 indexer /markets ${res.status}`);
   const rows = (await res.json()) as IndexerMarketRow[];
   const now = Date.now();
@@ -141,11 +156,18 @@ export async function fetchMarkets624(): Promise<Market624[]> {
     seen.add(id);
     const expiry = Number(m.expiry);
     if (expiry <= now) continue; // future-only
+    // Cadence from expiry alignment (inferCadence624 = Mysten's canonical
+    // _owner_cadence). Also carry the real trading window (expiry − created) for
+    // display — it's windowSize×cadence (≈3× the cadence period).
+    const created = Number(m.checkpoint_timestamp_ms);
+    const hasWindow = Number.isFinite(created) && created > 0 && created < expiry;
+    const windowMs = hasWindow ? expiry - created : NaN;
     out.push({
       id,
       expiry,
       minsOut: (expiry - now) / 60_000,
       cadence: inferCadence624(expiry),
+      windowMin: hasWindow ? windowMs / 60_000 : NaN,
       tickSize: Number(m.tick_size),
       admissionTickSize: Number(m.admission_tick_size),
       maxLeverage1e9: Number(m.max_admission_leverage),

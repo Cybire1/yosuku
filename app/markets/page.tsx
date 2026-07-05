@@ -54,6 +54,36 @@ const ODDS_STAGGER_MS = 350; // gap between per-market quote pairs
 
 const CADENCE_WORD: Record<Cadence624, string> = { '1m': '1-minute', '5m': '5-minute', '1h': '1-hour' };
 const CADENCES: Cadence624[] = ['1m', '5m', '1h'];
+
+// One rail slot per cadence — a live market or a graceful "between rounds"
+// placeholder — so the three categories are always present and never doubled.
+type RailItem =
+  | { kind: 'market'; market: Market624 }
+  | { kind: 'placeholder'; cadence: Cadence624; nextMs: number | null };
+
+function RailPlaceholder({ cadence }: { cadence: Cadence624 }) {
+  return (
+    <div className="market-card market-card-pending" aria-hidden="true">
+      <div className="mc-head">
+        <span className="mc-asset">
+          <span className="glyph">₿</span>
+          BTC · {CADENCE_WORD[cadence]}
+        </span>
+        <span className="mc-countdown">
+          <span className="clock-dot" />
+          rolling
+        </span>
+      </div>
+      {/* single text block — can't jam even if global CSS is stale */}
+      <div className="mc-pending">
+        <span className="mc-pending-dot" />
+        <p className="mc-pending-copy">
+          <strong>Between rounds.</strong> The next {CADENCE_WORD[cadence]} market is opening — this lane never closes.
+        </p>
+      </div>
+    </div>
+  );
+}
 const LIVE_HORIZON_LABELS = ['15-min', '30-min', '45-min', '1-hr'] as const; // previous venue only
 
 const fmtUsd0 = (n: number) => `$${Math.round(n).toLocaleString('en-US')}`;
@@ -186,7 +216,7 @@ function Market624Card({
   onOpen: (market: Market624, side: Dir624 | null) => void;
 }) {
   const msLeft = now > 0 ? market.expiry - now : null;
-  const closing = msLeft != null && msLeft < MIN_MINT_MS;
+  const closing = msLeft != null && msLeft > 0 && msLeft <= MIN_MINT_MS;
   const urgent = !closing && msLeft != null && msLeft < 5 * 60 * 1000;
   const strikeUp = odds?.strikeUpUsd ?? (spot != null ? spot - BAND_USD : null);
   const strikeDown = odds?.strikeDownUsd ?? (spot != null ? spot + BAND_USD : null);
@@ -215,7 +245,7 @@ function Market624Card({
         </span>
         <span className={`mc-countdown ${urgent || closing ? 'urgent' : ''}`}>
           <span className="clock-dot" />
-          {closing ? 'Settling' : msLeft != null ? fmtCountdown(msLeft) : '—'}
+          {msLeft != null ? fmtCountdown(msLeft) : '—'}
         </span>
       </div>
 
@@ -259,7 +289,7 @@ function Market624Card({
           </div>
         ) : (
           <div className="mc-strip">
-            <span>SETTLING · AWAITING THE ORACLE&apos;S PRINT</span>
+            <span>CLOSING · NEXT ROUND AT THE BELL</span>
           </div>
         )}
       </div>
@@ -386,44 +416,74 @@ export default function MarketsPage() {
     return first > 0 ? ((last - first) / first) * 100 : null;
   }, [liveSeries]);
 
-  // the rail: soonest MINTABLE market of each cadence, plus the next ones (max 6
-  // cards). Markets inside the 90s pricer window are dropped, not shown dead —
-  // on a 1-minute cadence the very soonest expiry is always un-mintable.
-  const railMarkets = useMemo(() => {
-    const by: Record<Cadence624, Market624[]> = { '1m': [], '5m': [], '1h': [] };
-    for (const m of markets) {
-      if (now === 0 || m.expiry - now > MIN_MINT_MS) by[m.cadence].push(m);
+  // The rail stays on the current round until its actual expiry. Trading pauses
+  // only during the short submission buffer; the timer must never jump early to
+  // the following round (especially visible on the 1-minute cadence).
+  const railItems = useMemo<RailItem[]>(() => {
+    const current: Partial<Record<Cadence624, Market624>> = {};
+    for (const m of markets) { // markets is soonest-first
+      if ((now === 0 || m.expiry > now) && !current[m.cadence]) current[m.cadence] = m;
     }
-    const rail: Market624[] = [];
-    for (const rank of [0, 1]) {
-      for (const c of CADENCES) {
-        const m = by[c][rank];
-        if (m) rail.push(m);
-      }
-    }
-    return rail.slice(0, 6);
+    return CADENCES.map((c) =>
+      current[c]
+        ? { kind: 'market', market: current[c]! }
+        : { kind: 'placeholder', cadence: c, nextMs: null },
+    );
+  }, [markets, now]);
+  const railMarkets = useMemo(
+    () => railItems.flatMap((i) => (i.kind === 'market' ? [i.market] : [])),
+    [railItems],
+  );
+
+  // The featured market — soonest 5-minute (enough runway to read the chart and
+  // act); falls back to any mintable market.
+  const featuredMarket = useMemo(() => {
+    const mintable = (m: Market624) => now === 0 || m.expiry - now > MIN_MINT_MS;
+    return markets.find((m) => m.cadence === '5m' && mintable(m)) ?? markets.find(mintable) ?? null;
   }, [markets, now]);
 
-  // REAL odds — house dry-run quotes, staggered, ~20s per-market refresh
-  const odds = useHouseOdds624(railMarkets, spot);
+  // ticket = the market you're actively sizing a bet on. Tapping a card sets it,
+  // and the HERO renders this market (chart + bet controls together) — so a card
+  // tap "loads into the hero", never a separate panel.
+  const [ticket, setTicket] = useState<{
+    market: Market624;
+    side: Dir624 | null;
+    sessionId: number;
+  } | null>(null);
+  const openTicket = (market: Market624, side: Dir624 | null) => {
+    setTicket({ market, side, sessionId: Date.now() });
+    // desktop: the bet lives in the hero at the top — bring it into view
+    if (typeof window !== 'undefined' && window.innerWidth >= 1024) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
 
-  // hero = the soonest market still comfortably mintable
-  const heroMarket = useMemo(
-    () => markets.find((m) => now === 0 || m.expiry - now > MIN_MINT_MS) ?? null,
-    [markets, now],
-  );
+  // Keep the ticket tradable. If the selected round enters the submission buffer
+  // while the user is sizing the bet, advance to the next market of the same
+  // cadence. The bet keeps the current side, amount, and leverage.
+  const ticketMarket = useMemo(() => {
+    if (!ticket) return null;
+    const selected = markets.find((m) => m.id === ticket.market.id) ?? ticket.market;
+    if (now === 0 || selected.expiry - now > MIN_MINT_MS) return selected;
+    return markets.find(
+      (m) => m.cadence === selected.cadence && m.expiry - now > MIN_MINT_MS,
+    ) ?? selected;
+  }, [ticket, markets, now]);
+
+  // The hero shows whichever market you're focused on: an explicit pick, else the featured one.
+  const heroMarket = ticketMarket ?? featuredMarket;
+
+  // REAL odds — house dry-run quotes, staggered, ~20s per-market refresh.
+  const quoteMarkets = useMemo(() => {
+    const byId = new Map(railMarkets.map((m) => [m.id, m]));
+    if (heroMarket) byId.set(heroMarket.id, heroMarket);
+    return Array.from(byId.values());
+  }, [railMarkets, heroMarket]);
+  const odds = useHouseOdds624(quoteMarkets, spot);
+
   const heroOdds = heroMarket ? odds[heroMarket.id] : undefined;
   const heroStrike = heroOdds?.strikeUpUsd ?? (spot != null ? spot - BAND_USD : null);
   const heroMsLeft = heroMarket && now > 0 ? heroMarket.expiry - now : null;
-
-  // ticket drawer
-  const [ticket, setTicket] = useState<{ market: Market624; side: Dir624 | null } | null>(null);
-  const openTicket = (market: Market624, side: Dir624 | null) => setTicket({ market, side });
-  // keep the drawer's market row fresh (countdown source) as polls roll in
-  const ticketMarket = useMemo(
-    () => (ticket ? markets.find((m) => m.id === ticket.market.id) ?? ticket.market : null),
-    [ticket, markets],
-  );
 
   // hero chart — the same living chart treatment as before, on the settlement feed
   const heroCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -582,57 +642,16 @@ export default function MarketsPage() {
               )}
             </div>
 
-            {/* Mini call panel — taps open the ticket drawer (desktop) */}
-            <div className="hero-mini-panel">
-              {heroMarket ? (
-                <div className="border border-white/[0.1] bg-white/[0.02] p-5">
-                  <div className="flex items-center justify-between pb-3 mb-4 border-b border-white/[0.08]">
-                    <span className="font-mono text-[10px] uppercase tracking-[0.25em] text-white/40">
-                      <span className="text-vermilion">⊙</span> Make the call
-                    </span>
-                    <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/30 tabular-nums">
-                      {heroMsLeft != null ? fmtCountdown(heroMsLeft) : '—'}
-                    </span>
-                  </div>
-                  <p className="font-mono text-[11px] text-white/50 leading-relaxed mb-4">
-                    BTC · {CADENCE_WORD[heroMarket.cadence]} market — settles on the oracle print. Tap a side; you size the bet in the ticket.
-                  </p>
-                  <div className="space-y-2.5">
-                    <button
-                      type="button"
-                      className="mc-side up w-full"
-                      style={{ padding: '14px' }}
-                      onClick={() => openTicket(heroMarket, 'up')}
-                      data-cursor="up"
-                    >
-                      <span>UP</span>
-                      <span className="price">{heroOdds?.upCents != null ? `${heroOdds.upCents}¢ / $1` : '···'}</span>
-                    </button>
-                    <div className="font-mono text-[9.5px] text-white/35 px-1 -mt-1">
-                      wins if BTC settles over {heroOdds?.strikeUpUsd != null ? fmtUsd0(heroOdds.strikeUpUsd) : spot != null ? fmtUsd0(spot - BAND_USD) : '—'}
-                    </div>
-                    <button
-                      type="button"
-                      className="mc-side down w-full"
-                      style={{ padding: '14px' }}
-                      onClick={() => openTicket(heroMarket, 'down')}
-                      data-cursor="hover"
-                    >
-                      <span>DOWN</span>
-                      <span className="price">{heroOdds?.downCents != null ? `${heroOdds.downCents}¢ / $1` : '···'}</span>
-                    </button>
-                    <div className="font-mono text-[9.5px] text-white/35 px-1 -mt-1">
-                      wins if BTC settles under {heroOdds?.strikeDownUsd != null ? fmtUsd0(heroOdds.strikeDownUsd) : spot != null ? fmtUsd0(spot + BAND_USD) : '—'}
-                    </div>
-                  </div>
-                  <p className="font-mono text-[9.5px] leading-relaxed text-white/30 mt-4 pt-3 border-t border-white/[0.06]">
-                    Each side is priced by the venue for its own band — UP and DOWN don&apos;t sum to $1. Testnet DUSDC; you can lose your stake.
-                  </p>
-                </div>
-              ) : (
-                <div className="hero-mini-loading">{marketsErr ? 'Reconnecting to the venue…' : 'Reading live markets…'}</div>
-              )}
-            </div>
+            {/* the bet — contained beside the hero chart (desktop); a slide-in drawer on mobile */}
+            <Ticket624Drawer
+              market={heroMarket}
+              side={ticket?.side ?? null}
+              sessionId={ticket?.sessionId ?? null}
+              spot={spot}
+              series={liveSeries}
+              mobileOpen={!!ticket}
+              onClose={() => setTicket(null)}
+            />
           </div>
         </div>
         <button
@@ -665,29 +684,33 @@ export default function MarketsPage() {
             </div>
           )}
 
-          {/* Live now — the venue's rolling cadence markets */}
-          {railMarkets.length > 0 && (
+          {/* Live now — one card per cadence (1m · 5m · 1h), always present */}
+          {markets.length > 0 && (
             <section className="markets-section" data-section="live">
               <SectionHeader
                 number="01"
                 title="Live now"
                 jp="開催中"
                 live
-                meta="1-minute / 5-minute / 1-hour · rolling"
+                cadences={['1 min', '5 min', '1 hr']}
               />
               <div className="markets-grid markets-grid-live">
-                {railMarkets.map((m) => (
-                  <Market624Card
-                    key={m.id}
-                    market={m}
-                    spot={spot}
-                    series={liveSeries}
-                    deltaPct={deltaPct}
-                    odds={odds[m.id]}
-                    now={now}
-                    onOpen={openTicket}
-                  />
-                ))}
+                {railItems.map((item) =>
+                  item.kind === 'market' ? (
+                    <Market624Card
+                      key={item.market.id}
+                      market={item.market}
+                      spot={spot}
+                      series={liveSeries}
+                      deltaPct={deltaPct}
+                      odds={odds[item.market.id]}
+                      now={now}
+                      onOpen={openTicket}
+                    />
+                  ) : (
+                    <RailPlaceholder key={`ph-${item.cadence}`} cadence={item.cadence} />
+                  ),
+                )}
               </div>
               <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
                 <p className="font-mono text-[10px] leading-relaxed text-gray-600 max-w-2xl">
@@ -733,14 +756,6 @@ export default function MarketsPage() {
 
       {/* First-visit tutorial */}
       <Tutorial />
-
-      {/* Ticket drawer — the founder-validated markets-live machinery */}
-      <Ticket624Drawer
-        market={ticketMarket}
-        side={ticket?.side ?? null}
-        spot={spot}
-        onClose={() => setTicket(null)}
-      />
     </div>
   );
 }
