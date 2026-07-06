@@ -1,0 +1,11 @@
+{
+  "name": "yosuku-vault-624",
+  "gasBudgetMax": 100000000,
+  "allowedCommandKinds": ["MoveCall", "SplitCoins", "MergeCoins", "TransferObjects"],
+  "targets": [
+    "0x27931b561d585164fd843c4d58943281f0fcd1f9ca5db684f8fd47b5ee3791b3::vault624::deposit",
+    "0x27931b561d585164fd843c4d58943281f0fcd1f9ca5db684f8fd47b5ee3791b3::vault624::withdraw",
+    "0x27931b561d585164fd843c4d58943281f0fcd1f9ca5db684f8fd47b5ee3791b3::vault624::subscribe",
+    "0x27931b561d585164fd843c4d58943281f0fcd1f9ca5db684f8fd47b5ee3791b3::vault624::cancel"
+  ]
+}
