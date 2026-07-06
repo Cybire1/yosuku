@@ -435,11 +435,15 @@ export default function MarketsPage() {
     [railItems],
   );
 
-  // The featured market — soonest 5-minute (enough runway to read the chart and
-  // act); falls back to any mintable market.
+  // The featured market a new user lands on — a FRESH 5-minute (smoothest to bet on: enough
+  // runway to read the chart, and its odds move far less while you sign than a 1-minute).
+  // Prefer 5m → 1h → and only fall back to the jumpy 1m if nothing else is open. Soonest-first
+  // within a cadence so the chart has live context.
   const featuredMarket = useMemo(() => {
     const mintable = (m: Market624) => now === 0 || m.expiry - now > MIN_MINT_MS;
-    return markets.find((m) => m.cadence === '5m' && mintable(m)) ?? markets.find(mintable) ?? null;
+    const soonest = (c: Cadence624) =>
+      markets.filter((m) => m.cadence === c && mintable(m)).sort((a, b) => a.expiry - b.expiry)[0] ?? null;
+    return soonest('5m') ?? soonest('1h') ?? soonest('1m') ?? markets.find(mintable) ?? null;
   }, [markets, now]);
 
   // ticket = the market you're actively sizing a bet on. Tapping a card sets it,
