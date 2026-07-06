@@ -30,6 +30,7 @@ import {
   buildCreateAccountTx,
   buildDepositTx,
   buildMintTx,
+  buildCreateFundAndMint624,
   quoteMint624,
   type MintQuote624,
 } from './predict624Client';
@@ -449,4 +450,61 @@ export async function placeRangeMint624(p: {
     }),
   );
   return { digest, lowerUsd: p.lowerUsd, higherUsd: p.higherUsd, costDusdc: freshCost };
+}
+
+/**
+ * FIRST BET for a user with no trading account yet — creates the account, funds it, and
+ * places the bet in ONE signature (gas-free via the sponsor). There is no account to quote
+ * against, so instead of the fresh-quote guard we deposit the stake + 15% headroom (capped at
+ * the wallet's DUSDC) and cap the mint at that deposit — the whole PTB reverts if the live cost
+ * can't fit, so funds are never stranded. The headroom that isn't spent stays as account
+ * balance, ready for the next bet. Handles a directional bet (dir) or a range bet (band).
+ */
+export async function placeFirstBet624(p: {
+  /** A sponsor-capable submit (factory form) — a new user has no SUI, so the first bet MUST
+   *  be gas-free; every target here is in the yosuku-trading-624 sponsor policy. */
+  submit: (factory: () => Transaction) => Promise<string>;
+  marketId: string;
+  dir?: Dir624;
+  band?: { lowerUsd: number; higherUsd: number };
+  /** Payout quantity, DUSDC display units. */
+  qty: number;
+  lev: number;
+  spot: number;
+  /** The user's intended stake (DUSDC display units) and their wallet DUSDC coins. */
+  stakeDusdc: number;
+  walletDusdcMicro: bigint;
+  coinIds: string[];
+}): Promise<{ digest: string; costDusdc: number; strikeUsd?: number; lowerUsd?: number; higherUsd?: number }> {
+  if (!p.coinIds.length) throw new Error('no DUSDC in your wallet — grab some from the faucet first');
+  const stakeMicro = BigInt(Math.round(p.stakeDusdc * DUSDC_MULTIPLIER));
+  // deposit the stake + 15% headroom for pricing/fees, never more than the wallet holds
+  const buffered = (stakeMicro * 115n) / 100n;
+  const depositMicro = buffered < p.walletDusdcMicro ? buffered : p.walletDusdcMicro;
+  if (depositMicro < stakeMicro) throw new Error('not enough DUSDC to cover the bet + fees — top up your wallet');
+
+  const isRange = p.band != null && p.band.lowerUsd < p.band.higherUsd;
+  const { lowerTick, higherTick } = isRange
+    ? rangeTicks624(p.band!.lowerUsd, p.band!.higherUsd)
+    : ticks624(p.spot, p.dir!);
+  const mintArgs = {
+    coinIds: p.coinIds,
+    depositMicro,
+    marketId: p.marketId,
+    lowerTick,
+    higherTick,
+    qtyMicro: positionQuantityMicro624(p.qty),
+    leverage1e9: BigInt(p.lev) * 1_000_000_000n,
+    maxCostMicro: depositMicro, // can't cost more than we just deposited
+    maxProb1e9: BigInt(990_000_000),
+  };
+  // factory form: the sponsored path rebuilds the tx per attempt (sets gas owner = sponsor)
+  const digest = await p.submit(() => buildCreateFundAndMint624(mintArgs));
+  const out: { digest: string; costDusdc: number; strikeUsd?: number; lowerUsd?: number; higherUsd?: number } = {
+    digest,
+    costDusdc: p.stakeDusdc,
+  };
+  if (isRange) { out.lowerUsd = p.band!.lowerUsd; out.higherUsd = p.band!.higherUsd; }
+  else { out.strikeUsd = strike624(p.spot, p.dir!); }
+  return out;
 }

@@ -32,6 +32,7 @@ import {
   friendlyMintAbort,
   placeMint624,
   placeRangeMint624,
+  placeFirstBet624,
   qtyForStake,
   strike624,
   useAccount624,
@@ -40,6 +41,8 @@ import {
   type Dir624,
   type RangePresetKey,
 } from '@/lib/sui/ticket624';
+import { useSmartSubmit } from '@/lib/sui/useSmartSubmit';
+import type { Transaction } from '@mysten/sui/transactions';
 
 // A ±$30 band is trivial on a 1-minute market but a real call on 1h — BTC's
 // expected move scales with the window. Scale the preset widths per cadence.
@@ -99,6 +102,7 @@ export default function Ticket624Drawer({
   const rangeDragRef = useRef<{ pointerId: number; startX: number; startOffset: number; usdPerPx: number } | null>(null);
   const { toast } = useToast();
   const acct = useAccount624();
+  const { submit: smartSubmit } = useSmartSubmit();
   const { address, wrapperId, wrapperChecked, acctBalance } = acct;
 
   const [dir, setDir] = useState<Dir624 | null>(side);
@@ -243,7 +247,12 @@ export default function Ticket624Drawer({
   const payoutQty = qtyForStake(stake, lev, probUsed);      // costs stake at this probability
   const winAmt = winForQty(payoutQty, lev, probUsed);       // what a win returns
   const currentCost = quote ? quote.costMicro / DUSDC_MULTIPLIER : stake;
-  const needsDeposit = stake > 0 && stake > acctBalance;
+  const needsDeposit = !!wrapperId && stake > 0 && stake > acctBalance;
+  // First-time user (no account): their first bet CREATES + funds + places in one signature,
+  // gas-free via the sponsor — no separate account/deposit steps, funded straight from the wallet.
+  const walletDusdc = acct.walletMicro / DUSDC_MULTIPLIER;
+  const needsAccount = !!address && wrapperChecked && !wrapperId;
+  const firstBetShortWallet = needsAccount && stake > 0 && stake > walletDusdc;
 
   const blocker: string | null = closing
     ? 'Market closing — pick the next one'
@@ -251,16 +260,16 @@ export default function Ticket624Drawer({
       ? 'Connect a wallet'
       : !wrapperChecked
         ? 'Reading the chain…'
-        : !wrapperId
-          ? 'Set up your account below'
-          : !isRange && !dir
-            ? 'Call UP or DOWN'
-            : stake <= 0
-              ? 'Enter your bet'
-              : belowMinHard
-                ? `Bet at least ${fmt2(MIN_STAKE)} test USDC`
-                : spot == null
-                  ? 'Waiting for the oracle price…'
+        : !isRange && !dir
+          ? 'Call UP or DOWN'
+          : stake <= 0
+            ? 'Enter your bet'
+            : belowMinHard
+              ? `Bet at least ${fmt2(MIN_STAKE)} test USDC`
+              : spot == null
+                ? 'Waiting for the oracle price…'
+                : needsAccount
+                  ? (firstBetShortWallet ? `Add ${fmt2(stake - walletDusdc)} test USDC to your wallet` : null)
                   : needsDeposit
                     ? `Add ${fmt2(stake - acctBalance)} test USDC below first`
                     : quoteErr
@@ -269,18 +278,6 @@ export default function Ticket624Drawer({
                         ? 'Getting the live price…'
                         : null;
 
-  const createAccount = useCallback(async () => {
-    if (busy) return;
-    setBusy('create');
-    try {
-      const wid = await acct.createAccount();
-      toast(wid ? 'Trading account created' : 'Account created — still indexing, one moment', 'success');
-    } catch (e) {
-      toast(`Could not create the account: ${String(e instanceof Error ? e.message : e).slice(0, 140)}`, 'error');
-    } finally {
-      setBusy(null);
-    }
-  }, [acct, busy, toast]);
 
   const deposit = useCallback(async () => {
     if (busy) return;
@@ -345,6 +342,41 @@ export default function Ticket624Drawer({
       setBusy(null);
     }
   }, [blocker, address, wrapperId, market, dir, isRange, lowerUsd, higherUsd, spot, busy, quote, acct, payoutQty, winAmt, lev, acctBalance, toast]);
+
+  // First bet for a user with no account yet: create + fund + place in ONE signature, gas-free
+  // via the sponsor (a new user has no SUI). No pre-quote — cost is bounded by the deposit.
+  const placeFirst = useCallback(async () => {
+    if (blocker || !address || !market || spot == null || busy) return;
+    setBusy('mint');
+    try {
+      const coinIds = acct.dusdcCoins.map((c) => c.coinObjectId);
+      const base = {
+        submit: (factory: () => Transaction) => smartSubmit(factory).then((x) => x.digest),
+        marketId: market.id,
+        qty: payoutQty,
+        lev,
+        spot,
+        stakeDusdc: stake,
+        walletDusdcMicro: BigInt(Math.floor(acct.walletMicro)),
+        coinIds,
+      };
+      if (isRange && lowerUsd != null && higherUsd != null) {
+        const r = await placeFirstBet624({ ...base, band: { lowerUsd, higherUsd } });
+        setPlaced({ digest: r.digest, kind: 'range', lowerUsd: r.lowerUsd!, higherUsd: r.higherUsd!, qty: winAmt, lev, costDusdc: r.costDusdc, expiry: market.expiry });
+        toast(`Account ready + range bet placed — ${fmtUsd0(r.lowerUsd!)}–${fmtUsd0(r.higherUsd!)}`, 'success');
+      } else if (dir) {
+        const r = await placeFirstBet624({ ...base, dir });
+        setPlaced({ digest: r.digest, kind: 'dir', dir, strikeUsd: r.strikeUsd!, qty: winAmt, lev, costDusdc: r.costDusdc, expiry: market.expiry });
+        toast(`Account ready + bet placed — ${dir.toUpperCase()} ${dir === 'up' ? 'over' : 'under'} ${fmtUsd0(r.strikeUsd!)}`, 'success');
+      }
+      acct.refreshWallet();
+      acct.refreshAcctBalance();
+    } catch (e) {
+      toast(`Bet failed: ${friendlyMintAbort(String(e instanceof Error ? e.message : e))}`, 'error');
+    } finally {
+      setBusy(null);
+    }
+  }, [blocker, address, market, dir, isRange, lowerUsd, higherUsd, spot, busy, acct, smartSubmit, payoutQty, winAmt, lev, stake, toast]);
 
   // draw the market's live price chart inside the ticket — strike line (verdict
   // colors) for a side bet, shaded band for a range bet.
@@ -717,20 +749,11 @@ export default function Ticket624Drawer({
                 <ConnectButton />
               </div>
             )}
-            {address && wrapperChecked && !wrapperId && (
-              <div className="border border-white/[0.08] bg-white/[0.02] p-4 mb-4">
-                <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-vermilion mb-1.5">One-time setup</div>
-                <p className="text-[12.5px] text-gray-400 leading-snug mb-3">
-                  Creates your trading account on DeepBook Predict — deposits, payouts and withdrawals all move through it; only you can withdraw.
+            {needsAccount && !firstBetShortWallet && stake > 0 && (
+              <div className="border border-vermilion/20 bg-vermilion/[0.03] p-3 mb-4">
+                <p className="font-mono text-[10px] text-white/45 leading-relaxed">
+                  <span className="text-vermilion">First bet sets you up.</span> Your trading account is created + funded and the bet placed in one tap — gas-free, no separate steps. Only your wallet can ever withdraw.
                 </p>
-                <button
-                  onClick={createAccount}
-                  disabled={busy === 'create'}
-                  className="rounded-full bg-vermilion hover:bg-vermilion-d text-white text-[13px] font-semibold px-5 py-2 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-                  data-cursor="hover"
-                >
-                  {busy === 'create' ? 'Creating…' : 'Create account →'}
-                </button>
               </div>
             )}
             {address && wrapperId && needsDeposit && (
@@ -771,7 +794,7 @@ export default function Ticket624Drawer({
 
             {/* place */}
             <button
-              onClick={place}
+              onClick={needsAccount ? placeFirst : place}
               disabled={!!blocker || busy === 'mint'}
               className={`w-full py-3 text-sm font-semibold transition-all rounded ${
                 !blocker && busy !== 'mint'
