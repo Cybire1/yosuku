@@ -15,6 +15,7 @@ import {
   MoreHorizontal,
   Sparkles,
   Trophy,
+  Twitter,
   WalletCards,
   Zap,
   type LucideIcon,
@@ -41,6 +42,7 @@ const PRIMARY_NAV: NavLink[] = [
 ];
 
 const SECONDARY_NAV: NavLink[] = [
+  { name: 'Trade from X', href: '/trade-from-x', icon: Twitter },
   { name: 'Parlay', href: '/parlay', icon: ChartNoAxesCombined },
   { name: 'Surface', href: '/surface', icon: Activity },
   { name: 'Agents', href: '/agents', icon: Bot },

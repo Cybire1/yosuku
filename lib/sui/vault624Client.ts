@@ -40,6 +40,19 @@ export const VAULT624 = {
   clock: CLOCK_ID,
 } as const;
 
+/** The DEDICATED trade-from-X vault624 instance (separate from the attested copy-desk so a
+ *  user's ONE-agent subscription is never clobbered between the two products). Trade-from-X is
+ *  user-directed (the tweet names the side), so it binds the PLAIN relay agent, not the enclave. */
+export const VAULT624_TWEET = {
+  pkg: VAULT624.pkg,
+  vaultId: '0x3f99ddeda9c1388b8c85777a4931f64143fb5fc70cacc6df132d607b08bb044d',
+  wrapperId: '0xc526da75acf134b160a4c442fb0bacbcd95aeff6daf2be759b65d39ec64f6f51',
+  /** The bounded tweet relay agent (plain key, honors the tweeted direction — NOT the enclave). */
+  tweetAgent: '0xaa50ec0fe985825bd45fcc65d301da096a487349d6993fe8f9305890284a7244',
+  accumulatorRoot: PREDICT624.accumulatorRoot,
+  clock: CLOCK_ID,
+} as const;
+
 /** 1e9 = 1x — the vault stores the leverage cap on the venue's own scale. */
 export const LEV_1X_624 = 1_000_000_000n;
 
@@ -164,6 +177,44 @@ export function buildJoinDesk624(p: {
     arguments: [
       tx.object(VAULT624.vaultId),
       tx.pure.address(p.agent ?? VAULT624.enclaveAgent),
+      tx.pure.u64(p.maxMarginMicro),
+      tx.pure.u64(p.maxLeverage1e9),
+    ],
+  });
+  return tx;
+}
+
+/** ONE-signature enable-tweet-trading: deposit + subscribe the PLAIN tweet agent on the
+ *  DEDICATED trade-from-X vault624. Mirrors buildJoinDesk624 but targets VAULT624_TWEET so a
+ *  user can also copy-trade the enclave desk without the two subscriptions clobbering. */
+export function buildEnableTweetTrading624(p: {
+  coinIds: string[];
+  amountMicro: bigint;
+  maxMarginMicro: bigint;
+  maxLeverage1e9: bigint;
+}): Transaction {
+  const tx = new Transaction();
+  if (p.amountMicro > 0n) {
+    if (p.coinIds.length === 0) throw new Error('no test USDC coins to deposit');
+    const primary = tx.object(p.coinIds[0]);
+    if (p.coinIds.length > 1) tx.mergeCoins(primary, p.coinIds.slice(1).map((id) => tx.object(id)));
+    const [pay] = tx.splitCoins(primary, [tx.pure.u64(p.amountMicro)]);
+    tx.moveCall({
+      target: `${VAULT624_TWEET.pkg}::vault624::deposit`,
+      arguments: [
+        tx.object(VAULT624_TWEET.vaultId),
+        tx.object(VAULT624_TWEET.wrapperId),
+        pay,
+        tx.object(VAULT624_TWEET.accumulatorRoot),
+        tx.object(VAULT624_TWEET.clock),
+      ],
+    });
+  }
+  tx.moveCall({
+    target: `${VAULT624_TWEET.pkg}::vault624::subscribe`,
+    arguments: [
+      tx.object(VAULT624_TWEET.vaultId),
+      tx.pure.address(VAULT624_TWEET.tweetAgent),
       tx.pure.u64(p.maxMarginMicro),
       tx.pure.u64(p.maxLeverage1e9),
     ],
