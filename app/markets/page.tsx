@@ -560,7 +560,7 @@ export default function MarketsPage() {
             <span style={{ color: 'var(--white)' }}>Markets</span>
           </div>
 
-          <div className="hero-grid hero-grid-mini">
+          <div className="hero-grid hero-grid-mini lg:![grid-template-columns:minmax(0,1fr)_400px] lg:!items-start">
             {/* Hero chart — the soonest live market */}
             <div className="hero-chart">
               <div className="hero-chart-head">

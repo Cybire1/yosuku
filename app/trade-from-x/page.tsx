@@ -7,17 +7,14 @@
 import { useState, useCallback } from 'react';
 import Link from 'next/link';
 import { ConnectButton, useCurrentAccount } from '@mysten/dapp-kit';
-import { Transaction } from '@mysten/sui/transactions';
 import { ArrowRight, ShieldCheck, Wallet, Coins, Twitter, Copy, Check, ExternalLink } from 'lucide-react';
 import { useSmartSubmit } from '@/lib/sui/useSmartSubmit';
 import { fetchDUSDCCoins } from '@/lib/sui/queries';
-import { DUSDC_TYPE } from '@/lib/sui/constants';
-import { NET } from '@/lib/sui/network';
+import { buildEnableTweetTrading624 } from '@/lib/sui/vault624Client';
 
 const CONNECT_URL = process.env.NEXT_PUBLIC_CONNECT_URL || 'https://yosuku-connect.yosuku.workers.dev';
-const SOCIAL_VAULT_ID = NET.socialVaultId;
-const VAULT_PKG = NET.strategyPackage; // social_vault lives at the upgrade-#2 package
 const DUSDC_MUL = 1_000_000;
+const TWEET_MAX_LEVERAGE_1E9 = 3_000_000_000n; // authorize the agent up to 3x per trade (it always clamps to the tweet)
 
 export default function TradeFromXPage() {
   const account = useCurrentAccount();
@@ -40,14 +37,17 @@ export default function TradeFromXPage() {
       if (micro <= BigInt(0)) throw new Error('Enter an amount');
       const coins = await fetchDUSDCCoins(null as never, addr);
       if (!coins.length) throw new Error('No DUSDC in your wallet. Grab some from the faucet first.');
-      await submit(() => {
-        const tx = new Transaction();
-        const primary = tx.object(coins[0].coinObjectId);
-        if (coins.length > 1) tx.mergeCoins(primary, coins.slice(1, 15).map((c) => tx.object(c.coinObjectId)));
-        const [dep] = tx.splitCoins(primary, [micro]);
-        tx.moveCall({ target: `${VAULT_PKG}::social_vault::deposit`, typeArguments: [DUSDC_TYPE], arguments: [tx.object(SOCIAL_VAULT_ID), dep] });
-        return tx;
-      });
+      // ONE signature: deposit into your trade-from-X vault624 ledger AND authorize the bounded
+      // relay agent (per-trade caps). The agent can then open tweeted positions from your funds,
+      // but has no path to withdraw them — only you can. maxMargin = what you fund this round.
+      await submit(() =>
+        buildEnableTweetTrading624({
+          coinIds: coins.slice(0, 15).map((c) => c.coinObjectId),
+          amountMicro: micro,
+          maxMarginMicro: micro,
+          maxLeverage1e9: TWEET_MAX_LEVERAGE_1E9,
+        }),
+      );
       setDeposited(true);
     } catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
     finally { setDepositing(false); }
@@ -98,15 +98,15 @@ export default function TradeFromXPage() {
         </Step>
 
         {/* 2 — deposit */}
-        <Step n="2" icon={Coins} title="Fund your X-vault" done={deposited} dim={!addr}>
-          <p className="text-[13px] text-gray-400 mb-3">Deposit DUSDC into your custodied vault — gas-free. Only you can ever withdraw it.</p>
+        <Step n="2" icon={Coins} title="Fund + enable tweet-trading" done={deposited} dim={!addr}>
+          <p className="text-[13px] text-gray-400 mb-3">One signature: deposit DUSDC into your vault <span className="text-white">and</span> authorize the bounded agent to open tweeted bets from it (up to your per-trade cap). Only you can ever withdraw.</p>
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-2 border border-white/10 rounded-xl px-3 py-2 focus-within:border-white/25">
               <input value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))} inputMode="decimal" disabled={!addr} className="bg-transparent w-20 outline-none font-mono text-lg" />
               <span className="text-gray-500 font-mono text-sm">DUSDC</span>
             </div>
             <button onClick={deposit} disabled={!addr || depositing} className="bg-white/10 hover:bg-white/15 disabled:opacity-40 transition-colors rounded-xl px-5 py-2.5 font-display font-bold text-sm">
-              {depositing ? 'Depositing…' : deposited ? 'Deposit more' : 'Deposit'}
+              {depositing ? 'Enabling…' : deposited ? 'Add funds' : 'Fund & enable'}
             </button>
           </div>
           {deposited && <div className="mt-2 font-mono text-[12px] text-new-mint">✓ funded</div>}
@@ -141,10 +141,10 @@ export default function TradeFromXPage() {
         {/* trust */}
         <div className="mt-8 rounded-2xl border border-white/[0.08] bg-gradient-to-b from-white/[0.04] to-transparent p-6">
           <div className="flex items-center gap-2 text-vermilion"><ShieldCheck className="w-5 h-5" /><span className="font-display font-bold">Why it can’t be drained</span></div>
-          <p className="mt-2 text-[13.5px] text-gray-400 leading-relaxed">The agent signs with a bounded key whose only power over your funds is opening a position <span className="text-white">you</span> own; every exit force-pays you. The X-handle→wallet link is the only off-chain piece, and the contract only ever sees Sui addresses — so even a wrong link can’t divert anyone’s funds. Proven on-chain:</p>
+          <p className="mt-2 text-[13.5px] text-gray-400 leading-relaxed">The agent signs with a bounded key whose only power over your funds is <span className="text-white">agent_mint_for</span>, capped by your own subscription — the position it opens is owned by the vault and settles straight back to <span className="text-white">your</span> ledger; the agent has no path to withdraw a cent. The X-handle→wallet link is the only off-chain piece, and the contract only ever sees Sui addresses — so even a wrong link can’t divert anyone’s funds. Proven on-chain (DeepBook Predict 6-24):</p>
           <div className="mt-3 flex flex-col gap-1.5">
-            <a href="https://suiscan.xyz/testnet/tx/2cRyhNAVQRw7TGaDzgHWzkrDYVPfJrCMkKPFoxVSKnWt" target="_blank" rel="noreferrer" className="font-mono text-[12px] text-gray-400 hover:text-vermilion inline-flex items-center gap-2"><ExternalLink className="w-3.5 h-3.5" /> agent_trade (your funds, your order)</a>
-            <a href="https://suiscan.xyz/testnet/tx/2PnQbQqR3bVyUWbT8PsUpb11QAzk27iRxaRz9e9igUb9" target="_blank" rel="noreferrer" className="font-mono text-[12px] text-gray-400 hover:text-vermilion inline-flex items-center gap-2"><ExternalLink className="w-3.5 h-3.5" /> filled into a position you own</a>
+            <a href="https://suiscan.xyz/testnet/tx/Cn69DaM49d5bATJLGyhokudS39F4s6j1rSPDLMhUy1Hb" target="_blank" rel="noreferrer" className="font-mono text-[12px] text-gray-400 hover:text-vermilion inline-flex items-center gap-2"><ExternalLink className="w-3.5 h-3.5" /> agent opened it — position owned by the vault, not the agent</a>
+            <a href="https://suiscan.xyz/testnet/tx/BmuJroQS4wgG9yvVBCDsq7xmdYVD6WyLsFPsBN8Em8rr" target="_blank" rel="noreferrer" className="font-mono text-[12px] text-gray-400 hover:text-vermilion inline-flex items-center gap-2"><ExternalLink className="w-3.5 h-3.5" /> earlier no-divert exit — 0.953 returned to the user, agent ±0</a>
           </div>
         </div>
       </section>

@@ -7,9 +7,17 @@
 // ×1.10 cost guard, friendly abort toasts. The tapped side arrives preselected —
 // the user's tap IS the choice. The amount is always theirs: empty + additive chips.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
+} from 'react';
 import { ConnectButton } from '@mysten/dapp-kit';
-import { X } from 'lucide-react';
+import { Minus, Plus, RotateCcw, X } from 'lucide-react';
 import { drawPriceLine } from '@/lib/charts/canvasChart';
 import { useToast } from '@/components/Toast';
 import { DUSDC_MULTIPLIER } from '@/lib/sui/constants';
@@ -87,6 +95,8 @@ export default function Ticket624Drawer({
   onClose: () => void;
 }) {
   const chartRef = useRef<HTMLCanvasElement | null>(null);
+  const rangeTrackRef = useRef<HTMLDivElement | null>(null);
+  const rangeDragRef = useRef<{ pointerId: number; startX: number; startOffset: number; usdPerPx: number } | null>(null);
   const { toast } = useToast();
   const acct = useAccount624();
   const { address, wrapperId, wrapperChecked, acctBalance } = acct;
@@ -95,6 +105,7 @@ export default function Ticket624Drawer({
   const [mode, setMode] = useState<BetMode>('dir'); // Up/Down vs Range band
   const [preset, setPreset] = useState<RangePresetKey>('medium'); // band width tier (scaled per cadence)
   const [centerOffset, setCenterOffset] = useState<number>(0);     // band center vs spot
+  const [rangeDragging, setRangeDragging] = useState(false);
   const [stakeStr, setStakeStr] = useState(''); // what you BET (the amount you pay) — user-owned
   const [lev, setLev] = useState(1);
   const [fundStr, setFundStr] = useState('');
@@ -118,6 +129,8 @@ export default function Ticket624Drawer({
     setMode('dir');
     setPreset('medium');
     setCenterOffset(0);
+    setRangeDragging(false);
+    rangeDragRef.current = null;
     setStakeStr('');
     setFundStr('');
     setLev(1);
@@ -160,6 +173,55 @@ export default function Ticket624Drawer({
   const higherUsd = bandCenter != null ? bandCenter + half : null;
   const band = isRange && lowerUsd != null && higherUsd != null ? { lowerUsd, higherUsd } : null;
 
+  const snapRangeOffset = useCallback((value: number) => {
+    const snapped = Math.round(value / 5) * 5;
+    return Math.max(-centerMax, Math.min(centerMax, snapped));
+  }, [centerMax]);
+
+  const startRangeDrag = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
+    const track = rangeTrackRef.current;
+    if (!track) return;
+    const width = track.getBoundingClientRect().width;
+    if (width <= 0) return;
+    const axisHalf = Math.max(90, half + 35);
+    rangeDragRef.current = {
+      pointerId: e.pointerId,
+      startX: e.clientX,
+      startOffset: clampedOffset,
+      usdPerPx: (axisHalf * 2) / width,
+    };
+    setRangeDragging(true);
+    e.currentTarget.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  }, [clampedOffset, half]);
+
+  const moveRangeDrag = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
+    const drag = rangeDragRef.current;
+    if (!drag || drag.pointerId !== e.pointerId) return;
+    setCenterOffset(snapRangeOffset(drag.startOffset + (e.clientX - drag.startX) * drag.usdPerPx));
+  }, [snapRangeOffset]);
+
+  const finishRangeDrag = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
+    const drag = rangeDragRef.current;
+    if (!drag || drag.pointerId !== e.pointerId) return;
+    rangeDragRef.current = null;
+    setRangeDragging(false);
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+  }, []);
+
+  const moveRangeWithKeyboard = useCallback((e: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      setCenterOffset(snapRangeOffset(clampedOffset - 5));
+    } else if (e.key === 'ArrowRight' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      setCenterOffset(snapRangeOffset(clampedOffset + 5));
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      setCenterOffset(0);
+    }
+  }, [clampedOffset, snapRangeOffset]);
+
   // Quote a STABLE payout qty derived from the stake via EST_PROB (non-circular). We read the
   // live probability from the quote, then derive the real payout qty + win from that.
   const qtyForQuote = qtyForStake(stake, lev, EST_PROB);
@@ -172,20 +234,16 @@ export default function Ticket624Drawer({
     qty: qtyForQuote,
     lev,
     spot,
-    enabled: !closing && !belowMinHard && !placed,
+    enabled: !closing && !belowMinHard && !placed && !rangeDragging,
   });
 
-  // Numbers ALWAYS show: worked example (empty) → estimate (typed) → live (connected + quoted).
-  const EX_STAKE = 5;
   const showLive = quote != null && stake > 0;
   const showEstimate = !showLive && stake > 0;
-  const showExample = stake === 0;
   const probUsed = quote?.entryProb ?? EST_PROB;
-  const betAmt = showExample ? EX_STAKE : stake;            // what you pay
-  const payoutQty = qtyForStake(betAmt, lev, probUsed);     // costs betAmt at this probability
+  const payoutQty = qtyForStake(stake, lev, probUsed);      // costs stake at this probability
   const winAmt = winForQty(payoutQty, lev, probUsed);       // what a win returns
+  const currentCost = quote ? quote.costMicro / DUSDC_MULTIPLIER : stake;
   const needsDeposit = stake > 0 && stake > acctBalance;
-  const numTone = showExample ? 'text-white/45' : showEstimate ? 'text-white/75' : 'text-white';
 
   const blocker: string | null = closing
     ? 'Market closing — pick the next one'
@@ -397,12 +455,12 @@ export default function Ticket624Drawer({
             )}
 
             {/* mode — call a side (Up/Down) or a band (Range) */}
-            <div className="flex gap-1 mb-4 rounded-lg border border-white/[0.08] bg-white/[0.02] p-1">
+            <div className="flex gap-1 mb-3 rounded-md border border-white/[0.08] bg-white/[0.015] p-1">
               {(['dir', 'range'] as const).map((m) => (
                 <button
                   key={m}
                   onClick={() => setMode(m)}
-                  className={`flex-1 py-2 rounded-md font-mono text-[10.5px] uppercase tracking-[0.16em] transition-colors ${mode === m ? 'bg-vermilion/[0.16] text-vermilion' : 'text-white/45 hover:text-white'}`}
+                  className={`flex-1 py-2 rounded font-mono text-[10px] uppercase tracking-[0.14em] transition-colors ${mode === m ? 'bg-white/[0.08] text-white' : 'text-white/40 hover:text-white/75'}`}
                   aria-pressed={mode === m}
                   data-cursor="hover"
                 >
@@ -413,7 +471,7 @@ export default function Ticket624Drawer({
 
             {mode === 'dir' ? (
               /* direction — tapped side arrives preselected */
-              <div className="grid grid-cols-2 gap-2.5 mb-5">
+              <div className="grid grid-cols-2 gap-2 mb-4">
                 {(['up', 'down'] as const).map((d) => {
                   const on = dir === d;
                   const line = spot == null
@@ -432,28 +490,27 @@ export default function Ticket624Drawer({
                     <button
                       key={d}
                       onClick={() => setDir(on ? null : d)}
-                      className={`text-left border rounded-lg p-4 transition-all duration-150 ${palette}`}
+                      className={`text-left border rounded-md px-3 py-2.5 transition-all duration-150 ${palette}`}
                       aria-pressed={on}
                       data-cursor="hover"
                     >
-                      <div className="font-display font-[800] text-2xl leading-none tracking-tight">
+                      <div className="font-display font-[750] text-[15px] leading-none tracking-normal">
                         {d === 'up' ? '▲ UP' : '▼ DOWN'}
                       </div>
-                      <div className={`font-mono text-[9.5px] leading-snug mt-2 ${on ? 'opacity-90' : 'opacity-60'}`}>{line}</div>
+                      <div className={`font-mono text-[8.5px] leading-snug mt-1.5 ${on ? 'opacity-85' : 'opacity-55'}`}>{line}</div>
                     </button>
                   );
                 })}
               </div>
             ) : (
-              /* range — pick a band near spot; tighter band pays more */
-              <div className="mb-5">
-                <div className="flex items-baseline justify-between mb-2.5">
-                  <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400">Where does BTC land?</span>
-                  <span className="font-mono text-[9.5px] text-white/45">wins if it settles in the band</span>
+              /* range — explicit bounds, compact width control, precise center steps */
+              <div className="mb-4">
+                <div className="flex items-baseline justify-between mb-2">
+                  <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-white/45">Winning range</span>
+                  <span className="font-mono text-[8.5px] text-white/35">BTC must finish inside</span>
                 </div>
 
-                {/* price axis — the band, with the live spot marked */}
-                <div className="relative h-[92px] rounded-xl border border-white/[0.1] bg-white/[0.02] overflow-hidden mb-3">
+                <div className="rounded-md border border-white/[0.1] bg-white/[0.015] overflow-hidden" aria-live="polite">
                   {spot != null && bandCenter != null && lowerUsd != null && higherUsd != null ? (
                     (() => {
                       const AXIS_HALF = Math.max(90, half + 35);
@@ -465,145 +522,191 @@ export default function Ticket624Drawer({
                       const sp = pct(spot);
                       return (
                         <>
-                          <div className="absolute inset-y-5 rounded-md bg-vermilion/[0.16] border-x-2 border-vermilion" style={{ left: `${bl}%`, right: `${100 - bh}%` }} />
-                          <div className="absolute inset-y-3 w-px bg-white/70" style={{ left: `${sp}%` }} />
-                          <div className="absolute top-1.5 font-mono text-[8px] text-white/70 -translate-x-1/2 whitespace-nowrap" style={{ left: `${Math.min(86, Math.max(14, sp))}%` }}>now · {fmtUsd0(spot)}</div>
-                          <div className="absolute bottom-1.5 font-mono text-[9px] font-semibold text-vermilion -translate-x-1/2 whitespace-nowrap" style={{ left: `${Math.max(10, bl)}%` }}>{fmtUsd0(lowerUsd)}</div>
-                          <div className="absolute bottom-1.5 font-mono text-[9px] font-semibold text-vermilion -translate-x-1/2 whitespace-nowrap" style={{ left: `${Math.min(90, bh)}%` }}>{fmtUsd0(higherUsd)}</div>
+                          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 px-3 pt-2.5">
+                            <div>
+                              <span className="block font-mono text-[7.5px] uppercase tracking-[0.14em] text-white/30">From</span>
+                              <strong className="block mt-0.5 font-mono text-[13px] font-medium tabular-nums text-vermilion">{fmtUsd0(lowerUsd)}</strong>
+                            </div>
+                            <span className="font-mono text-[10px] text-white/20" aria-hidden="true">→</span>
+                            <div className="text-right">
+                              <span className="block font-mono text-[7.5px] uppercase tracking-[0.14em] text-white/30">To</span>
+                              <strong className="block mt-0.5 font-mono text-[13px] font-medium tabular-nums text-vermilion">{fmtUsd0(higherUsd)}</strong>
+                            </div>
+                          </div>
+                          <div ref={rangeTrackRef} className="relative mx-3 h-8">
+                            <div className="absolute inset-x-0 top-1/2 h-px bg-white/[0.1]" />
+                            <div
+                              role="slider"
+                              tabIndex={0}
+                              aria-label="Range center relative to the current BTC price"
+                              aria-valuemin={-centerMax}
+                              aria-valuemax={centerMax}
+                              aria-valuenow={clampedOffset}
+                              aria-valuetext={clampedOffset === 0 ? 'Centered on market price' : `${Math.abs(clampedOffset)} dollars ${clampedOffset > 0 ? 'above' : 'below'} market price`}
+                              title="Drag to move the range"
+                              className={`absolute top-1 z-10 h-6 touch-none select-none rounded-sm outline-none transition-shadow focus-visible:ring-2 focus-visible:ring-vermilion/70 ${rangeDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+                              style={{ left: `${bl}%`, right: `${100 - bh}%` }}
+                              onPointerDown={startRangeDrag}
+                              onPointerMove={moveRangeDrag}
+                              onPointerUp={finishRangeDrag}
+                              onPointerCancel={finishRangeDrag}
+                              onLostPointerCapture={finishRangeDrag}
+                              onKeyDown={moveRangeWithKeyboard}
+                            >
+                              <span className={`absolute inset-x-0 top-1/2 h-2 -translate-y-1/2 rounded-sm border-x border-vermilion transition-colors ${rangeDragging ? 'bg-vermilion/45' : 'bg-vermilion/25 hover:bg-vermilion/35'}`} />
+                              <span className="pointer-events-none absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 gap-px" aria-hidden="true">
+                                <span className="h-2.5 w-px bg-vermilion/80" />
+                                <span className="h-2.5 w-px bg-vermilion/80" />
+                                <span className="h-2.5 w-px bg-vermilion/80" />
+                              </span>
+                            </div>
+                            <div className="pointer-events-none absolute top-2.5 z-20 h-3 w-px bg-white/80" style={{ left: `${sp}%` }} />
+                            <div className="pointer-events-none absolute top-[13px] z-20 h-1.5 w-1.5 -translate-x-1/2 rounded-full bg-white" style={{ left: `${sp}%` }} />
+                          </div>
+                          <div className="flex items-center justify-between border-t border-white/[0.07] px-3 py-1.5 font-mono text-[8px] text-white/35">
+                            <span>BTC now</span>
+                            <span className="tabular-nums text-white/65">{fmtUsd0(spot)}</span>
+                          </div>
                         </>
                       );
                     })()
                   ) : (
-                    <div className="absolute inset-0 flex items-center justify-center font-mono text-[10px] text-white/30">waiting for the oracle price…</div>
+                    <div className="flex h-[84px] items-center justify-center font-mono text-[9px] text-white/30">Waiting for the oracle price…</div>
                   )}
                 </div>
 
-                {/* width presets — tighter band = higher payout */}
-                <div className="flex gap-1.5 mb-2.5">
+                <div className="mt-2 grid grid-cols-3 gap-1" aria-label="Range width">
                   {RANGE_PRESETS.map((p) => {
                     const on = preset === p.key;
                     const eff = Math.max(5, Math.round(p.half * cadFactor));
+                    const label = p.key === 'medium' ? 'Balanced' : p.label;
                     return (
                       <button
                         key={p.key}
                         onClick={() => setPreset(p.key)}
-                        className={`flex-1 rounded-lg border py-2 transition-colors ${on ? 'border-vermilion text-vermilion bg-vermilion/[0.06]' : 'border-white/[0.1] text-white/50 hover:border-white/25 hover:text-white'}`}
+                        className={`rounded border px-2 py-1.5 text-left transition-all duration-150 active:scale-[0.98] ${on ? 'border-vermilion/70 bg-vermilion/[0.08] text-white' : 'border-white/[0.09] text-white/45 hover:border-white/20 hover:text-white/75'}`}
                         aria-pressed={on}
                         data-cursor="hover"
                       >
-                        <div className="font-display font-bold text-[13px] leading-none">{p.label}</div>
-                        <div className="font-mono text-[9px] opacity-70 mt-1">±${eff}</div>
+                        <span className="block font-display text-[11px] font-semibold leading-none">{label}</span>
+                        <span className={`mt-1 block font-mono text-[7.5px] tabular-nums ${on ? 'text-vermilion' : 'text-white/30'}`}>${eff * 2} span</span>
                       </button>
                     );
                   })}
                 </div>
 
-                {/* aim the band — single-handle slider avoids the dual-handle confusion */}
-                <div className="rounded-lg border border-white/[0.08] bg-white/[0.015] px-3 py-2.5">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-white/40">Aim the band</span>
-                    <span className="font-mono text-[10px] text-white/70 tabular-nums">
-                      {clampedOffset === 0 ? 'centered on market' : `$${Math.abs(clampedOffset)} ${clampedOffset > 0 ? 'above' : 'below'}`}
+                <div className="mt-2 flex min-h-10 items-center justify-between gap-3 border-t border-white/[0.08] pt-2">
+                  <div className="min-w-0">
+                    <span className="block font-mono text-[7.5px] uppercase tracking-[0.14em] text-white/30">Range center</span>
+                    <span className="block mt-0.5 truncate font-mono text-[9px] tabular-nums text-white/60">
+                      {clampedOffset === 0 ? 'At market price' : `$${Math.abs(clampedOffset)} ${clampedOffset > 0 ? 'above' : 'below'} market`}
                     </span>
                   </div>
-                  <input
-                    type="range"
-                    min={-centerMax}
-                    max={centerMax}
-                    step={5}
-                    value={clampedOffset}
-                    onChange={(e) => setCenterOffset(Number(e.target.value))}
-                    className="w-full accent-vermilion cursor-pointer"
-                    aria-label="Aim the band above or below the market price"
-                  />
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setCenterOffset(Math.max(-centerMax, clampedOffset - 5))}
+                      className="grid h-8 w-8 place-items-center rounded border border-white/[0.1] text-white/55 transition-colors hover:border-white/25 hover:text-white active:scale-95"
+                      aria-label="Move range five dollars lower"
+                      title="Move range $5 lower"
+                    >
+                      <Minus className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCenterOffset(0)}
+                      disabled={clampedOffset === 0}
+                      className="grid h-8 w-8 place-items-center rounded border border-white/[0.1] text-white/55 transition-colors hover:border-white/25 hover:text-white active:scale-95 disabled:cursor-default disabled:opacity-25"
+                      aria-label="Recenter range on the market price"
+                      title="Recenter range"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCenterOffset(Math.min(centerMax, clampedOffset + 5))}
+                      className="grid h-8 w-8 place-items-center rounded border border-white/[0.1] text-white/55 transition-colors hover:border-white/25 hover:text-white active:scale-95"
+                      aria-label="Move range five dollars higher"
+                      title="Move range $5 higher"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
 
-            {/* the bet — user-owned, chips ADD, never pre-decided */}
-            <div className="mb-5">
+            {/* amount + leverage — the only sizing controls */}
+            <div className="mb-4 border-y border-white/[0.08] py-3">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400">How much do you want to bet?</span>
-                <span className="font-mono text-[10px] text-gray-600">in your account: {fmt2(acctBalance)}</span>
+                <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-white/45">Bet amount</span>
+                <span className="font-mono text-[9px] text-white/35">Balance {fmt2(acctBalance)}</span>
               </div>
-              <div className="rounded-2xl border border-white/[0.1] bg-white/[0.02] px-4 pt-3.5 pb-3 transition-all focus-within:border-vermilion/60 focus-within:bg-vermilion/[0.03] focus-within:shadow-[0_0_0_3px_rgba(224,77,38,0.08)]">
-                <div className="flex items-baseline gap-2">
-                  <input
-                    inputMode="decimal"
-                    placeholder="0.00"
-                    value={stakeStr}
-                    onChange={(e) => setStakeStr(e.target.value.replace(/[^0-9.]/g, ''))}
-                    className="min-w-0 flex-1 bg-transparent font-display text-[2.1rem] leading-none font-bold text-white tabular-nums outline-none placeholder:text-white/20 caret-vermilion"
-                    aria-label="Bet amount in test USDC"
-                  />
-                  <span className="shrink-0 font-mono text-[11px] font-semibold uppercase tracking-wider text-gray-400">test USDC</span>
+              <div className="flex items-center gap-2">
+                <input
+                  inputMode="decimal"
+                  placeholder="0.00"
+                  value={stakeStr}
+                  onChange={(e) => setStakeStr(e.target.value.replace(/[^0-9.]/g, ''))}
+                  className="min-w-0 flex-1 bg-transparent font-display text-[1.75rem] leading-none font-bold text-white tabular-nums outline-none placeholder:text-white/18 caret-vermilion"
+                  aria-label="Bet amount in test USDC"
+                />
+                <span className="shrink-0 font-mono text-[9px] uppercase tracking-[0.12em] text-white/35">test USDC</span>
+              </div>
+              <div className="mt-2.5 flex items-center justify-between gap-3">
+                <div className="flex gap-1">
+                  {[1, 5, 20].map((n) => (
+                    <button key={n} onClick={() => addStake(n)} className="min-w-10 rounded border border-white/[0.1] px-2 py-1 font-mono text-[9px] text-white/55 hover:border-white/25 hover:text-white transition-colors active:scale-95" data-cursor="hover">
+                      +{n}
+                    </button>
+                  ))}
                 </div>
-                <div className="mt-3 flex items-center justify-between border-t border-white/[0.06] pt-2.5">
-                  <span className="font-mono text-[10px] text-gray-500">
-                    {stake > 0 ? <>win <span className="text-vermilion tabular-nums font-semibold">{fmt2(winAmt)}</span> if you&apos;re right</> : 'you win more than you bet'}
-                  </span>
-                  <div className="flex gap-1.5">
-                    {[1, 5, 20].map((n) => (
-                      <button key={n} onClick={() => addStake(n)} className="rounded-lg border border-white/15 px-2.5 py-1 font-mono text-[10px] font-semibold text-gray-300 hover:border-vermilion/60 hover:bg-vermilion/[0.08] hover:text-white transition-colors active:scale-95" data-cursor="hover">
-                        +{n}
-                      </button>
-                    ))}
-                  </div>
+                <div className="flex gap-1" aria-label="Leverage">
+                  {[1, 2, 3].map((v) => (
+                    <button
+                      key={v}
+                      onClick={() => setLev(v)}
+                      className={`min-w-10 rounded border px-2 py-1 font-mono text-[9px] transition-colors ${lev === v ? 'border-vermilion/70 bg-vermilion/[0.08] text-vermilion' : 'border-white/[0.1] text-white/45 hover:text-white'}`}
+                      aria-pressed={lev === v}
+                      data-cursor="hover"
+                    >
+                      {v}×
+                    </button>
+                  ))}
                 </div>
               </div>
               {belowMinHard && (
-                <p className="font-mono text-[10px] text-vermilion mt-2">
-                  Bet at least {fmt2(MIN_STAKE)} test USDC — that&apos;s the venue&apos;s minimum.
+                <p className="font-mono text-[9px] text-vermilion mt-2">
+                  Minimum {fmt2(MIN_STAKE)} test USDC.
                 </p>
               )}
             </div>
 
-            {/* leverage — native knockout */}
-            <div className="mb-5">
-              <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400 mb-1.5">
-                Leverage <span className="text-gray-600 normal-case tracking-normal">— native knockout</span>
-              </div>
-              <div className="flex gap-1.5 max-w-[14rem]">
-                {[1, 2, 3].map((v) => (
-                  <button
-                    key={v}
-                    onClick={() => setLev(v)}
-                    className={`flex-1 py-1.5 rounded font-mono text-[12px] border transition-colors ${lev === v ? 'border-vermilion text-vermilion bg-vermilion/[0.06]' : 'border-white/[0.08] text-white/50 hover:border-white/20'}`}
-                    data-cursor="hover"
-                  >
-                    {v}×
-                  </button>
-                ))}
-              </div>
-              {lev > 1 && (
-                <p className="font-mono text-[10px] text-white/40 leading-relaxed mt-2">
-                  Leverage finances part of your entry; a win pays quantity minus the financed floor; it can knock out before expiry.
-                </p>
-              )}
+            {/* one quote strip, no example table */}
+            <div className={`grid grid-cols-3 divide-x divide-white/[0.07] border-b mb-2 ${showLive ? 'border-vermilion/30' : 'border-white/[0.08]'}`}>
+              <CompactQuote label="Current cost" value={stake > 0 ? fmt2(currentCost) : '—'} />
+              <CompactQuote label="Return" value={stake > 0 ? fmt2(winAmt) : '—'} accent={stake > 0} />
+              <CompactQuote label="Max loss" value={stake > 0 ? fmt2(currentCost) : '—'} />
             </div>
-
-            {/* the numbers — ALWAYS shown: worked example → client estimate → exact live quote */}
-            <div className={`rounded-xl border ${showLive ? 'border-vermilion/25 bg-vermilion/[0.03]' : 'border-white/[0.08] bg-white/[0.015]'} divide-y divide-white/[0.06] mb-3 transition-colors`}>
-              <div className="flex items-center justify-between px-4 pt-2.5 pb-1">
-                <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-white/40">The numbers</span>
-                <span className={`font-mono text-[8.5px] uppercase tracking-[0.14em] rounded-full px-1.5 py-0.5 ${showLive ? 'text-vermilion border border-vermilion/40' : 'text-white/40 border border-white/15'}`}>
-                  {showLive ? '● live quote' : showEstimate ? (quoting ? 'quoting…' : 'estimate') : 'example'}
-                </span>
-              </div>
-              <QuoteRow k="You bet" v={fmt2(betAmt)} tone={numTone} />
-              <QuoteRow k="If you win" v={`${fmt2(winAmt)} back`} strong tone={showExample ? numTone : 'text-vermilion'} />
-              <QuoteRow k="If you lose" v={`${fmt2(betAmt)} — your bet, gone`} tone={numTone} />
-              {showLive && <QuoteRow k="Chance to win" v={`${(probUsed * 100).toFixed(0)}%`} tone={numTone} />}
-            </div>
-            <p className="font-mono text-[9.5px] leading-relaxed text-white/35 mb-4">
-              {showLive
-                ? 'Live venue price, refreshed every 12s. You never pay more than you bet — if the price moves while you sign, it safely rejects instead.'
-                : quoteErr
+            <div className="flex items-start justify-between gap-3 min-h-7 mb-3 font-mono text-[8.5px] leading-relaxed text-white/35">
+              <span>
+                {rangeDragging
+                  ? 'Release to price this range'
+                  : quoteErr
                   ? `Quote failed: ${friendlyMintAbort(quoteErr)}`
-                  : showEstimate
-                    ? (address ? 'Estimate — getting the exact live price…' : 'Estimate. Connect your wallet for the exact live price before you bet.')
-                    : `Example at a ${EX_STAKE} test USDC bet — type your own amount above.`}
-            </p>
+                  : showLive
+                    ? 'Live venue quote'
+                    : showEstimate
+                      ? (quoting ? 'Getting live quote…' : 'Estimated until wallet quote')
+                      : 'Enter an amount to quote'}
+              </span>
+              {showLive && <span className="shrink-0 text-white/55">{(probUsed * 100).toFixed(0)}% chance</span>}
+            </div>
+            {lev > 1 && (
+              <p className="font-mono text-[8.5px] text-white/35 leading-relaxed -mt-1 mb-3">
+                {lev}× can knock out before expiry.
+              </p>
+            )}
 
             {/* account gates, inline */}
             {!address && (
@@ -689,10 +792,8 @@ export default function Ticket624Drawer({
                     : `Place ${dir === 'up' ? 'UP' : 'DOWN'} — ${strikeUsd != null ? `${dir === 'up' ? 'over' : 'under'} ${fmtUsd0(strikeUsd)}` : ''} →`)}
             </button>
 
-            <p className="font-mono text-[9.5px] leading-relaxed text-white/30 mt-3">
-              Play-money test USDC. Settled by a price oracle — no committee, no vote. You can lose your full stake
-              {lev > 1 ? '; leveraged positions can knock out before expiry' : ''}. Wallet-signed;
-              payouts land in YOUR trading account only.
+            <p className="font-mono text-[8.5px] leading-relaxed text-white/25 mt-2.5">
+              Oracle-settled test market · wallet-signed · payouts return to your trading account.
             </p>
           </div>
         )}
@@ -701,11 +802,11 @@ export default function Ticket624Drawer({
   );
 }
 
-function QuoteRow({ k, v, strong, tone }: { k: string; v: string; strong?: boolean; tone?: string }) {
+function CompactQuote({ label, value, accent = false }: { label: string; value: string; accent?: boolean }) {
   return (
-    <div className="flex items-baseline justify-between gap-3 px-4 py-2.5">
-      <span className="font-mono text-[9.5px] uppercase tracking-[0.18em] text-white/40 shrink-0">{k}</span>
-      <span className={`font-mono tabular-nums text-right ${strong ? 'text-[17px] font-bold' : 'text-[13px]'} ${tone ?? 'text-white/80'}`}>{v}</span>
+    <div className="min-w-0 px-2.5 py-2.5 first:pl-0 last:pr-0">
+      <span className="block font-mono text-[7.5px] uppercase tracking-[0.12em] text-white/30 mb-1">{label}</span>
+      <span className={`block truncate font-mono text-[13px] tabular-nums ${accent ? 'text-vermilion' : 'text-white/75'}`}>{value}</span>
     </div>
   );
 }
