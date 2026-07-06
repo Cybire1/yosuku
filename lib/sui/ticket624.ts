@@ -53,6 +53,12 @@ export const EST_PROB_HIGH = 0.62;
  *  keeps the no-quote paths (first-bet, top-up) close enough that they clear with the buffer. */
 const EST_PROB_BY_CADENCE: Record<string, number> = { '1m': 0.8, '5m': 0.72, '1h': 0.62 };
 export const estProb = (cadence?: string) => EST_PROB_BY_CADENCE[cadence ?? '5m'] ?? 0.68;
+/** The sponsor's address, fetched once and cached — quotes/probes set it as gas owner so
+ *  build-time gas selection works for SUI-less wallets (the whole flow is sponsored). */
+let _sponsorAddrP: Promise<string | null> | null = null;
+export const sponsorAddr = () =>
+  (_sponsorAddrP ??= getSponsorStatus().then((s) => s?.address ?? null).catch(() => null));
+
 /** Leave enough time for wallet approval and submission before the market expires. */
 export const MIN_MINT_MS = 15_000;
 /** DeepBook Predict's on-chain minimum net premium. Fees are quoted separately. */
@@ -332,6 +338,7 @@ export function useMintQuote624(p: {
         higherTick,
         qtyMicro: positionQuantityMicro624(p.qty),
         leverage1e9: BigInt(p.lev) * 1_000_000_000n,
+        gasOwner: await sponsorAddr(), // SUI-less wallets: sponsor satisfies build-time gas selection
       });
       if (dead) return;
       setQuoting(false);
@@ -404,6 +411,7 @@ export async function placeMint624(p: {
     higherTick,
     qtyMicro,
     leverage1e9,
+    gasOwner: await sponsorAddr(),
   });
   if ('error' in fresh) throw new Error(`quote: ${fresh.error}`);
   const freshCost = fresh.costMicro / DUSDC_MULTIPLIER;
@@ -455,6 +463,7 @@ export async function placeRangeMint624(p: {
     higherTick,
     qtyMicro,
     leverage1e9,
+    gasOwner: await sponsorAddr(),
   });
   if ('error' in fresh) throw new Error(`quote: ${fresh.error}`);
   const freshCost = fresh.costMicro / DUSDC_MULTIPLIER;

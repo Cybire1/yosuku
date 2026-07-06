@@ -599,6 +599,9 @@ export async function quoteMint624(p: {
   higherTick: number | bigint;
   qtyMicro: bigint;
   leverage1e9: bigint;
+  /** Gas owner for BUILD-time gas selection — pass the sponsor for SUI-less wallets
+   *  (the bet itself is sponsored, so the quote must not require the user to hold SUI). */
+  gasOwner?: string | null;
 }): Promise<MintQuote624 | { error: string }> {
   try {
     const tx = buildMintTx({
@@ -607,6 +610,7 @@ export async function quoteMint624(p: {
       maxCostMicro: 18446744073709551615n, maxProb1e9: 990_000_000n, // uncapped guards: pure price discovery
     });
     tx.setSender(p.sender);
+    if (p.gasOwner) tx.setGasOwner(p.gasOwner); // dry-runs need no signature — sponsor coins satisfy gas selection
     const bytes = await tx.build({ client: grpc }); // resolution simulates; throws on protocol rejects
     const b64 = typeof Buffer !== 'undefined' ? Buffer.from(bytes).toString('base64') : btoa(String.fromCharCode(...bytes));
     const r = await fetch('https://fullnode.testnet.sui.io:443', {
