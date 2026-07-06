@@ -42,6 +42,7 @@ import {
   type RangePresetKey,
 } from '@/lib/sui/ticket624';
 import { useSmartSubmit } from '@/lib/sui/useSmartSubmit';
+import { buildDepositTx } from '@/lib/sui/predict624Client';
 import type { Transaction } from '@mysten/sui/transactions';
 
 // A ±$30 band is trivial on a 1-minute market but a real call on 1h — BTC's
@@ -103,6 +104,12 @@ export default function Ticket624Drawer({
   const { toast } = useToast();
   const acct = useAccount624();
   const { submit: smartSubmit } = useSmartSubmit();
+  // Every bet + deposit goes gas-free through the sponsor (targets are in the trading-624
+  // policy), auto-falling back to the wallet if the sponsor declines or its pool is dry.
+  const sponsoredSubmit = useCallback(
+    (factory: () => Transaction) => smartSubmit(factory).then((x) => x.digest),
+    [smartSubmit],
+  );
   const { address, wrapperId, wrapperChecked, acctBalance } = acct;
 
   const [dir, setDir] = useState<Dir624 | null>(side);
@@ -292,7 +299,13 @@ export default function Ticket624Drawer({
     }
     setBusy('fund');
     try {
-      await acct.deposit(BigInt(Math.floor(amt * DUSDC_MULTIPLIER)));
+      const amountMicro = BigInt(Math.floor(amt * DUSDC_MULTIPLIER));
+      const coinIds = acct.dusdcCoins.map((c) => c.coinObjectId);
+      if (!wrapperId) throw new Error('No trading account yet');
+      // gas-free via the sponsor (deposit_funds is in the trading-624 policy), wallet fallback
+      await sponsoredSubmit(() => buildDepositTx({ wrapperId, coinIds, amountMicro }));
+      acct.refreshWallet();
+      acct.refreshAcctBalance();
       toast(`Added ${fmt2(amt)} test USDC`, 'success');
       setFundStr('');
     } catch (e) {
@@ -300,7 +313,7 @@ export default function Ticket624Drawer({
     } finally {
       setBusy(null);
     }
-  }, [acct, busy, fundStr, toast]);
+  }, [acct, busy, fundStr, wrapperId, sponsoredSubmit, toast]);
 
   const place = useCallback(async () => {
     if (blocker || !address || !wrapperId || !market || spot == null || busy || !quote) return;
@@ -308,7 +321,7 @@ export default function Ticket624Drawer({
     try {
       if (isRange && lowerUsd != null && higherUsd != null) {
         const r = await placeRangeMint624({
-          submitTx: acct.submitTx,
+          submit: sponsoredSubmit,
           address,
           wrapperId,
           marketId: market.id,
@@ -322,7 +335,7 @@ export default function Ticket624Drawer({
         toast(`Range bet placed — ${fmtUsd0(r.lowerUsd)}–${fmtUsd0(r.higherUsd)}`, 'success');
       } else if (dir) {
         const r = await placeMint624({
-          submitTx: acct.submitTx,
+          submit: sponsoredSubmit,
           address,
           wrapperId,
           marketId: market.id,
@@ -341,7 +354,7 @@ export default function Ticket624Drawer({
     } finally {
       setBusy(null);
     }
-  }, [blocker, address, wrapperId, market, dir, isRange, lowerUsd, higherUsd, spot, busy, quote, acct, payoutQty, winAmt, lev, acctBalance, toast]);
+  }, [blocker, address, wrapperId, market, dir, isRange, lowerUsd, higherUsd, spot, busy, quote, acct, sponsoredSubmit, payoutQty, winAmt, lev, acctBalance, toast]);
 
   // First bet for a user with no account yet: create + fund + place in ONE signature, gas-free
   // via the sponsor (a new user has no SUI). No pre-quote — cost is bounded by the deposit.
@@ -351,7 +364,7 @@ export default function Ticket624Drawer({
     try {
       const coinIds = acct.dusdcCoins.map((c) => c.coinObjectId);
       const base = {
-        submit: (factory: () => Transaction) => smartSubmit(factory).then((x) => x.digest),
+        submit: sponsoredSubmit,
         marketId: market.id,
         qty: payoutQty,
         lev,
@@ -376,7 +389,7 @@ export default function Ticket624Drawer({
     } finally {
       setBusy(null);
     }
-  }, [blocker, address, market, dir, isRange, lowerUsd, higherUsd, spot, busy, acct, smartSubmit, payoutQty, winAmt, lev, stake, toast]);
+  }, [blocker, address, market, dir, isRange, lowerUsd, higherUsd, spot, busy, acct, sponsoredSubmit, payoutQty, winAmt, lev, stake, toast]);
 
   // draw the market's live price chart inside the ticket — strike line (verdict
   // colors) for a side bet, shaded band for a range bet.
@@ -816,7 +829,7 @@ export default function Ticket624Drawer({
             </button>
 
             <p className="font-mono text-[8.5px] leading-relaxed text-white/25 mt-2.5">
-              Oracle-settled test market · wallet-signed · payouts return to your trading account.
+              Oracle-settled test market · gas-free (sponsored) · payouts return to your trading account.
             </p>
           </div>
         )}
