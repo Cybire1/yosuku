@@ -14,6 +14,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useCurrentAccount, useSignTransaction } from '@mysten/dapp-kit';
 import type { Transaction } from '@mysten/sui/transactions';
 import { grpc, buildSignExecute } from './modernClients';
+import { getSponsorStatus } from '../sponsor';
 import { DUSDC_MULTIPLIER } from './constants';
 import { useDUSDCBalance } from './hooks';
 import {
@@ -31,6 +32,8 @@ import {
   buildDepositTx,
   buildMintTx,
   buildCreateFundAndMint624,
+  buildTopUpAndMint624,
+  probeCombinedMint624,
   quoteMint624,
   type MintQuote624,
 } from './predict624Client';
@@ -43,6 +46,13 @@ export const BAND_USD = 20;
 export const EST_PROB = 0.5;
 /** Upper bound used for balance checks before a live quote lands. */
 export const EST_PROB_HIGH = 0.62;
+/** Realistic entry-probability estimate when there is NO live quote (no account yet, or the
+ *  account is underfunded so the quote dry-run aborts). A near-money directional band is
+ *  HIGH-probability — and more so the shorter the cadence — so the flat 0.5 over-sizes the
+ *  payout and the real cost then blows past maxCost (EMintCostAboveMax). Sizing qty off these
+ *  keeps the no-quote paths (first-bet, top-up) close enough that they clear with the buffer. */
+const EST_PROB_BY_CADENCE: Record<string, number> = { '1m': 0.8, '5m': 0.72, '1h': 0.62 };
+export const estProb = (cadence?: string) => EST_PROB_BY_CADENCE[cadence ?? '5m'] ?? 0.68;
 /** Leave enough time for wallet approval and submission before the market expires. */
 export const MIN_MINT_MS = 15_000;
 /** DeepBook Predict's on-chain minimum net premium. Fees are quoted separately. */
@@ -477,6 +487,7 @@ export async function placeFirstBet624(p: {
   /** A sponsor-capable submit (factory form) — a new user has no SUI, so the first bet MUST
    *  be gas-free; every target here is in the yosuku-trading-624 sponsor policy. */
   submit: (factory: () => Transaction) => Promise<string>;
+  address: string;
   marketId: string;
   dir?: Dir624;
   band?: { lowerUsd: number; higherUsd: number };
@@ -503,19 +514,120 @@ export async function placeFirstBet624(p: {
   const { lowerTick, higherTick } = isRange
     ? rangeTicks624(p.band!.lowerUsd, p.band!.higherUsd)
     : ticks624(p.spot, p.dir!);
+  // Probe the REAL entry probability (dry-run of this same combined PTB — the deposit inside
+  // funds the account mid-dry-run). Static estimates abort EMintCostAboveMax when conditions
+  // push the band's probability past them (measured 0.6→0.9 on the same band in one day).
+  // Sponsor as gas owner satisfies gas selection for a SUI-less wallet; falls back to the
+  // caller's estimate-sized qty only if the probe itself fails.
+  let qtyDisplay = p.qty;
+  const sponsor = await getSponsorStatus().catch(() => null);
+  const probe = await probeCombinedMint624({
+    wrapperId: null,
+    coinIds: p.coinIds,
+    probeDepositMicro: p.walletDusdcMicro,
+    marketId: p.marketId,
+    lowerTick,
+    higherTick,
+    leverage1e9: BigInt(p.lev) * 1_000_000_000n,
+    sender: p.address,
+    gasOwner: sponsor?.address ?? null,
+  });
+  if (!('error' in probe) && probe.entryProb > 0.01) {
+    qtyDisplay = qtyForStake(p.stakeDusdc, p.lev, probe.entryProb);
+  }
   const mintArgs = {
     coinIds: p.coinIds,
     depositMicro,
     marketId: p.marketId,
     lowerTick,
     higherTick,
-    qtyMicro: positionQuantityMicro624(p.qty),
+    qtyMicro: positionQuantityMicro624(qtyDisplay),
     leverage1e9: BigInt(p.lev) * 1_000_000_000n,
     maxCostMicro: depositMicro, // can't cost more than we just deposited
     maxProb1e9: BigInt(990_000_000),
   };
   // factory form: the sponsored path rebuilds the tx per attempt (sets gas owner = sponsor)
   const digest = await p.submit(() => buildCreateFundAndMint624(mintArgs));
+  const out: { digest: string; costDusdc: number; strikeUsd?: number; lowerUsd?: number; higherUsd?: number } = {
+    digest,
+    costDusdc: p.stakeDusdc,
+  };
+  if (isRange) { out.lowerUsd = p.band!.lowerUsd; out.higherUsd = p.band!.higherUsd; }
+  else { out.strikeUsd = strike624(p.spot, p.dir!); }
+  return out;
+}
+
+/**
+ * TOP UP AND BET for an EXISTING account whose balance is below the bet: deposit the shortfall
+ * from the wallet AND place, in ONE sponsored signature — no separate "deposit, then bet" step.
+ * Like placeFirstBet624 but the account already exists (no create/share). No live quote (an
+ * underfunded account can't dry-run the mint), so we top the balance up to stake + cadence
+ * headroom and cap the cost there; the PTB reverts if it can't fit, so funds are never stranded.
+ */
+export async function placeTopUpAndBet624(p: {
+  submit: (factory: () => Transaction) => Promise<string>;
+  address: string;
+  wrapperId: string;
+  marketId: string;
+  dir?: Dir624;
+  band?: { lowerUsd: number; higherUsd: number };
+  /** Payout quantity, DUSDC display units. */
+  qty: number;
+  lev: number;
+  spot: number;
+  stakeDusdc: number;
+  /** The existing account balance (DUSDC display units). */
+  acctBalance: number;
+  walletDusdcMicro: bigint;
+  coinIds: string[];
+  cadence?: string;
+}): Promise<{ digest: string; costDusdc: number; strikeUsd?: number; lowerUsd?: number; higherUsd?: number }> {
+  if (!p.coinIds.length) throw new Error('no DUSDC in your wallet to top up — grab some from the faucet');
+  const stakeMicro = BigInt(Math.round(p.stakeDusdc * DUSDC_MULTIPLIER));
+  const acctMicro = BigInt(Math.round(p.acctBalance * DUSDC_MULTIPLIER));
+  // top the account up to stake + cadence headroom; deposit only the shortfall, capped at wallet
+  const targetMicro = (stakeMicro * BigInt(Math.round(costCapBuffer(p.cadence) * 100))) / 100n;
+  const shortfall = targetMicro > acctMicro ? targetMicro - acctMicro : 0n;
+  const depositMicro = shortfall < p.walletDusdcMicro ? shortfall : p.walletDusdcMicro;
+  if (depositMicro <= 0n) throw new Error('account already funded — no top-up needed');
+  const totalMicro = acctMicro + depositMicro;
+  if (totalMicro < stakeMicro) throw new Error('not enough test USDC to cover the bet + fees — top up your wallet');
+
+  const isRange = p.band != null && p.band.lowerUsd < p.band.higherUsd;
+  const { lowerTick, higherTick } = isRange
+    ? rangeTicks624(p.band!.lowerUsd, p.band!.higherUsd)
+    : ticks624(p.spot, p.dir!);
+  // Probe the REAL entry probability (see placeFirstBet624) — sizes qty so the measured cost
+  // lands near the stake instead of blowing past maxCost when the band's prob runs high.
+  let qtyDisplay = p.qty;
+  const sponsor = await getSponsorStatus().catch(() => null);
+  const probe = await probeCombinedMint624({
+    wrapperId: p.wrapperId,
+    coinIds: p.coinIds,
+    probeDepositMicro: depositMicro,
+    marketId: p.marketId,
+    lowerTick,
+    higherTick,
+    leverage1e9: BigInt(p.lev) * 1_000_000_000n,
+    sender: p.address,
+    gasOwner: sponsor?.address ?? null,
+  });
+  if (!('error' in probe) && probe.entryProb > 0.01) {
+    qtyDisplay = qtyForStake(p.stakeDusdc, p.lev, probe.entryProb);
+  }
+  const mintArgs = {
+    wrapperId: p.wrapperId,
+    coinIds: p.coinIds,
+    depositMicro,
+    marketId: p.marketId,
+    lowerTick,
+    higherTick,
+    qtyMicro: positionQuantityMicro624(qtyDisplay),
+    leverage1e9: BigInt(p.lev) * 1_000_000_000n,
+    maxCostMicro: totalMicro, // cost can't exceed the post-deposit balance
+    maxProb1e9: BigInt(990_000_000),
+  };
+  const digest = await p.submit(() => buildTopUpAndMint624(mintArgs));
   const out: { digest: string; costDusdc: number; strikeUsd?: number; lowerUsd?: number; higherUsd?: number } = {
     digest,
     costDusdc: p.stakeDusdc,

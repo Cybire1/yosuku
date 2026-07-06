@@ -25,6 +25,7 @@ import { type Market624 } from '@/lib/sui/predict624Client';
 import {
   BAND_USD,
   EST_PROB,
+  estProb,
   MIN_MINT_MS,
   MIN_STAKE,
   RANGE_CENTER_MAX,
@@ -33,6 +34,7 @@ import {
   placeMint624,
   placeRangeMint624,
   placeFirstBet624,
+  placeTopUpAndBet624,
   qtyForStake,
   strike624,
   useAccount624,
@@ -250,7 +252,7 @@ export default function Ticket624Drawer({
 
   const showLive = quote != null && stake > 0;
   const showEstimate = !showLive && stake > 0;
-  const probUsed = quote?.entryProb ?? EST_PROB;
+  const probUsed = quote?.entryProb ?? estProb(market?.cadence);
   const payoutQty = qtyForStake(stake, lev, probUsed);      // costs stake at this probability
   const winAmt = winForQty(payoutQty, lev, probUsed);       // what a win returns
   const currentCost = quote ? quote.costMicro / DUSDC_MULTIPLIER : stake;
@@ -260,6 +262,9 @@ export default function Ticket624Drawer({
   const walletDusdc = acct.walletMicro / DUSDC_MULTIPLIER;
   const needsAccount = !!address && wrapperChecked && !wrapperId;
   const firstBetShortWallet = needsAccount && stake > 0 && stake > walletDusdc;
+  // Existing account below the bet, but the wallet can cover the shortfall → top up + place in
+  // ONE signature (no separate "deposit, then bet"). If the wallet is ALSO short, they need more.
+  const canOneTapTopUp = needsDeposit && acctBalance + walletDusdc >= stake;
 
   const blocker: string | null = closing
     ? 'Market closing — pick the next one'
@@ -278,7 +283,7 @@ export default function Ticket624Drawer({
                 : needsAccount
                   ? (firstBetShortWallet ? `Add ${fmt2(stake - walletDusdc)} test USDC to your wallet` : null)
                   : needsDeposit
-                    ? `Add ${fmt2(stake - acctBalance)} test USDC below first`
+                    ? (canOneTapTopUp ? null : `Add ${fmt2(stake - acctBalance - walletDusdc)} more test USDC to your wallet`)
                     : quoteErr
                       ? 'Quote failed — see below'
                       : !quote
@@ -367,6 +372,7 @@ export default function Ticket624Drawer({
       const coinIds = acct.dusdcCoins.map((c) => c.coinObjectId);
       const base = {
         submit: sponsoredSubmit,
+        address,
         marketId: market.id,
         qty: payoutQty,
         lev,
@@ -393,6 +399,44 @@ export default function Ticket624Drawer({
       setBusy(null);
     }
   }, [blocker, address, market, dir, isRange, lowerUsd, higherUsd, spot, busy, acct, sponsoredSubmit, payoutQty, winAmt, lev, stake, toast]);
+
+  // Existing account below the bet, wallet covers it: top up the shortfall + place in ONE
+  // sponsored signature — no separate deposit step (mirrors the first-bet flow).
+  const placeTopUp = useCallback(async () => {
+    if (blocker || !address || !wrapperId || !market || spot == null || busy) return;
+    setBusy('mint');
+    try {
+      const base = {
+        submit: sponsoredSubmit,
+        address,
+        wrapperId,
+        marketId: market.id,
+        qty: payoutQty,
+        lev,
+        spot,
+        stakeDusdc: stake,
+        acctBalance,
+        walletDusdcMicro: BigInt(Math.floor(acct.walletMicro)),
+        coinIds: acct.dusdcCoins.map((c) => c.coinObjectId),
+        cadence: market.cadence,
+      };
+      if (isRange && lowerUsd != null && higherUsd != null) {
+        const r = await placeTopUpAndBet624({ ...base, band: { lowerUsd, higherUsd } });
+        setPlaced({ digest: r.digest, kind: 'range', lowerUsd: r.lowerUsd!, higherUsd: r.higherUsd!, qty: winAmt, lev, costDusdc: r.costDusdc, expiry: market.expiry });
+        toast(`Topped up + range bet placed — ${fmtUsd0(r.lowerUsd!)}–${fmtUsd0(r.higherUsd!)}`, 'success');
+      } else if (dir) {
+        const r = await placeTopUpAndBet624({ ...base, dir });
+        setPlaced({ digest: r.digest, kind: 'dir', dir, strikeUsd: r.strikeUsd!, qty: winAmt, lev, costDusdc: r.costDusdc, expiry: market.expiry });
+        toast(`Topped up + bet placed — ${dir.toUpperCase()} ${dir === 'up' ? 'over' : 'under'} ${fmtUsd0(r.strikeUsd!)}`, 'success');
+      }
+      acct.refreshWallet();
+      acct.refreshAcctBalance();
+    } catch (e) {
+      toast(`Bet failed: ${friendlyMintAbort(String(e instanceof Error ? e.message : e))}`, 'error');
+    } finally {
+      setBusy(null);
+    }
+  }, [blocker, address, wrapperId, market, dir, isRange, lowerUsd, higherUsd, spot, busy, acct, sponsoredSubmit, payoutQty, winAmt, lev, stake, acctBalance, toast]);
 
   // draw the market's live price chart inside the ticket — strike line (verdict
   // colors) for a side bet, shaded band for a range bet.
@@ -772,11 +816,18 @@ export default function Ticket624Drawer({
                 </p>
               </div>
             )}
-            {address && wrapperId && needsDeposit && (
+            {address && wrapperId && needsDeposit && canOneTapTopUp && (
+              <div className="border border-vermilion/20 bg-vermilion/[0.03] p-3 mb-4">
+                <p className="font-mono text-[10px] text-white/45 leading-relaxed">
+                  <span className="text-vermilion">One tap does it.</span> Your account holds {fmt2(acctBalance)} — this bet tops it up from your wallet and places in a single signature, gas-free. Only your wallet can withdraw.
+                </p>
+              </div>
+            )}
+            {address && wrapperId && needsDeposit && !canOneTapTopUp && (
               <div className="border border-vermilion/25 bg-vermilion/[0.04] p-4 mb-4">
                 <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-vermilion mb-1.5">Top up to place this</div>
                 <p className="font-mono text-[10px] text-gray-500 mb-2.5">
-                  Account holds {fmt2(acctBalance)} · this bet is {fmt2(stake)} · wallet holds {fmt2(acct.walletMicro / DUSDC_MULTIPLIER)} test USDC
+                  Account holds {fmt2(acctBalance)} · this bet is {fmt2(stake)} · wallet holds {fmt2(acct.walletMicro / DUSDC_MULTIPLIER)} test USDC — grab more from the faucet if you&apos;re short.
                 </p>
                 <div className="rounded-xl border border-white/[0.08] bg-black/30 px-3 py-2 focus-within:border-vermilion/50">
                   <div className="flex items-center justify-between">
@@ -810,7 +861,7 @@ export default function Ticket624Drawer({
 
             {/* place */}
             <button
-              onClick={needsAccount ? placeFirst : place}
+              onClick={needsAccount ? placeFirst : canOneTapTopUp ? placeTopUp : place}
               disabled={!!blocker || busy === 'mint'}
               className={`w-full py-3 text-sm font-semibold transition-all rounded ${
                 !blocker && busy !== 'mint'

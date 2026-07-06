@@ -46,6 +46,7 @@ import {
 import {
   BAND_USD,
   EST_PROB,
+  estProb,
   MIN_STAKE,
   qtyForStake,
   winForQty,
@@ -285,7 +286,7 @@ export default function MarketsLivePage() {
     enabled: !belowMinHard && !(msLeft != null && msLeft < MIN_MINT_MS),
   });
 
-  const probUsed = quote?.entryProb ?? EST_PROB;
+  const probUsed = quote?.entryProb ?? estProb(selected?.cadence);
   const payoutQty = qtyForStake(stake, lev, probUsed);     // costs `stake` at this probability
   const winAmt = winForQty(payoutQty, lev, probUsed);      // what a win returns
 
