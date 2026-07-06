@@ -36,6 +36,7 @@ import {
   fetchMarketState624,
   buildWithdrawTx,
   buildRedeemSettledTx,
+  buildDepositTx,
   type Cadence624,
   type Market624,
   type Position624,
@@ -54,6 +55,8 @@ import {
   useAccount624,
   useMintQuote624,
 } from '@/lib/sui/ticket624';
+import { useSmartSubmit } from '@/lib/sui/useSmartSubmit';
+import type { Transaction } from '@mysten/sui/transactions';
 
 // ─── constants ───
 // (Ticket machinery — band, quote loop, place guard, abort mapping — lives in
@@ -112,11 +115,14 @@ export default function MarketsLivePage() {
     wrapperChecked,
     acctBalance,
     refreshAcctBalance,
-    submitTx,
     walletMicro,
     dusdcCoins,
     refreshWallet,
   } = acct;
+  // gas-free via the sponsor (bet/withdraw/redeem targets are in the trading-624 policy),
+  // auto-falling back to the wallet if the sponsor declines or its pool is dry.
+  const { submit: smartSubmit } = useSmartSubmit();
+  const sponsoredSubmit = (factory: () => Transaction) => smartSubmit(factory).then((x) => x.digest);
   const walletDusdc = walletMicro / DUSDC_MULTIPLIER;
 
   // clock — drives every countdown; 0 until mounted (avoids SSR hydration drift)
@@ -334,9 +340,9 @@ export default function MarketsLivePage() {
     setBusy('fund');
     try {
       if (fundMode === 'deposit') {
-        await acct.deposit(amountMicro); // shared: merge → split exact → deposit_funds
+        await sponsoredSubmit(() => buildDepositTx({ wrapperId, coinIds: dusdcCoins.map((c) => c.coinObjectId), amountMicro }));
       } else {
-        await submitTx(buildWithdrawTx({ wrapperId, amountMicro, recipient: address }));
+        await sponsoredSubmit(() => buildWithdrawTx({ wrapperId, amountMicro, recipient: address }));
       }
       toast(fundMode === 'deposit' ? `Deposited ${fmt2(amt)} DUSDC` : `Withdrew ${fmt2(amt)} DUSDC to your wallet`, 'success');
       setFundStr('');
@@ -354,7 +360,7 @@ export default function MarketsLivePage() {
       // human reads a wallet popup), then ONE user-legible guard — fresh quote ×1.10,
       // never beyond your balance; maxProb stays at the protocol max.
       const r = await placeMint624({
-        submitTx, address, wrapperId, marketId: selected.id, dir, qty: payoutQty, lev, spot, acctBalance,
+        submit: sponsoredSubmit, address, wrapperId, marketId: selected.id, dir, qty: payoutQty, lev, spot, acctBalance,
       });
       setPending((p) => [{ marketId: selected.id, dir, strikeUsd: r.strikeUsd, qty: winAmt, lev, ts: Date.now() }, ...p]);
       setPayoutStr('');
@@ -370,7 +376,7 @@ export default function MarketsLivePage() {
     if (!wrapperId || busy) return;
     setBusy(`claim:${pos.orderId}`);
     try {
-      await submitTx(buildRedeemSettledTx({
+      await sponsoredSubmit(() => buildRedeemSettledTx({
         marketId: pos.marketId,
         wrapperId,
         orderId: BigInt(pos.orderId),

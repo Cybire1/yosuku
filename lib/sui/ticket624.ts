@@ -358,7 +358,9 @@ export function useMintQuote624(p: {
  * Throws raw errors — map with friendlyMintAbort at the call site.
  */
 export async function placeMint624(p: {
-  submitTx: (tx: Transaction) => Promise<string>;
+  /** Sponsor-capable submit (factory form) — every bet is gas-free via the sponsor,
+   *  falling back to the wallet if the sponsor declines/is down. */
+  submit: (factory: () => Transaction) => Promise<string>;
   address: string;
   wrapperId: string;
   marketId: string;
@@ -388,18 +390,17 @@ export async function placeMint624(p: {
   const maxCost = Math.min(p.acctBalance, freshCost * 1.1);
   if (maxCost < freshCost) throw new Error('balance below the live cost — deposit a little more');
 
-  const digest = await p.submitTx(
-    buildMintTx({
-      marketId: p.marketId,
-      wrapperId: p.wrapperId,
-      lowerTick,
-      higherTick,
-      qtyMicro,
-      leverage1e9,
-      maxCostMicro: BigInt(Math.floor(maxCost * DUSDC_MULTIPLIER)),
-      maxProb1e9: BigInt(990_000_000), // protocol max — the cost cap is the real guard
-    }),
-  );
+  const mintArgs = {
+    marketId: p.marketId,
+    wrapperId: p.wrapperId,
+    lowerTick,
+    higherTick,
+    qtyMicro,
+    leverage1e9,
+    maxCostMicro: BigInt(Math.floor(maxCost * DUSDC_MULTIPLIER)),
+    maxProb1e9: BigInt(990_000_000), // protocol max — the cost cap is the real guard
+  };
+  const digest = await p.submit(() => buildMintTx(mintArgs));
   return { digest, strikeUsd, costDusdc: freshCost };
 }
 
@@ -408,7 +409,8 @@ export async function placeMint624(p: {
  * with both band ends finite so it wins only if settlement lands inside [lower, higher].
  */
 export async function placeRangeMint624(p: {
-  submitTx: (tx: Transaction) => Promise<string>;
+  /** Sponsor-capable submit (factory form) — gas-free via the sponsor, wallet fallback. */
+  submit: (factory: () => Transaction) => Promise<string>;
   address: string;
   wrapperId: string;
   marketId: string;
@@ -437,18 +439,17 @@ export async function placeRangeMint624(p: {
   const maxCost = Math.min(p.acctBalance, freshCost * 1.1);
   if (maxCost < freshCost) throw new Error('balance below the live cost — deposit a little more');
 
-  const digest = await p.submitTx(
-    buildMintTx({
-      marketId: p.marketId,
-      wrapperId: p.wrapperId,
-      lowerTick,
-      higherTick,
-      qtyMicro,
-      leverage1e9,
-      maxCostMicro: BigInt(Math.floor(maxCost * DUSDC_MULTIPLIER)),
-      maxProb1e9: BigInt(990_000_000),
-    }),
-  );
+  const mintArgs = {
+    marketId: p.marketId,
+    wrapperId: p.wrapperId,
+    lowerTick,
+    higherTick,
+    qtyMicro,
+    leverage1e9,
+    maxCostMicro: BigInt(Math.floor(maxCost * DUSDC_MULTIPLIER)),
+    maxProb1e9: BigInt(990_000_000),
+  };
+  const digest = await p.submit(() => buildMintTx(mintArgs));
   return { digest, lowerUsd: p.lowerUsd, higherUsd: p.higherUsd, costDusdc: freshCost };
 }
 
