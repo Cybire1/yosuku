@@ -23,7 +23,6 @@ import { useToast } from '@/components/Toast';
 import { DUSDC_MULTIPLIER } from '@/lib/sui/constants';
 import { type Market624 } from '@/lib/sui/predict624Client';
 import {
-  BAND_USD,
   EST_PROB,
   estProb,
   MIN_MINT_MS,
@@ -115,7 +114,7 @@ export default function Ticket624Drawer({
   );
   const { address, wrapperId, wrapperChecked, acctBalance } = acct;
 
-  const [dir, setDir] = useState<Dir624 | null>(side);
+  const [dir, setDir] = useState<Dir624 | null>(side ?? 'up'); // a side is ALWAYS preselected — no dead "Call UP or DOWN" state
   const [mode, setMode] = useState<BetMode>('dir'); // Up/Down vs Range band
   const [preset, setPreset] = useState<RangePresetKey>('medium'); // band width tier (scaled per cadence)
   const [centerOffset, setCenterOffset] = useState<number>(0);     // band center vs spot
@@ -139,7 +138,7 @@ export default function Ticket624Drawer({
   // preserve the side, amount, leverage, and mode the user already entered.
   useEffect(() => {
     if (!market || sessionId == null) return;
-    setDir(side);
+    setDir(side ?? 'up');
     setMode('dir');
     setPreset('medium');
     setCenterOffset(0);
@@ -575,15 +574,11 @@ export default function Ticket624Drawer({
             </div>
 
             {mode === 'dir' ? (
-              /* direction — tapped side arrives preselected */
+              /* direction — one side is always selected; clean UP/DOWN, no price writeup
+                 (the strike lives on the chart, not the buttons) */
               <div className="grid grid-cols-2 gap-2 mb-4">
                 {(['up', 'down'] as const).map((d) => {
                   const on = dir === d;
-                  const line = spot == null
-                    ? 'waiting for the oracle…'
-                    : d === 'up'
-                      ? `wins if BTC settles over ${fmtUsd0(spot - BAND_USD)}`
-                      : `wins if BTC settles under ${fmtUsd0(spot + BAND_USD)}`;
                   const palette = d === 'up'
                     ? on
                       ? 'border-profit bg-profit/[0.14] text-profit'
@@ -594,15 +589,14 @@ export default function Ticket624Drawer({
                   return (
                     <button
                       key={d}
-                      onClick={() => setDir(on ? null : d)}
-                      className={`text-left border rounded-md px-3 py-2.5 transition-all duration-150 ${palette}`}
+                      onClick={() => setDir(d)}
+                      className={`border rounded-md px-3 py-3.5 text-center transition-all duration-150 ${palette}`}
                       aria-pressed={on}
                       data-cursor="hover"
                     >
-                      <div className="font-display font-[750] text-[15px] leading-none tracking-normal">
+                      <div className="font-display font-[750] text-[16px] leading-none tracking-normal">
                         {d === 'up' ? '▲ UP' : '▼ DOWN'}
                       </div>
-                      <div className={`font-mono text-[8.5px] leading-snug mt-1.5 ${on ? 'opacity-85' : 'opacity-55'}`}>{line}</div>
                     </button>
                   );
                 })}
@@ -892,11 +886,11 @@ export default function Ticket624Drawer({
                 : blocker ??
                   (isRange
                     ? `Place RANGE — ${lowerUsd != null && higherUsd != null ? `${fmtUsd0(lowerUsd)}–${fmtUsd0(higherUsd)}` : ''} →`
-                    : `Place ${dir === 'up' ? 'UP' : 'DOWN'} — ${strikeUsd != null ? `${dir === 'up' ? 'over' : 'under'} ${fmtUsd0(strikeUsd)}` : ''} →`)}
+                    : `Bet ${dir === 'up' ? 'UP' : 'DOWN'} →`)}
             </button>
 
             <p className="font-mono text-[8.5px] leading-relaxed text-white/25 mt-2.5">
-              Oracle-settled test market · gas-free (sponsored) · payouts return to your trading account.
+              Gas-free · settles on the oracle price.
             </p>
           </div>
         )}
