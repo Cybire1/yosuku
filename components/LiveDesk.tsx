@@ -399,7 +399,7 @@ export default function LiveDesk() {
                 <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
                   <h3 className="font-display font-[800] text-[1.7rem] text-white tracking-tight leading-none">{deskName}</h3>
                   <span className="inline-flex items-center gap-1 rounded-full border border-vermilion/40 bg-vermilion/[0.06] px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.14em] text-vermilion">
-                    ⊙ Attested
+                    ⊙ Enclave-signed
                   </span>
                 </div>
                 <p className="text-[13.5px] text-white/70 leading-snug mt-2 break-words">
@@ -407,7 +407,7 @@ export default function LiveDesk() {
                 </p>
                 <a href={SUISCAN_ACC(VAULT624.enclaveAgent)} target="_blank" rel="noreferrer"
                   className="mt-1.5 inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.12em] text-white/35 hover:text-vermilion transition-colors">
-                  Runs in sealed hardware · verify on Sui ↗
+                  Its key is sealed inside a Nitro enclave · see its on-chain trades ↗
                 </a>
               </div>
             </div>
