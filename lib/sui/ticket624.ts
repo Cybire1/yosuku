@@ -348,6 +348,14 @@ export function useMintQuote624(p: {
 
 // ─── the place half of the ticket ───
 
+// The mint caps the ALL-IN cost at maxCost and REVERTS if the live cost exceeds it. On short
+// cadences the entry probability swings fast while a human reads a wallet popup (~10s), so a
+// tight cap aborts EMintCostAboveMax("price moved past your max"). Give the cap more headroom
+// the shorter the market — 1m moves far more in 10s (≈17% of its life) than 1h (≈0.3%). The
+// user still pays only the EXACT measured cost; the wider cap just absorbs sign-time movement.
+const COST_CAP_BUFFER: Record<string, number> = { '1m': 1.45, '5m': 1.2, '1h': 1.1 };
+export const costCapBuffer = (cadence?: string) => COST_CAP_BUFFER[cadence ?? '5m'] ?? 1.2;
+
 /**
  * Place a bet with the founder-validated guard: re-quote at the moment of click
  * (1m-market odds move while a human reads a wallet popup), then ONE user-legible
@@ -370,6 +378,8 @@ export async function placeMint624(p: {
   lev: number;
   spot: number;
   acctBalance: number;
+  /** Market cadence — scales the cost-cap headroom (short markets move faster while signing). */
+  cadence?: string;
 }): Promise<{ digest: string; strikeUsd: number; costDusdc: number }> {
   const strikeUsd = strike624(p.spot, p.dir);
   const { lowerTick, higherTick } = ticks624(p.spot, p.dir);
@@ -387,7 +397,7 @@ export async function placeMint624(p: {
   });
   if ('error' in fresh) throw new Error(`quote: ${fresh.error}`);
   const freshCost = fresh.costMicro / DUSDC_MULTIPLIER;
-  const maxCost = Math.min(p.acctBalance, freshCost * 1.1);
+  const maxCost = Math.min(p.acctBalance, freshCost * costCapBuffer(p.cadence));
   if (maxCost < freshCost) throw new Error('balance below the live cost — deposit a little more');
 
   const mintArgs = {
@@ -420,6 +430,8 @@ export async function placeRangeMint624(p: {
   qty: number;
   lev: number;
   acctBalance: number;
+  /** Market cadence — scales the cost-cap headroom (short markets move faster while signing). */
+  cadence?: string;
 }): Promise<{ digest: string; lowerUsd: number; higherUsd: number; costDusdc: number }> {
   const { lowerTick, higherTick } = rangeTicks624(p.lowerUsd, p.higherUsd);
   const qtyMicro = positionQuantityMicro624(p.qty);
@@ -436,7 +448,7 @@ export async function placeRangeMint624(p: {
   });
   if ('error' in fresh) throw new Error(`quote: ${fresh.error}`);
   const freshCost = fresh.costMicro / DUSDC_MULTIPLIER;
-  const maxCost = Math.min(p.acctBalance, freshCost * 1.1);
+  const maxCost = Math.min(p.acctBalance, freshCost * costCapBuffer(p.cadence));
   if (maxCost < freshCost) throw new Error('balance below the live cost — deposit a little more');
 
   const mintArgs = {
@@ -476,11 +488,14 @@ export async function placeFirstBet624(p: {
   stakeDusdc: number;
   walletDusdcMicro: bigint;
   coinIds: string[];
+  /** Market cadence — scales the cost-cap headroom (short markets move faster while signing). */
+  cadence?: string;
 }): Promise<{ digest: string; costDusdc: number; strikeUsd?: number; lowerUsd?: number; higherUsd?: number }> {
   if (!p.coinIds.length) throw new Error('no DUSDC in your wallet — grab some from the faucet first');
   const stakeMicro = BigInt(Math.round(p.stakeDusdc * DUSDC_MULTIPLIER));
-  // deposit the stake + 15% headroom for pricing/fees, never more than the wallet holds
-  const buffered = (stakeMicro * 115n) / 100n;
+  // deposit the stake + cadence-scaled headroom for pricing movement during signing, never more
+  // than the wallet holds (the cost cap = the deposit, so this is what lets a 1m bet clear).
+  const buffered = (stakeMicro * BigInt(Math.round(costCapBuffer(p.cadence) * 100))) / 100n;
   const depositMicro = buffered < p.walletDusdcMicro ? buffered : p.walletDusdcMicro;
   if (depositMicro < stakeMicro) throw new Error('not enough DUSDC to cover the bet + fees — top up your wallet');
 
