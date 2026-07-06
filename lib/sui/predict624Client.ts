@@ -379,6 +379,71 @@ export function buildMintTx(p: {
   return tx;
 }
 
+/**
+ * ONE-SIGNATURE onboarding: create the account, fund it, place the first bet, and share
+ * the account — all in a single PTB. The AccountWrapper from `account_registry::new` is a
+ * command RESULT, so it's passed by reference through `deposit_funds` + `mint_exact_quantity`
+ * and only `share`d at the end (the shared-input rule applies to declared inputs, not results).
+ * A brand-new user goes connect → one tap → first bet, gas-free (every target is in the
+ * yosuku-trading-624 sponsor policy). No pre-quote is possible (the account doesn't exist yet),
+ * so cost is bounded by `maxCostMicro` (≤ the deposit) and the whole PTB reverts if it can't fit.
+ */
+export function buildCreateFundAndMint624(p: {
+  coinIds: string[];
+  depositMicro: bigint;
+  marketId: string;
+  lowerTick: number | bigint;
+  higherTick: number | bigint;
+  qtyMicro: bigint;
+  leverage1e9: bigint;
+  maxCostMicro: bigint;
+  maxProb1e9: bigint;
+}): Transaction {
+  if (p.coinIds.length === 0) throw new Error('no DUSDC coins to fund the account');
+  const lower = BigInt(p.lowerTick);
+  const higher = BigInt(p.higherTick);
+  if (lower === NEG_INF_TICK && higher === POS_INF_TICK) {
+    throw new Error('full open range (−inf, +inf) is prohibited on-chain (EInvalidRange)');
+  }
+  const tx = new Transaction();
+  // 1. create the account — `wrapper` is a PTB-local result, NOT yet shared
+  const wrapper = tx.moveCall({
+    target: `${PREDICT624.accountPackage}::account_registry::new`,
+    arguments: [tx.object(PREDICT624.accountRegistry)],
+  });
+  // 2. fund it from the wallet's DUSDC
+  const primary = tx.object(p.coinIds[0]);
+  if (p.coinIds.length > 1) tx.mergeCoins(primary, p.coinIds.slice(1).map((id) => tx.object(id)));
+  const [pay] = tx.splitCoins(primary, [tx.pure.u64(p.depositMicro)]);
+  const authDep = tx.moveCall({ target: `${PREDICT624.accountPackage}::account::generate_auth`, arguments: [] });
+  tx.moveCall({
+    target: `${PREDICT624.accountPackage}::account::deposit_funds`,
+    typeArguments: [PREDICT624.dusdcType],
+    arguments: [wrapper, authDep, pay, tx.object(PREDICT624.accumulatorRoot), tx.object(PREDICT624.clock)],
+  });
+  // 3. place the first bet against the just-funded account
+  const pricer = tx.moveCall({
+    target: `${PREDICT624.predictPackage}::expiry_market::load_live_pricer`,
+    arguments: [
+      tx.object(p.marketId), tx.object(PREDICT624.protocolConfig), tx.object(PREDICT624.oracleRegistry),
+      tx.object(PREDICT624.pythFeed), tx.object(PREDICT624.bsSpotFeed), tx.object(PREDICT624.bsForwardFeed),
+      tx.object(PREDICT624.bsSviFeed), tx.object(PREDICT624.clock),
+    ],
+  });
+  const authMint = tx.moveCall({ target: `${PREDICT624.accountPackage}::account::generate_auth`, arguments: [] });
+  tx.moveCall({
+    target: `${PREDICT624.predictPackage}::expiry_market::mint_exact_quantity`,
+    arguments: [
+      tx.object(p.marketId), wrapper, authMint, tx.object(PREDICT624.protocolConfig), pricer,
+      tx.pure.u64(lower), tx.pure.u64(higher), tx.pure.u64(p.qtyMicro), tx.pure.u64(p.leverage1e9),
+      tx.pure.u64(p.maxCostMicro), tx.pure.u64(p.maxProb1e9), tx.object(PREDICT624.accumulatorRoot), tx.object(PREDICT624.clock),
+    ],
+  });
+  // 4. share the account LAST — now it becomes the user's canonical shared AccountWrapper
+  tx.moveCall({ target: `${PREDICT624.accountPackage}::account::share`, arguments: [wrapper] });
+  return tx;
+}
+
 /** A REAL mint quote — dry-runs the exact mint PTB with UNCAPPED guards and reads OrderMinted.
  *  This is the number predict will actually charge (net premium + trader fee + builder fee +
  *  EWMA penalty), not an estimate; probability on short cadences moves too much to estimate
