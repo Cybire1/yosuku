@@ -330,6 +330,7 @@ export default function Ticket624Drawer({
           qty: payoutQty, // payout quantity derived so the entry cost ≈ the user's bet
           lev,
           acctBalance,
+          cadence: market.cadence,
         });
         setPlaced({ digest: r.digest, kind: 'range', lowerUsd: r.lowerUsd, higherUsd: r.higherUsd, qty: winAmt, lev, costDusdc: r.costDusdc, expiry: market.expiry });
         toast(`Range bet placed — ${fmtUsd0(r.lowerUsd)}–${fmtUsd0(r.higherUsd)}`, 'success');
@@ -344,6 +345,7 @@ export default function Ticket624Drawer({
           lev,
           spot,
           acctBalance,
+          cadence: market.cadence,
         });
         setPlaced({ digest: r.digest, kind: 'dir', dir, strikeUsd: r.strikeUsd, qty: winAmt, lev, costDusdc: r.costDusdc, expiry: market.expiry });
         toast(`Bet placed — ${dir.toUpperCase()} ${dir === 'up' ? 'over' : 'under'} ${fmtUsd0(r.strikeUsd)}`, 'success');
@@ -372,6 +374,7 @@ export default function Ticket624Drawer({
         stakeDusdc: stake,
         walletDusdcMicro: BigInt(Math.floor(acct.walletMicro)),
         coinIds,
+        cadence: market.cadence,
       };
       if (isRange && lowerUsd != null && higherUsd != null) {
         const r = await placeFirstBet624({ ...base, band: { lowerUsd, higherUsd } });

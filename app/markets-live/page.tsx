@@ -360,7 +360,7 @@ export default function MarketsLivePage() {
       // human reads a wallet popup), then ONE user-legible guard — fresh quote ×1.10,
       // never beyond your balance; maxProb stays at the protocol max.
       const r = await placeMint624({
-        submit: sponsoredSubmit, address, wrapperId, marketId: selected.id, dir, qty: payoutQty, lev, spot, acctBalance,
+        submit: sponsoredSubmit, address, wrapperId, marketId: selected.id, dir, qty: payoutQty, lev, spot, acctBalance, cadence: selected.cadence,
       });
       setPending((p) => [{ marketId: selected.id, dir, strikeUsd: r.strikeUsd, qty: winAmt, lev, ts: Date.now() }, ...p]);
       setPayoutStr('');
