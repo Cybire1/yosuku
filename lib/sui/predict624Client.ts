@@ -444,6 +444,141 @@ export function buildCreateFundAndMint624(p: {
   return tx;
 }
 
+/**
+ * TOP-UP-AND-BET in one signature for an EXISTING account whose balance is below the bet:
+ * deposit the shortfall from the wallet, then mint — both against the same already-shared
+ * `wrapperId`, so no create/share is needed (simpler than the first-bet PTB). Gas-free via the
+ * sponsor (deposit_funds + mint targets are in yosuku-trading-624). Cost is capped at maxCost
+ * (≤ the post-deposit balance); the whole PTB reverts if it can't fit, so funds are never stranded.
+ */
+export function buildTopUpAndMint624(p: {
+  wrapperId: string;
+  coinIds: string[];
+  depositMicro: bigint;
+  marketId: string;
+  lowerTick: number | bigint;
+  higherTick: number | bigint;
+  qtyMicro: bigint;
+  leverage1e9: bigint;
+  maxCostMicro: bigint;
+  maxProb1e9: bigint;
+}): Transaction {
+  if (p.coinIds.length === 0) throw new Error('no DUSDC coins to top up with');
+  const lower = BigInt(p.lowerTick);
+  const higher = BigInt(p.higherTick);
+  if (lower === NEG_INF_TICK && higher === POS_INF_TICK) {
+    throw new Error('full open range (−inf, +inf) is prohibited on-chain (EInvalidRange)');
+  }
+  const tx = new Transaction();
+  // 1. top up the existing account from the wallet
+  const primary = tx.object(p.coinIds[0]);
+  if (p.coinIds.length > 1) tx.mergeCoins(primary, p.coinIds.slice(1).map((id) => tx.object(id)));
+  const [pay] = tx.splitCoins(primary, [tx.pure.u64(p.depositMicro)]);
+  const authDep = tx.moveCall({ target: `${PREDICT624.accountPackage}::account::generate_auth`, arguments: [] });
+  tx.moveCall({
+    target: `${PREDICT624.accountPackage}::account::deposit_funds`,
+    typeArguments: [PREDICT624.dusdcType],
+    arguments: [tx.object(p.wrapperId), authDep, pay, tx.object(PREDICT624.accumulatorRoot), tx.object(PREDICT624.clock)],
+  });
+  // 2. place the bet against the now-funded account
+  const pricer = tx.moveCall({
+    target: `${PREDICT624.predictPackage}::expiry_market::load_live_pricer`,
+    arguments: [
+      tx.object(p.marketId), tx.object(PREDICT624.protocolConfig), tx.object(PREDICT624.oracleRegistry),
+      tx.object(PREDICT624.pythFeed), tx.object(PREDICT624.bsSpotFeed), tx.object(PREDICT624.bsForwardFeed),
+      tx.object(PREDICT624.bsSviFeed), tx.object(PREDICT624.clock),
+    ],
+  });
+  const authMint = tx.moveCall({ target: `${PREDICT624.accountPackage}::account::generate_auth`, arguments: [] });
+  tx.moveCall({
+    target: `${PREDICT624.predictPackage}::expiry_market::mint_exact_quantity`,
+    arguments: [
+      tx.object(p.marketId), tx.object(p.wrapperId), authMint, tx.object(PREDICT624.protocolConfig), pricer,
+      tx.pure.u64(lower), tx.pure.u64(higher), tx.pure.u64(p.qtyMicro), tx.pure.u64(p.leverage1e9),
+      tx.pure.u64(p.maxCostMicro), tx.pure.u64(p.maxProb1e9), tx.object(PREDICT624.accumulatorRoot), tx.object(PREDICT624.clock),
+    ],
+  });
+  return tx;
+}
+
+/**
+ * REAL entry probability for the no-quote paths (no account yet / underfunded account, where
+ * the plain quote's mint dry-run can't withdraw). Dry-runs the COMBINED PTB — (create|top-up)
+ * deposit funds the account mid-dry-run — with a fixed 2-DUSDC probe qty (clears the venue's
+ * 1-DUSDC min-premium admission for any prob ≥ 0.5, which the $20 band guarantees) and UNCAPPED
+ * cost guards, then reads OrderMinted. Nothing executes. The probability on these bands swings
+ * 0.6→0.9 with market conditions, so sizing off any static estimate aborts EMintCostAboveMax —
+ * this probe is what lets first-bet / top-up-bet size the payout correctly.
+ * `gasOwner` (the sponsor) satisfies gas selection for SUI-less wallets — dry-runs need no signature.
+ */
+export async function probeCombinedMint624(p: {
+  /** null = create-account path; a wrapper id = top-up path on the existing account. */
+  wrapperId: string | null;
+  coinIds: string[];
+  /** How much the probe deposits (dry-run only — nothing moves). Use the full wallet balance. */
+  probeDepositMicro: bigint;
+  marketId: string;
+  lowerTick: number | bigint;
+  higherTick: number | bigint;
+  leverage1e9: bigint;
+  sender: string;
+  gasOwner?: string | null;
+}): Promise<{ entryProb: number; costOfProbeMicro: number } | { error: string }> {
+  try {
+    const tx = new Transaction();
+    // account: fresh (command result) or the existing shared wrapper
+    const wrapper = p.wrapperId
+      ? tx.object(p.wrapperId)
+      : tx.moveCall({ target: `${PREDICT624.accountPackage}::account_registry::new`, arguments: [tx.object(PREDICT624.accountRegistry)] });
+    const primary = tx.object(p.coinIds[0]);
+    if (p.coinIds.length > 1) tx.mergeCoins(primary, p.coinIds.slice(1).map((id) => tx.object(id)));
+    const [pay] = tx.splitCoins(primary, [tx.pure.u64(p.probeDepositMicro)]);
+    const authDep = tx.moveCall({ target: `${PREDICT624.accountPackage}::account::generate_auth`, arguments: [] });
+    tx.moveCall({
+      target: `${PREDICT624.accountPackage}::account::deposit_funds`,
+      typeArguments: [PREDICT624.dusdcType],
+      arguments: [wrapper, authDep, pay, tx.object(PREDICT624.accumulatorRoot), tx.object(PREDICT624.clock)],
+    });
+    const pricer = tx.moveCall({
+      target: `${PREDICT624.predictPackage}::expiry_market::load_live_pricer`,
+      arguments: [
+        tx.object(p.marketId), tx.object(PREDICT624.protocolConfig), tx.object(PREDICT624.oracleRegistry),
+        tx.object(PREDICT624.pythFeed), tx.object(PREDICT624.bsSpotFeed), tx.object(PREDICT624.bsForwardFeed),
+        tx.object(PREDICT624.bsSviFeed), tx.object(PREDICT624.clock),
+      ],
+    });
+    const authMint = tx.moveCall({ target: `${PREDICT624.accountPackage}::account::generate_auth`, arguments: [] });
+    tx.moveCall({
+      target: `${PREDICT624.predictPackage}::expiry_market::mint_exact_quantity`,
+      arguments: [
+        tx.object(p.marketId), wrapper, authMint, tx.object(PREDICT624.protocolConfig), pricer,
+        tx.pure.u64(BigInt(p.lowerTick)), tx.pure.u64(BigInt(p.higherTick)),
+        tx.pure.u64(2_000_000n), tx.pure.u64(p.leverage1e9),
+        tx.pure.u64(18446744073709551615n), tx.pure.u64(990_000_000n),
+        tx.object(PREDICT624.accumulatorRoot), tx.object(PREDICT624.clock),
+      ],
+    });
+    if (!p.wrapperId) tx.moveCall({ target: `${PREDICT624.accountPackage}::account::share`, arguments: [wrapper] });
+    tx.setSender(p.sender);
+    if (p.gasOwner) tx.setGasOwner(p.gasOwner);
+    const bytes = await tx.build({ client: grpc });
+    const b64 = typeof Buffer !== 'undefined' ? Buffer.from(bytes).toString('base64') : btoa(String.fromCharCode(...bytes));
+    const r = await fetch('https://fullnode.testnet.sui.io:443', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'sui_dryRunTransactionBlock', params: [b64] }),
+    }).then((x) => x.json());
+    const ev = (r?.result?.events ?? []).find((e: { type?: string }) => String(e.type).includes('OrderMinted'))?.parsedJson as Record<string, string> | undefined;
+    if (!ev) return { error: String(r?.result?.effects?.status?.error ?? 'no OrderMinted in probe').slice(0, 160) };
+    const n = (k: string) => Number(ev[k] ?? 0);
+    return {
+      entryProb: n('entry_probability') / FLOAT_SCALING_624,
+      costOfProbeMicro: n('net_premium') + n('trading_fee') - n('fee_incentive_subsidy') + n('builder_fee') + n('penalty_fee'),
+    };
+  } catch (e) {
+    return { error: String(e instanceof Error ? e.message : e).slice(0, 160) };
+  }
+}
+
 /** A REAL mint quote — dry-runs the exact mint PTB with UNCAPPED guards and reads OrderMinted.
  *  This is the number predict will actually charge (net premium + trader fee + builder fee +
  *  EWMA penalty), not an estimate; probability on short cadences moves too much to estimate
