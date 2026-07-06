@@ -31,6 +31,7 @@ import {
   RANGE_CENTER_MAX,
   RANGE_PRESETS,
   friendlyMintAbort,
+  costCapBuffer,
   placeMint624,
   placeRangeMint624,
   placeFirstBet624,
@@ -256,15 +257,23 @@ export default function Ticket624Drawer({
   const payoutQty = qtyForStake(stake, lev, probUsed);      // costs stake at this probability
   const winAmt = winForQty(payoutQty, lev, probUsed);       // what a win returns
   const currentCost = quote ? quote.costMicro / DUSDC_MULTIPLIER : stake;
-  const needsDeposit = !!wrapperId && stake > 0 && stake > acctBalance;
+  // The bet needs the account to hold the stake PLUS the sign-time buffer — the on-chain cost
+  // cap is min(balance, cost×buffer), so a balance that BARELY covers the stake clamps the
+  // buffer to ~zero and any odds drift while signing aborts EMintCostAboveMax ("price moved
+  // past your max"). Trigger the top-up path on the BUFFERED need, not the bare stake.
+  const bufferedNeed = stake * costCapBuffer(market?.cadence);
+  const needsDeposit = !!wrapperId && stake > 0 && bufferedNeed > acctBalance;
   // First-time user (no account): their first bet CREATES + funds + places in one signature,
   // gas-free via the sponsor — no separate account/deposit steps, funded straight from the wallet.
   const walletDusdc = acct.walletMicro / DUSDC_MULTIPLIER;
   const needsAccount = !!address && wrapperChecked && !wrapperId;
   const firstBetShortWallet = needsAccount && stake > 0 && stake > walletDusdc;
-  // Existing account below the bet, but the wallet can cover the shortfall → top up + place in
-  // ONE signature (no separate "deposit, then bet"). If the wallet is ALSO short, they need more.
-  const canOneTapTopUp = needsDeposit && acctBalance + walletDusdc >= stake;
+  // Account below the buffered need, but the wallet has funds → top up + place in ONE
+  // signature (the top-up clamps to whatever the wallet holds, so a partial buffer still
+  // beats a clamped-to-balance cap). Wallet empty but account covers the bare stake → let
+  // the regular place run thin-margin (it may ask for a retry on drift, never strands funds).
+  const canOneTapTopUp = needsDeposit && walletDusdc > 0.01 && acctBalance + walletDusdc >= stake;
+  const thinMarginOk = needsDeposit && !canOneTapTopUp && acctBalance >= stake;
 
   const blocker: string | null = closing
     ? 'Market closing — pick the next one'
@@ -283,7 +292,11 @@ export default function Ticket624Drawer({
                 : needsAccount
                   ? (firstBetShortWallet ? `Add ${fmt2(stake - walletDusdc)} test USDC to your wallet` : null)
                   : needsDeposit
-                    ? (canOneTapTopUp ? null : `Add ${fmt2(stake - acctBalance - walletDusdc)} more test USDC to your wallet`)
+                    ? (canOneTapTopUp
+                        ? null
+                        : thinMarginOk
+                          ? (quoteErr ? 'Quote failed — see below' : !quote ? 'Getting the live price…' : null)
+                          : `Add ${fmt2(stake - acctBalance - walletDusdc)} more test USDC to your wallet`)
                     : quoteErr
                       ? 'Quote failed — see below'
                       : !quote
