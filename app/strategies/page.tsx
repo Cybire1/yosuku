@@ -3,7 +3,6 @@
 import { useEffect, useState, useCallback, useMemo, type ReactNode } from 'react';
 import { useCurrentAccount, useSuiClient, useSignPersonalMessage, ConnectButton } from '@mysten/dapp-kit';
 import { Share2, X } from 'lucide-react';
-import Image from 'next/image';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import Marquee from '@/components/Marquee';
@@ -29,6 +28,7 @@ import {
   fmtAddr,
   ago,
   codenameFromAddress,
+  glyphFromAddress,
   SUISCAN_TX,
   SUISCAN_ACC,
   xIntentUrl,
@@ -48,33 +48,17 @@ const ZERO_ADDR = '0x00000000000000000000000000000000000000000000000000000000000
 const SUISCAN_OBJ = (id: string) => `https://suiscan.xyz/testnet/object/${id}`;
 const DAY = 86_400_000;
 
-const AGENT_PORTRAITS = [
-  '/agents/agent-cobalt.jpg',
-  '/agents/agent-amber.jpg',
-  '/agents/agent-mint.jpg',
-  '/agents/agent-vermilion.jpg',
-  '/agents/agent-cyan.jpg',
-] as const;
-
-function portraitFromSeed(seed: string): string {
-  let hash = 0;
-  for (let i = 0; i < seed.length; i++) hash = ((hash << 5) - hash + seed.charCodeAt(i)) | 0;
-  return AGENT_PORTRAITS[Math.abs(hash) % AGENT_PORTRAITS.length];
-}
-
+// Deterministic kanji glyph tile per strategy — the desk's own visual language.
+// (Photo portraits looked like fake people, and a 5-image pool guaranteed duplicate
+// faces side-by-side in an 8-card grid. A seeded glyph is unique, honest, on-brand.)
 function AgentPortrait({ seed, name, size = 'card' }: { seed: string; name: string; size?: 'small' | 'card' | 'drawer' }) {
-  const dimensions = size === 'small' ? 'h-8 w-8' : size === 'drawer' ? 'h-16 w-16' : 'h-16 w-16';
-  const sizes = size === 'small' ? '32px' : '64px';
+  const dimensions = size === 'small' ? 'h-8 w-8 text-base' : size === 'drawer' ? 'h-16 w-16 text-3xl' : 'h-16 w-16 text-3xl';
   return (
-    <div className={`relative shrink-0 overflow-hidden border border-white/10 bg-white/[0.03] ${dimensions}`}>
-      <Image
-        src={portraitFromSeed(seed)}
-        alt={`${name} agent portrait`}
-        fill
-        sizes={sizes}
-        className="object-cover saturate-[0.82] contrast-[1.06] transition-transform duration-500 ease-out group-hover:scale-105"
-      />
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-white/[0.04]" />
+    <div
+      aria-label={`${name} agent glyph`}
+      className={`relative shrink-0 grid place-items-center overflow-hidden border border-white/10 bg-white/[0.03] font-jp text-vermilion ${dimensions}`}
+    >
+      {glyphFromAddress(seed)}
       <span className="absolute bottom-1 right-1 h-1.5 w-1.5 rounded-full border border-black/70 bg-vermilion shadow-[0_0_8px_rgba(224,77,38,0.8)]" />
     </div>
   );
@@ -448,7 +432,7 @@ export default function StrategiesPage() {
                         <div className="min-w-0 flex-1 pt-1">
                           <h3 className="font-display font-[800] text-xl text-white truncate tracking-tight leading-[1.05]">{agentName}</h3>
                           <a href={SUISCAN_ACC(card.agent)} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
-                            className="mt-1 inline-block font-mono text-[10px] uppercase tracking-[0.12em] text-white/35 hover:text-white transition-colors">Agent wallet {fmtAddr(card.agent)}</a>
+                            className="mt-1 inline-block font-mono text-[10px] uppercase tracking-[0.12em] text-white/35 hover:text-white transition-colors">On-chain record ↗</a>
                         </div>
                       </div>
 
@@ -915,7 +899,7 @@ function CopyDrawer(props: {
           <AgentPortrait seed={card.id} name={agentName} size="drawer" />
           <div className="min-w-0">
             <h2 className="font-display font-[800] text-xl text-white truncate">{agentName}</h2>
-            <a href={SUISCAN_ACC(card.agent)} target="_blank" rel="noreferrer" className="font-mono text-[10px] uppercase tracking-[0.12em] text-gray-500 hover:text-gray-300">Agent wallet {fmtAddr(card.agent)}</a>
+            <a href={SUISCAN_ACC(card.agent)} target="_blank" rel="noreferrer" className="font-mono text-[10px] uppercase tracking-[0.12em] text-gray-500 hover:text-gray-300">On-chain record ↗</a>
           </div>
           <span className="ml-auto shrink-0 font-mono text-[10px] uppercase tracking-[0.2em]"><TierWord tier={tier} /></span>
         </div>
@@ -947,7 +931,7 @@ function CopyDrawer(props: {
         <div className="grid grid-cols-3 gap-3 pb-4 mb-4 border-b border-white/[0.06]">
           <CapStat label="Copiers" value={card.subscribers > 0 ? String(card.subscribers) : '—'} unit="" />
           <CapStat label="Copy-trades" value={String(card.copyTrades)} unit="" />
-          <CapStat label="Last active" value={ago(card.lastActive) || 'never'} unit="" />
+          <CapStat label="Last active" value={ago(card.lastActive) || 'no trades yet'} unit="" />
         </div>
         {(card.hasMemory || card.hasCapsule) && (
           <div className="border border-vermilion/30 px-4 py-3 mb-4">

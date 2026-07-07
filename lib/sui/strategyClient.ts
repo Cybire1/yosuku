@@ -761,7 +761,7 @@ export const fmtDusdc = (n: number) =>
 export const fmtAddr = (a: string) => (a && a.length > 12 ? `${a.slice(0, 6)}…${a.slice(-4)}` : a);
 
 export function ago(ts: number): string {
-  if (!ts) return 'never';
+  if (!ts) return 'no trades yet';
   const s = Math.floor((Date.now() - ts) / 1000);
   if (s < 60) return `${s}s ago`;
   if (s < 3600) return `${Math.floor(s / 60)}m ago`;
