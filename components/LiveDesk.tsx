@@ -407,7 +407,7 @@ export default function LiveDesk() {
                 </p>
                 <a href={SUISCAN_ACC(VAULT624.enclaveAgent)} target="_blank" rel="noreferrer"
                   className="mt-1.5 inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.12em] text-white/35 hover:text-vermilion transition-colors">
-                  Its key is sealed inside a Nitro enclave · see its on-chain trades ↗
+                  Its trades are signed inside a Nitro enclave · see them on-chain ↗
                 </a>
               </div>
             </div>
