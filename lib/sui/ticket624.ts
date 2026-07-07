@@ -61,6 +61,10 @@ export const sponsorAddr = () =>
 
 /** Leave enough time for wallet approval and submission before the market expires. */
 export const MIN_MINT_MS = 15_000;
+/** Cadence-aware entry cutoff. A 1-minute market's dying seconds are where the entry
+ *  probability races to 0/1 — quotes go stale mid-signature (EMintCostAboveMax) and the
+ *  fill is terrible anyway. Stop entries 45s out; the ticket auto-rolls to the next round. */
+export const minMintMs = (cadence?: string) => (cadence === '1m' ? 45_000 : MIN_MINT_MS);
 /** DeepBook Predict's on-chain minimum net premium. Fees are quoted separately. */
 export const MIN_STAKE = 1;
 
@@ -372,7 +376,7 @@ export function useMintQuote624(p: {
 // tight cap aborts EMintCostAboveMax("price moved past your max"). Give the cap more headroom
 // the shorter the market — 1m moves far more in 10s (≈17% of its life) than 1h (≈0.3%). The
 // user still pays only the EXACT measured cost; the wider cap just absorbs sign-time movement.
-const COST_CAP_BUFFER: Record<string, number> = { '1m': 1.45, '5m': 1.2, '1h': 1.1 };
+const COST_CAP_BUFFER: Record<string, number> = { '1m': 1.6, '5m': 1.2, '1h': 1.1 };
 export const costCapBuffer = (cadence?: string) => COST_CAP_BUFFER[cadence ?? '5m'] ?? 1.2;
 
 /**
