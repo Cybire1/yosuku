@@ -88,6 +88,7 @@ export default function LiveDesk() {
   const [sub, setSub] = useState<Sub624 | null>(null);
   const [feed, setFeed] = useState<VaultEvent624[]>([]);
   const [feedLoaded, setFeedLoaded] = useState(false);
+  const [history, setHistory] = useState<VaultEvent624[]>([]); // full event history — the ALL-TIME record
 
   const [depositStr, setDepositStr] = useState('');   // ADDITIVE chips only — never pre-decided
   const [withdrawStr, setWithdrawStr] = useState('');
@@ -110,6 +111,11 @@ export default function LiveDesk() {
   const refreshDesk = useCallback(async () => {
     try { setFeed(await fetchVaultTrades624(40)); } catch { /* next poll wins */ } finally { setFeedLoaded(true); }
   }, []);
+  // the record is ALL-TIME, not a rolling window — walk the full event history (paginated),
+  // on mount and then slowly; the 20s poll above stays light for the live feed rail.
+  const refreshHistory = useCallback(async () => {
+    try { setHistory(await fetchVaultTrades624(600)); } catch { /* keep the last good history */ }
+  }, []);
   const refreshUser = useCallback(async () => {
     if (!address) { setLedger(0); setSub(null); return; }
     const [l, s] = await Promise.all([fetchLedger624(address), fetchSub624(address)]);
@@ -117,6 +123,7 @@ export default function LiveDesk() {
   }, [address]);
 
   useEffect(() => { refreshDesk(); const id = setInterval(refreshDesk, 20_000); return () => clearInterval(id); }, [refreshDesk]);
+  useEffect(() => { refreshHistory(); const id = setInterval(refreshHistory, 120_000); return () => clearInterval(id); }, [refreshHistory]);
   useEffect(() => { refreshUser(); const id = setInterval(refreshUser, 15_000); return () => clearInterval(id); }, [refreshUser]);
 
   // The app-wide faucet fires 'yosuku:credited' when it drips — pick the new
@@ -141,8 +148,9 @@ export default function LiveDesk() {
   // Also builds the equity curve: cumulative net P&L across settled trades,
   // oldest→newest, so the sparkline draws every win AND every drawdown.
   const stats = useMemo(() => {
-    const trades = feed.filter((e) => e.kind === 'trade');
-    const settles = feed.filter((e) => e.kind === 'settle');
+    const src = history.length ? history : feed; // all-time once loaded; live feed as a warm-up
+    const trades = src.filter((e) => e.kind === 'trade');
+    const settles = src.filter((e) => e.kind === 'settle');
     const wins = settles.filter((s) => s.payoutMicro > 0).length;
     const losses = settles.length - wins;
     const byOrder = new Map(trades.filter((t) => t.orderId).map((t) => [t.orderId, t]));
@@ -170,7 +178,7 @@ export default function LiveDesk() {
     const paid = settles.reduce((s, e) => s + e.payoutMicro, 0) / M;
     const copiers = new Set(trades.map((e) => e.user)).size;
     return { opened: trades.length, settled: settles.length, wins, losses, netMicro, matched, typicalCost, paid, copiers, curve };
-  }, [feed]);
+  }, [feed, history]);
 
   // The last three SETTLED results, newest first — a tight strip, not a log.
   // Only settles carry a win/loss outcome, which is the one thing this strip says.
@@ -362,7 +370,7 @@ export default function LiveDesk() {
           {/* framing: young + public. The net can read negative — that's transparency, not spin. */}
           <div className="flex items-center justify-between px-4 pt-3">
             <span className="font-mono text-[9px] uppercase tracking-[0.18em] text-white/40">Track record · every trade public</span>
-            <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-white/30">{stats.settled} trades · early days</span>
+            <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-white/30">{stats.settled} trades · all of them public</span>
           </div>
           <div className="px-4 pt-2 pb-2">
             <EquitySparkline points={stats.curve} width={520} height={64} className="w-full h-[64px]" />
@@ -399,7 +407,7 @@ export default function LiveDesk() {
                 <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
                   <h3 className="font-display font-[800] text-[1.7rem] text-white tracking-tight leading-none">{deskName}</h3>
                   <span className="inline-flex items-center gap-1 rounded-full border border-vermilion/40 bg-vermilion/[0.06] px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.14em] text-vermilion">
-                    ⊙ Enclave-signed
+                    ⊙ Autopilot
                   </span>
                 </div>
                 <p className="text-[13.5px] text-white/70 leading-snug mt-2 break-words">
@@ -407,7 +415,7 @@ export default function LiveDesk() {
                 </p>
                 <a href={SUISCAN_ACC(VAULT624.enclaveAgent)} target="_blank" rel="noreferrer"
                   className="mt-1.5 inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.12em] text-white/35 hover:text-vermilion transition-colors">
-                  Its key is sealed inside a Nitro enclave · see its on-chain trades ↗
+                  Runs by itself · every trade public — check them on-chain ↗
                 </a>
               </div>
             </div>

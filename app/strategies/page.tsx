@@ -322,7 +322,7 @@ export default function StrategiesPage() {
         if (strategyId) {
           try {
             await recordAgentSpec({ strategyId, agent, spec: draftSpec, creator: address });
-            toast('Agent launched — running in sealed hardware. Users can copy it now.', 'success');
+            toast('Agent listed on Sui. It starts trading once the desk picks it up.', 'success');
           } catch {
             toast('Agent listed on Sui. Sealed-hardware execution activates once the keeper picks up its spec.', 'success');
           }
@@ -570,8 +570,8 @@ export default function StrategiesPage() {
                   <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-vermilion mb-1.5">Creator studio</div>
                   <h2 className="font-display font-[800] text-2xl sm:text-[26px] text-white leading-none">Launch an agent</h2>
                   <p className="text-[13px] text-gray-400 mt-2.5 max-w-md leading-snug">
-                    Pick a strategy, set the caps it can never cross, publish. Runs in sealed hardware — no human holds the key,
-                    so it can trade your copiers&apos; funds but can never touch them.
+                    Pick a strategy, set the caps it can never cross, publish. It runs on autopilot, and the
+                    vault contract on Sui enforces the caps — it can trade your copiers&apos; funds, never take them.
                   </p>
                 </div>
                 {address ? (
@@ -611,7 +611,7 @@ export default function StrategiesPage() {
                               </div>
                               <p className="text-[12px] text-gray-400 leading-snug mt-2">{p.how}</p>
                               {comingSoon && (
-                                <div className="font-mono text-[9px] uppercase tracking-[0.16em] text-white/30 mt-2">Soon — enclave runs momentum today</div>
+                                <div className="font-mono text-[9px] uppercase tracking-[0.16em] text-white/30 mt-2">Soon — momentum runs today</div>
                               )}
                             </button>
                           );
@@ -676,8 +676,8 @@ export default function StrategiesPage() {
                     <StudioStep n="04" title="Who runs it">
                       <div className="grid sm:grid-cols-2 gap-3">
                         <HostingOption active={form.hosting === 'attested'} onClick={() => setForm((f) => ({ ...f, hosting: 'attested' }))}
-                          badge="Recommended" title="Run it in sealed hardware"
-                          body="Yosuku runs it inside a sealed chip. The signing key never leaves that chip — even we can't tamper with it or misuse it." />
+                          badge="Recommended" title="Let Yosuku run it"
+                          body="Yosuku runs it for you, hands-off. Your caps live in the Sui contract — it can trade copiers' funds, never take them." />
                         <HostingOption active={form.hosting === 'self'} onClick={() => setForm((f) => ({ ...f, hosting: 'self' }))}
                           badge="Advanced" title="Run your own bot"
                           body="You host the agent and hold its key. Register its wallet; it copies under the same limits enforced on Sui." />
@@ -699,7 +699,7 @@ export default function StrategiesPage() {
                       <div className="flex items-center justify-between">
                         <div className="font-mono text-[9px] uppercase tracking-[0.18em] text-white/40">Preview</div>
                         {form.hosting === 'attested' && (
-                          <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-vermilion border border-vermilion/40 rounded-full px-2 py-0.5">⊙ Attested</span>
+                          <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-vermilion border border-vermilion/40 rounded-full px-2 py-0.5">⊙ Autopilot</span>
                         )}
                       </div>
                       {(() => {
@@ -728,7 +728,7 @@ export default function StrategiesPage() {
                       onClick={listStrategy} disabled={listing}
                       className="w-full py-3 rounded-full text-sm font-semibold bg-vermilion hover:bg-vermilion-d text-white transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                     >
-                      {listing ? 'launching…' : form.hosting === 'attested' ? 'Launch sealed-hardware agent' : 'Publish strategy'}
+                      {listing ? 'launching…' : form.hosting === 'attested' ? 'Launch enclave agent' : 'Publish strategy'}
                     </button>
                     <p className="font-mono text-[10px] leading-relaxed text-gray-600">
                       Limits are enforced on Sui. The agent trades only inside them and can never withdraw a copier&apos;s funds.
@@ -1021,7 +1021,7 @@ function CopyDrawer(props: {
             </div>
             <p className="text-[12px] text-gray-500 leading-relaxed mb-4">
               Pause stops new copies. Your open positions keep running and stay yours — the agent
-              can&apos;t close or claim them out from under you.
+              can&apos;t claim their proceeds out from under you.
             </p>
             <button
               onClick={() => onPause(sub)} disabled={canceling}
