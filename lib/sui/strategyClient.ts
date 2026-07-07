@@ -90,10 +90,15 @@ const STRATEGY_SUBSCRIBED = `${STRATEGY_PKG}::strategy::StrategySubscribed`;
 const SOCIAL_SUBSCRIBED = `${STRATEGY_PKG}::social_vault::Subscribed`;
 const SOCIAL_UNSUBSCRIBED = `${STRATEGY_PKG}::social_vault::Unsubscribed`;
 const COPY_TRADED = `${STRATEGY_PKG}::social_vault::CopyTraded`;
-const ORDER_REQUESTED = `${STRATEGY_PKG}::margin::OrderRequested`;
-const POSITION_OPENED = `${STRATEGY_PKG}::margin::PositionOpened`;
-const POSITION_CLOSED = `${STRATEGY_PKG}::margin::Closed`;
-const POSITION_LIQUIDATED = `${STRATEGY_PKG}::margin::Liquidated`;
+// margin events are typed at the package that DEFINED the margin module (the original
+// yolev publish), not the strategy upgrade — typing them at STRATEGY_PKG returns 0
+// events forever, which left realizedPnl/wins/losses permanently empty (verified:
+// 46 OrderRequested / 45 PositionOpened / 19 Closed / 20 Liquidated live at this root).
+const MARGIN_PKG = '0xa3b75354df203da7b434efb55f6573f72fb656e3897082b575be86dc291cee44';
+const ORDER_REQUESTED = `${MARGIN_PKG}::margin::OrderRequested`;
+const POSITION_OPENED = `${MARGIN_PKG}::margin::PositionOpened`;
+const POSITION_CLOSED = `${MARGIN_PKG}::margin::Closed`;
+const POSITION_LIQUIDATED = `${MARGIN_PKG}::margin::Liquidated`;
 
 const BPS = 10_000;
 
