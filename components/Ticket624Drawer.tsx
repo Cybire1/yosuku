@@ -36,7 +36,10 @@ import {
   placeFirstBet624,
   placeTopUpAndBet624,
   qtyForStake,
+  rangeTicks624,
+  sponsorAddr,
   strike624,
+  ticks624,
   useAccount624,
   useMintQuote624,
   winForQty,
@@ -44,7 +47,7 @@ import {
   type RangePresetKey,
 } from '@/lib/sui/ticket624';
 import { useSmartSubmit } from '@/lib/sui/useSmartSubmit';
-import { buildDepositTx } from '@/lib/sui/predict624Client';
+import { buildDepositTx, probeCombinedMint624 } from '@/lib/sui/predict624Client';
 import type { Transaction } from '@mysten/sui/transactions';
 
 // A ±$30 band is trivial on a 1-minute market but a real call on 1h — BTC's
@@ -235,6 +238,11 @@ export default function Ticket624Drawer({
     }
   }, [clampedOffset, snapRangeOffset]);
 
+  // The plain quote dry-runs the mint ON the account — it ABORTS in account::withdraw when
+  // the balance can't cover the cost (≈ the stake). Don't run a doomed quote; the probe
+  // below supplies the real odds for that state, and placement goes through the top-up PTB.
+  const quoteWouldAbort = !!wrapperId && stake > 0 && acctBalance < stake;
+
   // Quote a STABLE payout qty derived from the stake via EST_PROB (non-circular). We read the
   // live probability from the quote, then derive the real payout qty + win from that.
   const qtyForQuote = qtyForStake(stake, lev, EST_PROB);
@@ -247,12 +255,17 @@ export default function Ticket624Drawer({
     qty: qtyForQuote,
     lev,
     spot,
-    enabled: !closing && !belowMinHard && !placed && !rangeDragging,
+    enabled: !closing && !belowMinHard && !placed && !rangeDragging && !quoteWouldAbort,
   });
 
-  const showLive = quote != null && stake > 0;
+  // REAL odds when the plain quote can't run (no account yet / balance below the stake):
+  // probe the combined (create|top-up)+mint PTB — its in-PTB deposit funds the account
+  // mid-dry-run, so it quotes states the plain quote aborts on. Nothing executes.
+  const [probeProb, setProbeProb] = useState<number | null>(null);
+
+  const showLive = (quote != null || probeProb != null) && stake > 0;
   const showEstimate = !showLive && stake > 0;
-  const probUsed = quote?.entryProb ?? estProb(market?.cadence);
+  const probUsed = quote?.entryProb ?? probeProb ?? estProb(market?.cadence);
   const payoutQty = qtyForStake(stake, lev, probUsed);      // costs stake at this probability
   const winAmt = winForQty(payoutQty, lev, probUsed);       // what a win returns
   const currentCost = quote ? quote.costMicro / DUSDC_MULTIPLIER : stake;
@@ -273,6 +286,38 @@ export default function Ticket624Drawer({
   // the regular place run thin-margin (it may ask for a retry on drift, never strands funds).
   const canOneTapTopUp = needsDeposit && walletDusdc > 0.01 && acctBalance + walletDusdc >= stake;
   const thinMarginOk = needsDeposit && !canOneTapTopUp && acctBalance >= stake;
+
+  // run the display probe for the states the plain quote can't serve (see probeProb above)
+  useEffect(() => {
+    const need = (needsAccount || quoteWouldAbort) && stake > 0 && !!address && !!market && spot != null && !placed && !rangeDragging;
+    if (!need) { setProbeProb(null); return; }
+    const coinIds = acct.dusdcCoins.map((c) => c.coinObjectId);
+    if (!coinIds.length || acct.walletMicro <= 0) return;
+    let dead = false;
+    const run = async () => {
+      const s = spot;
+      if (s == null) return;
+      const { lowerTick, higherTick } = isRange && lowerUsd != null && higherUsd != null
+        ? rangeTicks624(lowerUsd, higherUsd)
+        : ticks624(s, dir ?? 'up');
+      const probe = await probeCombinedMint624({
+        wrapperId: wrapperId ?? null,
+        coinIds,
+        probeDepositMicro: BigInt(Math.floor(acct.walletMicro)),
+        marketId: market!.id,
+        lowerTick,
+        higherTick,
+        leverage1e9: BigInt(lev) * 1_000_000_000n,
+        sender: address!,
+        gasOwner: await sponsorAddr(),
+      });
+      if (!dead && !('error' in probe) && probe.entryProb > 0.01) setProbeProb(probe.entryProb);
+    };
+    const t = setTimeout(run, 400); // debounce typing
+    const iv = setInterval(run, 15_000); // keep the shown odds current
+    return () => { dead = true; clearTimeout(t); clearInterval(iv); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [needsAccount, quoteWouldAbort, stake > 0, address, market?.id, spot != null, isRange, lowerUsd, higherUsd, dir, lev, placed, rangeDragging, acct.walletMicro]);
 
   const blocker: string | null = closing
     ? 'Market closing — pick the next one'
