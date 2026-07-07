@@ -118,7 +118,9 @@ export function rangeTicks624(lowerUsd: number, higherUsd: number): { lowerTick:
 
 /** Translate the venue's mint aborts into plain words (codes from expiry_market.move). */
 export function friendlyMintAbort(raw: string): string {
-  return /::order::assert_valid_quantity|::order::.*abort code:?\s*4/i.test(raw)
+  return /::account::withdraw/i.test(raw)
+    ? 'Your trading account can’t cover this yet — placing the bet tops it up automatically.'
+    : /::order::assert_valid_quantity|::order::.*abort code:?\s*4/i.test(raw)
     ? 'This bet size was not on the venue lot grid. The quote has been corrected — try again.'
     : /abort code:?\s*4/.test(raw)
     ? 'The price moved past your max while you were signing — nothing was charged. Quote refreshed, try again.'
