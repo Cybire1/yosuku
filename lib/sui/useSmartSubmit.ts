@@ -17,7 +17,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useCurrentAccount, useSignTransaction } from '@mysten/dapp-kit';
 import { Transaction } from '@mysten/sui/transactions';
-import { grpc, buildSignExecute } from './modernClients';
+import { grpc, GRPC_URL, buildSignExecute } from './modernClients';
 import { getSponsorStatus, submitSponsored, type SponsorStatus } from '../sponsor';
 
 export interface SubmitResult {
@@ -26,6 +26,36 @@ export interface SubmitResult {
 }
 
 type TxFactory = () => Transaction | Promise<Transaction>;
+
+// Pin ONE random gas coin from the sponsor's pool for a sponsored bet.
+//
+// Why this is required for concurrency: a Sui sponsored tx signs the gas coins INTO the
+// bytes — the user signs them, the sponsor co-signs the same bytes, and neither can reassign
+// gas afterward. If every bet builds with default gas resolution, the client locks the
+// sponsor's WHOLE coin set, so two concurrent bets collide (equivocation) no matter how many
+// coins the sponsor holds. Pinning a random coin per bet spreads concurrent bets across the
+// pool. suix_getCoins is the one call returning {objectId, version, digest} together (exactly
+// what setGasPayment needs); POSTed to the same fullnode the gRPC client uses. Best-effort:
+// any failure returns null and we let the client resolve gas (serial fallback) rather than
+// block the bet. Returns null when the pool has < 2 usable coins so we never pin a lone coin.
+async function pickSponsorGasPayment(sponsor: string): Promise<{ objectId: string; version: string; digest: string }[] | null> {
+  try {
+    const res = await fetch(GRPC_URL, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'suix_getCoins', params: [sponsor, '0x2::sui::SUI', null, 50] }),
+      signal: AbortSignal.timeout(4000),
+    });
+    const coins: Array<{ coinObjectId: string; version: string; digest: string; balance: string }> =
+      (await res.json())?.result?.data ?? [];
+    const usable = coins.filter((c) => BigInt(c.balance) >= 150_000_000n); // ≥0.15 SUI comfortably covers one bet's gas
+    if (usable.length < 2) return null; // single/empty pool → don't pin a lone coin; let the client resolve
+    const c = usable[Math.floor(Math.random() * usable.length)];
+    return [{ objectId: c.coinObjectId, version: String(c.version), digest: c.digest }];
+  } catch {
+    return null;
+  }
+}
 
 export function useSmartSubmit() {
   const account = useCurrentAccount();
@@ -51,6 +81,12 @@ export function useSmartSubmit() {
           const tx = await build();
           tx.setSender(address);
           tx.setGasOwner(sponsor.address);
+          // Spread concurrent bets across the sponsor's gas pool (see pickSponsorGasPayment).
+          // Without this, the client locks the sponsor's whole coin set and simultaneous bets
+          // collide. Skipped gracefully (null) when the pool isn't split — falls back to the
+          // client's default resolution, i.e. serial sponsorship, exactly as before.
+          const gasPayment = await pickSponsorGasPayment(sponsor.address);
+          if (gasPayment) tx.setGasPayment(gasPayment);
           const bytes = await tx.build({ client: grpc });
           const signed = await signTransaction({ transaction: Transaction.from(bytes) });
           const r = await submitSponsored({ sender: address, txBytes: signed.bytes, txSignature: signed.signature });
