@@ -65,8 +65,10 @@ export const MIN_MINT_MS = 15_000;
  *  probability races to 0/1 — quotes go stale mid-signature (EMintCostAboveMax) and the
  *  fill is terrible anyway. Stop entries 45s out; the ticket auto-rolls to the next round. */
 export const minMintMs = (cadence?: string) => (cadence === '1m' ? 45_000 : MIN_MINT_MS);
-/** DeepBook Predict's on-chain minimum net premium. Fees are quoted separately. */
-export const MIN_STAKE = 1;
+/** The venue hard-rejects net premium < 1 DUSDC, and pricing wobbles a few percent with
+ *  size/time — a stake of exactly 1.00 lands premium 0.99–1.09 and aborts about half the
+ *  time (verified on-chain: 0.9978 → assert_mint_admission). 1.10 clears it reliably. */
+export const MIN_STAKE = 1.1;
 
 export type Dir624 = 'up' | 'down';
 
@@ -80,6 +82,18 @@ export function qtyForStake(stake: number, lev: number, prob: number): number {
   if (stake <= 0 || prob <= 0) return 0;
   return quantizePositionQuantity624((stake * lev) / prob);
 }
+
+/** The venue hard-rejects mints whose net premium (= prob·qty/lev) is under 1 DUSDC
+ *  (assert_mint_admission). A 1.00 stake sizes premium to EXACTLY 1.00, and lot rounding
+ *  can shave it a hair under → abort. Floor the on-chain qty so the premium always clears
+ *  the minimum with a small safety margin — a 1.00 bet costs ~1.02 instead of failing. */
+export function minQtyMicroForPremium(lev: number, prob: number): bigint {
+  if (prob <= 0) return 0n;
+  const LOT = 10_000n;
+  const micro = BigInt(Math.ceil(((1.02 * lev) / prob) * 1_000_000));
+  return ((micro + LOT - 1n) / LOT) * LOT;
+}
+const bigMax = (a: bigint, b: bigint) => (a > b ? a : b);
 /** What a winning payout `qty` returns: quantity minus the financed floor (= qty at 1×). */
 export function winForQty(qty: number, lev: number, prob: number): number {
   return Math.max(0, qty * (1 - prob * (1 - 1 / lev)));
@@ -124,6 +138,8 @@ export function rangeTicks624(lowerUsd: number, higherUsd: number): { lowerTick:
 export function friendlyMintAbort(raw: string): string {
   return /::account::withdraw/i.test(raw)
     ? 'Your trading account can’t cover this yet — placing the bet tops it up automatically.'
+    : /assert_mint_admission/i.test(raw)
+    ? 'Just under the venue’s minimum ticket — bet a touch more (1.05+) and it clears.'
     : /::order::assert_valid_quantity|::order::.*abort code:?\s*4/i.test(raw)
     ? 'This bet size was not on the venue lot grid. The quote has been corrected — try again.'
     : /abort code:?\s*4/.test(raw)
@@ -406,7 +422,7 @@ export async function placeMint624(p: {
 }): Promise<{ digest: string; strikeUsd: number; costDusdc: number }> {
   const strikeUsd = strike624(p.spot, p.dir);
   const { lowerTick, higherTick } = ticks624(p.spot, p.dir);
-  const qtyMicro = positionQuantityMicro624(p.qty);
+  let qtyMicro = positionQuantityMicro624(p.qty);
   const leverage1e9 = BigInt(p.lev) * 1_000_000_000n;
 
   const fresh = await quoteMint624({
@@ -420,7 +436,12 @@ export async function placeMint624(p: {
     gasOwner: await sponsorAddr(),
   });
   if ('error' in fresh) throw new Error(`quote: ${fresh.error}`);
-  const freshCost = fresh.costMicro / DUSDC_MULTIPLIER;
+  // clear the venue's 1-DUSDC min-premium floor (a 1.00 stake sizes premium to exactly 1.00
+  // and lot rounding can shave it under → admission abort). Scale the cost guard with the bump.
+  const bumped = bigMax(qtyMicro, minQtyMicroForPremium(p.lev, fresh.entryProb));
+  const costScale = Number(bumped) / Number(qtyMicro);
+  qtyMicro = bumped;
+  const freshCost = (fresh.costMicro * costScale) / DUSDC_MULTIPLIER;
   const maxCost = Math.min(p.acctBalance, freshCost * costCapBuffer(p.cadence));
   if (maxCost < freshCost) throw new Error('balance below the live cost — deposit a little more');
 
@@ -458,7 +479,7 @@ export async function placeRangeMint624(p: {
   cadence?: string;
 }): Promise<{ digest: string; lowerUsd: number; higherUsd: number; costDusdc: number }> {
   const { lowerTick, higherTick } = rangeTicks624(p.lowerUsd, p.higherUsd);
-  const qtyMicro = positionQuantityMicro624(p.qty);
+  let qtyMicro = positionQuantityMicro624(p.qty);
   const leverage1e9 = BigInt(p.lev) * 1_000_000_000n;
 
   const fresh = await quoteMint624({
@@ -472,7 +493,11 @@ export async function placeRangeMint624(p: {
     gasOwner: await sponsorAddr(),
   });
   if ('error' in fresh) throw new Error(`quote: ${fresh.error}`);
-  const freshCost = fresh.costMicro / DUSDC_MULTIPLIER;
+  // min-premium floor + scaled cost guard (see placeMint624)
+  const bumped = bigMax(qtyMicro, minQtyMicroForPremium(p.lev, fresh.entryProb));
+  const costScale = Number(bumped) / Number(qtyMicro);
+  qtyMicro = bumped;
+  const freshCost = (fresh.costMicro * costScale) / DUSDC_MULTIPLIER;
   const maxCost = Math.min(p.acctBalance, freshCost * costCapBuffer(p.cadence));
   if (maxCost < freshCost) throw new Error('balance below the live cost — deposit a little more');
 
@@ -550,13 +575,17 @@ export async function placeFirstBet624(p: {
   if (!('error' in probe) && probe.entryProb > 0.01) {
     qtyDisplay = qtyForStake(p.stakeDusdc, p.lev, probe.entryProb);
   }
+  // probe-sized qty puts the premium EXACTLY at the stake — floor it over the venue minimum
+  const qtyMicroFirst = !('error' in probe) && probe.entryProb > 0.01
+    ? bigMax(positionQuantityMicro624(qtyDisplay), minQtyMicroForPremium(p.lev, probe.entryProb))
+    : positionQuantityMicro624(qtyDisplay);
   const mintArgs = {
     coinIds: p.coinIds,
     depositMicro,
     marketId: p.marketId,
     lowerTick,
     higherTick,
-    qtyMicro: positionQuantityMicro624(qtyDisplay),
+    qtyMicro: qtyMicroFirst,
     leverage1e9: BigInt(p.lev) * 1_000_000_000n,
     maxCostMicro: depositMicro, // can't cost more than we just deposited
     maxProb1e9: BigInt(990_000_000),
@@ -630,6 +659,10 @@ export async function placeTopUpAndBet624(p: {
   if (!('error' in probe) && probe.entryProb > 0.01) {
     qtyDisplay = qtyForStake(p.stakeDusdc, p.lev, probe.entryProb);
   }
+  // probe-sized qty puts the premium EXACTLY at the stake — floor it over the venue minimum
+  const qtyMicroTop = !('error' in probe) && probe.entryProb > 0.01
+    ? bigMax(positionQuantityMicro624(qtyDisplay), minQtyMicroForPremium(p.lev, probe.entryProb))
+    : positionQuantityMicro624(qtyDisplay);
   const mintArgs = {
     wrapperId: p.wrapperId,
     coinIds: p.coinIds,
@@ -637,7 +670,7 @@ export async function placeTopUpAndBet624(p: {
     marketId: p.marketId,
     lowerTick,
     higherTick,
-    qtyMicro: positionQuantityMicro624(qtyDisplay),
+    qtyMicro: qtyMicroTop,
     leverage1e9: BigInt(p.lev) * 1_000_000_000n,
     maxCostMicro: totalMicro, // cost can't exceed the post-deposit balance
     maxProb1e9: BigInt(990_000_000),
