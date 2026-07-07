@@ -322,7 +322,7 @@ export default function StrategiesPage() {
         if (strategyId) {
           try {
             await recordAgentSpec({ strategyId, agent, spec: draftSpec, creator: address });
-            toast('Agent listed on Sui. Enclave execution starts once the keeper picks up its spec.', 'success');
+            toast('Agent listed on Sui. It starts trading once the desk picks it up.', 'success');
           } catch {
             toast('Agent listed on Sui. Sealed-hardware execution activates once the keeper picks up its spec.', 'success');
           }
@@ -570,8 +570,8 @@ export default function StrategiesPage() {
                   <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-vermilion mb-1.5">Creator studio</div>
                   <h2 className="font-display font-[800] text-2xl sm:text-[26px] text-white leading-none">Launch an agent</h2>
                   <p className="text-[13px] text-gray-400 mt-2.5 max-w-md leading-snug">
-                    Pick a strategy, set the caps it can never cross, publish. Trades are signed inside a Nitro enclave,
-                    and the vault contract on Sui enforces the caps — it can trade your copiers&apos; funds, never take them.
+                    Pick a strategy, set the caps it can never cross, publish. It runs on autopilot, and the
+                    vault contract on Sui enforces the caps — it can trade your copiers&apos; funds, never take them.
                   </p>
                 </div>
                 {address ? (
@@ -611,7 +611,7 @@ export default function StrategiesPage() {
                               </div>
                               <p className="text-[12px] text-gray-400 leading-snug mt-2">{p.how}</p>
                               {comingSoon && (
-                                <div className="font-mono text-[9px] uppercase tracking-[0.16em] text-white/30 mt-2">Soon — enclave runs momentum today</div>
+                                <div className="font-mono text-[9px] uppercase tracking-[0.16em] text-white/30 mt-2">Soon — momentum runs today</div>
                               )}
                             </button>
                           );
@@ -676,8 +676,8 @@ export default function StrategiesPage() {
                     <StudioStep n="04" title="Who runs it">
                       <div className="grid sm:grid-cols-2 gap-3">
                         <HostingOption active={form.hosting === 'attested'} onClick={() => setForm((f) => ({ ...f, hosting: 'attested' }))}
-                          badge="Recommended" title="Run it in a Nitro enclave"
-                          body="Yosuku runs it inside an AWS Nitro enclave that signs its trades. The vault contract on Sui enforces the caps — it can trade copiers' funds, never withdraw them." />
+                          badge="Recommended" title="Let Yosuku run it"
+                          body="Yosuku runs it for you, hands-off. Your caps live in the Sui contract — it can trade copiers' funds, never take them." />
                         <HostingOption active={form.hosting === 'self'} onClick={() => setForm((f) => ({ ...f, hosting: 'self' }))}
                           badge="Advanced" title="Run your own bot"
                           body="You host the agent and hold its key. Register its wallet; it copies under the same limits enforced on Sui." />
@@ -699,7 +699,7 @@ export default function StrategiesPage() {
                       <div className="flex items-center justify-between">
                         <div className="font-mono text-[9px] uppercase tracking-[0.18em] text-white/40">Preview</div>
                         {form.hosting === 'attested' && (
-                          <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-vermilion border border-vermilion/40 rounded-full px-2 py-0.5">⊙ Enclave-signed</span>
+                          <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-vermilion border border-vermilion/40 rounded-full px-2 py-0.5">⊙ Autopilot</span>
                         )}
                       </div>
                       {(() => {

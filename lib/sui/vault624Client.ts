@@ -338,29 +338,39 @@ type EvNode = {
 const RPC_URL = process.env.NEXT_PUBLIC_SUI_RPC_URL || 'https://fullnode.testnet.sui.io:443';
 
 // Testnet GraphQL event indexing lags/windows — suix_queryEvents is the reliable net.
+// The fullnode clamps each page to 50 regardless of the requested limit, so walking the
+// cursor is the ONLY way to read a full history (the all-time desk record needs it).
 async function jsonRpcEvents(type: string, last: number): Promise<EvNode[]> {
+  type RpcEvent = { timestampMs?: string; parsedJson?: Record<string, unknown>; id?: { txDigest?: string } };
+  const out: EvNode[] = [];
+  let cursor: unknown = null;
   try {
-    const r = await fetch(RPC_URL, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        jsonrpc: '2.0', id: 1, method: 'suix_queryEvents',
-        params: [{ MoveEventType: type }, null, last, true],
-      }),
-    });
-    const j = await r.json();
-    type RpcEvent = { timestampMs?: string; parsedJson?: Record<string, unknown>; id?: { txDigest?: string } };
-    return ((j.result?.data ?? []) as RpcEvent[]).map((e) => ({
-      timestamp: e.timestampMs ? new Date(Number(e.timestampMs)).toISOString() : null,
-      contents: { json: e.parsedJson ?? {} },
-      transaction: e.id?.txDigest ? { digest: e.id.txDigest } : null,
-    }));
-  } catch {
-    return [];
-  }
+    // ceil(last/50) pages, hard-capped — each page is ≤50 by node policy
+    for (let page = 0; page < Math.min(20, Math.ceil(last / 50)); page++) {
+      const r = await fetch(RPC_URL, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0', id: 1, method: 'suix_queryEvents',
+          params: [{ MoveEventType: type }, cursor, Math.min(50, last - out.length), true],
+        }),
+      });
+      const j = await r.json();
+      const data = (j.result?.data ?? []) as RpcEvent[];
+      out.push(...data.map((e) => ({
+        timestamp: e.timestampMs ? new Date(Number(e.timestampMs)).toISOString() : null,
+        contents: { json: e.parsedJson ?? {} },
+        transaction: e.id?.txDigest ? { digest: e.id.txDigest } : null,
+      })));
+      if (!j.result?.hasNextPage || out.length >= last) break;
+      cursor = j.result.nextCursor;
+    }
+  } catch { /* return what we have */ }
+  return out;
 }
 
 async function queryEvents(type: string, last = 50): Promise<EvNode[]> {
+  if (last > 50) return jsonRpcEvents(type, last); // GraphQL pages cap at 50 — paginate via JSON-RPC
   try {
     const { data, errors } = await gql.query<{ events: { nodes: EvNode[] } }>({
       query: EVENTS_Q,
