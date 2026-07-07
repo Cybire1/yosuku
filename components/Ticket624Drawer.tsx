@@ -868,13 +868,6 @@ export default function Ticket624Drawer({
                 </p>
               </div>
             )}
-            {address && wrapperId && needsDeposit && canOneTapTopUp && (
-              <div className="border border-vermilion/20 bg-vermilion/[0.03] p-3 mb-4">
-                <p className="font-mono text-[10px] text-white/45 leading-relaxed">
-                  <span className="text-vermilion">One tap does it.</span> Your account holds {fmt2(acctBalance)} — this bet tops it up from your wallet and places in a single signature, gas-free. Only your wallet can withdraw.
-                </p>
-              </div>
-            )}
             {address && wrapperId && needsDeposit && !canOneTapTopUp && (
               <div className="border border-vermilion/25 bg-vermilion/[0.04] p-4 mb-4">
                 <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-vermilion mb-1.5">Top up to place this</div>
