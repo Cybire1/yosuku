@@ -37,7 +37,7 @@ import {
   type Cadence624,
   type Market624,
 } from '@/lib/sui/predict624Client';
-import { BAND_USD, MIN_MINT_MS, strike624, ticks624, type Dir624 } from '@/lib/sui/ticket624';
+import { BAND_USD, minMintMs, strike624, ticks624, type Dir624 } from '@/lib/sui/ticket624';
 
 // ─── house quoting (display odds) ───
 // Dry-runs are UNSIGNED simulations against a funded house account — no keys are
@@ -148,7 +148,7 @@ function useHouseOdds624(markets: Market624[], spot: number | null) {
       inflight.current = true;
       try {
         const nowMs = Date.now();
-        const list = marketsRef.current.filter((m) => m.expiry - nowMs > MIN_MINT_MS);
+        const list = marketsRef.current.filter((m) => m.expiry - nowMs > minMintMs(m.cadence));
         for (const m of list) {
           if (dead) break;
           const cached = oddsRef.current[m.id];
@@ -216,7 +216,7 @@ function Market624Card({
   onOpen: (market: Market624, side: Dir624 | null) => void;
 }) {
   const msLeft = now > 0 ? market.expiry - now : null;
-  const closing = msLeft != null && msLeft > 0 && msLeft <= MIN_MINT_MS;
+  const closing = msLeft != null && msLeft > 0 && msLeft <= minMintMs(market.cadence);
   const urgent = !closing && msLeft != null && msLeft < 5 * 60 * 1000;
   const strikeUp = odds?.strikeUpUsd ?? (spot != null ? spot - BAND_USD : null);
   const strikeDown = odds?.strikeDownUsd ?? (spot != null ? spot + BAND_USD : null);
@@ -440,7 +440,7 @@ export default function MarketsPage() {
   // Prefer 5m → 1h → and only fall back to the jumpy 1m if nothing else is open. Soonest-first
   // within a cadence so the chart has live context.
   const featuredMarket = useMemo(() => {
-    const mintable = (m: Market624) => now === 0 || m.expiry - now > MIN_MINT_MS;
+    const mintable = (m: Market624) => now === 0 || m.expiry - now > minMintMs(m.cadence);
     const soonest = (c: Cadence624) =>
       markets.filter((m) => m.cadence === c && mintable(m)).sort((a, b) => a.expiry - b.expiry)[0] ?? null;
     return soonest('5m') ?? soonest('1h') ?? soonest('1m') ?? markets.find(mintable) ?? null;
@@ -468,9 +468,9 @@ export default function MarketsPage() {
   const ticketMarket = useMemo(() => {
     if (!ticket) return null;
     const selected = markets.find((m) => m.id === ticket.market.id) ?? ticket.market;
-    if (now === 0 || selected.expiry - now > MIN_MINT_MS) return selected;
+    if (now === 0 || selected.expiry - now > minMintMs(selected.cadence)) return selected;
     return markets.find(
-      (m) => m.cadence === selected.cadence && m.expiry - now > MIN_MINT_MS,
+      (m) => m.cadence === selected.cadence && m.expiry - now > minMintMs(m.cadence),
     ) ?? selected;
   }, [ticket, markets, now]);
 

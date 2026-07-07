@@ -25,7 +25,7 @@ import { type Market624 } from '@/lib/sui/predict624Client';
 import {
   EST_PROB,
   estProb,
-  MIN_MINT_MS,
+  minMintMs,
   MIN_STAKE,
   RANGE_CENTER_MAX,
   RANGE_PRESETS,
@@ -174,7 +174,7 @@ export default function Ticket624Drawer({
   const addFund = (n: number) => setFundStr((s) => String(Math.max(0, (parseFloat(s || '0') || 0) + n)));
 
   const msLeft = market && now > 0 ? market.expiry - now : null;
-  const closing = msLeft != null && msLeft < MIN_MINT_MS;
+  const closing = msLeft != null && msLeft < minMintMs(market?.cadence);
   const belowMinHard = stake > 0 && stake < MIN_STAKE;
   const strikeUsd = spot != null && dir ? strike624(spot, dir) : null;
 
