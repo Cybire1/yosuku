@@ -4,6 +4,7 @@
 // seal_approve). Reads via JSON-RPC (reliable; the GraphQL event index lags — same as strategyClient).
 import { Transaction } from '@mysten/sui/transactions';
 import { SealClient, SessionKey } from '@mysten/seal';
+import { grpc } from './modernClients';
 import { fromHex } from '@mysten/sui/utils';
 import { DUSDC_MULTIPLIER } from './constants';
 
@@ -123,22 +124,23 @@ export async function readMemory(opts: {
   passId: string;
   signPersonalMessage: SignPersonalMessage;
 }): Promise<string> {
-  const { suiClient, walletAddress, listingId, passId, signPersonalMessage } = opts;
+  const { walletAddress, listingId, passId, signPersonalMessage } = opts; // Seal needs a `.core` client — use the gRPC client, not the wallet's JSON-RPC shim
   const blobId = CAPSULES[listingId];
   if (!blobId) throw new Error('No encrypted playbook for this listing yet.');
-  const sealClient = new SealClient({ suiClient, serverConfigs: SEAL_SERVERS.map((objectId) => ({ objectId, weight: 1 })), verifyKeyServers: false });
+  const sealClient = new SealClient({ suiClient: grpc, serverConfigs: SEAL_SERVERS.map((objectId) => ({ objectId, weight: 1 })), verifyKeyServers: false });
   const r = await fetch(`${WALRUS_AGG}/${blobId}`);
   if (!r.ok) throw new Error(`Couldn't fetch the playbook from Walrus (${r.status}).`);
   const ct = new Uint8Array(await r.arrayBuffer());
-  const sessionKey = await SessionKey.create({ address: walletAddress, packageId: MEMORY_MARKET_PKG, ttlMin: 10, suiClient });
+  const sessionKey = await SessionKey.create({ address: walletAddress, packageId: MEMORY_MARKET_PKG, ttlMin: 10, suiClient: grpc });
   const { signature } = await signPersonalMessage({ message: sessionKey.getPersonalMessage() });
   await sessionKey.setPersonalMessageSignature(signature);
   const tx = new Transaction();
+  tx.setSender(walletAddress); // owned-object (pass) resolution needs the real sender even for kind-only builds
   tx.moveCall({
     target: `${MEMORY_MARKET_PKG}::memory_market::seal_approve`,
     arguments: [tx.pure.vector('u8', fromHex(listingId.slice(2))), tx.object(passId)],
   });
-  const txBytes = await tx.build({ client: suiClient, onlyTransactionKind: true });
+  const txBytes = await tx.build({ client: grpc, onlyTransactionKind: true });
   const dec = await sealClient.decrypt({ data: ct, sessionKey, txBytes });
   return new TextDecoder().decode(dec);
 }
