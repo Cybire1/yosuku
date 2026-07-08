@@ -7,7 +7,7 @@
 // → inner account id (the indexer keys per-user feeds on the INNER account.account_id,
 // NOT the wrapper object id) → stored balance + open positions + settled history from
 // the beta indexer's /accounts/{account_id}/… routes. Claims build
-// buildRedeemSettledTx and submit plain wallet-signed (buildSignExecute) — the exact
+// buildRedeemSettledTx, submitted sponsored-first via useSmartSubmit — the exact
 // idiom of /beta, the founder-validated 6-24 surface: the Onara sponsor only
 // allowlists old-deployment targets, so routing 6-24 txs through the sponsored path
 // would cost the user a doomed extra signing popup.
@@ -20,7 +20,7 @@ import { useCurrentAccount, useSignTransaction } from '@mysten/dapp-kit';
 import type { Transaction } from '@mysten/sui/transactions';
 import { useToast } from '@/components/Toast';
 import SectionHeader from '@/components/SectionHeader';
-import { grpc, buildSignExecute } from '@/lib/sui/modernClients';
+import { useSmartSubmit } from '@/lib/sui/useSmartSubmit';
 import { DUSDC_MULTIPLIER } from '@/lib/sui/constants';
 import {
   POS_INF_TICK,
@@ -111,17 +111,15 @@ export default function Portfolio624Section() {
   const [deskSub, setDeskSub] = useState<Sub624 | null>(null);
   const [deskRows, setDeskRows] = useState<VaultEvent624[]>([]);
 
-  // plain wallet submit — /beta's exact tx path (no sponsor on 6-24 targets)
+  // sponsored-first — yosuku-trading-624 allowlists redeem_settled, so claims are gas-free
+  const { submit } = useSmartSubmit();
   const submitTx = useCallback(
-    async (tx: Transaction): Promise<string> => {
+    async (build: () => Transaction): Promise<string> => {
       if (!address) throw new Error('Connect a wallet first');
-      const r = await buildSignExecute(tx, ({ transaction }) =>
-        signTransaction({ transaction }).then((s) => ({ bytes: s.bytes, signature: s.signature })),
-      );
-      await grpc.waitForTransaction({ digest: r.digest });
-      return r.digest;
+      const { digest } = await submit(build);
+      return digest;
     },
-    [address, signTransaction],
+    [address, submit],
   );
 
   const refreshBalance = useCallback(async (wid?: string | null) => {
@@ -208,7 +206,7 @@ export default function Portfolio624Section() {
     if (!wrapperId || busy) return;
     setBusy(`claim:${pos.orderId}`);
     try {
-      await submitTx(buildRedeemSettledTx({
+      await submitTx(() => buildRedeemSettledTx({
         marketId: pos.marketId,
         wrapperId,
         orderId: BigInt(pos.orderId),

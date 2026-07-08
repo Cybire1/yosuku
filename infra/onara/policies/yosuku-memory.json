@@ -1,0 +1,13 @@
+{
+  "name": "yosuku-memory",
+  "gasBudgetMax": 100000000,
+  "allowedCommandKinds": [
+    "MoveCall",
+    "SplitCoins",
+    "MergeCoins",
+    "TransferObjects"
+  ],
+  "targets": [
+    "0x601895033b49cf24935f76a5ad796be8e8b93b91fa85ee89671d4405c7ed6061::memory_market::buy_pass"
+  ]
+}

@@ -1,7 +1,12 @@
 {
   "name": "yosuku-trading",
-  "gasBudgetMax": 100000000,
-  "allowedCommandKinds": ["MoveCall", "SplitCoins", "MergeCoins", "TransferObjects"],
+  "gasBudgetMax": 200000000,
+  "allowedCommandKinds": [
+    "MoveCall",
+    "SplitCoins",
+    "MergeCoins",
+    "TransferObjects"
+  ],
   "targets": [
     "0xf5ea2b3749c65d6e56507cc35388719aadb28f9cab873696a2f8687f5c785138::predict::create_manager",
     "0xf5ea2b3749c65d6e56507cc35388719aadb28f9cab873696a2f8687f5c785138::predict_manager::deposit",
@@ -14,6 +19,7 @@
     "0xf5ea2b3749c65d6e56507cc35388719aadb28f9cab873696a2f8687f5c785138::predict::redeem_permissionless",
     "0xf5ea2b3749c65d6e56507cc35388719aadb28f9cab873696a2f8687f5c785138::market_key::up",
     "0xf5ea2b3749c65d6e56507cc35388719aadb28f9cab873696a2f8687f5c785138::market_key::down",
-    "0xf5ea2b3749c65d6e56507cc35388719aadb28f9cab873696a2f8687f5c785138::range_key::new"
+    "0xf5ea2b3749c65d6e56507cc35388719aadb28f9cab873696a2f8687f5c785138::range_key::new",
+    "0x3b76383b2bb9bc411dc56c571a1da22f348b3c19518115ae958fe96e031cf30e::trading_vault::credit_available_for"
   ]
 }

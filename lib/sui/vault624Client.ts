@@ -84,7 +84,7 @@ export const EV_SETTLED = `${VAULT624.pkg}::vault624::Settled`;
 export const EV_DEPOSITED = `${VAULT624.pkg}::vault624::Deposited`;
 export const EV_WITHDRAWN = `${VAULT624.pkg}::vault624::Withdrawn`;
 
-// ─── tx builders (wallet-signed; NO sponsor — Onara only allowlists old-deployment targets) ───
+// ─── tx builders (sponsored-first via useSmartSubmit at the call sites; yosuku-vault-624 policy) ───
 
 /** Deposit DUSDC into the vault, credited to the SENDER's ledger entry
  *  (merge coins → split exact → vault624::deposit). */

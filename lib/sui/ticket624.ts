@@ -14,6 +14,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useCurrentAccount, useSignTransaction } from '@mysten/dapp-kit';
 import type { Transaction } from '@mysten/sui/transactions';
 import { grpc, buildSignExecute } from './modernClients';
+import { useSmartSubmit } from './useSmartSubmit';
 import { getSponsorStatus } from '../sponsor';
 import { DUSDC_MULTIPLIER } from './constants';
 import { useDUSDCBalance } from './hooks';
@@ -166,8 +167,8 @@ export interface Account624 {
   /** Stored DUSDC in the trading account (display units). */
   acctBalance: number;
   refreshAcctBalance: (wid?: string | null) => Promise<void>;
-  /** Plain wallet submit — NO sponsor (Onara only covers old-deployment targets). */
-  submitTx: (tx: Transaction) => Promise<string>;
+  /** Sponsored-first submit (yosuku-trading-624 covers all 6-24 targets); wallet fallback rebuilds via the factory. */
+  submitTx: (build: () => Transaction) => Promise<string>;
   /** One-time account creation. Resolves the wrapper id (null = still indexing). */
   createAccount: () => Promise<string | null>;
   /** Deposit micro-DUSDC from the connected wallet into the trading account. */
@@ -194,16 +195,14 @@ export function useAccount624(): Account624 {
   const [wrapperChecked, setWrapperChecked] = useState(false);
   const [acctBalance, setAcctBalance] = useState(0);
 
+  const { submit } = useSmartSubmit();
   const submitTx = useCallback(
-    async (tx: Transaction): Promise<string> => {
+    async (build: () => Transaction): Promise<string> => {
       if (!address) throw new Error('Connect a wallet first');
-      const r = await buildSignExecute(tx, ({ transaction }) =>
-        signTransaction({ transaction }).then((s) => ({ bytes: s.bytes, signature: s.signature })),
-      );
-      await grpc.waitForTransaction({ digest: r.digest });
-      return r.digest;
+      const { digest } = await submit(build); // sponsored-first; wallet fallback rebuilds clean
+      return digest;
     },
-    [address, signTransaction],
+    [address, submit],
   );
 
   const refreshAcctBalance = useCallback(
@@ -263,7 +262,7 @@ export function useAccount624(): Account624 {
 
   const createAccount = useCallback(async (): Promise<string | null> => {
     if (!address) throw new Error('Connect a wallet first');
-    await submitTx(buildCreateAccountTx());
+    await submitTx(() => buildCreateAccountTx());
     // the wrapper id is derived — poll until the read layer sees it
     let wid: string | null = null;
     for (let i = 0; i < 6 && !wid; i++) {
@@ -283,7 +282,7 @@ export function useAccount624(): Account624 {
     async (amountMicro: bigint): Promise<string> => {
       if (!address || !wrapperId) throw new Error('No trading account yet');
       if (dusdcCoins.length === 0) throw new Error('No DUSDC coins in this wallet');
-      const digest = await submitTx(
+      const digest = await submitTx(() =>
         buildDepositTx({ wrapperId, coinIds: dusdcCoins.map((c) => c.coinObjectId), amountMicro }),
       );
       refreshWallet();
