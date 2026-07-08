@@ -5,7 +5,7 @@
 // proof. Every claim links to a tx anyone can verify. Brand: near-black + vermilion, Sora.
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { ArrowRight, Zap, ShieldCheck, TrendingUp, Users, MessageSquare, Smartphone, ExternalLink } from 'lucide-react';
+import { ArrowRight, Zap, ShieldCheck, TrendingUp, Users, MessageSquare, Smartphone, ExternalLink, BarChart3 } from 'lucide-react';
 
 const SCAN = (d: string) => `https://suiscan.xyz/testnet/tx/${d}`;
 
@@ -51,6 +51,7 @@ export default function DemoPage() {
           <div className="font-display font-extrabold tracking-[0.18em] text-sm">YOSUKU <span className="text-gray-500 font-mono font-normal tracking-normal">/ demo</span></div>
           <div className="flex items-center gap-4 font-mono text-[12px]">
             <Link href="/pitch" className="text-gray-400 hover:text-white transition-colors">pitch</Link>
+            <Link href="/stats" className="inline-flex items-center gap-1.5 text-gray-400 hover:text-white transition-colors"><BarChart3 className="w-3.5 h-3.5" /> stats</Link>
             <Link href="/markets" className="inline-flex items-center gap-1.5 text-vermilion hover:gap-2.5 transition-all">open the app <ArrowRight className="w-3.5 h-3.5" /></Link>
           </div>
         </div>
@@ -179,6 +180,7 @@ export default function DemoPage() {
           <h2 className="font-display font-[800] text-[clamp(2rem,5vw,3.5rem)] leading-[1.02]">The front door is <Serif>open.</Serif></h2>
           <div className="mt-8 flex flex-wrap gap-3 justify-center">
             <Link href="/markets" className="inline-flex items-center gap-2 bg-vermilion hover:bg-vermilion-d transition-colors rounded-full px-6 py-3.5 font-display font-bold">Open the app <ArrowRight className="w-4 h-4" /></Link>
+            <Link href="/stats" className="inline-flex items-center gap-2 border border-white/15 hover:border-white/30 transition-colors rounded-full px-6 py-3.5 font-display font-bold"><BarChart3 className="w-4 h-4" /> View live stats</Link>
             <Link href="/pitch" className="inline-flex items-center gap-2 border border-white/15 hover:border-white/30 transition-colors rounded-full px-6 py-3.5 font-display font-bold">See the pitch</Link>
           </div>
           <div className="mt-10 font-mono text-[11px] tracking-wide text-gray-600">Yosuku · prediction markets on Sui, made usable by people, developers, and agents.</div>
