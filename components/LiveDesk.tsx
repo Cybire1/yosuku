@@ -14,8 +14,9 @@
 //   · The moment after — joining flips to a living "copying · watching" state.
 //   · Decision-moment honesty — wins AND losses, right next to the button.
 //
-// TX PATH: plain wallet signing — the Onara sponsor only allowlists
-// old-deployment targets, so nothing here routes through it.
+// TX PATH: sponsored-first via useSmartSubmit — the yosuku-vault-624 Onara policy
+// allowlists vault624 deposit/withdraw/subscribe/cancel, so a zero-SUI wallet can
+// join gas-free; falls back to wallet payment only on a sponsor-side decline.
 
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useCurrentAccount, useSignTransaction, ConnectButton } from '@mysten/dapp-kit';
@@ -45,7 +46,8 @@ import {
   type Sub624,
   type VaultEvent624,
 } from '@/lib/sui/vault624Client';
-import { grpc, buildSignExecute } from '@/lib/sui/modernClients';
+import { grpc } from '@/lib/sui/modernClients';
+import { useSmartSubmit } from '@/lib/sui/useSmartSubmit';
 import { DUSDC_MULTIPLIER } from '@/lib/sui/constants';
 import EquitySparkline, { type EquityPoint } from '@/components/EquitySparkline';
 
@@ -65,6 +67,7 @@ export default function LiveDesk() {
   const account = useCurrentAccount();
   const { toast } = useToast();
   const { mutateAsync: signTransaction } = useSignTransaction();
+  const { submit } = useSmartSubmit();
   const { balance: walletMicro, coins: dusdcCoins, refresh: refreshWallet } = useDUSDCBalance();
   const walletDusdc = walletMicro / M;
 
@@ -101,12 +104,10 @@ export default function LiveDesk() {
   const [fauceting, setFauceting] = useState(false);
   const [joinedFlash, setJoinedFlash] = useState<{ digest: string | null } | null>(null);
 
-  const submitTx = useCallback(async (tx: Transaction): Promise<string> => {
-    const r = await buildSignExecute(tx, ({ transaction }) =>
-      signTransaction({ transaction }).then((s) => ({ bytes: s.bytes, signature: s.signature })));
-    await grpc.waitForTransaction({ digest: r.digest });
-    return r.digest;
-  }, [signTransaction]);
+  const submitTx = useCallback(async (build: () => Transaction): Promise<string> => {
+    const { digest } = await submit(build); // sponsored-first; wallet fallback rebuilds via the factory
+    return digest;
+  }, [submit]);
 
   const refreshDesk = useCallback(async () => {
     try { setFeed(await fetchVaultTrades624(40)); } catch { /* next poll wins */ } finally { setFeedLoaded(true); }
@@ -236,7 +237,7 @@ export default function LiveDesk() {
     }
     setBusy('join');
     try {
-      const digest = await submitTx(buildJoinDesk624({
+      const digest = await submitTx(() => buildJoinDesk624({
         coinIds: dusdcCoins.map((c) => c.coinObjectId),
         amountMicro: BigInt(Math.floor(amt * M)),
         agent: VAULT624.enclaveAgent,
@@ -260,7 +261,7 @@ export default function LiveDesk() {
     if (dusdcCoins.length === 0) { toast('No test USDC in this wallet yet — tap “Get free test USDC”', 'error'); return; }
     setBusy('deposit');
     try {
-      await submitTx(buildVaultDeposit624({
+      await submitTx(() => buildVaultDeposit624({
         coinIds: dusdcCoins.map((c) => c.coinObjectId),
         amountMicro: BigInt(Math.floor(amt * M)),
       }));
@@ -279,7 +280,7 @@ export default function LiveDesk() {
     if (amt > ledger + 0.000001) { toast(`Your desk balance is ${fmtDusdc(ledger)} test USDC`, 'error'); return; }
     setBusy('withdraw');
     try {
-      await submitTx(buildVaultWithdraw624({ amountMicro: BigInt(Math.floor(amt * M)) }));
+      await submitTx(() => buildVaultWithdraw624({ amountMicro: BigInt(Math.floor(amt * M)) }));
       toast(`${fmtDusdc(amt)} test USDC is back in your wallet`, 'success');
       setWithdrawStr(''); setManage(null);
       burst();
@@ -292,7 +293,7 @@ export default function LiveDesk() {
     if (!address || busy || preview) return;
     setBusy('caps');
     try {
-      await submitTx(buildSubscribe624({
+      await submitTx(() => buildSubscribe624({
         agent: VAULT624.enclaveAgent,
         maxMarginMicro: BigInt(Math.round(capValue * M)),
         maxLeverage1e9: BigInt(levCap) * LEV_1X_624,
@@ -309,7 +310,7 @@ export default function LiveDesk() {
     if (!address || !sub || busy || preview) return;
     setBusy('resume');
     try {
-      await submitTx(buildSubscribe624({
+      await submitTx(() => buildSubscribe624({
         agent: VAULT624.enclaveAgent,
         maxMarginMicro: BigInt(sub.maxMarginMicro),
         maxLeverage1e9: BigInt(sub.maxLeverage1e9),
@@ -325,7 +326,7 @@ export default function LiveDesk() {
     if (!address || busy || preview) return;
     setBusy('pause');
     try {
-      await submitTx(buildCancel624());
+      await submitTx(() => buildCancel624());
       toast('Paused — no new trades. Your balance stays yours; withdraw anytime.', 'success');
       burst();
     } catch (e) {
