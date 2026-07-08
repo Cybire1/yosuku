@@ -74,6 +74,7 @@ export default function DemoPage() {
           </motion.p>
           <motion.div variants={rise} initial="hidden" animate="show" className="mt-9 flex flex-wrap gap-3">
             <Link href="/markets" className="inline-flex items-center gap-2 bg-vermilion hover:bg-vermilion-d transition-colors rounded-full px-5 py-3 font-display font-bold text-sm">Open the app <ArrowRight className="w-4 h-4" /></Link>
+            <Link href="/stats" className="inline-flex items-center gap-2 border border-white/15 hover:border-white/30 transition-colors rounded-full px-5 py-3 font-display font-bold text-sm"><BarChart3 className="w-4 h-4" /> View live stats</Link>
             <Link href="/pitch" className="inline-flex items-center gap-2 border border-white/15 hover:border-white/30 transition-colors rounded-full px-5 py-3 font-display font-bold text-sm">See the pitch</Link>
           </motion.div>
           <motion.div variants={rise} initial="hidden" animate="show" className="mt-10 border-t border-white/10 pt-5 font-mono text-[11px] tracking-wide text-gray-500 flex flex-wrap items-center gap-x-3 gap-y-1.5">
