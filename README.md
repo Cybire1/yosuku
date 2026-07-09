@@ -111,7 +111,7 @@ Composed, not bolted on.
 
 ## Traction
 
-On-chain (testnet), early and verifiable: **~9 distinct non-team wallets** have touched our contracts, **6 actively trading/betting** (verified on-chain 2026-06-23), via Onara-sponsored gas (~42–51 sponsored on-chain actions), with the running count at **[yosuku.xyz/stats](https://yosuku.xyz/stats)**. Developer pull: about **440 npm installs last month** across our two Predict packages (`@yosuku/deepbook-predict` 249, `@yosuku/deepbook-predict-mcp` 191) — the only SDK and MCP server for DeepBook Predict.
+On-chain (testnet), early and verifiable: **~9 distinct non-team wallets** have touched our contracts, **6 of them have placed real bets/trades** (verified on-chain 2026-06-23), via Onara-sponsored gas (~42–51 sponsored on-chain actions), with the running count at **[yosuku.xyz/stats](https://yosuku.xyz/stats)**. Developer pull: about **440 npm installs last month** across our two Predict packages (`@yosuku/deepbook-predict` 249, `@yosuku/deepbook-predict-mcp` 191) — the only SDK and MCP server for DeepBook Predict.
 
 ## Quickstart
 
