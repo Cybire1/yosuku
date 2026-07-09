@@ -22,7 +22,10 @@ const FAUCET_ADDR = '0x7c89c67ca62eca789d2247d4168edc3dded1d93ec2706119e861f128e
 const OFFICIAL_FAUCET = 'https://tally.so/r/Xx102L';
 const COOKIE = 'yfp_claim';
 
-const rpc = () => new SuiJsonRpcClient({ url: 'https://fullnode.testnet.sui.io:443', network: 'testnet' });
+// The public fullnode's JSON-RPC is sunset (every call 404s → faucet fell back to the tally form).
+// publicnode still serves the JSON-RPC surface this route needs (getBalance/getCoins/execute).
+const RPC_URL = process.env.SUI_RPC_URL || 'https://sui-testnet-rpc.publicnode.com';
+const rpc = () => new SuiJsonRpcClient({ url: RPC_URL, network: 'testnet' });
 
 /** Did the faucet wallet fund `address` with DUSDC in the last 24h? (chain = the store) */
 async function fundedRecently(client: SuiJsonRpcClient, address: string): Promise<boolean> {
