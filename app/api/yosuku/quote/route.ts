@@ -11,7 +11,7 @@ import { DUSDC_MULTIPLIER } from '@/lib/sui/constants';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const RPC = getJsonRpcFullnodeUrl('testnet');
+const RPC = process.env.SUI_RPC_URL || 'https://sui-testnet-rpc.publicnode.com'; // public fullnode JSON-RPC sunset
 const client = new SuiJsonRpcClient({ url: RPC, network: 'testnet' });
 const ZERO = '0x' + '0'.repeat(64);
 const leU64 = (b: number[]) => { let v = BigInt(0); for (let i = 0; i < 8; i++) v |= BigInt(b[i] ?? 0) << BigInt(8 * i); return v; };

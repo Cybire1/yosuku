@@ -563,7 +563,7 @@ export async function probeCombinedMint624(p: {
     if (p.gasOwner) tx.setGasOwner(p.gasOwner);
     const bytes = await tx.build({ client: grpc });
     const b64 = typeof Buffer !== 'undefined' ? Buffer.from(bytes).toString('base64') : btoa(String.fromCharCode(...bytes));
-    const r = await fetch('https://fullnode.testnet.sui.io:443', {
+    const r = await fetch(RPC_URL, {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'sui_dryRunTransactionBlock', params: [b64] }),
     }).then((x) => x.json());
@@ -613,7 +613,7 @@ export async function quoteMint624(p: {
     if (p.gasOwner) tx.setGasOwner(p.gasOwner); // dry-runs need no signature — sponsor coins satisfy gas selection
     const bytes = await tx.build({ client: grpc }); // resolution simulates; throws on protocol rejects
     const b64 = typeof Buffer !== 'undefined' ? Buffer.from(bytes).toString('base64') : btoa(String.fromCharCode(...bytes));
-    const r = await fetch('https://fullnode.testnet.sui.io:443', {
+    const r = await fetch(RPC_URL, {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'sui_dryRunTransactionBlock', params: [b64] }),
     }).then((x) => x.json());
@@ -671,7 +671,7 @@ export function buildRedeemSettledTx(p: {
 
 // ─── reads ───
 
-const RPC_URL = process.env.NEXT_PUBLIC_SUI_RPC_URL || 'https://fullnode.testnet.sui.io:443';
+const RPC_URL = process.env.NEXT_PUBLIC_SUI_RPC_URL || 'https://sui-testnet-rpc.publicnode.com'; // public fullnode JSON-RPC sunset
 
 async function jsonRpc<T>(method: string, params: unknown[]): Promise<T | null> {
   try {
