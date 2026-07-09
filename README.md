@@ -25,7 +25,7 @@ Predict directly from X, with leverage, private trading, and agent strategies. O
 
 <div align="center">
 
-**Tweet "@yosuku BTC up 3x" and an AI agent opens that exact position on-chain, from a vault only you can withdraw from.<br/>It trades your money. It cannot take it. Proven on-chain: the agent routed the funds back to the user — 0.953 DUSDC to the user, 0 to the agent.**
+**Tweet "@yosuku BTC up 3x" and an agent opens that exact position on-chain, from a vault only you can withdraw from.<br/>It trades your money. It cannot take it. Proven on-chain: the agent routed the funds back to the user — 0.953 DUSDC to the user, 0 to the agent.**
 
 </div>
 
@@ -106,12 +106,12 @@ Composed, not bolted on.
 | **Parlays (multi-leg AND-combo)** — stack N bells, all must win; full lifecycle | [open](https://suiscan.xyz/testnet/tx/22RYaGccku5NprXZLDmtGEA8k7cWPyNyueHwjN4QCxiD) → resolve → [claim](https://suiscan.xyz/testnet/tx/5AmZGc2bp2hBGycVeMEdaJt3d14NTBByrkc6LSZcwJC1), plus the [early-kill](https://suiscan.xyz/testnet/tx/CC2V5dDEYmYMQHb7Ueb3UeBJwEMsHAgYj5GrYZovsdNj) |
 | **Leverage** — margin desk with real liquidations on recovered value | 12 liquidations proven on-chain |
 | **Trading Balance** — one account routes normal / private / leverage trades, withdrawals owner-only | shared `TradingVault<DUSDC>` live, 59/59 Move tests, wired into web (deposit, withdraw, leverage, private) |
-| **First SDK for DeepBook Predict** | [`@yosuku/deepbook-predict`](https://www.npmjs.com/package/@yosuku/deepbook-predict) (v0.3.0, 198 installs) |
-| **First MCP server** — let any LLM trade Predict | [`@yosuku/deepbook-predict-mcp`](https://www.npmjs.com/package/@yosuku/deepbook-predict-mcp) (v0.1.0, 172 installs) |
+| **First SDK for DeepBook Predict** | [`@yosuku/deepbook-predict`](https://www.npmjs.com/package/@yosuku/deepbook-predict) (249 installs last month) |
+| **First MCP server** — let any LLM trade Predict | [`@yosuku/deepbook-predict-mcp`](https://www.npmjs.com/package/@yosuku/deepbook-predict-mcp) (191 installs last month) |
 
 ## Traction
 
-On-chain (testnet), early and verifiable: **~9 distinct non-team wallets** have touched our contracts, **6 actively trading/betting** (verified on-chain 2026-06-23), via Onara-sponsored gas (~42–51 sponsored on-chain actions), with the running count at **[yosuku.xyz/stats](https://yosuku.xyz/stats)**. Developer pull: about **1,870 npm installs** combined across the @yosuku Predict packages (`@yosuku/deepbook-predict` 198, `@yosuku/deepbook-predict-mcp` 172, `@yosuku/predict` 1,504).
+On-chain (testnet), early and verifiable: **~9 distinct non-team wallets** have touched our contracts, **6 actively trading/betting** (verified on-chain 2026-06-23), via Onara-sponsored gas (~42–51 sponsored on-chain actions), with the running count at **[yosuku.xyz/stats](https://yosuku.xyz/stats)**. Developer pull: about **440 npm installs last month** across our two Predict packages (`@yosuku/deepbook-predict` 249, `@yosuku/deepbook-predict-mcp` 191) — the only SDK and MCP server for DeepBook Predict.
 
 ## Quickstart
 
