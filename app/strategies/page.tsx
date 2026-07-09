@@ -232,6 +232,11 @@ export default function StrategiesPage() {
 
   // open/close the copy drawer: reset budget, lock scroll, Esc to close.
   const openDrawer = (id: string) => { setBudget(''); setMemoryText(null); setDrawerId(id); };
+  // Archived-catalogue CTAs send copiers up to the (only) live venue instead of a dead subscribe.
+  const scrollToDesk = (e: { preventDefault: () => void }) => {
+    e.preventDefault();
+    document.getElementById('live-desk')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
   const closeDrawer = useCallback(() => setDrawerId(null), []);
   useEffect(() => {
     if (!drawerId) return;
@@ -385,7 +390,7 @@ export default function StrategiesPage() {
 
         {/* ── THE LIVE DESK — copy-trading on the NEW venue (vault624 on predict-testnet-6-24) ── */}
         {/* pb keeps the manage chips clear of the fixed mobile bottom nav */}
-        <div className="pb-24 sm:pb-0">
+        <div id="live-desk" className="pb-24 sm:pb-0">
           <LiveDesk />
         </div>
 
@@ -526,15 +531,18 @@ export default function StrategiesPage() {
                       {/* CTA */}
                       <div className="mt-auto">
                         {sub ? (
+                          // Existing subscribers keep an entry point to view / withdraw their position.
                           <button onClick={() => openDrawer(card.id)}
                             className="w-full py-3 font-mono text-[11px] uppercase tracking-[0.14em] font-semibold border border-white/20 text-white hover:border-white/40 hover:bg-white/[0.03] transition-colors inline-flex items-center justify-center gap-2">
-                            <span className="w-1.5 h-1.5 rounded-full bg-vermilion" /> Copying — manage
+                            <span className="w-1.5 h-1.5 rounded-full bg-vermilion" /> Your position — manage
                           </button>
                         ) : (
-                          <button onClick={() => openDrawer(card.id)}
-                            className="group/cta w-full py-3 text-sm font-semibold bg-vermilion text-white hover:bg-vermilion-d transition-colors inline-flex items-center justify-center gap-2">
-                            Copy this agent <span className="transition-transform group-hover/cta:translate-x-0.5">→</span>
-                          </button>
+                          // Read-only archive: the old keeper only fans one strategy, so a new "Copy"
+                          // here would take a fee and never fill. Send new copiers to the Live Desk.
+                          <a href="#live-desk" onClick={scrollToDesk}
+                            className="group/cta w-full py-3 font-mono text-[11px] uppercase tracking-[0.14em] font-semibold border border-white/12 text-white/55 hover:text-white hover:border-white/30 transition-colors inline-flex items-center justify-center gap-2">
+                            Archived record · copy live on the desk <span className="transition-transform group-hover/cta:-translate-y-0.5">↑</span>
+                          </a>
                         )}
                       </div>
                     </div>

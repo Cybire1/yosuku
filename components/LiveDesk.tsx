@@ -53,6 +53,9 @@ import EquitySparkline, { type EquityPoint } from '@/components/EquitySparkline'
 
 const M = DUSDC_MULTIPLIER;
 const DEFAULT_CAP = 2; // suggested per-fill guardrail — always user-editable
+// Keeper floor: it can only place a trade when ledger/1.15 clears the on-chain 1.4 DUSDC min premium
+// (≈ 1.61). Below this the keeper silently skips the subscriber forever, so we don't let them join under it.
+const MIN_LEDGER = 1.7;
 
 // ── dev-only forced states for design review (?desk-preview=fresh|joined) ──
 // The NODE_ENV check is inlined at build time, so this whole branch is dead
@@ -196,6 +199,8 @@ export default function LiveDesk() {
   const subLev = sub ? sub.maxLeverage1e9 / Number(LEV_1X_624) : 0;
   const capValue = (() => { const c = parseFloat(capStr.replace(',', '.')); return Number.isFinite(c) && c > 0 ? c : DEFAULT_CAP; })();
   const depositValue = (() => { const d = parseFloat(depositStr.replace(',', '.')); return Number.isFinite(d) && d > 0 ? d : 0; })();
+  const effLedger = ledger + depositValue; // what the desk can actually trade with the moment you join
+  const belowFloor = effLedger < MIN_LEDGER; // too little for the keeper to ever place a trade
   const addChip = (set: (fn: (s: string) => string) => void) => (n: number) =>
     set((s) => String(Math.max(0, (parseFloat(s || '0') || 0) + n)));
   const addDeposit = addChip(setDepositStr);
@@ -642,17 +647,21 @@ export default function LiveDesk() {
 
                 {/* one CTA, one signature */}
                 <div>
-                  <button onClick={joinDesk} disabled={busy === 'join' || (depositValue <= 0 && ledger <= 0)}
+                  <button onClick={joinDesk} disabled={busy === 'join' || belowFloor}
                     className="w-full sm:w-auto rounded-full bg-vermilion hover:bg-vermilion-d text-white text-[13px] font-semibold px-6 py-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                     {busy === 'join'
                       ? 'One signature…'
-                      : depositValue > 0
-                        ? `Put ${fmtDusdc(depositValue)} on & copy →`
-                        : ledger > 0
-                          ? `Copy with your ${fmtDusdc(ledger)} →`
-                          : 'Enter an amount to join'}
+                      : belowFloor
+                        ? `Put on at least ${fmtDusdc(MIN_LEDGER)} to copy`
+                        : depositValue > 0
+                          ? `Put ${fmtDusdc(depositValue)} on & copy →`
+                          : `Copy with your ${fmtDusdc(ledger)} →`}
                   </button>
-                  <p className="font-mono text-[10px] text-white/30 mt-2">Deposit and copy-permission in one signature.</p>
+                  <p className="font-mono text-[10px] text-white/30 mt-2">
+                    {belowFloor
+                      ? `The desk needs about ${fmtDusdc(MIN_LEDGER)} test USDC on it to place a trade — anything less gets skipped.`
+                      : 'Deposit and copy-permission in one signature.'}
+                  </p>
                 </div>
               </div>
             )}
@@ -669,9 +678,12 @@ export default function LiveDesk() {
               ) : (
                 <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/40 shrink-0">Latest trades</span>
               )}
-              <span className="font-mono text-[10px] text-white/30 tabular-nums shrink-0">
-                {stats.copiers} copying
-              </span>
+              {stats.copiers > 0 && (
+                <span className="font-mono text-[10px] text-white/30 tabular-nums shrink-0"
+                  title="Distinct wallets this desk has copy-traded for (on-chain, all-time)">
+                  {stats.copiers} copied
+                </span>
+              )}
             </div>
             <div className="flex-1 flex flex-col divide-y divide-white/[0.05]">
               {!feedLoaded ? (
