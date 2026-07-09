@@ -96,6 +96,83 @@ export async function fetchMemoryMarket(strategyId: string, owner: string | null
   }
 }
 
+/** One card in the Marketplace storefront — an agent's memory offered for sale. */
+export type MemoryListingCard = {
+  listingId: string;
+  strategy: string;      // the Strategy object this memory belongs to (match to a StrategyCard for its record)
+  creator: string;
+  memoryAccount: string;
+  price: number;         // DUSDC
+  passesSold: number;
+  ownsPass: boolean;
+  passId: string | null;
+  hasCapsule: boolean;   // an encrypted playbook exists (readable once you hold a pass)
+};
+
+/** Discover EVERY memory listing for the Marketplace storefront (admin-vetted, so all are safe). */
+export async function fetchAllMemoryListings(owner: string | null): Promise<MemoryListingCard[]> {
+  try {
+    // 1) every MemoryListed event → listing meta (dedupe by listing id, newest first)
+    const meta = new Map<string, { strategy: string; creator: string; memoryAccount: string }>();
+    let cursor: unknown = null;
+    for (let page = 0; page < 10; page++) {
+      const ev = await rpc<{ data?: Array<{ parsedJson?: Record<string, any> }>; hasNextPage?: boolean; nextCursor?: unknown }>(
+        'suix_queryEvents', [{ MoveEventType: MEMORY_LISTED }, cursor, 50, true],
+      );
+      for (const e of ev?.data ?? []) {
+        const j = e.parsedJson;
+        if (j?.listing && !meta.has(String(j.listing))) {
+          meta.set(String(j.listing), { strategy: String(j.strategy), creator: String(j.creator), memoryAccount: String(j.memory_account) });
+        }
+      }
+      if (!ev?.hasNextPage) break;
+      cursor = ev.nextCursor;
+    }
+    const ids = [...meta.keys()];
+    if (!ids.length) return [];
+
+    // 2) current on-chain state of each listing (price + passes_sold) — one multiGet
+    const objs = await rpc<Array<{ data?: { objectId?: string; content?: { fields?: Record<string, any> } } }>>(
+      'sui_multiGetObjects', [ids, { showContent: true }],
+    );
+    const state = new Map<string, { price: number; passesSold: number }>();
+    for (const o of objs ?? []) {
+      const id = o.data?.objectId; const f = o.data?.content?.fields;
+      if (id && f) state.set(id, { price: Number(f.price) / DUSDC_MULTIPLIER, passesSold: Number(f.passes_sold) });
+    }
+
+    // 3) which listings the connected wallet already holds a pass to (one paginated owned query)
+    const owned = new Map<string, string>();
+    if (owner) {
+      let pc: unknown = null;
+      for (let page = 0; page < 10; page++) {
+        const r = await rpc<{ data?: Array<{ data?: { objectId?: string; content?: { fields?: Record<string, any> } } }>; hasNextPage?: boolean; nextCursor?: unknown }>(
+          'suix_getOwnedObjects', [owner, { filter: { StructType: PASS_TYPE }, options: { showContent: true } }, pc, 50],
+        );
+        for (const o of r?.data ?? []) {
+          const l = o.data?.content?.fields?.listing;
+          if (l && !owned.has(String(l))) owned.set(String(l), o.data!.objectId!);
+        }
+        if (!r?.hasNextPage) break;
+        pc = r.nextCursor;
+      }
+    }
+
+    return ids
+      .map((id): MemoryListingCard => {
+        const m = meta.get(id)!; const st = state.get(id);
+        return {
+          listingId: id, strategy: m.strategy, creator: m.creator, memoryAccount: m.memoryAccount,
+          price: st?.price ?? 0, passesSold: st?.passesSold ?? 0,
+          ownsPass: owned.has(id), passId: owned.get(id) ?? null, hasCapsule: !!CAPSULES[id],
+        };
+      })
+      .filter((l) => l.price > 0); // drop any half-created/broken listing
+  } catch {
+    return [];
+  }
+}
+
 /** Buy a MemoryPass: split exactly the price, call buy_pass, keep the pass. */
 export function buildBuyPassTx(p: { listingId: string; coinIds: string[]; priceMicro: bigint; owner: string }): Transaction {
   const tx = new Transaction();

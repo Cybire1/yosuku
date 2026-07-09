@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useCallback, useMemo, type ReactNode } from 'react';
 import { useCurrentAccount, useSuiClient, useSignPersonalMessage, ConnectButton } from '@mysten/dapp-kit';
-import { Share2, X } from 'lucide-react';
+import { Share2, X, Lock, ArrowRight, Sparkles } from 'lucide-react';
+import { motion } from 'framer-motion';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import Marquee from '@/components/Marquee';
@@ -38,7 +39,7 @@ import {
   type PresetKey,
   type StrategySpec,
 } from '@/lib/sui/strategyClient';
-import { fetchMemoryMarket, buildBuyPassTx, readMemory, type MemoryMarketInfo } from '@/lib/sui/memoryMarketClient';
+import { fetchMemoryMarket, fetchAllMemoryListings, buildBuyPassTx, readMemory, type MemoryMarketInfo, type MemoryListingCard } from '@/lib/sui/memoryMarketClient';
 import LiveDesk from '@/components/LiveDesk';
 import { DUSDC_MULTIPLIER } from '@/lib/sui/constants';
 import { getSponsorStatus, type SponsorStatus } from '@/lib/sponsor';
@@ -142,6 +143,39 @@ export default function StrategiesPage() {
     lookback: form.lookback,
     thresholdBps: Math.round((parseFloat(form.thresholdPct) || 0) * 100),
   };
+
+  // ── Memory Market storefront (Own an agent's mind) ──
+  const [listings, setListings] = useState<MemoryListingCard[]>([]);
+  const [mktBusy, setMktBusy] = useState<string | null>(null);     // listingId being bought/read
+  const [mktText, setMktText] = useState<Record<string, string>>({}); // listingId → decrypted playbook
+  const refreshListings = useCallback(() => {
+    fetchAllMemoryListings(address).then(setListings).catch(() => {});
+  }, [address]);
+  useEffect(() => { refreshListings(); }, [refreshListings]);
+
+  const buyListing = useCallback(async (l: MemoryListingCard) => {
+    if (!address) return;
+    const priceMicro = BigInt(Math.round(l.price * DUSDC_MULTIPLIER));
+    const haveMicro = dusdcCoins.reduce((s, c) => s + c.balance, BigInt(0));
+    if (haveMicro < priceMicro) { toast(`Wallet needs ${l.price} test USDC for this pass`, 'error'); return; }
+    setMktBusy(`buy:${l.listingId}`);
+    try {
+      await submit(() => buildBuyPassTx({ listingId: l.listingId, coinIds: dusdcCoins.map((c) => c.coinObjectId), priceMicro, owner: address }));
+      toast('Pass acquired — decrypt the playbook', 'success');
+      refreshDusdc(); refreshListings();
+    } catch (e) { toast(`Couldn't buy: ${String(e instanceof Error ? e.message : e).slice(0, 120)}`, 'error'); }
+    finally { setMktBusy(null); }
+  }, [address, dusdcCoins, submit, refreshDusdc, refreshListings, toast]);
+
+  const readListing = useCallback(async (l: MemoryListingCard) => {
+    if (!address || !l.passId) return;
+    setMktBusy(`read:${l.listingId}`);
+    try {
+      const text = await readMemory({ suiClient, walletAddress: address, listingId: l.listingId, passId: l.passId, signPersonalMessage });
+      setMktText((m) => ({ ...m, [l.listingId]: text }));
+    } catch (e) { toast(`Couldn't decrypt: ${String(e instanceof Error ? e.message : e).slice(0, 120)}`, 'error'); }
+    finally { setMktBusy(null); }
+  }, [address, suiClient, signPersonalMessage, toast]);
 
   const subscriptionByStrategy = useMemo(
     () => new Map(subscriptions.map((sub) => [sub.strategy, sub])),
@@ -354,6 +388,17 @@ export default function StrategiesPage() {
         <div className="pb-24 sm:pb-0">
           <LiveDesk />
         </div>
+
+        {/* ── THE MEMORY MARKET — Own an agent's mind (buy the pass, decrypt the playbook) ── */}
+        <MemoryMarket
+          listings={listings}
+          strategies={strategies}
+          address={address}
+          busy={mktBusy}
+          text={mktText}
+          onBuy={buyListing}
+          onRead={readListing}
+        />
 
         {/* previous-venue dateline — the catalogue below is real history on the old deployment */}
         <div className="flex items-center gap-3 mt-14 mb-2">
@@ -764,6 +809,162 @@ export default function StrategiesPage() {
 
 const INPUT = 'w-full px-3 py-2 rounded bg-white/[0.03] border border-white/[0.08] focus:border-white/20 text-white font-mono text-[12px] outline-none transition-colors';
 const INPUT_NUM = INPUT + ' [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none';
+
+// ── THE MEMORY MARKET — a gallery of sealed agent minds ───────────────────────
+// Each capsule is a redacted playbook that unlocks + reveals when you hold the pass.
+// Native to the near-black + vermilion + kanji language; the buy→decrypt reveal is the moment.
+
+function MemoryMarket({ listings, strategies, address, busy, text, onBuy, onRead }: {
+  listings: MemoryListingCard[];
+  strategies: StrategyCard[];
+  address: string | null;
+  busy: string | null;
+  text: Record<string, string>;
+  onBuy: (l: MemoryListingCard) => void;
+  onRead: (l: MemoryListingCard) => void;
+}) {
+  const stratById = useMemo(() => new Map(strategies.map((s) => [s.id, s])), [strategies]);
+  return (
+    <section className="mt-16 sm:mt-20">
+      {/* header — a giant paper kanji watermark behind an editorial headline */}
+      <div className="relative">
+        <div aria-hidden className="pointer-events-none absolute -top-10 right-0 font-jp font-[800] text-[6.5rem] md:text-[9rem] leading-none text-white/[0.028] select-none tracking-tighter">記憶</div>
+        <div className="font-mono text-[11px] uppercase tracking-[0.34em] text-vermilion/80 mb-3">⊙ 記憶市場 · The Memory Market</div>
+        <h2 className="font-display font-[800] text-[2rem] md:text-[3.1rem] leading-[0.94] text-white tracking-tight max-w-3xl">
+          Own what an agent<br /><span className="text-white/50">has learned.</span>
+        </h2>
+        <p className="mt-4 text-white/50 text-[15px] leading-relaxed max-w-xl">
+          Copy an agent and it trades for you. <span className="text-white/85">Buy its memory</span> and the playbook is yours —
+          decrypt it in your own browser, run it, keep it. Every listing is on-chain, vetted, and non-custodial.
+        </p>
+      </div>
+
+      <div className="mt-9 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {listings.map((l, i) => (
+          <MemoryCapsule
+            key={l.listingId} l={l} strat={stratById.get(l.strategy)} address={address}
+            busy={busy} text={text[l.listingId]} onBuy={onBuy} onRead={onRead} idx={i}
+          />
+        ))}
+        <ComingSoonCapsule idx={listings.length} />
+      </div>
+    </section>
+  );
+}
+
+function MemoryCapsule({ l, strat, address, busy, text, onBuy, onRead, idx }: {
+  l: MemoryListingCard;
+  strat: StrategyCard | undefined;
+  address: string | null;
+  busy: string | null;
+  text: string | undefined;
+  onBuy: (l: MemoryListingCard) => void;
+  onRead: (l: MemoryListingCard) => void;
+  idx: number;
+}) {
+  const glyph = glyphFromAddress(l.strategy);
+  const name = codenameFromAddress(l.strategy);
+  const buying = busy === `buy:${l.listingId}`;
+  const reading = busy === `read:${l.listingId}`;
+  const revealed = !!text;
+  const settled = strat ? strat.wins + strat.losses : 0;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 22 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: '-60px' }}
+      transition={{ delay: Math.min(idx, 6) * 0.06, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+      className="group relative flex flex-col border border-white/[0.09] bg-gradient-to-b from-white/[0.035] to-transparent hover:border-white/20 transition-colors overflow-hidden"
+    >
+      {/* wax-seal — a vermilion hanko in the corner */}
+      <div aria-hidden className="absolute top-3 right-3 h-7 w-7 grid place-items-center rounded-full border border-vermilion/50 text-vermilion font-jp text-[11px] shadow-[0_0_18px_-4px_var(--vermilion)]">封</div>
+
+      {/* head: glyph tile + name */}
+      <div className="flex items-center gap-3 p-4 pb-3">
+        <div className="h-11 w-11 shrink-0 grid place-items-center border border-white/10 bg-white/[0.03] font-jp text-xl text-vermilion">{glyph}</div>
+        <div className="min-w-0">
+          <div className="font-display font-[800] text-white leading-tight truncate">{name}</div>
+          <div className="font-mono text-[9.5px] uppercase tracking-[0.16em] text-white/35 mt-0.5">agent memory</div>
+        </div>
+      </div>
+
+      {/* the capsule — sealed (redacted, blurred) or revealed (the real playbook) */}
+      <div className="relative mx-4 mb-3 h-[136px] border border-white/[0.07] bg-black/40 overflow-hidden">
+        {revealed ? (
+          <motion.pre
+            initial={{ opacity: 0, filter: 'blur(9px)' }} animate={{ opacity: 1, filter: 'blur(0px)' }} transition={{ duration: 0.75, ease: 'easeOut' }}
+            className="h-full overflow-auto p-3 font-mono text-[10.5px] leading-[1.5] text-white/80 whitespace-pre-wrap no-scrollbar"
+          >{text}</motion.pre>
+        ) : (
+          <>
+            <div className="p-3.5 space-y-2 blur-[5px] select-none" aria-hidden>
+              {[94, 80, 88, 66, 90, 74, 58].map((w, k) => (
+                <div key={k} className="h-[7px] rounded-sm bg-white/14" style={{ width: `${w}%` }} />
+              ))}
+            </div>
+            <div className="absolute inset-0 grid place-items-center bg-black/10">
+              <div className="flex flex-col items-center gap-1.5">
+                <div className="h-8 w-8 grid place-items-center rounded-full border border-vermilion/40 bg-black/50 text-vermilion"><Lock className="h-3.5 w-3.5" /></div>
+                <span className="font-mono text-[9px] uppercase tracking-[0.22em] text-white/45">sealed playbook</span>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* foot: record / owners + price + the CTA */}
+      <div className="mt-auto p-4 pt-2.5 border-t border-white/[0.06]">
+        <div className="flex items-center justify-between mb-3">
+          <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-white/40">
+            {settled > 0
+              ? <span><span className="text-emerald-400/90">{strat!.wins}W</span> · <span className="text-white/50">{strat!.losses}L</span></span>
+              : <span>{l.passesSold} {l.passesSold === 1 ? 'owner' : 'owners'}</span>}
+          </div>
+          <div className="flex items-baseline gap-1">
+            <span className="font-display font-[800] text-white text-lg tabular-nums">{l.price}</span>
+            <span className="font-mono text-[9.5px] text-white/40">test USDC</span>
+          </div>
+        </div>
+
+        {!address ? (
+          <div className="w-full py-2.5 text-center font-mono text-[10.5px] uppercase tracking-[0.14em] text-white/40 border border-white/10">Connect a wallet to buy</div>
+        ) : l.ownsPass ? (
+          revealed ? (
+            <div className="w-full py-2.5 text-center font-mono text-[10.5px] uppercase tracking-[0.14em] text-emerald-400/90 border border-emerald-400/25 bg-emerald-400/[0.04]">✓ Yours · decrypted in your browser</div>
+          ) : (
+            <button onClick={() => onRead(l)} disabled={reading}
+              className="group/cta w-full py-2.5 font-display font-[800] text-sm bg-vermilion text-white hover:bg-vermilion-d transition-colors inline-flex items-center justify-center gap-2 disabled:opacity-60">
+              {reading ? 'Decrypting…' : <>Decrypt the playbook <ArrowRight className="h-4 w-4 transition-transform group-hover/cta:translate-x-0.5" /></>}
+            </button>
+          )
+        ) : (
+          <button onClick={() => onBuy(l)} disabled={buying}
+            className="w-full py-2.5 font-display font-[800] text-sm bg-vermilion text-white hover:bg-vermilion-d transition-colors disabled:opacity-60">
+            {buying ? 'Buying…' : `Buy the pass · ${l.price} USDC`}
+          </button>
+        )}
+        {address && !l.ownsPass && (
+          <div className="mt-2 text-center font-mono text-[9px] uppercase tracking-[0.16em] text-white/25">gas-free · yours to keep, forever</div>
+        )}
+      </div>
+    </motion.div>
+  );
+}
+
+function ComingSoonCapsule({ idx }: { idx: number }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 22 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: '-60px' }}
+      transition={{ delay: Math.min(idx, 6) * 0.06, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+      className="relative flex flex-col items-center justify-center gap-3 border border-dashed border-white/[0.09] bg-white/[0.01] p-6 min-h-[280px] text-center"
+    >
+      <div className="h-10 w-10 grid place-items-center rounded-full border border-white/10 text-white/40"><Sparkles className="h-4 w-4" /></div>
+      <div className="font-display font-[800] text-white/70">More minds soon</div>
+      <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-white/30 leading-relaxed max-w-[180px]">
+        Creators list their own agent&apos;s memory — self-serve, next
+      </p>
+    </motion.div>
+  );
+}
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
