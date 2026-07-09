@@ -60,9 +60,18 @@ const TESTNET: NetworkConfig = {
   keeperAddress: '0xaa50ec0fe985825bd45fcc65d301da096a487349d6993fe8f9305890284a7244',
   strategyPackage: '0x47d3c108b2165cb1190eefd0b67f73a386e8ca71b870f87a9afb096056795388',
   socialVaultId: '0xbe9e96fb8cb6be797c00529fc1f4fe1119192299579167140a084d946851e07b',
-  tradingVaultPackage: process.env.NEXT_PUBLIC_TRADING_VAULT_PACKAGE || '',
-  marginDeskId: process.env.NEXT_PUBLIC_MARGIN_DESK_ID || '',
-  tradingVaultId: process.env.NEXT_PUBLIC_TRADING_VAULT_ID || '',
+  // Web margin desk + prefunded Trading Balance vault (deployed testnet 2026-06-23,
+  // e2e-proven). Hardcoded fallbacks (same pattern as parlayClient / vault624Client) so a
+  // fresh clone runs cash-out without needing env vars; NEXT_PUBLIC_* still override.
+  tradingVaultPackage:
+    process.env.NEXT_PUBLIC_TRADING_VAULT_PACKAGE ||
+    '0x3b76383b2bb9bc411dc56c571a1da22f348b3c19518115ae958fe96e031cf30e',
+  marginDeskId:
+    process.env.NEXT_PUBLIC_MARGIN_DESK_ID ||
+    '0x5aa4be2fb3084660e584d29a7323ea73ab96a07728496c5a3832b3b9cc0f4e40',
+  tradingVaultId:
+    process.env.NEXT_PUBLIC_TRADING_VAULT_ID ||
+    '0xc04516b582bfe73c71325408bfb9e9a5a8fdcd54952a313a288a135e272fa1e6',
   deepbookSpotPackage: '0x337f4f4f6567fcd778d5454f27c16c70e2f274cc6377ea6249ddf491482ef497',
   deepbookSpotRegistry: '0xaf16199a2dff736e9f07a845f23c5da6df6f756eddb631aed9d24a93efc4549d',
   graphqlUrl: 'https://graphql.testnet.sui.io/graphql',
