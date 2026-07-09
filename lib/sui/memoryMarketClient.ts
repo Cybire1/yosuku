@@ -2,6 +2,7 @@
 // Buy a MemoryPass (the transferable on-chain asset) → the creator earns; the pass holder can
 // Seal-decrypt the agent's playbook capsule in-browser (readMemory, gated by memory_market::
 // seal_approve). Reads via JSON-RPC (reliable; the GraphQL event index lags — same as strategyClient).
+import { suiJsonRpc } from './jsonRpc';
 import { Transaction } from '@mysten/sui/transactions';
 import { SealClient, SessionKey } from '@mysten/seal';
 import { grpc } from './modernClients';
@@ -11,7 +12,6 @@ import { DUSDC_MULTIPLIER } from './constants';
 // Hardened pkg (admin-gated listing + exact-price/refund). Replaces 0x71598871 (open-listing flaw).
 export const MEMORY_MARKET_PKG = '0x601895033b49cf24935f76a5ad796be8e8b93b91fa85ee89671d4405c7ed6061';
 const DUSDC_TYPE = '0xe95040085976bfd54a1a07225cd46c8a2b4e8e2b6732f140a0fc49850ba73e1a::dusdc::DUSDC';
-const RPC_URL = process.env.NEXT_PUBLIC_SUI_RPC_URL || 'https://fullnode.testnet.sui.io:443';
 const MEMORY_LISTED = `${MEMORY_MARKET_PKG}::memory_market::MemoryListed`;
 const PASS_TYPE = `${MEMORY_MARKET_PKG}::memory_market::MemoryPass`;
 const SEAL_SERVERS = [
@@ -27,12 +27,7 @@ const CAPSULES: Record<string, string> = {
 type SignPersonalMessage = (input: { message: Uint8Array }) => Promise<{ signature: string }>;
 
 async function rpc<T = any>(method: string, params: unknown[]): Promise<T> {
-  const r = await fetch(RPC_URL, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
-  });
-  return (await r.json())?.result as T;
+  return suiJsonRpc<T>(method, params); // resilient multi-node — the public fullnode's JSON-RPC 404s
 }
 
 export type MemoryMarketInfo = {

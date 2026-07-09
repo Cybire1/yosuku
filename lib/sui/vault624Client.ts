@@ -19,6 +19,7 @@
 // GraphQL-events-with-JSON-RPC-fallback dance from strategyClient; writes are
 // wallet-signed Transaction builders.
 
+import { suiJsonRpc } from './jsonRpc';
 import { Transaction } from '@mysten/sui/transactions';
 import { gql, grpc, simulateReturnU64s } from './modernClients';
 import { DUSDC_MULTIPLIER, CLOCK_ID } from './constants';
@@ -335,7 +336,6 @@ type EvNode = {
   transaction: { digest: string } | null;
 };
 
-const RPC_URL = process.env.NEXT_PUBLIC_SUI_RPC_URL || 'https://fullnode.testnet.sui.io:443';
 
 // Testnet GraphQL event indexing lags/windows — suix_queryEvents is the reliable net.
 // The fullnode clamps each page to 50 regardless of the requested limit, so walking the
@@ -347,23 +347,18 @@ async function jsonRpcEvents(type: string, last: number): Promise<EvNode[]> {
   try {
     // ceil(last/50) pages, hard-capped — each page is ≤50 by node policy
     for (let page = 0; page < Math.min(20, Math.ceil(last / 50)); page++) {
-      const r = await fetch(RPC_URL, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          jsonrpc: '2.0', id: 1, method: 'suix_queryEvents',
-          params: [{ MoveEventType: type }, cursor, Math.min(50, last - out.length), true],
-        }),
-      });
-      const j = await r.json();
-      const data = (j.result?.data ?? []) as RpcEvent[];
+      const res = await suiJsonRpc<{ data?: RpcEvent[]; hasNextPage?: boolean; nextCursor?: unknown }>(
+        'suix_queryEvents',
+        [{ MoveEventType: type }, cursor, Math.min(50, last - out.length), true],
+      );
+      const data = (res?.data ?? []) as RpcEvent[];
       out.push(...data.map((e) => ({
         timestamp: e.timestampMs ? new Date(Number(e.timestampMs)).toISOString() : null,
         contents: { json: e.parsedJson ?? {} },
         transaction: e.id?.txDigest ? { digest: e.id.txDigest } : null,
       })));
-      if (!j.result?.hasNextPage || out.length >= last) break;
-      cursor = j.result.nextCursor;
+      if (!res?.hasNextPage || out.length >= last) break;
+      cursor = res.nextCursor;
     }
   } catch { /* return what we have */ }
   return out;

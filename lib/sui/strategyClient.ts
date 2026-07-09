@@ -12,6 +12,7 @@
 //                                                    distinct subscribers, last-active)
 //   • getObject(strategyId)                       → current on-chain state (subscribers,
 //                                                    fee, caps, capsule/memory pointers)
+import { suiJsonRpc } from './jsonRpc';
 import { Transaction } from '@mysten/sui/transactions';
 import { gql, readClient, simulateReturnU64s } from './modernClients';
 import { DUSDC_TYPE, DUSDC_MULTIPLIER, DUSDC_DECIMALS } from './constants';
@@ -308,20 +309,14 @@ const EVENTS_Q = `query Ev($t: String!, $last: Int!) {
 
 type EvNode = { timestamp: string | null; sender: { address: string }; contents: { json: Record<string, unknown> }; transaction: { digest: string } | null };
 
-const RPC_URL = process.env.NEXT_PUBLIC_SUI_RPC_URL || 'https://fullnode.testnet.sui.io:443';
 
 // JSON-RPC fallback — testnet GraphQL event indexing lags/windows (returns 0 StrategyListed while
 // these events are live on-chain). suix_queryEvents is the reliable source. (JSON-RPC sunsets
 // ~Jul 2026; revisit once GraphQL event indexing is dependable.)
 async function jsonRpcEvents(type: string, last: number): Promise<EvNode[]> {
   try {
-    const r = await fetch(RPC_URL, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'suix_queryEvents', params: [{ MoveEventType: type }, null, last, true] }),
-    });
-    const j = await r.json();
-    return ((j.result?.data ?? []) as Array<Record<string, any>>).map((e) => ({
+    const res = await suiJsonRpc<{ data?: Array<Record<string, any>> }>('suix_queryEvents', [{ MoveEventType: type }, null, Math.min(50, last), true]);
+    return ((res?.data ?? []) as Array<Record<string, any>>).map((e) => ({
       timestamp: e.timestampMs ? new Date(Number(e.timestampMs)).toISOString() : null,
       sender: { address: e.sender ?? '' },
       contents: { json: e.parsedJson ?? {} },
@@ -334,7 +329,7 @@ async function jsonRpcEvents(type: string, last: number): Promise<EvNode[]> {
 
 async function queryEvents(type: string, last = 100): Promise<EvNode[]> {
   try {
-    const { data, errors } = await gql.query<{ events: { nodes: EvNode[] } }>({ query: EVENTS_Q, variables: { t: type, last } });
+    const { data, errors } = await gql.query<{ events: { nodes: EvNode[] } }>({ query: EVENTS_Q, variables: { t: type, last: Math.min(last, 50) } });
     if (!errors?.length && data?.events?.nodes?.length) return data.events.nodes.slice().reverse(); // newest first
   } catch { /* fall through to JSON-RPC */ }
   return jsonRpcEvents(type, last); // GraphQL empty/errored → reliable JSON-RPC
