@@ -138,14 +138,14 @@ export default function TradingBalanceModal({ onClose }: { onClose: () => void }
 
         {/* amount */}
         <div className="rounded-xl border border-white/[0.08] bg-black/30 px-4 py-2.5 transition-colors focus-within:border-vermilion/50">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
             <input
               autoFocus
               inputMode="decimal"
               placeholder="0.00"
               value={amount}
               onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))}
-              className="w-full bg-transparent font-display text-2xl font-bold text-white outline-none focus:outline-none focus-visible:outline-none placeholder:text-gray-600"
+              className="flex-1 min-w-0 bg-transparent font-display text-2xl font-bold text-white outline-none focus:outline-none focus-visible:outline-none placeholder:text-gray-600"
             />
             <span className="font-mono text-xs font-semibold text-gray-300 shrink-0">DUSDC</span>
           </div>
