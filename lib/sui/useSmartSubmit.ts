@@ -17,7 +17,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useCurrentAccount, useSignTransaction } from '@mysten/dapp-kit';
 import { Transaction } from '@mysten/sui/transactions';
-import { grpc, GRPC_URL, buildSignExecute } from './modernClients';
+import { grpc, buildSignExecute } from './modernClients';
 import { getSponsorStatus, submitSponsored, type SponsorStatus } from '../sponsor';
 
 export interface SubmitResult {
@@ -40,7 +40,10 @@ type TxFactory = () => Transaction | Promise<Transaction>;
 // block the bet. Returns null when the pool has < 2 usable coins so we never pin a lone coin.
 async function pickSponsorGasPayment(sponsor: string): Promise<{ objectId: string; version: string; digest: string }[] | null> {
   try {
-    const res = await fetch(GRPC_URL, {
+    // The public fullnode's JSON-RPC is sunset (404s) — this read silently failed, so every
+    // sponsored tx fell back to locking the WHOLE sponsor pool (collisions + pool re-merge).
+    // publicnode still serves suix_getCoins.
+    const res = await fetch('https://sui-testnet-rpc.publicnode.com', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'suix_getCoins', params: [sponsor, '0x2::sui::SUI', null, 50] }),
