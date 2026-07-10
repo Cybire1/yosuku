@@ -4,17 +4,19 @@
 // liquidated) trade. A trade-confirmation slip where the oracle's print at the
 // exact settlement second is the monument — set bigger than the payout.
 //
-// One-spark color system: a win carries living vermilion heat in the PnL and
-// the stamp; a loss is the exact same slip with the heat drained — a quiet,
-// dignified record, never an alarm. No green, no red.
+// One-spark color system: a win carries living vermilion heat — in the P&L,
+// the stamp, and a low ember bloom behind the result strip; a loss is the
+// exact same slip with the heat drained — a quiet, dignified record, never an
+// alarm. No green, no red.
 //
 // Honesty is structural: kind='settled_order_redeemed' stamps ORACLE-SETTLED
-// with the oracle print + second; 'live_order_redeemed' says CASHED OUT at the
-// live price (never claims oracle settlement); 'liquidated_order_redeemed'
-// says LIQUIDATED, muted. Every number is real on-chain data (see
-// lib/sui/settledTrade.ts) — if the row carried no price print, the hero is
-// omitted rather than estimated. The strike↔settle relationship is shown as
-// two marks on an axis, never a fabricated price path.
+// with the oracle print + second (the market EXPIRY — never the claim time);
+// 'live_order_redeemed' says CASHED OUT at the live price (never claims
+// oracle settlement); 'liquidated_order_redeemed' says LIQUIDATED, muted.
+// Every number is real on-chain data (see lib/sui/settledTrade.ts) — if the
+// row carried no price print, the hero is omitted rather than estimated. The
+// strike↔settle relationship is shown as marks on an axis, never a fabricated
+// price path.
 
 import { useEffect, useRef, type ReactNode } from 'react';
 import { X } from 'lucide-react';
@@ -55,7 +57,7 @@ function fmtHeld(ms: number): string {
 
 /** Human band, same pattern as Portfolio624Section.bandLabel. */
 function positionLabel(t: SettledTrade): string {
-  if (t.dir === 'range' && t.lowerUsd != null && t.higherUsd != null) return `RANGE · ${fmtStrike(t.lowerUsd)}–${fmtStrike(t.higherUsd)}`;
+  if (t.dir === 'range' && t.lowerUsd != null && t.higherUsd != null) return `RANGE ${fmtStrike(t.lowerUsd)}–${fmtStrike(t.higherUsd)}`;
   if (t.dir === 'up') return `UP · over ${t.lowerUsd != null ? fmtStrike(t.lowerUsd) : '—'}`;
   if (t.dir === 'down') return `DOWN · under ${t.higherUsd != null ? fmtStrike(t.higherUsd) : '—'}`;
   return '—';
@@ -89,12 +91,14 @@ function kindMeta(kind: SettledTrade['kind']): KindMeta {
 
 const GRAIN = `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.5 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>")`;
 
-// Entrance choreography — one card rise + one stamp press. `motion-safe:` on
-// every use means prefers-reduced-motion users get the finished frame directly.
+// Entrance choreography — backdrop fade, one card rise, one stamp press, and a
+// late label reveal under the monument. `motion-safe:` on every use means
+// prefers-reduced-motion users get the finished frame directly.
 const KEYFRAMES = `
 @keyframes ykReceiptFade { from { opacity: 0 } to { opacity: 1 } }
-@keyframes ykReceiptIn { from { opacity: 0; transform: translateY(16px) scale(0.985) } to { opacity: 1; transform: none } }
-@keyframes ykStampIn { 0% { opacity: 0; transform: rotate(-7deg) scale(1.7) } 55% { opacity: 1; transform: rotate(-7deg) scale(0.96) } 100% { opacity: 1; transform: rotate(-7deg) scale(1) } }
+@keyframes ykReceiptIn { from { opacity: 0; transform: translateY(22px) scale(0.97) } to { opacity: 1; transform: none } }
+@keyframes ykStampIn { 0% { opacity: 0; transform: rotate(-8deg) scale(1.9) } 60% { opacity: 1; transform: rotate(-8deg) scale(0.94) } 100% { opacity: 1; transform: rotate(-8deg) scale(1) } }
+@keyframes ykRise { from { opacity: 0; transform: translateY(8px) } to { opacity: 1; transform: none } }
 `;
 
 // ─── component ───
@@ -129,6 +133,7 @@ export default function TradeReceipt({
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     document.addEventListener('keydown', onKey);
+    dialogRef.current?.focus({ preventScroll: true }); // focus enters the dialog without painting a ring
     return () => {
       document.body.style.overflow = prev;
       document.removeEventListener('keydown', onKey);
@@ -167,58 +172,72 @@ export default function TradeReceipt({
     >
       <style>{KEYFRAMES}</style>
 
-      {/* backdrop — click closes */}
-      <div className="absolute inset-0 bg-black/75 backdrop-blur-sm motion-safe:animate-[ykReceiptFade_.22s_ease_both]" aria-hidden="true" />
+      {/* backdrop — vignette + (on a win) a faint ember rising under the card */}
+      <div className="absolute inset-0 bg-black/80 backdrop-blur-md motion-safe:animate-[ykReceiptFade_.25s_ease_both]" aria-hidden="true" />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 motion-safe:animate-[ykReceiptFade_.6s_ease_both]"
+        style={{
+          background: heat
+            ? 'radial-gradient(42% 34% at 50% 62%, rgba(224,77,38,0.13), transparent 70%)'
+            : 'radial-gradient(46% 36% at 50% 58%, rgba(255,255,255,0.03), transparent 70%)',
+        }}
+      />
 
       {/* the slip — warm near-black, hairline edge, internal scroll on short screens */}
       <div
         ref={dialogRef}
-        className="relative flex w-full max-w-[420px] max-h-[calc(100dvh-2rem)] flex-col overflow-hidden border border-white/10 bg-[#0B0907] shadow-[0_32px_80px_-24px_rgba(0,0,0,0.9)] motion-safe:animate-[ykReceiptIn_.34s_var(--ease-out)_both]"
+        tabIndex={-1}
+        className="relative flex w-full max-w-[400px] max-h-[calc(100dvh-2rem)] flex-col overflow-hidden border border-white/[0.12] shadow-[0_48px_120px_-32px_rgba(0,0,0,0.95)] outline-none motion-safe:animate-[ykReceiptIn_.4s_var(--ease-out)_both]"
+        style={{ background: 'radial-gradient(130% 90% at 50% -12%, #14100c 0%, #0c0a08 46%, #080605 100%)', outline: 'none' }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* film grain, scoped to the card */}
-        <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-30 opacity-[0.05] mix-blend-overlay" style={{ backgroundImage: GRAIN }} />
+        <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-30 opacity-[0.06] mix-blend-overlay" style={{ backgroundImage: GRAIN }} />
+        {/* top hairline glow — the printed edge */}
+        <div aria-hidden="true" className={`pointer-events-none absolute inset-x-0 top-0 z-20 h-px ${heat ? 'bg-gradient-to-r from-transparent via-vermilion/60 to-transparent' : 'bg-gradient-to-r from-transparent via-white/25 to-transparent'}`} />
 
         {/* registration ticks — the print-proof corners */}
-        <span aria-hidden="true" className="pointer-events-none absolute left-1.5 top-1.5 z-20 h-2 w-2 border-l border-t border-white/15" />
-        <span aria-hidden="true" className="pointer-events-none absolute right-1.5 top-1.5 z-20 h-2 w-2 border-r border-t border-white/15" />
-        <span aria-hidden="true" className="pointer-events-none absolute bottom-1.5 left-1.5 z-20 h-2 w-2 border-b border-l border-white/15" />
-        <span aria-hidden="true" className="pointer-events-none absolute bottom-1.5 right-1.5 z-20 h-2 w-2 border-b border-r border-white/15" />
+        <span aria-hidden="true" className="pointer-events-none absolute left-2 top-2 z-20 h-2.5 w-2.5 border-l border-t border-white/20" />
+        <span aria-hidden="true" className="pointer-events-none absolute right-2 top-2 z-20 h-2.5 w-2.5 border-r border-t border-white/20" />
+        <span aria-hidden="true" className="pointer-events-none absolute bottom-2 left-2 z-20 h-2.5 w-2.5 border-b border-l border-white/20" />
+        <span aria-hidden="true" className="pointer-events-none absolute bottom-2 right-2 z-20 h-2.5 w-2.5 border-b border-r border-white/20" />
 
+        {/* No autoFocus here — script-focus paints the global focus ring on open.
+            The dialog container takes initial focus instead; Tab reaches this first. */}
         <button
           onClick={onClose}
           aria-label="Close receipt"
-          autoFocus
-          className="absolute right-3 top-3 z-40 rounded-full p-2 text-gray-600 transition-colors hover:bg-white/[0.05] hover:text-white"
+          className="absolute right-2.5 top-2.5 z-40 rounded-full p-2 text-white/35 outline-none transition-colors hover:bg-white/[0.06] hover:text-white focus-visible:ring-1 focus-visible:ring-white/40"
           data-cursor="hover"
         >
           <X className="h-4 w-4" />
         </button>
 
         <div className="relative overflow-y-auto overscroll-contain">
-          {/* ── masthead — seal · wordmark · folio ── */}
-          <header className="px-5 pt-5">
-            <div className="flex items-center gap-3 pr-10">
-              <div className={`grid h-9 w-9 shrink-0 place-items-center border bg-white/[0.03] font-jp text-[17px] leading-none ${heat ? 'border-vermilion/40 text-vermilion' : 'border-white/10 text-white/40'}`}>
+          {/* ── masthead — seal · wordmark · record line ── */}
+          <header className="px-6 pt-6">
+            <div className="flex items-center gap-3.5 pr-10">
+              <div className={`grid h-11 w-11 shrink-0 -rotate-3 place-items-center border-[1.5px] font-jp text-[22px] leading-none ${heat ? 'border-vermilion/70 text-vermilion shadow-[inset_0_0_0_3px_rgba(224,77,38,0.12),0_0_24px_-6px_rgba(224,77,38,0.5)]' : 'border-white/20 text-white/50 shadow-[inset_0_0_0_3px_rgba(255,255,255,0.03)]'}`}>
                 予
               </div>
               <div className="min-w-0">
-                <div className="font-display text-[13px] font-[800] leading-none tracking-[0.22em] text-white">YOSUKU</div>
-                <div className="mt-1.5 font-mono text-[8px] uppercase tracking-[0.22em] text-white/35">
-                  Prediction markets · Sui · <span className="font-jp normal-case tracking-normal text-white/45">予測</span>
+                <div className="font-display text-[15px] font-[800] leading-none tracking-[0.26em] text-white">YOSUKU</div>
+                <div className="mt-2 font-mono text-[8px] uppercase tracking-[0.3em] text-white/40">
+                  Oracle-settled prediction markets
                 </div>
               </div>
             </div>
-            <div className="mt-4 flex items-baseline justify-between border-t border-white/[0.08] pt-2.5 font-mono text-[8.5px] uppercase">
-              <span className="tracking-[0.22em] text-white/50">{meta.receipt}</span>
-              <span className="tabular-nums tracking-[0.14em] text-white/40">Nº {folio}</span>
+            <div className="mt-5 flex items-baseline justify-between border-t border-white/[0.1] pt-3 font-mono text-[9px] uppercase">
+              <span className="tracking-[0.26em] text-white/60">{meta.receipt}</span>
+              <span className="tabular-nums tracking-[0.16em] text-white/35">Nº {folio}</span>
             </div>
           </header>
 
           {/* ── ledger — dotted-leader rows, every figure from the chain ── */}
-          <section className="px-5 pb-4 pt-3">
+          <section className="px-6 pb-5 pt-3.5">
             <Row label="Market" value={`BTC / USD · ${shortId(trade.marketId)}`} />
-            <Row label="Position" value={positionLabel(trade)} />
+            <Row label="Position" value={positionLabel(trade)} strong />
             <Row label="Stake" value={fmt2(stake)} />
             <Row label="Leverage" value={levStr} />
             <Row label="Max payout" value={fmt2(maxPayout)} />
@@ -239,23 +258,26 @@ export default function TradeReceipt({
 
           {/* ── the monument — the print at the exact second ── */}
           {settle != null ? (
-            <section className="relative px-5 pb-2 pt-4">
-              <span aria-hidden="true" className="pointer-events-none absolute -right-3 -top-4 select-none font-jp text-[96px] font-bold leading-none text-white/[0.02]">
-                予
+            <section className="relative px-6 pb-1 pt-5">
+              <span aria-hidden="true" className="pointer-events-none absolute -right-4 -top-7 select-none font-jp text-[120px] font-bold leading-none text-white/[0.03]">
+                {meta.stampKanji}
               </span>
-              <div className="font-mono text-[8.5px] uppercase tracking-[0.26em] text-white/40">{meta.heroLabel}</div>
-              <div className={`mt-2 font-display text-[clamp(2rem,10vw,2.6rem)] font-[800] leading-none tracking-tight tabular-nums ${heat ? 'text-white' : 'text-white/85'}`}>
+              <div className="flex items-center gap-2.5">
+                <span aria-hidden="true" className={`h-3.5 w-[3px] ${heat ? 'bg-vermilion' : 'bg-white/30'}`} />
+                <span className="font-mono text-[9px] uppercase tracking-[0.3em] text-white/55">{meta.heroLabel}</span>
+              </div>
+              <div className="mt-3 font-display text-[clamp(2.5rem,12vw,3.15rem)] font-[800] leading-[0.95] tracking-[-0.02em] tabular-nums text-white [text-shadow:0_1px_40px_rgba(255,255,255,0.08)]">
                 {fmtPx(settle)}
               </div>
               {/* The oracle prints AT EXPIRY; the claim tx can land any time after. Only
                   stamp "the exact second" when we hold the real expiry — otherwise say
                   what we actually know (when it was claimed), never a false second. */}
-              <div className="mt-2 font-mono text-[9px] tracking-[0.08em] tabular-nums text-white/45">
+              <div className="mt-2.5 font-mono text-[9.5px] tracking-[0.1em] tabular-nums text-white/50 motion-safe:animate-[ykRise_.4s_ease_.3s_both]">
                 {trade.kind === 'settled_order_redeemed' ? (
                   trade.expiryMs != null ? (
                     <>
                       {utcStamp(trade.expiryMs)}
-                      <span className="text-white/25"> · the exact second</span>
+                      <span className={heat ? 'text-vermilion/80' : 'text-white/30'}> · the exact second</span>
                     </>
                   ) : (
                     <>Claimed {utcStamp(trade.settledAtMs)}</>
@@ -264,41 +286,55 @@ export default function TradeReceipt({
                   utcStamp(trade.settledAtMs)
                 )}
               </div>
-              {strikes.length > 0 && <ProofScale strikes={strikes} settle={settle} dir={trade.dir} settleWord={meta.settleWord} />}
+              {strikes.length > 0 && <ProofScale strikes={strikes} settle={settle} dir={trade.dir} settleWord={meta.settleWord} won={heat} />}
             </section>
           ) : (
             /* no print carried on-chain — record the payout only, never estimate */
-            <section className="px-5 pb-2 pt-4">
-              <div className="font-mono text-[8.5px] uppercase tracking-[0.26em] text-white/40">{meta.heroLabel}</div>
-              <p className="mt-2 font-mono text-[9.5px] leading-relaxed text-white/35">
+            <section className="px-6 pb-1 pt-5">
+              <div className="flex items-center gap-2.5">
+                <span aria-hidden="true" className="h-3.5 w-[3px] bg-white/30" />
+                <span className="font-mono text-[9px] uppercase tracking-[0.3em] text-white/55">{meta.heroLabel}</span>
+              </div>
+              <p className="mt-3 font-mono text-[10px] leading-relaxed text-white/40">
                 This redemption carried no price print on-chain — the payout below is the full record.
               </p>
             </section>
           )}
 
-          {/* ── result strip — payout · net · the stamp ── */}
-          <section className="mx-5 mt-3 flex items-center gap-4 border-t border-white/[0.08] pb-5 pt-4">
-            <div className="grid flex-1 grid-cols-2 gap-4">
-              <div>
-                <div className="font-mono text-[8px] uppercase tracking-[0.2em] text-white/35">Payout</div>
-                <div className="mt-1.5 font-mono text-[16px] leading-none tabular-nums text-white/90">{fmt2(payout)}</div>
+          {/* ── result strip — payout · net · the stamp, with the ember bloom under a win ── */}
+          <section className="relative mx-6 mt-5">
+            {heat && (
+              <div aria-hidden="true" className="pointer-events-none absolute -inset-x-6 -inset-y-4 bg-[radial-gradient(60%_100%_at_50%_100%,rgba(224,77,38,0.09),transparent_75%)]" />
+            )}
+            <div className="relative flex items-center gap-4 border-t border-white/[0.1] pb-6 pt-5">
+              <div className="grid flex-1 grid-cols-2 gap-4">
+                <div>
+                  <div className="font-mono text-[8px] uppercase tracking-[0.24em] text-white/40">Payout</div>
+                  <div className="mt-2 font-display text-[22px] font-[700] leading-none tracking-tight tabular-nums text-white/90">{fmt2(payout)}</div>
+                </div>
+                <div>
+                  <div className="font-mono text-[8px] uppercase tracking-[0.24em] text-white/40">Net P&amp;L</div>
+                  <div className={`mt-2 font-display text-[22px] font-[800] leading-none tracking-tight tabular-nums ${heat ? 'text-vermilion [text-shadow:0_0_28px_rgba(224,77,38,0.45)]' : 'text-white/60'}`}>
+                    {pnlStr}
+                  </div>
+                </div>
               </div>
-              <div>
-                <div className="font-mono text-[8px] uppercase tracking-[0.2em] text-white/35">Net P&amp;L</div>
-                <div className={`mt-1.5 font-mono text-[16px] leading-none tabular-nums ${heat ? 'text-vermilion' : 'text-white/55'}`}>{pnlStr}</div>
-              </div>
+              <Stamp word={meta.stampWord} kanji={meta.stampKanji} heat={heat} />
             </div>
-            <Stamp word={meta.stampWord} kanji={meta.stampKanji} heat={heat} />
           </section>
 
           {/* ── verifiable footer — the proof links ── */}
-          <footer className="border-t border-white/[0.08] bg-white/[0.015] px-5 pb-4 pt-3.5">
+          <footer className="border-t border-white/[0.1] bg-black/30 px-6 pb-5 pt-4">
             <TxRow label="Mint tx" digest={trade.mintDigest} />
             <TxRow label={meta.settleTxLabel} digest={trade.redeemDigest} />
-            <p className="mt-3 text-center font-mono text-[7.5px] uppercase tracking-[0.22em] text-white/25">
-              All amounts in test USDC · on-chain record · Sui testnet
+            <p className="mt-3.5 whitespace-nowrap text-center font-mono text-[7.5px] uppercase tracking-[0.24em] text-white/30">
+              All amounts in test USDC · Sui testnet
             </p>
-            {shareSlot ? <div className="mt-3.5">{shareSlot}</div> : null}
+            {shareSlot ? (
+              <div className={`mt-4 flex justify-center border px-4 py-2.5 transition-colors ${heat ? 'border-vermilion/35 bg-vermilion/[0.06] hover:border-vermilion/60' : 'border-white/[0.12] bg-white/[0.02] hover:border-white/25'}`}>
+                {shareSlot}
+              </div>
+            ) : null}
           </footer>
         </div>
       </div>
@@ -309,12 +345,12 @@ export default function TradeReceipt({
 // ─── pieces ───
 
 /** Dotted-leader ledger row — label … value, all mono, all tabular. */
-function Row({ label, value }: { label: string; value: string }) {
+function Row({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
   return (
-    <div className="flex items-baseline gap-2 py-[5px] font-mono text-[10.5px] leading-none">
-      <span className="shrink-0 text-[8.5px] uppercase tracking-[0.16em] text-white/40">{label}</span>
-      <span aria-hidden="true" className="flex-1 -translate-y-[2px] border-b border-dotted border-white/[0.14]" />
-      <span className="shrink-0 tabular-nums text-white/80">{value}</span>
+    <div className="flex items-baseline gap-2.5 py-[6px] font-mono text-[11px] leading-none">
+      <span className="shrink-0 text-[8.5px] uppercase tracking-[0.18em] text-white/40">{label}</span>
+      <span aria-hidden="true" className="flex-1 -translate-y-[2px] border-b border-dotted border-white/[0.16]" />
+      <span className={`shrink-0 tabular-nums ${strong ? 'font-semibold text-white' : 'text-white/75'}`}>{value}</span>
     </div>
   );
 }
@@ -322,14 +358,14 @@ function Row({ label, value }: { label: string; value: string }) {
 /** Footer proof row — dotted leader into a Suiscan link. */
 function TxRow({ label, digest }: { label: string; digest: string }) {
   return (
-    <div className="flex items-baseline gap-2 py-[5px] font-mono text-[10px] leading-none">
-      <span className="shrink-0 text-[8px] uppercase tracking-[0.18em] text-white/35">{label}</span>
+    <div className="flex items-baseline gap-2.5 py-[5px] font-mono text-[10px] leading-none">
+      <span className="shrink-0 text-[8px] uppercase tracking-[0.2em] text-white/35">{label}</span>
       <span aria-hidden="true" className="flex-1 -translate-y-[2px] border-b border-dotted border-white/[0.12]" />
       <a
         href={SUISCAN_TX(digest)}
         target="_blank"
         rel="noreferrer"
-        className="shrink-0 tabular-nums text-white/60 transition-colors hover:text-white"
+        className="shrink-0 tabular-nums text-white/60 outline-none transition-colors hover:text-vermilion focus-visible:text-vermilion"
         data-cursor="hover"
       >
         {digest.slice(0, 6)}…{digest.slice(-4)} ↗
@@ -341,10 +377,10 @@ function TxRow({ label, digest }: { label: string; digest: string }) {
 /** Torn-slip perforation — punched side notches + dashed rule, pure CSS. */
 function Perforation() {
   return (
-    <div aria-hidden="true" className="my-1 flex h-4 items-center">
-      <span className="-ml-px h-4 w-2 rounded-r-full border border-l-0 border-white/10 bg-bg" />
-      <span className="mx-2 flex-1 border-t border-dashed border-white/[0.14]" />
-      <span className="-mr-px h-4 w-2 rounded-l-full border border-r-0 border-white/10 bg-bg" />
+    <div aria-hidden="true" className="relative flex h-6 items-center">
+      <span className="-ml-[13px] h-[26px] w-[26px] shrink-0 rounded-full border border-white/[0.12] bg-black" />
+      <span className="mx-3 flex-1 border-t-2 border-dashed border-white/[0.13]" />
+      <span className="-mr-[13px] h-[26px] w-[26px] shrink-0 rounded-full border border-white/[0.12] bg-black" />
     </div>
   );
 }
@@ -353,36 +389,38 @@ function Perforation() {
  *  drained ink on a loss or knockout. */
 function Stamp({ word, kanji, heat }: { word: string; kanji: string; heat: boolean }) {
   return (
-    <div className="relative shrink-0 rotate-[-7deg] select-none motion-safe:animate-[ykStampIn_.5s_var(--ease-bounce)_.25s_both]">
+    <div className="relative shrink-0 select-none motion-safe:animate-[ykStampIn_.55s_var(--ease-bounce)_.3s_both]" style={{ transform: 'rotate(-8deg)' }}>
       <div
-        className={`rounded-[3px] border-2 px-3 py-2 text-center ${
+        className={`rounded-[4px] border-2 px-3.5 py-2.5 text-center ${
           heat
-            ? 'border-vermilion/85 text-vermilion shadow-[0_0_30px_-8px_rgba(224,77,38,0.65)]'
-            : 'border-white/20 text-white/40'
+            ? 'border-vermilion text-vermilion shadow-[0_0_40px_-6px_rgba(224,77,38,0.75),inset_0_0_18px_rgba(224,77,38,0.14)]'
+            : 'border-white/25 text-white/45'
         }`}
       >
-        <span className="block font-jp text-[24px] leading-none">{kanji}</span>
-        <span className="mt-1.5 block whitespace-nowrap font-mono text-[6.5px] font-bold uppercase tracking-[0.24em]">{word}</span>
+        <span className="block font-jp text-[30px] leading-none">{kanji}</span>
+        <span className="mt-2 block whitespace-nowrap font-mono text-[6.5px] font-bold uppercase tracking-[0.26em]">{word}</span>
       </div>
       {/* inner hairline ring — double-struck seal edge */}
-      <span aria-hidden="true" className={`pointer-events-none absolute inset-[3px] rounded-[2px] border ${heat ? 'border-vermilion/35' : 'border-white/10'}`} />
+      <span aria-hidden="true" className={`pointer-events-none absolute inset-[4px] rounded-[2px] border ${heat ? 'border-vermilion/40' : 'border-white/10'}`} />
     </div>
   );
 }
 
-/** Two real marks on one axis — where the strike sat, where the print landed.
- *  Deliberately NOT a price path: we don't hold historical tape for old trades,
- *  so the receipt shows only the two numbers the chain actually recorded. */
+/** Marks on one axis — where the strike sat, where the print landed. Deliberately
+ *  NOT a price path: we don't hold historical tape for old trades, so the receipt
+ *  shows only the numbers the chain actually recorded. */
 function ProofScale({
   strikes,
   settle,
   dir,
   settleWord,
+  won,
 }: {
   strikes: number[];
   settle: number;
   dir: SettledTrade['dir'];
   settleWord: string;
+  won: boolean;
 }) {
   const sorted = [...strikes].sort((a, b) => a - b);
   const vals = [...sorted, settle];
@@ -394,52 +432,72 @@ function ProofScale({
   const lo = min - pad;
   const hi = max + pad;
   const pct = (v: number) => ((v - lo) / (hi - lo)) * 100;
-  const clampLabel = (p: number) => Math.min(86, Math.max(14, p));
+  const clampLabel = (p: number) => Math.min(84, Math.max(16, p));
 
   const isBand = dir === 'range' && sorted.length === 2;
   const strikeLabel = isBand ? `BAND ${fmtStrike(sorted[0])}–${fmtStrike(sorted[1])}` : `STRIKE ${fmtStrike(sorted[0])}`;
   const strikeLabelPct = clampLabel(isBand ? (pct(sorted[0]) + pct(sorted[1])) / 2 : pct(sorted[0]));
+  const settlePct = pct(settle);
+
+  // The in-the-money side of the axis — a real fact (band geometry), drawn as a
+  // faint zone so the print visibly lands in (or out of) the money.
+  const zone = isBand
+    ? { left: pct(sorted[0]), right: 100 - pct(sorted[1]) }
+    : dir === 'up'
+      ? { left: pct(sorted[0]), right: 0 }
+      : { left: 0, right: 100 - pct(sorted[0]) };
 
   return (
-    <div className="mt-4">
-      <div className="font-mono text-[7.5px] uppercase tracking-[0.22em] text-white/30">
-        Proof · strike vs {settleWord.toLowerCase()}
+    <div className="mt-6 border border-white/[0.09] bg-white/[0.015] px-4 pb-3 pt-2.5">
+      <div className="flex items-baseline justify-between">
+        <span className="font-mono text-[7.5px] uppercase tracking-[0.26em] text-white/35">
+          Proof · strike vs {settleWord.toLowerCase()}
+        </span>
+        <span className={`font-mono text-[7.5px] uppercase tracking-[0.2em] ${won ? 'text-vermilion/80' : 'text-white/30'}`}>
+          {won ? 'In the money' : 'Out of the money'}
+        </span>
       </div>
-      <div className="relative mt-1 h-[54px]">
+      <div className="relative mt-2 h-[58px]">
         {/* strike label above the axis */}
         <div
-          className="absolute top-0 -translate-x-1/2 whitespace-nowrap font-mono text-[8px] tracking-[0.06em] tabular-nums text-white/45"
+          className="absolute top-0 -translate-x-1/2 whitespace-nowrap font-mono text-[8.5px] tracking-[0.06em] tabular-nums text-white/55"
           style={{ left: `${strikeLabelPct}%` }}
         >
           {strikeLabel}
         </div>
 
-        {/* axis + end caps */}
-        <div className="absolute left-0 right-0 top-1/2 h-px bg-white/[0.14]" />
-        <span aria-hidden="true" className="absolute left-0 top-1/2 h-2 w-px -translate-y-1/2 bg-white/25" />
-        <span aria-hidden="true" className="absolute right-0 top-1/2 h-2 w-px -translate-y-1/2 bg-white/25" />
+        {/* the in-the-money zone — band geometry, a real on-chain fact */}
+        <div
+          aria-hidden="true"
+          className={`absolute top-1/2 h-3.5 -translate-y-1/2 ${won ? 'bg-vermilion/[0.13]' : 'bg-white/[0.05]'}`}
+          style={{ left: `${zone.left}%`, right: `${zone.right}%` }}
+        />
 
-        {/* the winning band, when the position was a range */}
-        {isBand && (
-          <div
-            className="absolute top-1/2 h-2.5 -translate-y-1/2 border-x border-white/40 bg-white/[0.05]"
-            style={{ left: `${pct(sorted[0])}%`, right: `${100 - pct(sorted[1])}%` }}
-          />
-        )}
+        {/* axis + end caps */}
+        <div className="absolute left-0 right-0 top-1/2 h-px bg-white/20" />
+        <span aria-hidden="true" className="absolute left-0 top-1/2 h-2.5 w-px -translate-y-1/2 bg-white/30" />
+        <span aria-hidden="true" className="absolute right-0 top-1/2 h-2.5 w-px -translate-y-1/2 bg-white/30" />
 
         {/* strike tick(s) */}
         {sorted.map((s) => (
-          <span key={s} className="absolute top-1/2 h-3 w-px -translate-y-1/2 bg-white/50" style={{ left: `${pct(s)}%` }} />
+          <span key={s} className="absolute top-1/2 h-4 w-px -translate-y-1/2 bg-white/60" style={{ left: `${pct(s)}%` }} />
         ))}
 
-        {/* where the print landed */}
-        <span className="absolute top-1/2 h-4 w-[2px] -translate-x-1/2 -translate-y-1/2 bg-white/90" style={{ left: `${pct(settle)}%` }} />
-        <span aria-hidden="true" className="absolute top-[calc(50%-11px)] h-1 w-1 -translate-x-1/2 rounded-full bg-white/90" style={{ left: `${pct(settle)}%` }} />
+        {/* where the print landed — the one hot mark on a win */}
+        <span
+          className={`absolute top-1/2 h-5 w-[3px] -translate-x-1/2 -translate-y-1/2 ${won ? 'bg-vermilion shadow-[0_0_14px_rgba(224,77,38,0.8)]' : 'bg-white/90'}`}
+          style={{ left: `${settlePct}%` }}
+        />
+        <span
+          aria-hidden="true"
+          className={`absolute top-[calc(50%-14px)] h-1.5 w-1.5 -translate-x-1/2 rounded-full ${won ? 'bg-vermilion' : 'bg-white/90'}`}
+          style={{ left: `${settlePct}%` }}
+        />
 
         {/* settle label below the axis */}
         <div
-          className="absolute bottom-0 -translate-x-1/2 whitespace-nowrap font-mono text-[8px] uppercase tracking-[0.06em] tabular-nums text-white/80"
-          style={{ left: `${clampLabel(pct(settle))}%` }}
+          className={`absolute bottom-0 -translate-x-1/2 whitespace-nowrap font-mono text-[8.5px] uppercase tracking-[0.06em] tabular-nums ${won ? 'text-vermilion' : 'text-white/80'}`}
+          style={{ left: `${clampLabel(settlePct)}%` }}
         >
           {settleWord} {fmtPx(settle)}
         </div>
