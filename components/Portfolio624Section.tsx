@@ -15,11 +15,14 @@
 // Everything below this section on /portfolio is the PREVIOUS venue (4-16) and stays
 // untouched until cutover completes.
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useCurrentAccount, useSignTransaction } from '@mysten/dapp-kit';
 import type { Transaction } from '@mysten/sui/transactions';
 import { useToast } from '@/components/Toast';
 import SectionHeader from '@/components/SectionHeader';
+import TradeReceipt from '@/components/TradeReceipt';
+import ShareTradeButton from '@/components/ShareTradeButton';
+import { joinSettledTrades, type SettledTrade } from '@/lib/sui/settledTrade';
 import { useSmartSubmit } from '@/lib/sui/useSmartSubmit';
 import { DUSDC_MULTIPLIER } from '@/lib/sui/constants';
 import {
@@ -33,6 +36,7 @@ import {
   fetchAccountOrders624,
   fetchMarketState624,
   buildRedeemSettledTx,
+  buildWithdrawTx,
   type Position624,
   type OrderRow624,
   type MarketState624,
@@ -102,8 +106,45 @@ export default function Portfolio624Section() {
   const [acctBalance, setAcctBalance] = useState(0);
   const [positions, setPositions] = useState<Position624[]>([]);
   const [history, setHistory] = useState<OrderRow624[]>([]);
+  const [orderRows, setOrderRows] = useState<OrderRow624[]>([]);
   const [mktStates, setMktStates] = useState<Record<string, MarketState624>>({});
   const [busy, setBusy] = useState<string | null>(null);
+
+  // trade receipts — joined mint+redeem pairs from the SAME order feed the history uses
+  const settledTrades = useMemo(() => joinSettledTrades(orderRows), [orderRows]);
+  const tradeByOrderId = useMemo(() => {
+    const m = new Map<string, SettledTrade>();
+    for (const t of settledTrades) if (!m.has(t.orderId)) m.set(t.orderId, t);
+    return m;
+  }, [settledTrades]);
+  const [openReceipt, setOpenReceipt] = useState<SettledTrade | null>(null);
+  // Open a receipt, resolving the oracle's TRUE second (= market expiry) for settled
+  // trades — the order feed doesn't carry it, and the stamp must never present the
+  // claim time as the oracle print. Opens instantly (honest "Claimed …" fallback),
+  // upgrades in place once the market state lands.
+  const openReceiptFor = useCallback((trade: SettledTrade) => {
+    if (trade.kind === 'settled_order_redeemed' && trade.expiryMs == null) {
+      const cached = mktStates[trade.marketId]?.expiry;
+      if (cached) { setOpenReceipt({ ...trade, expiryMs: cached }); return; }
+      setOpenReceipt(trade);
+      fetchMarketState624(trade.marketId)
+        .then((st) => {
+          if (!st?.expiry) return;
+          setOpenReceipt((cur) => (cur && cur.orderId === trade.orderId ? { ...cur, expiryMs: st.expiry } : cur));
+        })
+        .catch(() => { /* receipt stays in its honest "Claimed …" fallback */ });
+      return;
+    }
+    setOpenReceipt(trade);
+  }, [mktStates]);
+  // set on a successful claim → auto-opens the receipt once the redeemed row lands
+  const pendingReceiptRef = useRef<string | null>(null);
+  useEffect(() => {
+    const pending = pendingReceiptRef.current;
+    if (!pending) return;
+    const t = tradeByOrderId.get(pending);
+    if (t) { pendingReceiptRef.current = null; openReceiptFor(t); }
+  }, [tradeByOrderId, openReceiptFor]);
 
   // copy-trading desk (vault624) — independent of the personal wrapper: the desk
   // holds its own object-owned account, users only have a ledger entry + sub
@@ -134,6 +175,7 @@ export default function Portfolio624Section() {
     try {
       const [open, orders] = await Promise.all([fetchOpenPositions624(id), fetchAccountOrders624(id, 30)]);
       setPositions(open);
+      setOrderRows(orders);
       setHistory(orders.filter((o) => o.kind.endsWith('_redeemed')).slice(0, HISTORY_ROWS));
       const ids = Array.from(new Set(open.map((p) => p.marketId)));
       const states = await Promise.all(ids.map((m) => fetchMarketState624(m).catch(() => null)));
@@ -147,7 +189,8 @@ export default function Portfolio624Section() {
   useEffect(() => {
     let live = true;
     setWrapperId(null); setInnerAccountId(null); setChecked(false);
-    setAcctBalance(0); setPositions([]); setHistory([]); setMktStates({});
+    setAcctBalance(0); setPositions([]); setHistory([]); setOrderRows([]); setMktStates({});
+    setOpenReceipt(null); pendingReceiptRef.current = null;
     if (!address) { setChecked(true); return; }
     (async () => {
       try {
@@ -213,10 +256,35 @@ export default function Portfolio624Section() {
         qty: pos.qtyMicro,
       }));
       toast('Position redeemed — payout landed in your trading account', 'success');
+      // auto-open the receipt once the redeemed row shows up in the order feed
+      // (satisfied by the loadPositions() below or the steady 12s poll — no extra timers)
+      pendingReceiptRef.current = pos.orderId;
       refreshBalance();
       loadPositions();
     } catch (e) {
-      toast(`Claim failed: ${String(e instanceof Error ? e.message : e).slice(0, 140)}`, 'error');
+      // F6: translate the known aborts instead of dumping raw Move errors on the user.
+      const raw = String(e instanceof Error ? e.message : e);
+      const friendly = /not.?settled|assert_settled|ENotSettled/i.test(raw)
+        ? 'This round hasn’t settled yet — try again at the bell.'
+        : /order|position.*not.*found|EOrderNotFound|already/i.test(raw)
+          ? 'Nothing to claim here — this position was already redeemed.'
+          : `Claim failed: ${raw.slice(0, 140)}`;
+      toast(friendly, 'error');
+    } finally { setBusy(null); }
+  }
+
+  // B3: the money's way OUT — trading account → wallet, right where the balance shows.
+  async function withdrawToWallet() {
+    if (!wrapperId || !address || busy) return;
+    const amountMicro = BigInt(Math.floor(acctBalance * DUSDC_MULTIPLIER));
+    if (amountMicro <= BigInt(0)) return;
+    setBusy('withdraw');
+    try {
+      await submitTx(() => buildWithdrawTx({ wrapperId, amountMicro, recipient: address }));
+      toast(`${fmt2(acctBalance)} DUSDC returned to your wallet`, 'success');
+      refreshBalance();
+    } catch (e) {
+      toast(`Withdraw failed: ${String(e instanceof Error ? e.message : e).slice(0, 140)}`, 'error');
     } finally { setBusy(null); }
   }
 
@@ -262,6 +330,16 @@ export default function Portfolio624Section() {
                 <div className="font-mono text-lg text-white tabular-nums">
                   {fmt2(acctBalance)} <span className="text-[11px] text-white/40">DUSDC</span>
                 </div>
+                {acctBalance > 0 && (
+                  <button
+                    onClick={withdrawToWallet}
+                    disabled={busy !== null}
+                    data-cursor="hover"
+                    className="mt-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-vermilion hover:text-white transition-colors disabled:opacity-50"
+                  >
+                    {busy === 'withdraw' ? 'withdrawing…' : 'Withdraw to wallet →'}
+                  </button>
+                )}
               </div>
               <div className="px-4 py-3.5 border-l border-white/[0.06]">
                 <div className="font-mono text-[9px] uppercase tracking-[0.18em] text-white/40 mb-1">Open positions</div>
@@ -329,23 +407,35 @@ export default function Portfolio624Section() {
                     );
                   })}
 
-                  {/* settled history — payouts + Suiscan links */}
-                  {history.map((h, i) => (
-                    <div key={`h-${h.orderId}-${i}`} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-5 py-3 hover:bg-white/[0.02] transition-colors">
-                      <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/30 w-40 shrink-0">
-                        {h.kind === 'settled_order_redeemed' ? 'Claimed' : h.kind === 'liquidated_order_redeemed' ? 'Knocked out' : 'Closed early'}
-                      </span>
-                      <span className="font-display font-[700] text-[13px] text-white/60 tabular-nums">
-                        paid {h.payoutMicro != null ? fmt2(micro(h.payoutMicro)) : '—'} DUSDC
-                      </span>
-                      {h.settlementUsd != null && <span className="font-mono text-[10px] text-white/35">at {fmtUsd(h.settlementUsd)}</span>}
-                      <span className="flex-1" />
-                      <span className="font-mono text-[11px] text-white/30 tabular-nums">{now > 0 ? ago(h.tsMs, now) : ''}</span>
-                      {h.digest && (
-                        <a href={SUISCAN_TX(h.digest)} target="_blank" rel="noreferrer" className="font-mono text-[11px] text-vermilion hover:text-white transition-colors">↗</a>
-                      )}
-                    </div>
-                  ))}
+                  {/* settled history — payouts + receipts + Suiscan links */}
+                  {history.map((h, i) => {
+                    const receipt = h.orderId ? tradeByOrderId.get(h.orderId) : undefined;
+                    return (
+                      <div key={`h-${h.orderId}-${i}`} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-5 py-3 hover:bg-white/[0.02] transition-colors">
+                        <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/30 w-40 shrink-0">
+                          {h.kind === 'settled_order_redeemed' ? 'Claimed' : h.kind === 'liquidated_order_redeemed' ? 'Knocked out' : 'Closed early'}
+                        </span>
+                        <span className="font-display font-[700] text-[13px] text-white/60 tabular-nums">
+                          paid {h.payoutMicro != null ? fmt2(micro(h.payoutMicro)) : '—'} DUSDC
+                        </span>
+                        {h.settlementUsd != null && <span className="font-mono text-[10px] text-white/35">at {fmtUsd(h.settlementUsd)}</span>}
+                        <span className="flex-1" />
+                        <span className="font-mono text-[11px] text-white/30 tabular-nums">{now > 0 ? ago(h.tsMs, now) : ''}</span>
+                        {receipt && (
+                          <button
+                            onClick={() => openReceiptFor(receipt)}
+                            data-cursor="hover"
+                            className="font-mono text-[10px] uppercase tracking-[0.14em] text-white/40 hover:text-vermilion transition-colors"
+                          >
+                            Receipt ↗
+                          </button>
+                        )}
+                        {h.digest && (
+                          <a href={SUISCAN_TX(h.digest)} target="_blank" rel="noreferrer" className="font-mono text-[11px] text-vermilion hover:text-white transition-colors">↗</a>
+                        )}
+                      </div>
+                    );
+                  })}
                 </>
               )}
             </div>
@@ -409,6 +499,15 @@ export default function Portfolio624Section() {
             )}
           </div>
         </div>
+      )}
+
+      {/* trade receipt modal — one open receipt at a time; the component owns overlay/Esc/scroll-lock */}
+      {openReceipt && (
+        <TradeReceipt
+          trade={openReceipt}
+          onClose={() => setOpenReceipt(null)}
+          shareSlot={<ShareTradeButton trade={openReceipt} />}
+        />
       )}
     </section>
   );
