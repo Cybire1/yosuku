@@ -20,6 +20,8 @@ import { ConnectButton } from '@mysten/dapp-kit';
 import { Minus, Plus, RotateCcw, X } from 'lucide-react';
 import { drawPriceLine } from '@/lib/charts/canvasChart';
 import { useToast } from '@/components/Toast';
+import BetPlacedCard from '@/components/BetPlacedCard';
+import type { OpenBetCard } from '@/lib/openBetShareCard';
 import { DUSDC_MULTIPLIER } from '@/lib/sui/constants';
 import { type Market624 } from '@/lib/sui/predict624Client';
 import {
@@ -80,6 +82,7 @@ interface Placed {
   lev: number;
   costDusdc: number;
   expiry: number;
+  placedAtMs: number;
 }
 
 export default function Ticket624Drawer({
@@ -394,7 +397,7 @@ export default function Ticket624Drawer({
           acctBalance,
           cadence: market.cadence,
         });
-        setPlaced({ digest: r.digest, kind: 'range', lowerUsd: r.lowerUsd, higherUsd: r.higherUsd, qty: winAmt, lev, costDusdc: r.costDusdc, expiry: market.expiry });
+        setPlaced({ digest: r.digest, kind: 'range', lowerUsd: r.lowerUsd, higherUsd: r.higherUsd, qty: winAmt, lev, costDusdc: r.costDusdc, expiry: market.expiry, placedAtMs: Date.now() });
         toast(`Range bet placed — ${fmtUsd0(r.lowerUsd)}–${fmtUsd0(r.higherUsd)}`, 'success');
       } else if (dir) {
         const r = await placeMint624({
@@ -409,7 +412,7 @@ export default function Ticket624Drawer({
           acctBalance,
           cadence: market.cadence,
         });
-        setPlaced({ digest: r.digest, kind: 'dir', dir, strikeUsd: r.strikeUsd, qty: winAmt, lev, costDusdc: r.costDusdc, expiry: market.expiry });
+        setPlaced({ digest: r.digest, kind: 'dir', dir, strikeUsd: r.strikeUsd, qty: winAmt, lev, costDusdc: r.costDusdc, expiry: market.expiry, placedAtMs: Date.now() });
         toast(`Bet placed — ${dir.toUpperCase()} ${dir === 'up' ? 'over' : 'under'} ${fmtUsd0(r.strikeUsd)}`, 'success');
       }
       acct.refreshAcctBalance();
@@ -441,11 +444,11 @@ export default function Ticket624Drawer({
       };
       if (isRange && lowerUsd != null && higherUsd != null) {
         const r = await placeFirstBet624({ ...base, band: { lowerUsd, higherUsd } });
-        setPlaced({ digest: r.digest, kind: 'range', lowerUsd: r.lowerUsd!, higherUsd: r.higherUsd!, qty: winAmt, lev, costDusdc: r.costDusdc, expiry: market.expiry });
+        setPlaced({ digest: r.digest, kind: 'range', lowerUsd: r.lowerUsd!, higherUsd: r.higherUsd!, qty: winAmt, lev, costDusdc: r.costDusdc, expiry: market.expiry, placedAtMs: Date.now() });
         toast(`Account ready + range bet placed — ${fmtUsd0(r.lowerUsd!)}–${fmtUsd0(r.higherUsd!)}`, 'success');
       } else if (dir) {
         const r = await placeFirstBet624({ ...base, dir });
-        setPlaced({ digest: r.digest, kind: 'dir', dir, strikeUsd: r.strikeUsd!, qty: winAmt, lev, costDusdc: r.costDusdc, expiry: market.expiry });
+        setPlaced({ digest: r.digest, kind: 'dir', dir, strikeUsd: r.strikeUsd!, qty: winAmt, lev, costDusdc: r.costDusdc, expiry: market.expiry, placedAtMs: Date.now() });
         toast(`Account ready + bet placed — ${dir.toUpperCase()} ${dir === 'up' ? 'over' : 'under'} ${fmtUsd0(r.strikeUsd!)}`, 'success');
       }
       acct.refreshWallet();
@@ -479,11 +482,11 @@ export default function Ticket624Drawer({
       };
       if (isRange && lowerUsd != null && higherUsd != null) {
         const r = await placeTopUpAndBet624({ ...base, band: { lowerUsd, higherUsd } });
-        setPlaced({ digest: r.digest, kind: 'range', lowerUsd: r.lowerUsd!, higherUsd: r.higherUsd!, qty: winAmt, lev, costDusdc: r.costDusdc, expiry: market.expiry });
+        setPlaced({ digest: r.digest, kind: 'range', lowerUsd: r.lowerUsd!, higherUsd: r.higherUsd!, qty: winAmt, lev, costDusdc: r.costDusdc, expiry: market.expiry, placedAtMs: Date.now() });
         toast(`Topped up + range bet placed — ${fmtUsd0(r.lowerUsd!)}–${fmtUsd0(r.higherUsd!)}`, 'success');
       } else if (dir) {
         const r = await placeTopUpAndBet624({ ...base, dir });
-        setPlaced({ digest: r.digest, kind: 'dir', dir, strikeUsd: r.strikeUsd!, qty: winAmt, lev, costDusdc: r.costDusdc, expiry: market.expiry });
+        setPlaced({ digest: r.digest, kind: 'dir', dir, strikeUsd: r.strikeUsd!, qty: winAmt, lev, costDusdc: r.costDusdc, expiry: market.expiry, placedAtMs: Date.now() });
         toast(`Topped up + bet placed — ${dir.toUpperCase()} ${dir === 'up' ? 'over' : 'under'} ${fmtUsd0(r.strikeUsd!)}`, 'success');
       }
       acct.refreshWallet();
@@ -553,44 +556,44 @@ export default function Ticket624Drawer({
         </div>
 
         {placed ? (
-          /* ── success state ── */
+          /* ── The Call — award-winning, shareable confirmation ── */
           <div>
-            <div className={`border p-5 mb-5 ${placed.kind === 'range' ? 'border-vermilion/40 bg-vermilion/[0.05]' : placed.dir === 'up' ? 'border-profit/40 bg-profit/[0.05]' : 'border-loss/40 bg-loss/[0.05]'}`}>
-              <div className={`font-mono text-[10px] font-bold uppercase tracking-[0.2em] mb-2 ${placed.kind === 'range' ? 'text-vermilion' : placed.dir === 'up' ? 'text-profit' : 'text-loss'}`}>
-                ✓ Bet placed
-              </div>
-              <div className="font-display font-[800] text-2xl text-white leading-tight">
-                {placed.kind === 'range' ? (
-                  <>◆ RANGE — BTC {fmtUsd0(placed.lowerUsd ?? 0)}–{fmtUsd0(placed.higherUsd ?? 0)}</>
-                ) : (
-                  <>{placed.dir === 'up' ? '▲ UP' : '▼ DOWN'} — BTC {placed.dir === 'up' ? 'over' : 'under'} {fmtUsd0(placed.strikeUsd ?? 0)}</>
-                )}
-              </div>
-              <div className="mt-3 space-y-1.5 font-mono text-[11px] text-white/70">
-                <div className="flex justify-between"><span className="text-white/40 uppercase tracking-[0.14em] text-[9.5px]">You bet</span><span className="tabular-nums">{fmt2(placed.costDusdc)} test USDC</span></div>
-                <div className="flex justify-between"><span className="text-white/40 uppercase tracking-[0.14em] text-[9.5px]">You win if it lands</span><span className="tabular-nums text-vermilion">{fmt2(placed.qty)} test USDC{placed.lev > 1 ? ' (before knockout)' : ''}</span></div>
-                <div className="flex justify-between"><span className="text-white/40 uppercase tracking-[0.14em] text-[9.5px]">Settles</span><span className="tabular-nums">{now > 0 ? fmtCountdown(placed.expiry - now) : '—'}</span></div>
-              </div>
-              <a href={SUISCAN_TX(placed.digest)} target="_blank" rel="noreferrer" className="mt-3 inline-block font-mono text-[10px] text-white/40 hover:text-white transition-colors" data-cursor="hover">
-                verify on Suiscan ↗
-              </a>
-            </div>
-            <a
-              href="/portfolio"
-              className="block w-full text-center rounded-full bg-vermilion hover:bg-vermilion-d text-white text-sm font-semibold px-6 py-3 transition-colors"
-              data-cursor="hover"
-            >
-              View in Portfolio →
-            </a>
-            <button
-              onClick={() => { setPlaced(null); setStakeStr(''); }}
-              className="mt-2.5 w-full rounded-full border border-white/15 text-white/70 hover:text-white hover:border-white/30 text-sm font-semibold px-6 py-3 transition-colors"
-              data-cursor="hover"
-            >
-              Place another
-            </button>
+            <BetPlacedCard
+              call={{
+                kind: placed.kind,
+                dir: placed.dir,
+                strikeUsd: placed.strikeUsd,
+                lowerUsd: placed.lowerUsd,
+                higherUsd: placed.higherUsd,
+                stakeDusdc: placed.costDusdc,
+                winDusdc: placed.qty,
+                lev: placed.lev,
+                expiryMs: placed.expiry,
+                digest: placed.digest,
+                placedAtMs: placed.placedAtMs,
+              } satisfies OpenBetCard}
+              nowMs={now}
+              actions={
+                <div className="mt-2.5 grid grid-cols-2 gap-2.5">
+                  <a
+                    href="/portfolio"
+                    className="rounded-full border border-white/15 px-4 py-3 text-center text-sm font-semibold text-white/70 transition-colors hover:border-white/30 hover:text-white"
+                    data-cursor="hover"
+                  >
+                    Portfolio
+                  </a>
+                  <button
+                    onClick={() => { setPlaced(null); setStakeStr(''); }}
+                    className="rounded-full border border-white/15 px-4 py-3 text-center text-sm font-semibold text-white/70 transition-colors hover:border-white/30 hover:text-white"
+                    data-cursor="hover"
+                  >
+                    Place another
+                  </button>
+                </div>
+              }
+            />
             <p className="font-mono text-[9.5px] leading-relaxed text-white/30 mt-4">
-              Oracle-settled at expiry. Your payout lands in YOUR trading account — claim it from Portfolio once the market settles.
+              Oracle-settled at the bell. Your payout lands in YOUR trading account — claim it from Portfolio once the market settles.
             </p>
           </div>
         ) : (
@@ -784,7 +787,12 @@ export default function Ticket624Drawer({
             <div className="mb-4 border-y border-white/[0.08] py-3">
               <div className="flex items-center justify-between mb-2">
                 <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-white/45">Bet amount</span>
-                <span className="font-mono text-[9px] text-white/35">Balance {fmt2(acctBalance)}</span>
+                {/* Spendable = account + wallet. Bets debit the trading account, but a bet the
+                    account can't cover tops up from the wallet in the SAME tap (canOneTapTopUp →
+                    placeTopUp), so the two buckets together are the real buying power. Showing the
+                    account alone read as "0.11 when I have 4.80 in my wallet" — two correct numbers
+                    that looked broken. The top-up panel still breaks out the split when you're short. */}
+                <span className="font-mono text-[9px] text-white/35">Balance {fmt2(acctBalance + walletDusdc)}</span>
               </div>
               <div className="flex items-center gap-2">
                 <input
