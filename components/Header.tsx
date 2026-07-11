@@ -265,13 +265,14 @@ export default function Header() {
                 onClick={() => setShowBalance(true)}
                 data-cursor="hover"
                 title="Tap to move funds between your wallet and your Trading Balance."
-                className="dusdc-pill flex items-center gap-1.5 font-mono text-[12px] px-3 py-1.5 rounded-full border border-white/10 hover:border-white/25 hover:bg-white/[0.03] text-gray-300 hover:text-white transition-colors"
+                className="dusdc-pill flex items-center gap-1.5 font-mono text-[12px] px-2.5 sm:px-3 py-1.5 rounded-full border border-white/10 hover:border-white/25 hover:bg-white/[0.03] text-gray-300 hover:text-white transition-colors"
               >
-                {/* One compact total — the Trading · Wallet split lives in the Move-funds modal. */}
+                {/* One compact total — the Trading · Wallet split lives in the Move-funds modal.
+                    On phones the icon + number carry it; the unit label costs too much width. */}
                 <span className="flex items-center gap-1.5">
                   <Coins className="w-3.5 h-3.5 text-gray-500" />
                   <span className="text-white font-semibold tabular-nums">{((tradingVaultBalance.available + dusdcRaw) / 1e6).toFixed(2)}</span>
-                  <span className="text-gray-500">DUSDC</span>
+                  <span className="hidden sm:inline text-gray-500">DUSDC</span>
                 </span>
                 <span className="text-vermilion font-bold ml-0.5 text-[15px] leading-none">+</span>
               </button>

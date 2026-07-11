@@ -86,6 +86,9 @@ html, body {
   font-size: 15px; line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* stop iOS Safari's font boosting from inflating wide nowrap strips (the marquee rendered ~2x on phones without this) */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
   /* `clip` (not `hidden`) clips horizontal overflow WITHOUT making the page a
      scroll container — `hidden` silently coerces overflow-y to auto and breaks
      every `position: sticky` descendant (e.g. the docs sidebar). */
@@ -3645,7 +3648,7 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
   .records-grid { grid-template-columns: 1fr; }
   .you-bar { grid-template-columns: 1fr 1fr; gap: 12px; }
   .you-bar .you-stats { display: none; }
-  .hero { grid-template-columns: 1fr; padding: 120px 24px 48px; gap: 40px; }
+  .hero { grid-template-columns: 1fr; padding: 86px 20px 40px; gap: 36px; min-height: auto; align-content: start; }
   .hero .hero-left, .hero .hero-right { grid-column: 1; grid-row: auto; }
   .hero-dial { max-width: 360px; margin: 0 auto; }
   .stats-grid { grid-template-columns: 1fr 1fr; gap: 0; row-gap: 40px; }
@@ -3766,8 +3769,12 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
   .nav-links { display: none; }
   /* Slim the top bar on mobile: shorter header, tighter logo + wallet pill. */
   .header { padding: 0 14px; height: 46px; }
-  .logo { font-size: 11px; font-weight: 700; letter-spacing: 0.04em; gap: 6px; }
-  .logo-mark { width: 13px; height: 13px; }
+  .logo { font-size: 14px; font-weight: 800; letter-spacing: 0.12em; gap: 8px; }
+  .logo-mark { width: 16px; height: 16px; }
+  /* slimmer top tape on phones; header hangs directly under it */
+  .marquee { height: 20px; font-size: 8.5px; }
+  .marquee-track { gap: 32px; padding-left: 32px; }
+  .header { top: 20px; }
   .wallet-pill { font-size: 10px; padding: 4px 9px 4px 4px; gap: 5px; }
   .wallet-pill .addr-dot { width: 14px; height: 14px; }
   .wallet-pill .addr-dot::after { inset: 4px; }

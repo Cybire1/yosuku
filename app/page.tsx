@@ -495,16 +495,6 @@ export default function HomePage() {
             </a>
           </div>
 
-          <div className="hero-pillrow">
-            <span className="hero-pill">
-              <span className="live-dot" />
-              <span>{oraclesLoading ? '\u2014' : `${liveOracles.length} markets live`}</span>
-            </span>
-            <span className="hero-pill">
-              <span className="live-dot" />
-              <span>free test funds</span>
-            </span>
-          </div>
         </div>
 
         {/* Right column - Dial */}
@@ -582,22 +572,6 @@ export default function HomePage() {
         </div>
 
         {/* Ticker */}
-        <div className="hero-ticker">
-          <div className="ticker-cell">
-            <span className="ticker-label">BTC</span>
-            <span className="ticker-value">
-              {btcPrice ? `$${btcPrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : spotPrices.BTC ? `$${spotPrices.BTC.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '\u2014'}
-            </span>
-          </div>
-          <div className="ticker-cell">
-            <span className="ticker-label">Next bell</span>
-            <span className="ticker-value">{nextRound > 0 ? fmtTime(nextRound) : '\u2014'}</span>
-          </div>
-          <div className="ticker-cell">
-            <span className="ticker-label">Live now</span>
-            <span className="ticker-value">{liveOracles.length || '\u2014'}</span>
-          </div>
-        </div>
 
         {/* Scroll indicator */}
         <div className="hero-scroll-indicator">
@@ -885,91 +859,6 @@ export default function HomePage() {
       </section>
 
       {/* ═══════ MARKETS PREVIEW ═══════ */}
-      <section className="markets-preview fade-up">
-        <div className="section-eyebrow">
-          <span>04 &mdash; Markets, right now</span>
-        </div>
-        <div className="markets-floor-head">
-          <div className="lhs">
-            <h2 className="section-title" style={{ marginBottom: 0 }}>Closing soon.</h2>
-            <div className="sub">Live markets approaching settlement. Take a side before the window closes.</div>
-          </div>
-          <div className="markets-status">
-            <div className="row">
-              <span className="dot" />
-              <span>Live</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="markets-tabs">
-          {marketTabs.map(tab => (
-            <button
-              key={tab}
-              className={`markets-tab ${marketTab === tab ? 'active' : ''}`}
-              onClick={() => setMarketTab(tab)}
-              data-cursor="hover"
-            >
-              {tab}
-            </button>
-          ))}
-        </div>
-
-        <div className="lp-markets-grid">
-          {filteredMarkets.length === 0 && !oraclesLoading && (
-            <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '48px 0', opacity: 0.4, fontFamily: 'var(--font-mono)', fontSize: '12px' }}>
-              No active markets right now
-            </div>
-          )}
-          {filteredMarkets.map((m, i) => (
-            <Link href={`/markets/${m.oracleId}?strike=${m.strike}&side=UP`} key={m.oracleId} className={`lp-market-card ${m.hot ? 'hot' : ''}`} data-cursor="hover">
-              <div className="market-row1">
-                <div className="market-glyph">{m.glyph}</div>
-                <div className="market-asset-block">
-                  <span className="market-asset">{m.asset}</span>
-                  <span className="market-window">15-min</span>
-                </div>
-                <div className="spacer" />
-                <span className={`lp-market-countdown ${m.secsLeft < 120 ? 'urgent' : ''}`}>
-                  {fmtTime(m.secsLeft)}
-                </span>
-              </div>
-
-              <div className="lp-market-question">{m.question}</div>
-
-              <div className="lp-market-spark">
-                <svg viewBox="0 0 160 40" preserveAspectRatio="none" dangerouslySetInnerHTML={{ __html: sparklineSVG(m.spark, 160, 40, 'rgba(255,255,255,0.25)') }} />
-              </div>
-
-              <div className="lp-market-prob">
-                <div className="lp-market-prob-row">
-                  <span className="yes">{m.yesC}% Up</span>
-                  <span className="no">{100 - m.yesC}% Down</span>
-                </div>
-                <div className="lp-market-prob-bar">
-                  <div className="fill" style={{ width: `${m.yesC}%` }} />
-                </div>
-              </div>
-
-              <div className="lp-market-meta-row">
-                <span>Vol {m.vol}</span>
-                <span>{m.traders} traders</span>
-              </div>
-
-              <div className="lp-market-actions">
-                <span className="lp-market-side up">Up</span>
-                <span className="lp-market-side down">Down</span>
-              </div>
-            </Link>
-          ))}
-        </div>
-
-        <div className="markets-floor-foot">
-          <Link href="/markets" className="arrow-link" data-cursor="hover">
-            View all markets <span className="arr">{'\u2197'}</span>
-          </Link>
-        </div>
-      </section>
 
       {/* ═══════ FAQ ═══════ */}
       <section className="faq fade-up">
