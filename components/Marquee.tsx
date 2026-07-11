@@ -2,10 +2,13 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useBtcPrice } from '@/lib/hooks/useBtcPrice';
+import { useBell624, fmtBell624 } from '@/lib/sui/bell624';
 import { FLOAT_SCALING } from '@/lib/sui/constants';
 
 // The ticker earns its motion by carrying live signal: asset prices,
 // the countdown to the next bell, and the last settlement print.
+// NEXT/LAST BELL read the LIVE 6-24 venue (bells ring every minute) — the
+// legacy oracles kept below only feed the spot-price fallback.
 interface MarqueeItem {
   label: string;
   value: string;
@@ -29,8 +32,7 @@ export default function Marquee() {
   const [spots, setSpots] = useState<Record<string, number>>({});
   const [dirs, setDirs] = useState<Record<string, 'up' | 'down' | ''>>({});
   const prevSpots = useRef<Record<string, number>>({});
-  const [nextExpiry, setNextExpiry] = useState<number | null>(null);
-  const [lastBell, setLastBell] = useState<{ asset: string; price: number } | null>(null);
+  const { nextBellMs, lastPrint } = useBell624();
   const [, setTick] = useState(0);
 
   useEffect(() => {
@@ -60,21 +62,6 @@ export default function Marquee() {
         prevSpots.current = byAsset;
         setSpots(byAsset);
         setDirs(newDirs);
-
-        const active = oracles
-          .filter(o => o.status === 'active' && o.expiry > Date.now())
-          .sort((a, b) => a.expiry - b.expiry);
-        setNextExpiry(active[0]?.expiry ?? null);
-
-        const settled = oracles
-          .filter(o => o.status === 'settled' && o.settlement_price)
-          .sort((a, b) => (b.settled_at ?? b.expiry) - (a.settled_at ?? a.expiry));
-        if (settled[0]) {
-          setLastBell({
-            asset: settled[0].underlying_asset || 'BTC',
-            price: (settled[0].settlement_price as number) / FLOAT_SCALING,
-          });
-        }
       } catch { /* keep last values */ }
     }
     load();
@@ -91,10 +78,6 @@ export default function Marquee() {
 
   const usd = (n: number, dp: number) =>
     `$${n.toLocaleString('en-US', { minimumFractionDigits: dp, maximumFractionDigits: dp })}`;
-  const mmss = (ms: number) => {
-    const s = Math.max(0, Math.floor(ms / 1000));
-    return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
-  };
 
   const items: MarqueeItem[] = [];
   const btc = btcLive || spots.BTC;
@@ -102,8 +85,8 @@ export default function Marquee() {
   for (const asset of ASSET_ORDER) {
     if (spots[asset]) items.push({ label: asset, value: usd(spots[asset], DECIMALS[asset] ?? 2), direction: dirs[asset] ?? '' });
   }
-  if (nextExpiry) items.push({ label: 'NEXT BELL', value: mmss(nextExpiry - Date.now()), direction: '' });
-  if (lastBell) items.push({ label: 'LAST BELL', value: `${lastBell.asset} ${usd(lastBell.price, DECIMALS[lastBell.asset] ?? 2)}`, direction: '' });
+  if (nextBellMs) items.push({ label: 'NEXT BELL', value: fmtBell624(nextBellMs - Date.now()), direction: '' });
+  if (lastPrint) items.push({ label: 'LAST BELL', value: `BTC ${usd(lastPrint.priceUsd, 2)}`, direction: '' });
   if (items.length === 0) items.push({ label: 'YOSUKU', value: '予測', direction: '' });
 
   const renderCells = (keyPrefix: string) =>

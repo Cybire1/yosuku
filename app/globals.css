@@ -3792,6 +3792,12 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
   body { padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px)); }
   .container { padding-inline: 18px; }
   .page-hero { padding: 116px 0 24px; }
+  /* single-column hero on phones: drop the desktop align-end lift + oversized gap
+     (they left ~76px of dead air between the hero copy and the panel below it) */
+  .hero-grid { gap: 20px; }
+  .hero-grid .hero-left { margin-bottom: 0; }
+  .hero-left .eyebrow { letter-spacing: 0.12em; margin-bottom: 14px; }
+  .hero-left .eyebrow .dash { width: 18px; }
   /* tighten the loose vertical rhythm between sections on phones */
   .markets-section { padding: 32px 0 0; }
   .markets-section.settled { padding-top: 40px !important; }
@@ -4207,3 +4213,4 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
 @media (prefers-reduced-motion: reduce) { .scroll-cue-dot { animation: none; top: 12px; } }
 /* mobile: the Trade button is the CTA — drop the scroll cue so they don't overlap */
 @media (max-width: 900px) { .scroll-cue { display: none; } }
+

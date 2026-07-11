@@ -8,6 +8,7 @@ import GrainOverlay from '@/components/GrainOverlay';
 
 import { useBtcPrice } from '@/lib/hooks/useBtcPrice';
 import { useOracles, useProtocolStats } from '@/lib/sui/hooks';
+import { useBell624 } from '@/lib/sui/bell624';
 import { type PriceData } from '@/lib/sui/predictApi';
 import { FLOAT_SCALING } from '@/lib/sui/constants';
 import { getCanonicalMarketLine } from '@/lib/marketLine';
@@ -131,6 +132,7 @@ function clamp(v: number, lo: number, hi: number): number {
    ═══════════════════════════════════════════════════ */
 export default function HomePage() {
   const { price: btcPrice } = useBtcPrice();
+  const { nextBellMs, liveCount: liveBells624 } = useBell624();
   const { active: liveOracles, settled: settledOracles, loading: oraclesLoading } = useOracles();
   const { stats: protocolStats, loading: statsLoading } = useProtocolStats();
   const [oraclePrices, setOraclePrices] = useState<Record<string, PriceData>>({});
@@ -236,33 +238,13 @@ export default function HomePage() {
     return () => clearInterval(iv);
   }, []);
 
-  /* ── Real next-expiry countdown ── */
-  const nextExpirySec = useMemo(() => {
-    if (futureOracles.length === 0 || !nowMs) return 0;
-    const nearest = Math.min(...futureOracles.map(o => o.expiry));
-    // expiry is in ms, convert to seconds for countdown
-    const nearestSec = nearest > 1e12 ? nearest / 1000 : nearest;
-    return Math.max(0, Math.floor(nearestSec - nowMs / 1000));
-  }, [futureOracles, nowMs]);
-
-  const [nextRound, setNextRound] = useState<number>(0);
-  useEffect(() => {
-    setNextRound(nextExpirySec);
-  }, [nextExpirySec]);
-
-  useEffect(() => {
-    const iv = setInterval(() => {
-      setNextRound(t => Math.max(0, t - 1));
-    }, 1000);
-    return () => clearInterval(iv);
-  }, []);
-
-  /* ── Per-oracle dial countdown (first oracle) ── */
+  /* ── Dial countdown — the REAL next bell on the live 6-24 venue ──
+     The legacy oracles above expire ~6 days out (the dial used to read
+     "9100:12"); the venue that actually trades rings every minute. */
   const dialExpiry = useMemo(() => {
-    if (futureOracles.length === 0 || !nowMs) return 0;
-    const exp = futureOracles[0].expiry > 1e12 ? futureOracles[0].expiry / 1000 : futureOracles[0].expiry;
-    return Math.max(0, Math.floor(exp - nowMs / 1000));
-  }, [futureOracles, nowMs]);
+    if (!nextBellMs || !nowMs) return 0;
+    return Math.max(0, Math.floor((nextBellMs - nowMs) / 1000));
+  }, [nextBellMs, nowMs]);
 
   const [dialCountdown, setDialCountdown] = useState<number>(0);
   useEffect(() => {
@@ -434,7 +416,8 @@ export default function HomePage() {
 
   /* ── Stats band data from protocol ── */
   const statsData = [
-    { idx: '01', label: 'Markets live now', value: liveOracles.length ? String(liveOracles.length) : '\u2014', spark: STAT_SPARKS[0], meta: 'open for bets' },
+    // count the LIVE 6-24 venue's future bells (the retired 4-16 oracles are archival)
+    { idx: '01', label: 'Markets live now', value: liveBells624 != null && liveBells624 > 0 ? String(liveBells624) : '\u2014', spark: STAT_SPARKS[0], meta: 'open for bets' },
     { idx: '02', label: 'Oracle-settled', value: '100%', spark: STAT_SPARKS[1], meta: 'no committee, no disputes' },
     { idx: '03', label: 'Players', value: protocolStats ? protocolStats.activeWallets.toLocaleString() : '\u2014', spark: STAT_SPARKS[2], meta: 'wallets in' },
     { idx: '04', label: 'Settlement', value: '< 1s', spark: STAT_SPARKS[3], meta: 'sub-second, final' },

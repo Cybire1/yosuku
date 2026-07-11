@@ -448,19 +448,27 @@ export function useVaultStats(pollInterval = 60_000) {
         options: { showContent: true },
       });
       if (obj.data?.content && obj.data.content.dataType === 'moveObject') {
+        // Field names verified against the live object (sui_getObject, 2026-07-11):
+        // vault.{balance,total_mtm,total_max_payout}, PLP supply on treasury_cap.total_supply,
+        // pricing_config.{base_spread,min_spread,utilization_multiplier}. Old names kept as
+        // fallbacks so a package upgrade can't silently zero the stats.
         const fields = obj.data.content.fields as Record<string, unknown>;
         const vault = fields.vault as Record<string, unknown> | undefined;
         const vf = vault?.fields as Record<string, unknown> | undefined;
         const pricingConfig = fields.pricing_config as Record<string, unknown> | undefined;
         const pcf = pricingConfig?.fields as Record<string, unknown> | undefined;
+        const treasuryCap = fields.treasury_cap as Record<string, unknown> | undefined;
+        const tcf = treasuryCap?.fields as Record<string, unknown> | undefined;
+        const totalSupply = tcf?.total_supply as Record<string, unknown> | undefined;
+        const tsf = totalSupply?.fields as Record<string, unknown> | undefined;
 
         const balance = Number(vf?.balance ?? 0);
         const totalMtm = Number(vf?.total_mtm ?? 0);
-        const maxPayout = Number(vf?.max_payout ?? 0);
-        const totalPlpSupply = Number(vf?.total_plp_supply ?? 0);
+        const maxPayout = Number(vf?.total_max_payout ?? vf?.max_payout ?? 0);
+        const totalPlpSupply = Number(tsf?.value ?? vf?.total_plp_supply ?? 0);
 
-        const baseFee = Number(pcf?.base_fee ?? 20_000_000);
-        const minFee = Number(pcf?.min_fee ?? 5_000_000);
+        const baseFee = Number(pcf?.base_spread ?? pcf?.base_fee ?? 20_000_000);
+        const minFee = Number(pcf?.min_spread ?? pcf?.min_fee ?? 5_000_000);
         const utilizationMultiplier = Number(pcf?.utilization_multiplier ?? 2_000_000_000);
 
         setStats({

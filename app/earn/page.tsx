@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useCurrentAccount, ConnectButton } from '@mysten/dapp-kit';
 import { useSmartSubmit } from '@/lib/sui/useSmartSubmit';
 import Header from '@/components/Header';
@@ -8,13 +8,12 @@ import Footer from '@/components/Footer';
 import Marquee from '@/components/Marquee';
 import GrainOverlay from '@/components/GrainOverlay';
 import SectionHeader from '@/components/SectionHeader';
-import { useDUSDCBalance, usePLPBalance, useVaultStats, useVaultSummary, useVaultPerformance } from '@/lib/sui/hooks';
+import { useDUSDCBalance, usePLPBalance, useVaultStats } from '@/lib/sui/hooks';
 import { useReserveStats, useMySupply, useMyPositions, useMyOrders } from '@/lib/sui/leverageHooks';
 import { supplyTx, withdrawTx, cancelOrderTx, settleTx, type PositionData } from '@/lib/sui/leverageClient';
 import { supplyLpTx, withdrawAllPlpTx } from '@/lib/sui/predictClient';
-import { DUSDC_MULTIPLIER, PREDICT_ID } from '@/lib/sui/constants';
+import { DUSDC_MULTIPLIER } from '@/lib/sui/constants';
 import { fetchOracles, type OracleData } from '@/lib/sui/predictApi';
-import { drawSparkline } from '@/lib/charts/canvasChart';
 
 const fmt = (n: number, d = 2) => n.toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d });
 const pct = (bps: number) => `${(bps / 100).toFixed(1)}%`;
@@ -52,12 +51,14 @@ export default function EarnPage() {
   const [tab, setTab] = useState<'yield' | 'leverage'>('yield');
 
   // ── Protocol vault / PLP (the real, passive yield) ──
+  // Everything below reads the live Predict object straight from chain (useVaultStats).
+  // The old indexer summary/performance endpoints (predict-server …/vault/summary and
+  // …/vault/performance) are dead — the legacy server can no longer read the object —
+  // so nothing here depends on them anymore. No history source ⇒ no sparkline: we only
+  // render numbers we actually have.
   const { stats: vaultStats, refresh: refreshVault } = useVaultStats();
-  const { summary } = useVaultSummary(PREDICT_ID);
-  const { performance } = useVaultPerformance(PREDICT_ID);
   const { balance: plpBalance, coins: plpCoins, refresh: refreshPlp } = usePLPBalance();
   const { coins: dusdcCoins, refresh: refreshDusdc } = useDUSDCBalance();
-  const sparkRef = useRef<HTMLCanvasElement>(null);
 
   // ── Leverage reserve (advanced) ──
   const { stats: reserveStats, refresh: refreshReserve } = useReserveStats();
@@ -79,32 +80,15 @@ export default function EarnPage() {
     return () => { on = false; clearInterval(t); };
   }, []);
 
-  // share-price sparkline — real on-chain history
-  useEffect(() => {
-    if (!sparkRef.current || !performance?.points?.length) return;
-    drawSparkline(sparkRef.current, performance.points.map((p) => p.share_price), {
-      color: '#E04D26', fillColor: 'rgba(224,77,38,0.12)', lineWidth: 1.6, dotEnd: true,
-    });
-  }, [performance]);
-
-  // Honest yield: realized share-price growth over the real on-chain window, plus an
-  // annualized estimate (only when the window is ≥ 1 day, and clearly labelled). No
-  // fabricated APY — if there isn't enough history yet, we show nothing.
-  const perf = useMemo(() => {
-    const pts = performance?.points ? [...performance.points].sort((a, b) => a.timestamp_ms - b.timestamp_ms) : [];
-    if (pts.length < 2) return null;
-    const first = pts[0], last = pts[pts.length - 1];
-    if (!(first.share_price > 0) || !(last.share_price > 0)) return null;
-    const ratio = last.share_price / first.share_price;
-    const realizedPct = (ratio - 1) * 100;
-    const periodMs = last.timestamp_ms - first.timestamp_ms;
-    const days = periodMs / 86_400_000;
-    const apy = periodMs > 0 && days >= 1 ? (Math.pow(ratio, 31_536_000_000 / periodMs) - 1) * 100 : null;
-    return { realizedPct, days, apy };
-  }, [performance]);
-
-  const sharePrice = summary?.plp_share_price ?? null;
-  const vaultValue = summary ? summary.vault_value / DUSDC_MULTIPLIER : vaultStats ? vaultStats.vaultValue / DUSDC_MULTIPLIER : null;
+  // All vault figures derive from ONE live on-chain read — real numbers or nothing.
+  const vaultValue = vaultStats ? vaultStats.vaultValue / DUSDC_MULTIPLIER : null;
+  const sharePrice = vaultStats && vaultStats.totalPlpSupply > 0
+    ? vaultStats.vaultValue / vaultStats.totalPlpSupply
+    : null;
+  const availableWithdraw = vaultStats ? vaultStats.availableForWithdraw / DUSDC_MULTIPLIER : null;
+  const utilization = vaultStats && vaultStats.balance > 0
+    ? vaultStats.maxPayout / vaultStats.balance
+    : null;
   const myPlp = plpBalance / DUSDC_MULTIPLIER;
   const myValue = vaultStats && vaultStats.totalPlpSupply > 0
     ? (plpBalance / vaultStats.totalPlpSupply) * (vaultStats.vaultValue / DUSDC_MULTIPLIER)
@@ -177,10 +161,10 @@ export default function EarnPage() {
       {/* Hero — protocol vault yield */}
       <section className="page-hero">
         <span className="crop tl" /><span className="crop tr" /><span className="crop bl" /><span className="crop br" />
+        {/* bottom corner metas removed — the live panel carries those numbers now, and they
+            collided with the panel's lower edge at ~1280px */}
         <span className="hero-meta tl">VAULT V-04<span className="ln">PROTOCOL LIQUIDITY</span></span>
         <span className="hero-meta tr">EDITION 04 / 2026<span className="ln">SUI · TESTNET</span></span>
-        <span className="hero-meta bl">SHARE {sharePrice != null ? sharePrice.toFixed(4) : '—'}<span className="ln">DUSDC / PLP</span></span>
-        <span className="hero-meta br">{vaultValue != null ? `${fmt(vaultValue, 0)} DUSDC` : '—'}<span className="ln">VAULT VALUE</span></span>
 
         <div className="container">
           <div className="breadcrumb">
@@ -191,12 +175,11 @@ export default function EarnPage() {
 
           <div className="hero-grid">
             <div className="hero-left">
+              {/* one text node so it reads as a single line — flex segments used to wrap into two columns on phones */}
               <div className="eyebrow">
                 <span className="dash" />
                 <span className="live-dot" />
-                <span>Be the house</span>
-                <span style={{ color: 'var(--gray-700)' }}>·</span>
-                <span>earn the protocol&apos;s spread</span>
+                <span className="whitespace-nowrap">Be the house · earn the spread</span>
               </div>
               <h1 className="page-title">
                 Earn real<br />
@@ -208,46 +191,47 @@ export default function EarnPage() {
               </p>
             </div>
 
-            {/* live vault dashboard */}
-            <div className="rounded-2xl border border-white/[0.10] bg-gradient-to-b from-white/[0.04] to-transparent p-7 backdrop-blur-sm">
+            {/* live vault dashboard — every number below is the live on-chain object, or the panel says so */}
+            <div className="rounded-2xl border border-white/[0.10] bg-gradient-to-b from-white/[0.04] to-transparent p-5 md:p-7 backdrop-blur-sm">
               <div className="flex items-center justify-between mb-4">
                 <span className="font-mono text-[10px] tracking-[0.22em] uppercase text-gray-500 flex items-center gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-vermilion" style={{ boxShadow: '0 0 8px var(--vermilion)' }} /> Live vault
                 </span>
-                <canvas ref={sparkRef} width={120} height={28} className="opacity-90" />
+                <span className="font-mono text-[9px] tracking-[0.2em] uppercase text-gray-700">金庫 · on-chain</span>
               </div>
-              <div className="font-display text-4xl font-extrabold tracking-tight">
-                {sharePrice != null ? sharePrice.toFixed(4) : '—'}
-                <span className="text-sm text-gray-500 font-mono font-normal ml-2">DUSDC / share</span>
-              </div>
-              <div className="mt-1.5 font-mono text-[11px]">
-                {perf ? (
-                  <span className={perf.realizedPct >= 0 ? 'text-emerald-400' : 'text-rose-400'}>
-                    {perf.realizedPct >= 0 ? '+' : ''}{perf.realizedPct.toFixed(3)}% realized · {perf.days >= 1 ? `${Math.round(perf.days)}d` : '<1d'}
-                    {perf.apy != null && <span className="text-gray-500"> · ~{perf.apy.toFixed(1)}% APY (annualized · testnet)</span>}
-                  </span>
-                ) : <span className="text-gray-600">building yield history…</span>}
-              </div>
-              <div className="mt-5 space-y-3.5">
-                <ReserveRow label="Vault value" value={vaultValue != null ? fmt(vaultValue) : '—'} unit="DUSDC" />
-                <ReserveRow label="Available to withdraw" value={summary ? fmt(summary.available_withdrawal / DUSDC_MULTIPLIER) : '—'} unit="DUSDC" />
-                <ReserveRow label="Utilization" value={summary ? `${(summary.utilization * 100).toFixed(0)}%` : '—'} accent />
-              </div>
+              {vaultStats ? (
+                <>
+                  <div className="font-display text-4xl font-extrabold tracking-tight">
+                    {sharePrice != null ? sharePrice.toFixed(4) : '—'}
+                    <span className="text-sm text-gray-500 font-mono font-normal ml-2">DUSDC / share</span>
+                  </div>
+                  <div className="mt-1.5 font-mono text-[11px] text-gray-600">yield accrues into the share price</div>
+                  <div className="mt-5 space-y-3.5">
+                    <ReserveRow label="Vault value" value={vaultValue != null ? fmt(vaultValue) : '—'} unit="DUSDC" />
+                    <ReserveRow label="Available to withdraw" value={availableWithdraw != null ? fmt(availableWithdraw) : '—'} unit="DUSDC" />
+                    <ReserveRow label="Utilization" value={utilization != null ? `${(utilization * 100).toFixed(1)}%` : '—'} accent />
+                  </div>
+                </>
+              ) : (
+                <p className="font-mono text-xs text-gray-600 py-3">syncing vault from chain…</p>
+              )}
             </div>
           </div>
         </div>
       </section>
 
       <main>
-        <div className="container max-w-5xl mx-auto pt-10 pb-20">
-          {/* tab toggle */}
-          <div className="flex items-center gap-7 border-b border-white/[0.07] mb-10">
+        <div className="container max-w-5xl mx-auto pt-6 md:pt-10 pb-24">
+          {/* tab toggle — sits above the content it switches; page bottom padding + the global
+              body clearance keep everything clear of the floating bottom nav on phones */}
+          <div className="flex items-center gap-7 border-b border-white/[0.07] mb-8 md:mb-10">
             {([['yield', 'Earn yield'], ['leverage', 'Back leverage']] as const).map(([k, label]) => (
               <button
                 key={k}
                 type="button"
                 onClick={() => setTab(k)}
                 aria-pressed={tab === k}
+                style={{ outline: 'none' }}
                 className={`relative pb-3 text-sm font-bold transition-colors ${tab === k ? 'text-white' : 'text-gray-500 hover:text-gray-300'}`}
               >
                 {label}
@@ -298,7 +282,7 @@ export default function EarnPage() {
                 <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-6">
                   <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-gray-600 mb-4">Your position</div>
                   {!address ? (
-                    <p className="font-mono text-xs text-gray-500 py-10 text-center">—</p>
+                    <p className="font-mono text-xs text-gray-500 py-10 text-center">Connect a wallet to see it.</p>
                   ) : plpBalance <= 0 ? (
                     <p className="font-mono text-xs text-gray-500 py-10 text-center">No PLP yet. Supply to start earning.</p>
                   ) : (
@@ -358,7 +342,7 @@ export default function EarnPage() {
                 <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-6">
                   <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-gray-600 mb-4">Your reserve position</div>
                   {!address ? (
-                    <p className="font-mono text-xs text-gray-500 py-10 text-center">—</p>
+                    <p className="font-mono text-xs text-gray-500 py-10 text-center">Connect a wallet to see it.</p>
                   ) : supplies.length === 0 ? (
                     <p className="font-mono text-xs text-gray-500 py-10 text-center">No active supply yet.</p>
                   ) : (
@@ -394,9 +378,9 @@ export default function EarnPage() {
                           <span className="font-mono text-sm text-gray-300"><span className="text-vermilion font-bold">{o.leverage.toFixed(0)}×</span> · {fmt(o.margin)} DUSDC margin {o.isRange ? '· range' : ''}</span>
                           <p className={`font-mono text-[10px] mt-1 ${
                             o.expiry && Number(o.expiry) < Date.now()
-                              ? 'text-rose-400'
+                              ? 'text-vermilion'
                               : o.createdAt && Date.now() - o.createdAt > 90_000
-                                ? 'text-amber-400'
+                                ? 'text-gray-300'
                                 : 'text-gray-600'
                           }`}>
                             {o.source === 'local'
@@ -438,7 +422,7 @@ export default function EarnPage() {
                           <div className="flex items-center gap-5">
                             <div className="text-right">
                               <div className="font-mono text-[9px] uppercase tracking-wider text-gray-600">max payout</div>
-                              <div className="font-mono text-sm text-emerald-400/90">{fmt(maxPayout)} DUSDC</div>
+                              <div className="font-mono text-sm text-white/90">{fmt(maxPayout)} DUSDC</div>
                             </div>
                             {oc === 'pending' ? (
                               <span className="font-mono text-[11px] text-gray-500 px-3 py-2 inline-flex items-center gap-1.5">
@@ -446,17 +430,18 @@ export default function EarnPage() {
                               </span>
                             ) : oc === 'won' ? (
                               p.isRange ? (
-                                <span className="font-mono text-[11px] px-3 py-2 rounded-full border border-emerald-500/30 text-emerald-300 inline-flex items-center gap-1.5">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> won · paying out
+                                <span className="font-mono text-[11px] px-3 py-2 rounded-full border border-vermilion/30 text-vermilion inline-flex items-center gap-1.5">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-vermilion animate-pulse" /> won · paying out
                                 </span>
                               ) : (
                                 <button
                                   onClick={() => doSettle(p)}
                                   disabled={busy === 's:' + p.id}
-                                  className="font-mono text-[11px] px-4 py-2 rounded-full border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 hover:border-emerald-400/60 transition-colors disabled:opacity-50 inline-flex items-center gap-1.5"
+                                  style={{ outline: 'none' }}
+                                  className="font-mono text-[11px] px-4 py-2 rounded-full border border-vermilion/40 bg-vermilion/10 text-vermilion hover:bg-vermilion/20 hover:border-vermilion/60 transition-colors disabled:opacity-50 inline-flex items-center gap-1.5"
                                   title="Cash out your win"
                                 >
-                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                  <span className="w-1.5 h-1.5 rounded-full bg-vermilion animate-pulse" />
                                   {busy === 's:' + p.id ? 'Settling…' : 'Cash out win'}
                                 </button>
                               )
@@ -478,7 +463,7 @@ export default function EarnPage() {
             </>
           )}
 
-          {msg && <p className={`text-center mt-8 text-[12px] font-mono ${msg.includes('✓') ? 'text-emerald-400' : 'text-rose-400'}`}>{msg}</p>}
+          {msg && <p className={`text-center mt-8 text-[12px] font-mono ${msg.includes('✓') ? 'text-gray-300' : 'text-vermilion'}`}>{msg}</p>}
         </div>
         <Footer />
       </main>
