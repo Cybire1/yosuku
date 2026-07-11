@@ -4221,3 +4221,23 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
 
 
 /* recompile-nudge */
+
+/* ── /feed — full-screen vertical snap feed (one card per screen) ──
+   The container is FIXED between the chrome (marquee+header above, viewport
+   bottom below — the floating pill nav overlays it, cards pad past it), so
+   card height = container height exactly and `scroll-snap-align: start`
+   lands every swipe on a clean screen. */
+.feed-snap {
+  position: fixed; left: 0; right: 0; top: 92px; bottom: 0;
+  overflow-y: auto;
+  scroll-snap-type: y mandatory;
+  overscroll-behavior-y: contain;
+  scrollbar-width: none;
+}
+.feed-snap::-webkit-scrollbar { display: none; }
+.feed-card { height: 100%; scroll-snap-align: start; scroll-snap-stop: always; }
+/* non-scrolling sibling overlay for progress ticks / hint / desktop vignette */
+.feed-chrome { position: fixed; left: 0; right: 0; top: 92px; bottom: 0; pointer-events: none; z-index: 10; }
+@media (max-width: 720px) {
+  .feed-snap, .feed-chrome { top: 66px; } /* slim mobile marquee (20) + header (46) */
+}
