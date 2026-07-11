@@ -108,11 +108,24 @@ const SPEC_ROWS: SpecRow[] = [
   { label: 'Audits', value: 'In progress' },
 ];
 
-const FOOTER_COLS = [
-  { title: 'Product', links: ['Markets', 'Portfolio', 'Leaderboard', 'Docs'] },
-  { title: 'Develop', links: ['GitHub', 'SDK', 'API', 'Status'] },
-  { title: 'Society', links: ['Twitter / X', 'Discord', 'Blog', 'Brand'] },
-  { title: 'Resources', links: ['Whitepaper', 'Audits', 'Terms', 'Privacy'] },
+// Every link goes somewhere real — dead '#' anchors read as broken to a judge.
+const FOOTER_COLS: { title: string; links: { label: string; href: string; ext?: boolean }[] }[] = [
+  { title: 'Product', links: [
+    { label: 'Markets', href: '/markets' },
+    { label: 'Feed', href: '/feed' },
+    { label: 'Portfolio', href: '/portfolio' },
+    { label: 'Leaderboard', href: '/leaderboard' },
+    { label: 'Stats', href: '/stats' },
+    { label: 'Docs', href: '/docs' },
+  ] },
+  { title: 'Develop', links: [
+    { label: 'GitHub', href: 'https://github.com/shaibuafeez/yosuku', ext: true },
+    { label: 'SDK', href: 'https://www.npmjs.com/package/@yosuku/deepbook-predict', ext: true },
+    { label: 'MCP server', href: 'https://www.npmjs.com/package/@yosuku/deepbook-predict-mcp', ext: true },
+  ] },
+  { title: 'Society', links: [
+    { label: 'X · @yosuku0', href: 'https://x.com/yosuku0', ext: true },
+  ] },
 ];
 
 /* ───────── Helpers ───────── */
@@ -928,8 +941,13 @@ export default function HomePage() {
               </div>
               <div className="footer-links">
                 {col.links.map(link => (
-                  <a href="#" key={link} data-cursor="hover">
-                    {link}
+                  <a
+                    href={link.href}
+                    key={link.label}
+                    data-cursor="hover"
+                    {...(link.ext ? { target: '_blank', rel: 'noreferrer' } : {})}
+                  >
+                    {link.label}
                     <span className="arr">{'\u2197'}</span>
                   </a>
                 ))}

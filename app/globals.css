@@ -3966,7 +3966,12 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
   .landing-footer { padding-top: 64px; }
   .footer-headline { grid-template-columns: 1fr; gap: 24px; }
   .footer-headline h2 { font-size: clamp(1.8rem, 7vw, 2.6rem); }
-  .footer-grid { grid-template-columns: 1fr; gap: 40px; }
+  .footer-grid { grid-template-columns: 1fr; gap: 26px; }
+  /* phone footer: each section's links flow HORIZONTALLY (wrap) — one screen, not five */
+  .footer-col { gap: 10px; }
+  .footer-links { flex-direction: row; flex-wrap: wrap; gap: 10px 22px; }
+  .footer-links a { display: inline-flex; align-items: baseline; gap: 4px; font-size: 13px; }
+  .footer-links a .arr { display: none; }
   .footer-status { grid-template-columns: 1fr 1fr; }
   .footer-watermark { font-size: 18vw; }
 }
@@ -4214,3 +4219,5 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
 /* mobile: the Trade button is the CTA — drop the scroll cue so they don't overlap */
 @media (max-width: 900px) { .scroll-cue { display: none; } }
 
+
+/* recompile-nudge */
