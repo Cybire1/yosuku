@@ -477,11 +477,6 @@ export default function HomePage() {
             <span className="l2">before the room reads itself.</span>
           </h1>
 
-          <p className="hero-sub">
-            Call the next bell: BTC higher or lower. Gas-free testnet trading,
-            powered by DeepBook Predict.
-          </p>
-
           <div className="hero-cta-row">
             <Link href="/markets" className="btn btn-primary" data-cursor="hover">
               Launch app {'\u2197'}

@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import AddFunds from './AddFunds';
 import CreditWelcome from './CreditWelcome';
+import ThemeToggle from './ThemeToggle';
 import TradingBalanceModal from './TradingBalanceModal';
 import { useToast } from './Toast';
 import { useDUSDCBalance, useTradingVaultBalance } from '@/lib/sui/hooks';
@@ -260,6 +261,7 @@ export default function Header() {
           </div>
 
           <div className="header-right">
+            <ThemeToggle />
             {mounted && address && (
               <button
                 onClick={() => setShowBalance(true)}

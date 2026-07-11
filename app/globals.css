@@ -3603,36 +3603,284 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
 }
 
 /* ───────── Light Mode (beta) ───────── */
+/* ══════════════════════════════════════════════════════════════════════════
+   CREAM LIGHT MODE — the brand-film palette, brought into the app.
+   #F4EEE3 paper · #141210 ink · #D93E1F vermilion · #2E6B4F matcha.
+
+   Most of the app re-skins for free: tailwind.config maps gray-*, bg, and
+   vermilion to the CSS vars flipped below (so 830 text-gray-* + bg-bg + every
+   vermilion usage follow automatically). The gray ramp is INVERTED — low
+   numbers → ink (text), high numbers → raised cream surfaces — which preserves
+   contrast semantics (text-gray-400/500 stay readable; bg-gray-900 becomes a
+   light card). The literal white/black/neutral utilities (not var-backed) get
+   explicit overrides below.
+   ══════════════════════════════════════════════════════════════════════════ */
 [data-theme="light"] {
-  --bg: #FAFAF9;
-  --white: #1A1612;
-  --black: #FAFAF9;
-  --gray-400: #6B6B6B;
-  --gray-500: #888;
-  --gray-600: #999;
-  --gray-700: #BBB;
+  --black: #F4EEE3;   /* used as a background in places */
+  --bg:    #F4EEE3;
+  --white: #141210;   /* used as foreground in places */
+
+  /* inverted warm ramp: 50 = darkest ink … 950 = lightest raised surface */
+  --gray-50:  #17130E;
+  --gray-100: #211C16;
+  --gray-200: #2E2821;
+  --gray-300: #453E33;
+  --gray-400: #5E574B;  /* muted text — strong contrast on cream */
+  --gray-500: #7C7466;  /* labels / dim text (also the films' INK_DIM family) */
+  --gray-600: #9A9080;  /* faint text / soft dividers */
+  --gray-700: #C4BAA6;  /* hairline dividers */
+  --gray-800: #ECE3D2;  /* recessed surface / border surface */
+  --gray-900: #F6F0E4;  /* card surface */
+  --gray-950: #FBF7EE;  /* raised surface, just above paper */
+
+  --vermilion:   #D93E1F;
+  --vermilion-d: #B83214;
+  --profit: #2E6B4F;    /* matcha — the neon mint is unreadable on cream */
+  --loss:   #C2381F;    /* warm red, legible on cream */
 }
+
 [data-theme="light"] body {
-  background: #FAFAF9;
-  color: #1A1612;
+  background: #F4EEE3;
+  color: #141210;
 }
+
+/* ── literal foreground / background utilities (not var-backed) ── */
+[data-theme="light"] .text-white { color: #141210; }
+[data-theme="light"] .text-black { color: #F4EEE3; }
+
+/* SOLID vermilion buttons keep LIGHT text in both themes — the .text-white →
+   ink flip must NOT darken a label sitting on a saturated fill (black-on-orange
+   reads cheap). Vermilion TINT surfaces (bg-vermilion/[0.08]) are excluded — ink
+   is correct there. Also pins the dark dapp-kit modal's text (it never flips). */
+[data-theme="light"] .btn-primary,
+[data-theme="light"] .bg-vermilion.text-white,
+[data-theme="light"] .bg-vermilion .text-white { color: #FBF7EE !important; }
+[data-theme="light"] [data-dapp-kit] {
+  --dapp-kit-colors-primaryButton: #FBF7EE !important; /* light label on vermilion button */
+  --dapp-kit-colors-body: #F4EEE3 !important;          /* light text on the dark connect modal */
+  --dapp-kit-colors-bodyMuted: #9A9080 !important;
+}
+
+/* white-at-opacity text (used HEAVILY for muted labels) → ink at boosted alpha.
+   Ink on cream reads fainter than white on ink at the same %, so each step is
+   lifted for legibility. Covers fixed steps + the common arbitrary values. */
+[data-theme="light"] .text-white\/90,
+[data-theme="light"] .text-white\/80,
+[data-theme="light"] .text-white\/75,
+[data-theme="light"] .text-white\/70,
+[data-theme="light"] .text-white\/65 { color: rgba(20,18,16,0.80); }
+[data-theme="light"] .text-white\/60,
+[data-theme="light"] .text-white\/55,
+[data-theme="light"] .text-white\/50,
+[data-theme="light"] .text-white\/45,
+[data-theme="light"] .text-white\/40 { color: rgba(20,18,16,0.62); }
+[data-theme="light"] .text-white\/35,
+[data-theme="light"] .text-white\/30,
+[data-theme="light"] .text-white\/\[0\.3\],
+[data-theme="light"] .text-white\/25 { color: rgba(20,18,16,0.50); }
+[data-theme="light"] .text-white\/20,
+[data-theme="light"] .text-white\/18,
+[data-theme="light"] .text-white\/15,
+[data-theme="light"] .text-white\/\[0\.18\] { color: rgba(20,18,16,0.40); }
+[data-theme="light"] .text-white\/10 { color: rgba(20,18,16,0.30); }
+/* hover targets that brighten to white → darken to ink */
+[data-theme="light"] .hover\:text-white:hover { color: #141210; }
+[data-theme="light"] .hover\:text-white\/75:hover,
+[data-theme="light"] .hover\:text-white\/70:hover { color: rgba(20,18,16,0.80); }
+/* placeholders keyed off white opacity → visible ink placeholders */
+[data-theme="light"] .placeholder\:text-white\/18::placeholder,
+[data-theme="light"] .placeholder\:text-white\/20::placeholder,
+[data-theme="light"] .placeholder\:text-white\/30::placeholder { color: rgba(20,18,16,0.34); }
+/* extra hairline alphas the base pass missed */
+[data-theme="light"] .border-white\/\[0\.07\],
+[data-theme="light"] .border-white\/\[0\.09\] { border-color: rgba(20,18,16,0.09); }
+[data-theme="light"] .bg-black { background-color: #F4EEE3; }
+[data-theme="light"] .bg-white { background-color: #141210; }
+
+/* dark neutral surfaces → raised cream cards (solid + translucent variants) */
+[data-theme="light"] .bg-neutral-950,
+[data-theme="light"] .bg-neutral-900,
 [data-theme="light"] .market-card,
-[data-theme="light"] .bg-bg {
-  background: #F5F5F0;
-}
+[data-theme="light"] .bg-bg { background-color: #FBF7EE; }
+[data-theme="light"] .bg-neutral-800 { background-color: #F6F0E4; }
 [data-theme="light"] .bg-neutral-900\/95,
 [data-theme="light"] .bg-neutral-900\/90,
-[data-theme="light"] .bg-neutral-900\/50 {
-  background: rgba(255, 255, 255, 0.95);
+[data-theme="light"] .bg-neutral-900\/80,
+[data-theme="light"] .bg-neutral-900\/70,
+[data-theme="light"] .bg-neutral-900\/60,
+[data-theme="light"] .bg-neutral-900\/50 { background-color: rgba(251,247,238,0.94); }
+
+/* frosted header / floating nav → warm translucent */
+[data-theme="light"] .header,
+[data-theme="light"] .mobile-bottom-nav { background: rgba(244,238,227,0.82); }
+
+/* hero sub-line: readable ink de-emphasis on cream (var(--gray-300) is too faint here) */
+[data-theme="light"] .hero-title .l2 { color: rgba(20,18,16,0.56); }
+[data-theme="light"] .hero-title .l2 em { color: #141210; border-bottom-color: rgba(20,18,16,0.35); }
+
+/* the UP-odds meter under the chart (hero + grid cards): dark band → soft cream inset.
+   Its fill gradient ended in var(--white) (→ ink in light); re-aim to a vermilion fade. */
+[data-theme="light"] .hero-chart-foot,
+[data-theme="light"] .mc-strip { background: rgba(20,18,16,0.035); border-top-color: rgba(20,18,16,0.08); }
+[data-theme="light"] .hero-chart-foot .ramp .bar,
+[data-theme="light"] .mc-strip .ramp .bar { background: rgba(20,18,16,0.10); }
+[data-theme="light"] .hero-chart-foot .ramp .fill,
+[data-theme="light"] .mc-strip .ramp .fill { background: linear-gradient(90deg, var(--vermilion), #E6A489); }
+
+/* the floating bell-countdown orb — a clean WHITE disc that lifts off the cream page
+   (a cream disc vanishes into it). A soft shadow gives the raised-control feel; the
+   inner text + arc auto-flip to ink via var(--white), which reads perfectly on white. */
+[data-theme="light"] .bell {
+  background: #FFFFFF;
+  border-color: rgba(20,18,16,0.08);
+  box-shadow: 0 10px 28px rgba(20,18,16,0.12);
 }
-[data-theme="light"] .text-white {
-  color: #1A1612;
-}
-[data-theme="light"] .border-white\/10,
+[data-theme="light"] .bell:hover { border-color: rgba(20,18,16,0.16); }
+[data-theme="light"] .bell .track { stroke: rgba(20,18,16,0.10); }
+
+/* ── /feed is an intentional DARK island — even in light mode the reel card stays black.
+   The light-mode ink overrides use descendant combinators, so they leak THROUGH the card
+   and darken its white labels into the black surface (the DOWN button + hints vanish).
+   Re-assert the true white palette scoped to .feed-card (extra class → wins on specificity),
+   preserving every opacity step so the hierarchy survives. vermilion stays a var → fine. */
+[data-theme="light"] .feed-card .text-white { color: #fff !important; }
+[data-theme="light"] .feed-card .text-white\/85 { color: rgba(255,255,255,0.85) !important; }
+[data-theme="light"] .feed-card .text-white\/80 { color: rgba(255,255,255,0.80) !important; }
+[data-theme="light"] .feed-card .text-white\/70 { color: rgba(255,255,255,0.70) !important; }
+[data-theme="light"] .feed-card .text-white\/45 { color: rgba(255,255,255,0.45) !important; }
+[data-theme="light"] .feed-card .text-white\/40 { color: rgba(255,255,255,0.40) !important; }
+[data-theme="light"] .feed-card .text-white\/35 { color: rgba(255,255,255,0.35) !important; }
+[data-theme="light"] .feed-card .text-white\/30 { color: rgba(255,255,255,0.30) !important; }
+[data-theme="light"] .feed-card .text-white\/10 { color: rgba(255,255,255,0.10) !important; }
+[data-theme="light"] .feed-card .border-white\/30 { border-color: rgba(255,255,255,0.30) !important; }
+[data-theme="light"] .feed-card .border-white\/15 { border-color: rgba(255,255,255,0.15) !important; }
+[data-theme="light"] .feed-card .border-white\/\[0\.1\] { border-color: rgba(255,255,255,0.10) !important; }
+[data-theme="light"] .feed-card .border-white\/\[0\.08\] { border-color: rgba(255,255,255,0.08) !important; }
+[data-theme="light"] .feed-card .bg-white\/\[0\.02\] { background-color: rgba(255,255,255,0.02) !important; }
+[data-theme="light"] .feed-card .bg-\[\#0a0807\] { background-color: #0a0807 !important; }
+
+/* ── white borders → ink hairlines (scaled by their alpha) ── */
 [data-theme="light"] .border-white\/5,
-[data-theme="light"] .border-white\/\[0\.08\] {
-  border-color: rgba(0, 0, 0, 0.08);
+[data-theme="light"] .border-white\/\[0\.05\],
+[data-theme="light"] .border-white\/\[0\.06\] { border-color: rgba(20,18,16,0.07); }
+[data-theme="light"] .border-white\/10,
+[data-theme="light"] .border-white\/\[0\.08\],
+[data-theme="light"] .border-white\/\[0\.1\] { border-color: rgba(20,18,16,0.11); }
+[data-theme="light"] .border-white\/15,
+[data-theme="light"] .border-white\/20 { border-color: rgba(20,18,16,0.16); }
+[data-theme="light"] .border-white\/25,
+[data-theme="light"] .border-white\/30 { border-color: rgba(20,18,16,0.22); }
+[data-theme="light"] .border-white\/40,
+[data-theme="light"] .border-white\/50 { border-color: rgba(20,18,16,0.32); }
+
+/* hover-border variants */
+[data-theme="light"] .hover\:border-white\/20:hover,
+[data-theme="light"] .hover\:border-white\/25:hover,
+[data-theme="light"] .hover\:border-white\/30:hover { border-color: rgba(20,18,16,0.22); }
+[data-theme="light"] .hover\:border-white\/40:hover { border-color: rgba(20,18,16,0.32); }
+
+/* ── white background tints (subtle surfaces + hovers) → ink tints ── */
+[data-theme="light"] .bg-white\/\[0\.02\],
+[data-theme="light"] .bg-white\/\[0\.03\] { background-color: rgba(20,18,16,0.03); }
+[data-theme="light"] .bg-white\/5,
+[data-theme="light"] .bg-white\/\[0\.05\],
+[data-theme="light"] .bg-white\/\[0\.06\] { background-color: rgba(20,18,16,0.05); }
+[data-theme="light"] .bg-white\/10,
+[data-theme="light"] .bg-white\/\[0\.08\],
+[data-theme="light"] .bg-white\/\[0\.1\] { background-color: rgba(20,18,16,0.08); }
+[data-theme="light"] .hover\:bg-white\/5:hover,
+[data-theme="light"] .hover\:bg-white\/\[0\.03\]:hover,
+[data-theme="light"] .hover\:bg-white\/\[0\.05\]:hover { background-color: rgba(20,18,16,0.05); }
+[data-theme="light"] .hover\:bg-white\/10:hover { background-color: rgba(20,18,16,0.08); }
+
+/* divider borders using var-backed grays already flip; ring/shadow on ink go soft */
+[data-theme="light"] .shadow-\[0_0_0_1px_rgba\(255\,255\,255\,0\.06\)\] { box-shadow: 0 0 0 1px rgba(20,18,16,0.08); }
+
+/* arbitrary near-black surfaces (drawers, panels, cards using bg-[#0…]) → raised cream */
+[data-theme="light"] .bg-\[\#050505\],
+[data-theme="light"] .bg-\[\#070708\],
+[data-theme="light"] .bg-\[\#08080a\],
+[data-theme="light"] .bg-\[\#08080b\],
+[data-theme="light"] .bg-\[\#0a0807\],
+[data-theme="light"] .bg-\[\#0a0a0a\],
+[data-theme="light"] .bg-\[\#0b0b0e\],
+[data-theme="light"] .bg-\[\#0c0c0c\],
+[data-theme="light"] .bg-\[\#0c0c0e\],
+[data-theme="light"] .bg-\[\#0c0c0f\],
+[data-theme="light"] .bg-\[\#0d0d10\],
+[data-theme="light"] .bg-\[\#0e0e11\] { background-color: #FBF7EE; }
+
+/* ── DARK ISLANDS ──────────────────────────────────────────────────────────
+   A subtree marked data-theme="dark" is a photographic dark surface (the
+   Settlement Receipt, The Call card, the share-card previews) that must keep
+   TRUE light-on-dark ink even when the PAGE is in light mode. These mirror the
+   light remap above at equal specificity but LATER in source order, so inside
+   an island they win the tie; outside an island (page = dark) they only ever
+   re-assert the values Tailwind already produces, so they are a no-op there. */
+[data-theme="dark"] .text-white { color: #fff; }
+[data-theme="dark"] .text-white\/90 { color: rgba(255,255,255,0.90); }
+[data-theme="dark"] .text-white\/80 { color: rgba(255,255,255,0.80); }
+[data-theme="dark"] .text-white\/75 { color: rgba(255,255,255,0.75); }
+[data-theme="dark"] .text-white\/70 { color: rgba(255,255,255,0.70); }
+[data-theme="dark"] .text-white\/65 { color: rgba(255,255,255,0.65); }
+[data-theme="dark"] .text-white\/60 { color: rgba(255,255,255,0.60); }
+[data-theme="dark"] .text-white\/55 { color: rgba(255,255,255,0.55); }
+[data-theme="dark"] .text-white\/50 { color: rgba(255,255,255,0.50); }
+[data-theme="dark"] .text-white\/45 { color: rgba(255,255,255,0.45); }
+[data-theme="dark"] .text-white\/40 { color: rgba(255,255,255,0.40); }
+[data-theme="dark"] .text-white\/35 { color: rgba(255,255,255,0.35); }
+[data-theme="dark"] .text-white\/30,
+[data-theme="dark"] .text-white\/\[0\.3\] { color: rgba(255,255,255,0.30); }
+[data-theme="dark"] .text-white\/25 { color: rgba(255,255,255,0.25); }
+[data-theme="dark"] .text-white\/20 { color: rgba(255,255,255,0.20); }
+[data-theme="dark"] .text-white\/18,
+[data-theme="dark"] .text-white\/\[0\.18\] { color: rgba(255,255,255,0.18); }
+[data-theme="dark"] .text-white\/15 { color: rgba(255,255,255,0.15); }
+[data-theme="dark"] .text-white\/10 { color: rgba(255,255,255,0.10); }
+[data-theme="dark"] .hover\:text-white:hover { color: #fff; }
+[data-theme="dark"] .placeholder\:text-white\/18::placeholder,
+[data-theme="dark"] .placeholder\:text-white\/20::placeholder,
+[data-theme="dark"] .placeholder\:text-white\/30::placeholder { color: rgba(255,255,255,0.30); }
+/* borders inside islands stay pale hairlines */
+[data-theme="dark"] .border-white\/5,
+[data-theme="dark"] .border-white\/\[0\.05\],
+[data-theme="dark"] .border-white\/\[0\.06\],
+[data-theme="dark"] .border-white\/\[0\.07\] { border-color: rgba(255,255,255,0.06); }
+[data-theme="dark"] .border-white\/10,
+[data-theme="dark"] .border-white\/\[0\.08\],
+[data-theme="dark"] .border-white\/\[0\.09\],
+[data-theme="dark"] .border-white\/\[0\.1\] { border-color: rgba(255,255,255,0.09); }
+[data-theme="dark"] .border-white\/15 { border-color: rgba(255,255,255,0.15); }
+[data-theme="dark"] .border-white\/20 { border-color: rgba(255,255,255,0.20); }
+[data-theme="dark"] .border-white\/25 { border-color: rgba(255,255,255,0.25); }
+[data-theme="dark"] .border-white\/30 { border-color: rgba(255,255,255,0.30); }
+[data-theme="dark"] .hover\:border-white\/20:hover { border-color: rgba(255,255,255,0.20); }
+[data-theme="dark"] .hover\:border-white\/25:hover { border-color: rgba(255,255,255,0.25); }
+[data-theme="dark"] .hover\:border-white\/30:hover { border-color: rgba(255,255,255,0.30); }
+/* white background tints inside islands stay white tints */
+[data-theme="dark"] .bg-white\/\[0\.02\] { background-color: rgba(255,255,255,0.02); }
+[data-theme="dark"] .bg-white\/\[0\.03\] { background-color: rgba(255,255,255,0.03); }
+[data-theme="dark"] .bg-white\/5,
+[data-theme="dark"] .bg-white\/\[0\.05\],
+[data-theme="dark"] .bg-white\/\[0\.06\] { background-color: rgba(255,255,255,0.05); }
+[data-theme="dark"] .bg-white\/10,
+[data-theme="dark"] .bg-white\/\[0\.08\],
+[data-theme="dark"] .bg-white\/\[0\.1\] { background-color: rgba(255,255,255,0.08); }
+[data-theme="dark"] .hover\:bg-white\/\[0\.06\]:hover,
+[data-theme="dark"] .hover\:bg-white\/10:hover { background-color: rgba(255,255,255,0.08); }
+
+/* ── the ☀/☾ toggle (base is theme-agnostic; sits in .header-right) ── */
+.theme-toggle {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px; border-radius: 9999px;
+  border: 1px solid rgba(255,255,255,0.10);
+  color: var(--gray-400); background: transparent;
+  transition: color .18s var(--ease), border-color .18s var(--ease), background .18s var(--ease);
 }
+.theme-toggle:hover { color: var(--white); border-color: rgba(255,255,255,0.25); background: rgba(255,255,255,0.03); }
+.theme-toggle svg { width: 16px; height: 16px; }
+[data-theme="light"] .theme-toggle { border-color: rgba(20,18,16,0.14); }
+[data-theme="light"] .theme-toggle:hover { border-color: rgba(20,18,16,0.28); background: rgba(20,18,16,0.04); }
 
 /* responsive */
 @media (max-width: 1100px) {

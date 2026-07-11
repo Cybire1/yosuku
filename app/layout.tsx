@@ -4,6 +4,7 @@ import "./globals.css";
 import WalletProvider from "@/components/WalletProvider";
 import { ToastProvider } from "@/components/Toast";
 import { Analytics } from "@vercel/analytics/next";
+import { THEME_INIT_SCRIPT } from "@/lib/theme";
 
 const sora = Sora({
   variable: "--font-sora",
@@ -70,6 +71,9 @@ export default function RootLayout({
         className={`${sora.variable} ${inter.variable} ${jetbrainsMono.variable} ${notoSerifJP.variable} antialiased cursor-custom`}
         suppressHydrationWarning
       >
+        {/* Paint the resolved theme on the FIRST frame (no flash of dark). Runs
+            synchronously before the app renders; mirrors lib/theme resolveTheme. */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
         <WalletProvider>
           <ToastProvider>
             {children}
