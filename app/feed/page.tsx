@@ -187,11 +187,11 @@ function ReelCard({
               <div className="mb-2.5 text-center font-mono text-[9px] uppercase tracking-[0.18em] text-white/35">winning side pays $1 · settled by the oracle at the bell</div>
               <div className="grid grid-cols-2 gap-3">
                 <Link href="/markets" data-cursor="hover" style={{ outline: 'none' }}
-                  className="rounded-2xl border border-vermilion/60 bg-vermilion/10 py-4 text-center font-display text-lg font-bold text-vermilion transition-colors hover:bg-vermilion/20">
+                  className="rounded-xl border border-vermilion/60 bg-vermilion/10 py-3 text-center font-display text-base font-bold text-vermilion transition-colors hover:bg-vermilion/20">
                   UP
                 </Link>
                 <Link href="/markets" data-cursor="hover" style={{ outline: 'none' }}
-                  className="rounded-2xl border border-white/15 bg-white/[0.02] py-4 text-center font-display text-lg font-bold text-white/80 transition-colors hover:border-white/30 hover:text-white">
+                  className="rounded-xl border border-white/15 bg-white/[0.02] py-3 text-center font-display text-base font-bold text-white/80 transition-colors hover:border-white/30 hover:text-white">
                   DOWN
                 </Link>
               </div>
