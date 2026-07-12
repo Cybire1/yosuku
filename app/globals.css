@@ -3881,6 +3881,11 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
 .theme-toggle svg { width: 16px; height: 16px; }
 [data-theme="light"] .theme-toggle { border-color: rgba(20,18,16,0.14); }
 [data-theme="light"] .theme-toggle:hover { border-color: rgba(20,18,16,0.28); background: rgba(20,18,16,0.04); }
+/* the header is tight on phones — shrink the ☀/☾ toggle so it doesn't crowd the balance pill */
+@media (max-width: 640px) {
+  .theme-toggle { width: 28px; height: 28px; }
+  .theme-toggle svg { width: 14px; height: 14px; }
+}
 
 /* responsive */
 @media (max-width: 1100px) {

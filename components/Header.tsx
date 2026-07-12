@@ -17,7 +17,7 @@ import {
   Trophy,
   Twitter,
   WalletCards,
-  Zap,
+  GalleryVerticalEnd,
   type LucideIcon,
 } from 'lucide-react';
 import AddFunds from './AddFunds';
@@ -56,7 +56,7 @@ const AUTO_FUND_AT = 1_000_000; // 1 DUSDC (6 decimals)
 
 const MOBILE_NAV: NavLink[] = [
   { name: 'Markets', href: '/markets', icon: ChartLine },
-  { name: 'Feed', href: '/feed', icon: Zap },
+  { name: 'Feed', href: '/feed', icon: GalleryVerticalEnd },
   { name: 'Earn', href: '/earn', icon: BadgeDollarSign },
   { name: 'Strategies', href: '/strategies', icon: Bot },
   { name: 'Portfolio', href: '/portfolio', icon: WalletCards },
