@@ -23,6 +23,10 @@ import {
 } from '@/lib/sui/predict624Client';
 import { BAND_USD, minMintMs } from '@/lib/sui/ticket624';
 import { fmtBell624 } from '@/lib/sui/bell624';
+import { fetchTakes, type FeedTake } from '@/lib/sui/takeBoard';
+import TakeReelCard from '@/components/TakeReelCard';
+import TakeComposer624 from '@/components/TakeComposer624';
+import { Feather } from 'lucide-react';
 
 const CAD_WORD: Record<Cadence624, string> = { '1m': '1-min', '5m': '5-min', '1h': '1-hour' };
 
@@ -31,6 +35,21 @@ const usd2 = (n: number) =>
   `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const clockHM = (ms: number) =>
   new Date(ms).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
+
+// Weave community takes into the live-market reel so the snap scroll (the moat)
+// is one stream of actionable bells + social calls: market, take, market, take…
+// then whichever list has a tail. Starting on a live market keeps the first card
+// actionable.
+type ReelItem = { kind: 'market'; market: Market624 } | { kind: 'take'; take: FeedTake };
+function weaveReel(rounds: Market624[], takes: FeedTake[]): ReelItem[] {
+  const out: ReelItem[] = [];
+  const max = Math.max(rounds.length, takes.length);
+  for (let i = 0; i < max; i++) {
+    if (i < rounds.length) out.push({ kind: 'market', market: rounds[i] });
+    if (i < takes.length) out.push({ kind: 'take', take: takes[i] });
+  }
+  return out;
+}
 
 // ─── one reel — a framed portrait card, chart as the hero ───
 
@@ -244,6 +263,19 @@ export default function FeedPage() {
   }, []);
   const liveSeries = useMemo(() => (spot != null && series.length > 1 ? [...series, spot] : series), [series, spot]);
 
+  // community takes (poll 20s) — the social half of the reel
+  const [takes, setTakes] = useState<FeedTake[]>([]);
+  const [composerOpen, setComposerOpen] = useState(false);
+  const reloadTakes = useMemo(
+    () => () => { fetchTakes(30).then(setTakes).catch(() => {}); },
+    [],
+  );
+  useEffect(() => {
+    reloadTakes();
+    const iv = setInterval(reloadTakes, 20_000);
+    return () => clearInterval(iv);
+  }, [reloadTakes]);
+
   // enterable rounds, soonest bell first
   const rounds = useMemo(() => {
     const nowMs = now || Date.now();
@@ -252,6 +284,8 @@ export default function FeedPage() {
       .sort((a, b) => a.expiry - b.expiry);
   }, [markets, now]);
 
+  const reel = useMemo(() => weaveReel(rounds, takes), [rounds, takes]);
+
   return (
     <>
       <Marquee />
@@ -259,14 +293,34 @@ export default function FeedPage() {
       <main className="feed-snap" style={{ outline: 'none' }}>
         {!loaded ? (
           <EmptyReel>reading the bell…</EmptyReel>
-        ) : rounds.length === 0 ? (
+        ) : reel.length === 0 ? (
           <EmptyReel>between bells — a new round rolls every minute.</EmptyReel>
         ) : (
-          rounds.map((m) => (
-            <ReelCard key={m.id} market={m} spot={spot} series={liveSeries} now={now} />
-          ))
+          reel.map((item) =>
+            item.kind === 'market' ? (
+              <ReelCard key={item.market.id} market={item.market} spot={spot} series={liveSeries} now={now} />
+            ) : (
+              <TakeReelCard key={`take-${item.take.blobId}-${item.take.tsMs}`} take={item.take} />
+            ),
+          )
         )}
       </main>
+
+      {/* Post a take — the social entry point. Anchored on the RIGHT RAIL, mid-card
+          (TikTok-style), so it never covers a card's bottom action row (UP/DOWN on
+          a market, "take the other side" on a take). Icon + label pill. */}
+      <button
+        onClick={() => setComposerOpen(true)}
+        aria-label="Post a take"
+        data-cursor="hover"
+        style={{ outline: 'none' }}
+        className="fixed right-3 top-1/2 z-40 inline-flex -translate-y-1/2 flex-col items-center gap-1 rounded-2xl bg-vermilion px-3 py-3 text-white shadow-[0_12px_32px_-8px_rgba(224,77,38,0.6)] transition-colors hover:bg-vermilion-d"
+      >
+        <Feather size={18} />
+        <span className="font-display text-[10px] font-bold leading-none">Take</span>
+      </button>
+
+      {composerOpen && <TakeComposer624 onClose={() => setComposerOpen(false)} onPosted={reloadTakes} />}
     </>
   );
 }
