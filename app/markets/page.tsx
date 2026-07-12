@@ -695,7 +695,6 @@ export default function MarketsPage() {
                 number="01"
                 title="Live now"
                 jp="開催中"
-                live
                 cadences={['1 min', '5 min', '1 hr']}
               />
               <div className="markets-grid markets-grid-live">
