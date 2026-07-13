@@ -131,7 +131,16 @@ export function useBell624(pollMs = 15_000): { nextBellMs: number | null; lastPr
   }, [pollMs]);
 
   useEffect(() => {
-    const tick = () => setNextBellMs(bells.find((e) => e > Date.now()) ?? null);
+    // "NEXT BELL" tracks the primary 5-minute cadence, so the chrome countdown
+    // coincides with the main 5-minute market card (the 1-minute markets ring
+    // every minute and are the thin/flaky ones — the keeper prefers 5m too).
+    // Falls back to the soonest bell of ANY cadence if no 5m is loaded.
+    const tick = () => {
+      const now = Date.now();
+      const future = bells.filter((e) => e > now);
+      const primary = future.find((e) => inferCadence624(e) === '5m');
+      setNextBellMs(primary ?? future[0] ?? null);
+    };
     tick();
     const iv = setInterval(tick, 1000);
     return () => clearInterval(iv);
