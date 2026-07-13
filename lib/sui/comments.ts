@@ -246,9 +246,13 @@ export async function ensureMarketRoom(opts: {
   return { ruleId, groupId };
 }
 
-/** Join a market's room from the browser wallet (gated on-chain). Returns the digest. */
-export async function joinRoom(opts: { signTransaction: SignTx; ruleId: string; groupId: string }): Promise<string> {
-  const tx = buildJoinRoomTx(opts.ruleId, opts.groupId);
-  const { digest } = await buildSignExecute(tx, opts.signTransaction);
+/** useSmartSubmit's submit: gas-free via the Onara sponsor, wallet fallback. */
+type SubmitFn = (factory: () => Transaction | Promise<Transaction>) => Promise<{ digest: string; sponsored: boolean }>;
+
+/** Join a market's room (gated on-chain). Gas-free via the Onara sponsor (wallet
+ *  fallback). The one on-chain step of The Room — posting comments is off-chain
+ *  (relayer/Walrus delivery), so it costs no gas at all. */
+export async function joinRoom(opts: { submit: SubmitFn; ruleId: string; groupId: string }): Promise<string> {
+  const { digest } = await opts.submit(() => buildJoinRoomTx(opts.ruleId, opts.groupId));
   return digest;
 }

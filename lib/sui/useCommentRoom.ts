@@ -15,6 +15,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useCurrentAccount, useSignTransaction } from '@mysten/dapp-kit';
 import { useWalletSigner } from './useWalletSigner';
+import { useSmartSubmit } from './useSmartSubmit';
 import {
   getMessagingClient,
   findMarketRoom,
@@ -41,6 +42,7 @@ export function useCommentRoom(marketId: string | null, open: boolean): UseComme
   const account = useCurrentAccount();
   const signer = useWalletSigner();
   const { mutateAsync: signTransaction } = useSignTransaction();
+  const { submit } = useSmartSubmit(); // join is gas-free via Onara (wallet fallback)
   // one client per session → one SessionKey prompt (see file header).
   const client = useMemo(() => (signer ? getMessagingClient(signer) : null), [signer]);
 
@@ -104,7 +106,7 @@ export function useCommentRoom(marketId: string | null, open: boolean): UseComme
     try {
       const room = await ensureMarketRoom({ client, signer, signTransaction, marketId });
       roomRef.current = room;
-      await joinRoom({ signTransaction, ruleId: room.ruleId, groupId: room.groupId });
+      await joinRoom({ submit, ruleId: room.ruleId, groupId: room.groupId });
       await new Promise((r) => setTimeout(r, RELAYER_SYNC_MS));
       const msgs = await fetchComments(client, signer, marketId, me);
       setComments(msgs);
