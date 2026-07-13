@@ -1,8 +1,0 @@
-{
-  "name": "yosuku-rooms",
-  "gasBudgetMax": 100000000,
-  "allowedCommandKinds": ["MoveCall"],
-  "targets": [
-    "0x7d22915a2bc60c2dcdb7055f69debe9d41e759b3f4e212330c17380e6795a658::market_room_rule::join"
-  ]
-}
