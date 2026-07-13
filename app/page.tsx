@@ -5,6 +5,7 @@ import Link from 'next/link';
 import Header from '@/components/Header';
 import Marquee from '@/components/Marquee';
 import GrainOverlay from '@/components/GrainOverlay';
+import ProofRecord from '@/components/ProofRecord';
 
 import { useBtcPrice } from '@/lib/hooks/useBtcPrice';
 import { useOracles, useProtocolStats } from '@/lib/sui/hooks';
@@ -65,13 +66,6 @@ function sparklineSVG(
 }
 
 /* ───────── Static data ───────── */
-const STAT_SPARKS = [
-  'M0,20 L8,14 L16,16 L24,8 L32,10 L40,4 L48,6 L56,2',
-  'M0,18 L8,12 L16,14 L24,6 L32,8 L40,4 L48,10 L56,3',
-  'M0,20 L8,16 L16,18 L24,10 L32,12 L40,6 L48,8 L56,4',
-  'M0,10 L8,8 L16,12 L24,6 L32,4 L40,8 L48,3 L56,2',
-];
-
 const ASSET_GLYPH: Record<string, string> = {
   BTC: '\u20BF', ETH: '\u039E', SOL: 'S', SUI: '\u25E2',
 };
@@ -427,14 +421,6 @@ export default function HomePage() {
   const filteredMarkets = marketTab === 'All' ? displayMarkets : displayMarkets.filter(m => m.asset === marketTab);
   const marketTabs = ['All', 'BTC'];
 
-  /* ── Stats band data from protocol ── */
-  const statsData = [
-    // count the LIVE 6-24 venue's future bells (the retired 4-16 oracles are archival)
-    { idx: '01', label: 'Markets live now', value: liveBells624 != null && liveBells624 > 0 ? String(liveBells624) : '\u2014', spark: STAT_SPARKS[0], meta: 'open for bets' },
-    { idx: '02', label: 'Oracle-settled', value: '100%', spark: STAT_SPARKS[1], meta: 'no committee, no disputes' },
-    { idx: '03', label: 'Players', value: protocolStats ? protocolStats.activeWallets.toLocaleString() : '\u2014', spark: STAT_SPARKS[2], meta: 'wallets in' },
-    { idx: '04', label: 'Settlement', value: '< 1s', spark: STAT_SPARKS[3], meta: 'sub-second, final' },
-  ];
 
   return (
     <div className="landing">
@@ -572,22 +558,7 @@ export default function HomePage() {
       </section>
 
       {/* ═══════ STATS BAND ═══════ */}
-      <section className="stats fade-up">
-        <div className="stats-jp">{'\u6570'}</div>
-        <div className="stats-grid">
-          {statsData.map(s => (
-            <div className="stat" key={s.idx}>
-              <span className="stat-idx">{s.idx}</span>
-              <span className="stat-label">{s.label}</span>
-              <span className="stat-value">{s.value}</span>
-              <svg className="stat-spark" viewBox="0 0 56 22" fill="none">
-                <path d={s.spark} stroke="var(--vermilion)" strokeWidth="1.2" strokeLinecap="round" />
-              </svg>
-              <span className="stat-meta">{s.meta}</span>
-            </div>
-          ))}
-        </div>
-      </section>
+      <ProofRecord liveMarkets={liveBells624} players={protocolStats?.activeWallets ?? null} />
 
       {/* ═══════ HOW IT WORKS ═══════ */}
       <section className="how" id="how">
