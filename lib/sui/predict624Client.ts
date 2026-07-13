@@ -320,26 +320,6 @@ export function buildWithdrawTx(p: {
  * Open-ended ranges use the sentinels (NEG_INF_TICK / POS_INF_TICK), but the FULL
  * open range is rejected on-chain (order.move EInvalidRange) — guarded here too.
  */
-/**
- * yosuku_rooms position gate — a `record` call folded into every bet PTB flips the
- * on-chain `has_bet` flag that unlocks that market's Room. Kept local (not imported
- * from comments.ts) so the core bet path doesn't pull in the messaging/Seal SDK.
- * `record` is idempotent per (user, market), so repeat bets are a safe no-op, and
- * it's atomic with the mint — the flag only sets if the bet actually lands.
- */
-const ROOMS_GATE = {
-  packageId: '0x7d22915a2bc60c2dcdb7055f69debe9d41e759b3f4e212330c17380e6795a658',
-  betRegistry: '0xea58c10b34bbb90f226208c5895b8f159870a9f60d33bc5a11e1972763503dc6',
-} as const;
-
-/** Append the position-gate record so this market's Room unlocks for the sender. */
-function appendRecordBet(tx: Transaction, marketId: string): void {
-  tx.moveCall({
-    target: `${ROOMS_GATE.packageId}::bet_registry::record`,
-    arguments: [tx.object(ROOMS_GATE.betRegistry), tx.pure.id(marketId)],
-  });
-}
-
 export function buildMintTx(p: {
   marketId: string;
   wrapperId: string;
@@ -396,7 +376,6 @@ export function buildMintTx(p: {
       tx.object(PREDICT624.clock),
     ],
   });
-  appendRecordBet(tx, p.marketId);
   return tx;
 }
 
@@ -460,9 +439,7 @@ export function buildCreateFundAndMint624(p: {
       tx.pure.u64(p.maxCostMicro), tx.pure.u64(p.maxProb1e9), tx.object(PREDICT624.accumulatorRoot), tx.object(PREDICT624.clock),
     ],
   });
-  // 4. record the position so this market's Room unlocks for the sender
-  appendRecordBet(tx, p.marketId);
-  // 5. share the account LAST — now it becomes the user's canonical shared AccountWrapper
+  // 4. share the account LAST — now it becomes the user's canonical shared AccountWrapper
   tx.moveCall({ target: `${PREDICT624.accountPackage}::account::share`, arguments: [wrapper] });
   return tx;
 }
@@ -521,7 +498,6 @@ export function buildTopUpAndMint624(p: {
       tx.pure.u64(p.maxCostMicro), tx.pure.u64(p.maxProb1e9), tx.object(PREDICT624.accumulatorRoot), tx.object(PREDICT624.clock),
     ],
   });
-  appendRecordBet(tx, p.marketId);
   return tx;
 }
 

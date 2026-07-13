@@ -11,7 +11,6 @@
     "0xdb3ef5a5129920e59c9b2ae25a77eddb48acd0e1c6307b97073f0e076016446e::expiry_market::load_live_pricer",
     "0xdb3ef5a5129920e59c9b2ae25a77eddb48acd0e1c6307b97073f0e076016446e::expiry_market::mint_exact_quantity",
     "0xdb3ef5a5129920e59c9b2ae25a77eddb48acd0e1c6307b97073f0e076016446e::expiry_market::mint_exact_amount",
-    "0xdb3ef5a5129920e59c9b2ae25a77eddb48acd0e1c6307b97073f0e076016446e::expiry_market::redeem_settled",
-    "0x7d22915a2bc60c2dcdb7055f69debe9d41e759b3f4e212330c17380e6795a658::bet_registry::record"
+    "0xdb3ef5a5129920e59c9b2ae25a77eddb48acd0e1c6307b97073f0e076016446e::expiry_market::redeem_settled"
   ]
 }
