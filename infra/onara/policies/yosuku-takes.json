@@ -1,0 +1,8 @@
+{
+  "name": "yosuku-takes",
+  "gasBudgetMax": 100000000,
+  "allowedCommandKinds": ["MoveCall"],
+  "targets": [
+    "0xeb4d4847d06a11a8ac30c91ca38cda6f690ac902712eef46992a67f706907343::take_board::post_take"
+  ]
+}
