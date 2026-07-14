@@ -25,6 +25,7 @@ import Footer from '@/components/Footer';
 import Marquee from '@/components/Marquee';
 import GrainOverlay from '@/components/GrainOverlay';
 import MarketCard from '@/components/MarketCard';
+import MarketRoom from '@/components/MarketRoom';
 import SectionHeader from '@/components/SectionHeader';
 import TheBell from '@/components/TheBell';
 import Tutorial from '@/components/Tutorial';
@@ -215,6 +216,7 @@ function Market624Card({
   now: number;
   onOpen: (market: Market624, side: Dir624 | null) => void;
 }) {
+  const [roomOpen, setRoomOpen] = useState(false);
   const msLeft = now > 0 ? market.expiry - now : null;
   const closing = msLeft != null && msLeft > 0 && msLeft <= minMintMs(market.cadence);
   const urgent = !closing && msLeft != null && msLeft < 5 * 60 * 1000;
@@ -223,6 +225,7 @@ function Market624Card({
   const question = strikeUp != null ? `BTC holds above ${fmtUsd0(strikeUp)}?` : 'BTC market';
 
   return (
+    <>
     <article
       className={`market-card ${urgent ? 'urgent' : ''}`}
       role="button"
@@ -326,7 +329,34 @@ function Market624Card({
           </button>
         </div>
       )}
+
+      <button
+        type="button"
+        className="mc-room"
+        data-cursor="hover"
+        aria-label="Open the room — bettors-only chat for this market"
+        onClick={(e) => {
+          e.stopPropagation();
+          setRoomOpen(true);
+        }}
+      >
+        <span className="mc-room-ico" aria-hidden>💬</span>
+        <span className="mc-room-label">The Room</span>
+        <span className="mc-room-hint">bettors only · encrypted</span>
+      </button>
     </article>
+    {roomOpen && (
+      <MarketRoom
+        marketId={market.id}
+        callLabel={`${question} · ${CADENCE_WORD[market.cadence]}`}
+        onClose={() => setRoomOpen(false)}
+        onBet={() => {
+          setRoomOpen(false);
+          onOpen(market, null);
+        }}
+      />
+    )}
+    </>
   );
 }
 
