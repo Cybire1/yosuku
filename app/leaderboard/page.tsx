@@ -148,9 +148,11 @@ export default function LeaderboardPage() {
                 of names.
               </h1>
               <p className="lb-hero-sub">
-                {meta.rankedTraders > 0
-                  ? `${meta.rankedTraders.toLocaleString()} traders closed positions in the last 24 hours.`
-                  : 'Loading rankings from on-chain trade data...'}
+                {lbLoading
+                  ? 'Reading on-chain trade data…'
+                  : meta.rankedTraders > 0
+                    ? `${meta.rankedTraders.toLocaleString()} traders closed positions in the last 24 hours.`
+                    : 'No positions have closed in the last 24 hours yet — the board fills as traders redeem settled bets.'}
                 {' '}Ranks use realized P&amp;L: redemption payout minus FIFO-matched entry cost.
               </p>
             </div>
@@ -193,7 +195,18 @@ export default function LeaderboardPage() {
           {/* Loading state */}
           {lbLoading && (
             <div style={{ textAlign: 'center', padding: '64px 0', fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'rgba(255,255,255,0.3)' }}>
-              Loading rankings from on-chain data...
+              Reading on-chain trade data…
+            </div>
+          )}
+
+          {/* Empty state — window is complete but no realized calls yet */}
+          {!lbLoading && rankings.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '96px 24px', fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'rgba(255,255,255,0.42)', lineHeight: 2 }}>
+              <div style={{ fontSize: '30px', marginBottom: '14px', opacity: 0.35 }}>◷</div>
+              No realized calls in this window yet.<br />
+              <span style={{ color: 'rgba(255,255,255,0.28)' }}>
+                The board ranks traders by realized P&amp;L, so names appear once settled positions are redeemed. Check back after the next few bells settle.
+              </span>
             </div>
           )}
 

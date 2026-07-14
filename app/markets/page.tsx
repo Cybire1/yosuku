@@ -745,15 +745,6 @@ export default function MarketsPage() {
                   ),
                 )}
               </div>
-              <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
-                <p className="font-mono text-[10px] leading-relaxed text-gray-600 max-w-2xl">
-                  Each side is priced live by the venue for its own $20-cushion band — UP and DOWN are
-                  different questions and don&apos;t sum to $1. Oracle-settled testnet markets; you can lose your stake.
-                </p>
-                <a href="/markets-live" className="font-mono text-[10px] text-gray-600 hover:text-gray-400 transition-colors whitespace-nowrap" data-cursor="hover">
-                  focused trading view ↗
-                </a>
-              </div>
             </section>
           )}
 

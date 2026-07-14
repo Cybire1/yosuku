@@ -114,13 +114,6 @@ function ReelCard({
 
   return (
     <section ref={cardRef} className="feed-card flex items-center justify-center px-3 pt-2 pb-[92px]">
-      {/* ambient vermilion glow behind the reel */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 opacity-70"
-        style={{ background: 'radial-gradient(52% 42% at 50% 34%, rgba(224,77,38,0.09), transparent 70%)' }}
-      />
-
       {/* the reel — framed portrait card floating on the near-black ground */}
       <div className="relative z-10 flex h-full w-full max-w-[460px] flex-col overflow-hidden rounded-[26px] border border-white/[0.1] shadow-[0_30px_120px_-30px_rgba(0,0,0,0.9)]"
         style={{ background: 'radial-gradient(130% 80% at 50% -8%, #16110d 0%, #0c0a08 44%, #080605 100%)' }}
@@ -314,10 +307,10 @@ export default function FeedPage() {
         aria-label="Post a take"
         data-cursor="hover"
         style={{ outline: 'none' }}
-        className="fixed right-3 top-1/2 z-40 inline-flex -translate-y-1/2 flex-col items-center gap-1 rounded-2xl bg-vermilion px-3 py-3 text-white shadow-[0_12px_32px_-8px_rgba(224,77,38,0.6)] transition-colors hover:bg-vermilion-d"
+        className="fixed right-4 top-1/2 z-40 inline-flex -translate-y-1/2 flex-col items-center gap-1.5 rounded-2xl bg-vermilion px-5 py-4 text-white shadow-[0_12px_32px_-10px_rgba(224,77,38,0.55)] transition-colors hover:bg-vermilion-d"
       >
-        <Feather size={18} />
-        <span className="font-display text-[10px] font-bold leading-none">Take</span>
+        <Feather size={24} />
+        <span className="font-display text-[13px] font-bold leading-none">Take</span>
       </button>
 
       {composerOpen && <TakeComposer624 onClose={() => setComposerOpen(false)} onPosted={reloadTakes} />}

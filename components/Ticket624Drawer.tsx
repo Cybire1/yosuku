@@ -919,10 +919,10 @@ export default function Ticket624Drawer({
               className={`w-full py-3 text-sm font-semibold transition-all rounded ${
                 !blocker && busy !== 'mint'
                   ? isRange
-                    ? 'bg-vermilion text-white hover:opacity-90 shadow-[0_6px_28px_-8px_var(--vermilion)]'
+                    ? 'bg-vermilion text-white hover:opacity-90 shadow-[0_3px_12px_-9px_var(--vermilion)]'
                     : dir === 'down'
-                      ? 'bg-loss text-white hover:opacity-90 shadow-[0_6px_28px_-8px_var(--loss)]'
-                      : 'bg-profit text-black hover:opacity-90 shadow-[0_6px_28px_-8px_var(--profit)]'
+                      ? 'bg-loss text-white hover:opacity-90 shadow-[0_3px_12px_-9px_var(--loss)]'
+                      : 'bg-profit text-black hover:opacity-90 shadow-[0_3px_12px_-9px_var(--profit)]'
                   : 'cursor-not-allowed bg-white/[0.06] text-gray-500'
               }`}
               data-cursor="hover"

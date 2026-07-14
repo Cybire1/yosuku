@@ -254,6 +254,9 @@ export default function EarnPage() {
                     </div>
                   ) : (
                     <>
+                      <p className="font-mono text-[11px] text-gray-500 mb-5 leading-relaxed">
+                        You receive PLP at the live share price. Its value rises as the vault earns the spread — and can dip if the vault takes losses.
+                      </p>
                       <div className="flex items-baseline justify-between mb-3">
                         <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-gray-600">Amount</span>
                         <span className="font-mono text-[10px] text-gray-600">wallet {fmt(walletDusdc)} DUSDC</span>
@@ -268,12 +271,9 @@ export default function EarnPage() {
                           <button key={a} onClick={() => setPlpAmount(a)} className={`rounded-lg py-2 font-mono text-xs border transition-all ${plpAmount === a ? 'bg-vermilion/15 border-vermilion/50 text-white' : 'border-white/10 text-gray-500 hover:text-gray-300'}`}>{a}</button>
                         ))}
                       </div>
-                      <button onClick={doDepositPlp} disabled={busy === 'plp-deposit'} className="w-full bg-white text-black font-semibold rounded-full py-3.5 hover:scale-[1.01] active:scale-[0.98] transition-transform disabled:opacity-60">
+                      <button onClick={doDepositPlp} disabled={busy === 'plp-deposit'} className="w-full bg-vermilion text-white font-semibold rounded-full py-3.5 hover:bg-vermilion-d active:scale-[0.98] transition-all disabled:opacity-60">
                         {busy === 'plp-deposit' ? 'Supplying…' : 'Supply DUSDC'}
                       </button>
-                      <p className="font-mono text-[11px] text-gray-600 mt-3.5 leading-relaxed">
-                        You receive PLP at the live share price. Its value rises as the vault earns the spread — and can dip if the vault takes losses.
-                      </p>
                     </>
                   )}
                 </div>
