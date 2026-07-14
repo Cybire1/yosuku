@@ -76,12 +76,33 @@ function mkMessagingClient(admin: ReturnType<typeof roomAdmin>) {
   });
 }
 
+/** Retry an admin tx on gas-coin / object-version staleness. The room-admin has one gas
+ *  coin, so concurrent room-opens race its version ("needs to be rebuilt because object …").
+ *  These are pre-execution input-check rejections (no state change), so rebuilding fresh is safe. */
+async function withRetry<T>(fn: () => Promise<T>, tries = 6): Promise<T> {
+  let lastErr: unknown;
+  for (let i = 0; i < tries; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      lastErr = e;
+      const msg = String((e as Error)?.message ?? e);
+      if (/rebuilt|reserved|conflict|equivocat|not available|checking transaction input|could not be locked|version/i.test(msg) && i < tries - 1) {
+        await new Promise((r) => setTimeout(r, 900 * (i + 1)));
+        continue;
+      }
+      throw e;
+    }
+  }
+  throw lastErr;
+}
+
 /** Ensure the rule holds ExtensionPermissionsAdmin so gated join() can grant Reader/Sender.
  *  Idempotent: older/partial rooms may lack it; if it's already present the re-grant aborts on
  *  vec_set::insert (already a member) — which we swallow. Any other error is real. */
 async function ensureGrant(client: ReturnType<typeof mkMessagingClient>, groupId: string, ruleId: string, admin: ReturnType<typeof roomAdmin>) {
   try {
-    await client.groups.grantPermissions({ signer: admin, groupId, member: ruleId, permissionTypes: [EXT_ADMIN] });
+    await withRetry(() => client.groups.grantPermissions({ signer: admin, groupId, member: ruleId, permissionTypes: [EXT_ADMIN] }));
   } catch (e) {
     const msg = String((e as Error)?.message ?? e);
     if (!/vec_set|insert|already|abort code: 0/i.test(msg)) throw e;
@@ -104,29 +125,32 @@ export async function POST(req: Request) {
     }
 
     // 1. create the messaging group (+ Seal DEK), deterministic id from the market.
-    await client.messaging.createAndShareGroup({ signer: admin, uuid: marketId, name: 'Yosuku market room' });
+    await withRetry(() => client.messaging.createAndShareGroup({ signer: admin, uuid: marketId, name: 'Yosuku market room' }));
     const groupId = String(client.messaging.derive.groupId({ uuid: marketId }));
 
     // 2. create + share our gated MarketRoomRule; read the created id from objectTypes.
-    const tx = new Transaction();
-    const rule = tx.moveCall({ target: `${ROOMS_PKG}::market_room_rule::new`, arguments: [tx.pure.id(groupId), tx.pure.id(marketId)] });
-    tx.moveCall({ target: `${ROOMS_PKG}::market_room_rule::share`, arguments: [rule] });
-    tx.setSenderIfNotSet(admin.toSuiAddress());
-    const bytes = await tx.build({ client: grpc });
-    const { signature } = await admin.signTransaction(bytes);
-    const res = (await grpc.executeTransaction({ transaction: bytes, signatures: [signature], include: { effects: true, objectTypes: true } })) as {
-      Transaction?: { status?: { success?: boolean; error?: unknown }; objectTypes?: Record<string, string> };
-      FailedTransaction?: { status?: { error?: unknown } };
-    };
-    const t = res.Transaction ?? res.FailedTransaction;
-    if (!(t as { status?: { success?: boolean } })?.status?.success) {
-      throw new Error(`rule creation failed: ${JSON.stringify((t as { status?: { error?: unknown } })?.status?.error)}`);
-    }
-    const ruleId = Object.entries(res.Transaction?.objectTypes ?? {}).find(([, ty]) => String(ty).includes('MarketRoomRule'))?.[0];
-    if (!ruleId) throw new Error('rule id not found among created objects');
+    const ruleId = await withRetry(async () => {
+      const tx = new Transaction();
+      const rule = tx.moveCall({ target: `${ROOMS_PKG}::market_room_rule::new`, arguments: [tx.pure.id(groupId), tx.pure.id(marketId)] });
+      tx.moveCall({ target: `${ROOMS_PKG}::market_room_rule::share`, arguments: [rule] });
+      tx.setSenderIfNotSet(admin.toSuiAddress());
+      const bytes = await tx.build({ client: grpc });
+      const { signature } = await admin.signTransaction(bytes);
+      const res = (await grpc.executeTransaction({ transaction: bytes, signatures: [signature], include: { effects: true, objectTypes: true } })) as {
+        Transaction?: { status?: { success?: boolean; error?: unknown }; objectTypes?: Record<string, string> };
+        FailedTransaction?: { status?: { error?: unknown } };
+      };
+      const t = res.Transaction ?? res.FailedTransaction;
+      if (!(t as { status?: { success?: boolean } })?.status?.success) {
+        throw new Error(`rule creation failed: ${JSON.stringify((t as { status?: { error?: unknown } })?.status?.error)}`);
+      }
+      const rid = Object.entries(res.Transaction?.objectTypes ?? {}).find(([, ty]) => String(ty).includes('MarketRoomRule'))?.[0];
+      if (!rid) throw new Error('rule id not found among created objects');
+      return rid;
+    });
 
     // 3. grant the rule ExtensionPermissionsAdmin so gated join() can add members.
-    await client.groups.grantPermissions({ signer: admin, groupId, member: ruleId, permissionTypes: [EXT_ADMIN] });
+    await withRetry(() => client.groups.grantPermissions({ signer: admin, groupId, member: ruleId, permissionTypes: [EXT_ADMIN] }));
 
     return NextResponse.json({ ruleId, groupId });
   } catch (e) {
