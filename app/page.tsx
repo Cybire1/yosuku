@@ -5,7 +5,6 @@ import Link from 'next/link';
 import Header from '@/components/Header';
 import Marquee from '@/components/Marquee';
 import GrainOverlay from '@/components/GrainOverlay';
-import ProofRecord from '@/components/ProofRecord';
 
 import { useBtcPrice } from '@/lib/hooks/useBtcPrice';
 import { useOracles, useProtocolStats } from '@/lib/sui/hooks';
@@ -556,9 +555,6 @@ export default function HomePage() {
           <span>scroll</span>
         </div>
       </section>
-
-      {/* ═══════ STATS BAND ═══════ */}
-      <ProofRecord liveMarkets={liveBells624} players={protocolStats?.activeWallets ?? null} />
 
       {/* ═══════ HOW IT WORKS ═══════ */}
       <section className="how" id="how">

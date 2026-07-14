@@ -11,6 +11,7 @@ import { useMemo } from 'react';
 import { useCurrentAccount, useSignTransaction, useSignPersonalMessage } from '@mysten/dapp-kit';
 import { Transaction } from '@mysten/sui/transactions';
 import { Ed25519PublicKey } from '@mysten/sui/keypairs/ed25519';
+import { fromBase64 } from '@mysten/sui/utils';
 import type { Signer } from '@mysten/sui/cryptography';
 
 /** A `Signer` backed by the connected wallet, or null when no wallet is connected. */
@@ -39,6 +40,25 @@ export function useWalletSigner(): Signer | null {
       signPersonalMessage: async (message: Uint8Array) => {
         const r = await signMsg({ message });
         return { signature: r.signature, bytes: r.bytes };
+      },
+      // The messaging SDK builds a Transaction and calls this to sign+execute it.
+      // Keypairs have it from the base Signer; a wallet adapter must implement it.
+      // Mirrors @mysten/sui's Signer.signAndExecuteTransaction, but the WALLET builds
+      // + signs (its returned bytes are what got signed), then we execute those bytes.
+      signAndExecuteTransaction: async ({
+        transaction,
+        client,
+      }: {
+        transaction: Transaction;
+        client: { core: { executeTransaction: (a: unknown) => Promise<unknown> } };
+      }) => {
+        transaction.setSenderIfNotSet(account.address);
+        const r = await signTx({ transaction });
+        return client.core.executeTransaction({
+          transaction: fromBase64(r.bytes),
+          signatures: [r.signature],
+          include: { transaction: true, effects: true },
+        });
       },
     };
     return signer as unknown as Signer;
