@@ -21,11 +21,11 @@ export function useWalletSigner(): Signer | null {
 
   return useMemo(() => {
     if (!account) return null;
-    // Most Sui wallets are Ed25519; the raw account public key bytes construct it.
-    const publicKey = new Ed25519PublicKey(account.publicKey);
     const signer = {
       getKeyScheme: () => 'ED25519' as const,
-      getPublicKey: () => publicKey,
+      // lazy: construct the PublicKey only when actually needed, so a non-Ed25519
+      // wallet (zkLogin/passkey/secp256k1) can't throw during render.
+      getPublicKey: () => new Ed25519PublicKey(account.publicKey),
       toSuiAddress: () => account.address,
       // raw sign isn't available from a wallet; the SDK never calls it for our flow.
       sign: async () => { throw new Error('raw sign() is unsupported for a wallet signer'); },
