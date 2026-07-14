@@ -570,23 +570,6 @@ export default function MarketsPage() {
         <span className="crop bl" />
         <span className="crop br" />
 
-        <span className="hero-meta tl">
-          LAT 35.6762
-          <span className="ln">LON 139.6503 / TOKYO</span>
-        </span>
-        <span className="hero-meta tr">
-          EDITION 04 / OF 2026
-          <span className="ln">SUI · TESTNET</span>
-        </span>
-        <span className="hero-meta bl">
-          PLATE M-04
-          <span className="ln">FLOOR · OPEN</span>
-        </span>
-        <span className="hero-meta br">
-          R/N 624-2026-Q3
-          <span className="ln">1M / 5M / 1H CADENCE</span>
-        </span>
-
         <div className="container">
           <div className="breadcrumb">
             <a href="/" data-cursor="hover">Home</a>

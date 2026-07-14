@@ -163,8 +163,6 @@ export default function EarnPage() {
         <span className="crop tl" /><span className="crop tr" /><span className="crop bl" /><span className="crop br" />
         {/* bottom corner metas removed — the live panel carries those numbers now, and they
             collided with the panel's lower edge at ~1280px */}
-        <span className="hero-meta tl">VAULT V-04<span className="ln">PROTOCOL LIQUIDITY</span></span>
-        <span className="hero-meta tr">EDITION 04 / 2026<span className="ln">SUI · TESTNET</span></span>
 
         <div className="container">
           <div className="breadcrumb">

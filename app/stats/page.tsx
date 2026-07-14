@@ -108,10 +108,6 @@ export default function StatsPage() {
       {/* ── HERO: the 5-second answer to "can they get users?" ── */}
       <section className="page-hero">
         <span className="crop tl" /><span className="crop tr" /><span className="crop bl" /><span className="crop br" />
-        <span className="hero-meta tl">PROOF · 実証<span className="ln">LIVE ON-CHAIN</span></span>
-        <span className="hero-meta tr">EDITION 04 / 2026<span className="ln">SUI · TESTNET</span></span>
-        <span className="hero-meta bl">VERIFIABLE<span className="ln">NOTHING SELF-REPORTED</span></span>
-        <span className="hero-meta br">{t ? `UPDATED ${ago(t.updatedAt)}` : 'LIVE'}<span className="ln">AUTO · 30s</span></span>
 
         <div className="container">
           <div className="breadcrumb">
