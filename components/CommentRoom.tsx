@@ -50,6 +50,7 @@ export default function CommentRoom({
   onPost,
   onBet,
   busy,
+  error,
   connectSlot,
 }: {
   /** the call this room is about, e.g. "▼ BTC under $64,316" */
@@ -61,6 +62,8 @@ export default function CommentRoom({
   onPost?: (text: string) => void;
   onBet?: () => void;
   busy?: boolean;
+  /** surfaced join/post error, shown inline instead of failing silently */
+  error?: string | null;
   /** a <ConnectButton/> passed in for the 'connect' state */
   connectSlot?: ReactNode;
 }) {
@@ -135,6 +138,11 @@ export default function CommentRoom({
             <button onClick={onJoin} disabled={gate === 'joining'} style={{ outline: 'none' }} className="mt-1 rounded-full bg-vermilion px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-vermilion-d disabled:opacity-60">
               {gate === 'joining' ? 'Joining…' : 'Join the room'}
             </button>
+            {error && (
+              <code className="mt-2 block max-h-28 w-full overflow-auto rounded-lg border border-white/[0.08] bg-black/40 px-3 py-2 text-left font-mono text-[10px] leading-relaxed text-vermilion/80 break-all">
+                {error}
+              </code>
+            )}
           </div>
         )}
 

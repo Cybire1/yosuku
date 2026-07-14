@@ -34,6 +34,8 @@ export interface UseCommentRoom {
   gate: RoomGate;
   comments: RoomComment[];
   busy: boolean;
+  /** surfaced join/post failure (so the UI can show it instead of failing silently) */
+  error: string | null;
   join: () => Promise<void>;
   post: (text: string) => Promise<void>;
 }
@@ -49,6 +51,7 @@ export function useCommentRoom(marketId: string | null, open: boolean): UseComme
   const [gate, setGate] = useState<RoomGate>('connect');
   const [comments, setComments] = useState<RoomComment[]>([]);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const roomRef = useRef<{ ruleId: string; groupId: string } | null>(null);
   const me = account?.address;
 
@@ -102,6 +105,7 @@ export function useCommentRoom(marketId: string | null, open: boolean): UseComme
 
   const join = useCallback(async () => {
     if (!marketId || !client || !signer) return;
+    setError(null);
     setGate('joining');
     try {
       const room = await ensureMarketRoom({ client, signer, signTransaction, marketId });
@@ -113,6 +117,7 @@ export function useCommentRoom(marketId: string | null, open: boolean): UseComme
       setGate('joined');
     } catch (e) {
       console.error('[room] join failed', e);
+      setError(`Join failed: ${String((e as Error)?.message ?? e).slice(0, 240)}`);
       setGate('joinable');
     }
   }, [marketId, client, signer, signTransaction, me]);
@@ -120,16 +125,18 @@ export function useCommentRoom(marketId: string | null, open: boolean): UseComme
   const post = useCallback(async (text: string) => {
     if (!marketId || !client || !signer) return;
     setBusy(true);
+    setError(null);
     try {
       await postComment(client, signer, marketId, text);
       const msgs = await fetchComments(client, signer, marketId, me);
       setComments(msgs);
     } catch (e) {
       console.error('[room] post failed', e);
+      setError(`Post failed: ${String((e as Error)?.message ?? e).slice(0, 240)}`);
     } finally {
       setBusy(false);
     }
   }, [marketId, client, signer, me]);
 
-  return { gate, comments, busy, join, post };
+  return { gate, comments, busy, error, join, post };
 }

@@ -42,13 +42,14 @@ const sheetBg = { background: 'radial-gradient(130% 90% at 50% -10%, #16110c 0%,
 
 /** The live room — hooks + UI. If any of this throws during render, the boundary catches it. */
 function RoomInner({ marketId, callLabel, onClose, onBet }: RoomProps) {
-  const { gate, comments, busy, join, post } = useCommentRoom(marketId, true);
+  const { gate, comments, busy, error, join, post } = useCommentRoom(marketId, true);
   return (
     <CommentRoom
       callLabel={callLabel}
       gate={gate}
       comments={comments}
       busy={busy}
+      error={error}
       onClose={onClose}
       onJoin={join}
       onPost={post}
