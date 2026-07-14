@@ -66,22 +66,42 @@ async function findMarketRoom(marketId: string): Promise<{ ruleId: string; group
   return null;
 }
 
+function mkMessagingClient(admin: ReturnType<typeof roomAdmin>) {
+  const seal = new SealClient({ suiClient: grpc, serverConfigs: SEAL_SERVERS.map((objectId) => ({ objectId, weight: 1 })), verifyKeyServers: false });
+  return createSuiStackMessagingClient(grpc, {
+    seal,
+    encryption: { sessionKey: { signer: admin } },
+    relayer: { relayerUrl: RELAYER_URL },
+    packageConfig: { messaging: TESTNET_SUI_STACK_MESSAGING_PACKAGE_CONFIG, permissionedGroups: TESTNET_SUI_GROUPS_PACKAGE_CONFIG },
+  });
+}
+
+/** Ensure the rule holds ExtensionPermissionsAdmin so gated join() can grant Reader/Sender.
+ *  Idempotent: older/partial rooms may lack it; if it's already present the re-grant aborts on
+ *  vec_set::insert (already a member) — which we swallow. Any other error is real. */
+async function ensureGrant(client: ReturnType<typeof mkMessagingClient>, groupId: string, ruleId: string, admin: ReturnType<typeof roomAdmin>) {
+  try {
+    await client.groups.grantPermissions({ signer: admin, groupId, member: ruleId, permissionTypes: [EXT_ADMIN] });
+  } catch (e) {
+    const msg = String((e as Error)?.message ?? e);
+    if (!/vec_set|insert|already|abort code: 0/i.test(msg)) throw e;
+  }
+}
+
 export async function POST(req: Request) {
   try {
     const { marketId } = (await req.json()) as { marketId?: string };
     if (!marketId) return NextResponse.json({ error: 'marketId required' }, { status: 400 });
 
-    const existing = await findMarketRoom(marketId);
-    if (existing) return NextResponse.json(existing);
-
     const admin = roomAdmin();
-    const seal = new SealClient({ suiClient: grpc, serverConfigs: SEAL_SERVERS.map((objectId) => ({ objectId, weight: 1 })), verifyKeyServers: false });
-    const client = createSuiStackMessagingClient(grpc, {
-      seal,
-      encryption: { sessionKey: { signer: admin } },
-      relayer: { relayerUrl: RELAYER_URL },
-      packageConfig: { messaging: TESTNET_SUI_STACK_MESSAGING_PACKAGE_CONFIG, permissionedGroups: TESTNET_SUI_GROUPS_PACKAGE_CONFIG },
-    });
+    const client = mkMessagingClient(admin);
+
+    const existing = await findMarketRoom(marketId);
+    if (existing) {
+      // self-heal rooms created before the grant worked (else join aborts ENotPermitted).
+      await ensureGrant(client, existing.groupId, existing.ruleId, admin);
+      return NextResponse.json(existing);
+    }
 
     // 1. create the messaging group (+ Seal DEK), deterministic id from the market.
     await client.messaging.createAndShareGroup({ signer: admin, uuid: marketId, name: 'Yosuku market room' });
