@@ -4468,12 +4468,12 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
 
 /* Award-winning scroll cue: hero -> markets (auto-fades on scroll) */
 .scroll-cue {
-  position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%);
+  position: relative; width: max-content; margin: 20px auto 2px;
   display: flex; flex-direction: column; align-items: center; gap: 9px;
   z-index: 5; background: none; border: 0; cursor: pointer; padding: 6px 12px;
   opacity: 1; transition: opacity 0.45s var(--ease), transform 0.45s var(--ease);
 }
-.scroll-cue.gone { opacity: 0; transform: translate(-50%, 10px); pointer-events: none; }
+.scroll-cue.gone { opacity: 0; transform: translateY(10px); pointer-events: none; }
 .scroll-cue-label {
   font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.22em;
   text-transform: uppercase; color: var(--gray-500); transition: color 0.2s var(--ease);

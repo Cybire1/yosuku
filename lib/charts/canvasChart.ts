@@ -412,7 +412,10 @@ export function drawPriceLine(
       ctx.font = '10px JetBrains Mono, monospace';
       const tw = ctx.measureText(label).width;
       const pw = tw + 14, ph = 16;
-      const px = rightEdge - pw - 2, py = y - ph / 2;
+      // Anchor the strike pill to the LEFT edge: the current-price dot and the
+      // right-axis price labels both live on the right, so a right-anchored pill
+      // collides with them whenever spot ≈ strike. Left keeps it clear.
+      const px = padX + 2, py = y - ph / 2;
       ctx.fillStyle = 'rgba(38,38,44,0.95)';
       roundRectPath(ctx, px, py, pw, ph, 8); ctx.fill();
       ctx.fillStyle = 'rgba(255,255,255,0.85)';

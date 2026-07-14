@@ -803,7 +803,7 @@ export default function Ticket624Drawer({
                   className="min-w-0 flex-1 bg-transparent font-display text-[1.75rem] leading-none font-bold text-white tabular-nums outline-none placeholder:text-white/18 caret-vermilion"
                   aria-label="Bet amount in test USDC"
                 />
-                <span className="shrink-0 font-mono text-[9px] uppercase tracking-[0.12em] text-white/35">test USDC</span>
+                <span className="shrink-0 font-mono text-[9px] uppercase tracking-[0.12em] text-white/35">DUSDC</span>
               </div>
               <div className="mt-2.5 flex items-center justify-between gap-3">
                 <div className="flex gap-1">
