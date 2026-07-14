@@ -184,8 +184,7 @@ export default function EarnPage() {
                 <span className="accent">yield</span>.
               </h1>
               <p className="mt-6 max-w-md text-gray-400 leading-relaxed text-[15px]">
-                Supply DUSDC to the protocol vault and earn the trading spread on every market — passive, and
-                withdrawable anytime. The share price reflects yield as it accrues; it can dip if the vault takes losses.
+                Supply DUSDC, earn the trading spread from every market. Withdraw anytime — the share price can dip if the vault takes losses.
               </p>
             </div>
 
@@ -203,7 +202,6 @@ export default function EarnPage() {
                     {sharePrice != null ? sharePrice.toFixed(4) : '—'}
                     <span className="text-sm text-gray-500 font-mono font-normal ml-2">DUSDC / share</span>
                   </div>
-                  <div className="mt-1.5 font-mono text-[11px] text-gray-600">yield accrues into the share price</div>
                   <div className="mt-5 space-y-3.5">
                     <ReserveRow label="Vault value" value={vaultValue != null ? fmt(vaultValue) : '—'} unit="DUSDC" />
                     <ReserveRow label="Available to withdraw" value={availableWithdraw != null ? fmt(availableWithdraw) : '—'} unit="DUSDC" />
@@ -241,7 +239,7 @@ export default function EarnPage() {
 
           {tab === 'yield' ? (
             <>
-              <SectionHeader number="01" title="Supply the vault" desc="Earn the trading spread on every market. Your PLP rises in value as the vault earns." meta="withdraw anytime" />
+              <SectionHeader number="01" title="Supply the vault" desc="Your balance grows as the vault earns the spread." meta="withdraw anytime" />
               <div className="grid md:grid-cols-2 gap-5 mb-10">
                 {/* deposit */}
                 <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-6">
