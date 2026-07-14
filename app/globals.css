@@ -1163,13 +1163,15 @@ body.urgent::before {
 .mc-ticker {
   font-size: 14px; font-weight: 800; letter-spacing: 0.02em; color: var(--white);
 }
+/* Timeframe as an editorial accent, not a chip: the app's serif (a real
+   departure from the mono/sans elsewhere), vermilion, larger, lowercase italic.
+   No box — the color + serif carry it. */
 .mc-cadence {
-  font-family: var(--font-mono); font-size: 10px; font-weight: 700;
-  text-transform: uppercase; letter-spacing: 0.08em;
-  color: rgba(255,255,255,0.9);
-  border: 1px solid rgba(255,255,255,0.15);
-  background: rgba(255,255,255,0.05);
-  border-radius: 6px; padding: 3px 8px;
+  font-family: var(--font-jp);
+  font-size: 15px; font-weight: 500; font-style: italic;
+  text-transform: none; letter-spacing: 0.005em;
+  line-height: 1; color: var(--vermilion);
+  border: none; background: none; padding: 0; border-radius: 0;
 }
 .mc-countdown {
   font-family: var(--font-mono);
