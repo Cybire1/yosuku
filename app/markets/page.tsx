@@ -583,7 +583,8 @@ export default function MarketsPage() {
             <div className="hero-chart">
               <div className="hero-chart-head">
                 <div>
-                  <div className="flex items-center gap-3 mb-2.5">
+                  <div className="flex items-center gap-2.5 mb-2.5">
+                    <span aria-hidden className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full font-sans text-[17px] font-extrabold leading-none text-white" style={{ background: '#F7931A' }}>₿</span>
                     <span className="font-mono text-[9px] tracking-[0.16em] uppercase px-2.5 py-1 rounded-full border text-vermilion bg-vermilion/10 border-vermilion/20">Live</span>
                     <span className="font-mono text-[10px] tracking-[0.1em] uppercase text-gray-600">
                       BTC{heroMarket ? ` · ${CADENCE_WORD[heroMarket.cadence]}` : ''}
