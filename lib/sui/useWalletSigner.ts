@@ -10,9 +10,13 @@
 import { useMemo } from 'react';
 import { useCurrentAccount, useSignTransaction, useSignPersonalMessage } from '@mysten/dapp-kit';
 import { Transaction } from '@mysten/sui/transactions';
-import { Ed25519PublicKey } from '@mysten/sui/keypairs/ed25519';
+import { publicKeyFromRawBytes } from '@mysten/sui/verify';
 import { fromBase64 } from '@mysten/sui/utils';
-import type { Signer } from '@mysten/sui/cryptography';
+import type { Signer, SignatureScheme } from '@mysten/sui/cryptography';
+
+/** Infer the key scheme from the raw public-key length: 32=Ed25519, 33=Secp256k1,
+ *  ~61=zkLogin (Google/social login). Lets the adapter serve zkLogin wallets, not just Ed25519. */
+const schemeForPk = (len: number): SignatureScheme => (len === 32 ? 'ED25519' : len === 33 ? 'Secp256k1' : 'ZkLogin');
 
 /** A `Signer` backed by the connected wallet, or null when no wallet is connected. */
 export function useWalletSigner(): Signer | null {
@@ -23,10 +27,11 @@ export function useWalletSigner(): Signer | null {
   return useMemo(() => {
     if (!account) return null;
     const signer = {
-      getKeyScheme: () => 'ED25519' as const,
-      // lazy: construct the PublicKey only when actually needed, so a non-Ed25519
-      // wallet (zkLogin/passkey/secp256k1) can't throw during render.
-      getPublicKey: () => new Ed25519PublicKey(account.publicKey),
+      getKeyScheme: () => schemeForPk(account.publicKey.length),
+      // lazy + scheme-aware: build the right PublicKey (Ed25519 / zkLogin / secp256k1)
+      // from the raw bytes, only when needed — so zkLogin's 61-byte key doesn't get
+      // fed into an Ed25519 constructor ("Expected 32 bytes, got 61").
+      getPublicKey: () => publicKeyFromRawBytes(schemeForPk(account.publicKey.length), Uint8Array.from(account.publicKey)),
       toSuiAddress: () => account.address,
       // raw sign isn't available from a wallet; the SDK never calls it for our flow.
       sign: async () => { throw new Error('raw sign() is unsupported for a wallet signer'); },

@@ -238,8 +238,11 @@ export async function joinRoom(opts: { submit: SubmitFn; ruleId: string; groupId
       const { digest } = await opts.submit(() => buildJoinRoomTx(opts.ruleId, opts.groupId));
       return digest;
     } catch (e) {
-      lastErr = e;
       const msg = String((e as Error)?.message ?? e);
+      // already a member (re-join): join grants Reader/Sender, and vec_set::insert aborts
+      // "already present" — that means we're in. Treat as success, not a failure.
+      if (/vec_set|abort code: 0/i.test(msg)) return 'already-member';
+      lastErr = e;
       const retriable = /rebuilt|rejected as invalid|not available|version|equivocat|reserved|conflict/i.test(msg);
       if (!retriable || attempt === 3) throw e;
       await new Promise((r) => setTimeout(r, 1200 * (attempt + 1))); // let chain state settle, then repin
