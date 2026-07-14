@@ -77,7 +77,7 @@ export default function TakeCard({ take }: { take: FeedTake }) {
               <a href={SUISCAN_ADDR(take.author)} target="_blank" rel="noreferrer" className="block truncate font-mono text-[11px] text-white/80 hover:text-white transition-colors" data-cursor="hover">
                 {shortAddr(take.author)}
               </a>
-              <div className="font-mono text-[9px] text-white/40">{timeAgo(take.tsMs)}{take.cadence ? ` · ${take.cadence} bell` : ''}</div>
+              <div className="font-mono text-[9px] text-white/40">{timeAgo(take.tsMs)}{take.cadence ? ` · ${take.cadence} market` : ''}</div>
             </div>
           </div>
           {take.backed ? (

@@ -508,14 +508,14 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
               <div className="lg:sticky lg:top-[120px] rounded-2xl border border-white/[0.08] bg-neutral-900/60 p-6 text-center">
                 <p className="font-mono text-[10px] tracking-[0.16em] uppercase text-gray-500 mb-2">Trading closed</p>
                 <p className="text-sm text-gray-400 leading-relaxed">
-                  The bell has rung. The final price lands in a moment — if you won, your payout drops straight into your balance.
+                  The market's closed. The final price lands in a moment — if you won, your payout drops straight into your balance.
                 </p>
                 {nextRound && (
                   <button
                     onClick={() => router.push(`/markets/${nextRound.oracle_id}`)}
                     className="mt-5 w-full bg-vermilion hover:bg-vermilion-d text-white font-bold rounded-xl py-3 text-sm transition-colors"
                   >
-                    Go to the next bell →
+                    Go to the next round →
                   </button>
                 )}
               </div>

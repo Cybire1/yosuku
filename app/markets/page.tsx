@@ -293,7 +293,7 @@ function Market624Card({
           </div>
         ) : (
           <div className="mc-strip">
-            <span>CLOSING · NEXT ROUND AT THE BELL</span>
+            <span>CLOSING · NEXT ROUND SOON</span>
           </div>
         )}
       </div>

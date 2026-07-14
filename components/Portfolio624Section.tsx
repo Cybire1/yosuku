@@ -265,7 +265,7 @@ export default function Portfolio624Section() {
       // F6: translate the known aborts instead of dumping raw Move errors on the user.
       const raw = String(e instanceof Error ? e.message : e);
       const friendly = /not.?settled|assert_settled|ENotSettled/i.test(raw)
-        ? 'This round hasn’t settled yet — try again at the bell.'
+        ? 'This round hasn’t settled yet — try again at close.'
         : /order|position.*not.*found|EOrderNotFound|already/i.test(raw)
           ? 'Nothing to claim here — this position was already redeemed.'
           : `Claim failed: ${raw.slice(0, 140)}`;

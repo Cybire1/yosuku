@@ -116,7 +116,7 @@ export default function DocsPage() {
                 <div className="flex flex-col gap-1.5">
                   <a href="https://www.npmjs.com/package/@yosuku/deepbook-predict" target="_blank" rel="noreferrer" data-cursor="hover" className="font-mono text-[11px] text-gray-500 hover:text-vermilion transition-colors">npm ↗</a>
                   <a href="https://github.com/yosuku-lab/predict-sdk" target="_blank" rel="noreferrer" data-cursor="hover" className="font-mono text-[11px] text-gray-500 hover:text-vermilion transition-colors">source ↗</a>
-                  <Link href="/bell" data-cursor="hover" className="font-mono text-[11px] text-gray-500 hover:text-vermilion transition-colors">ring the bell ↗</Link>
+                  <Link href="/bell" data-cursor="hover" className="font-mono text-[11px] text-gray-500 hover:text-vermilion transition-colors">make the call ↗</Link>
                 </div>
               </div>
             </div>
@@ -141,12 +141,12 @@ export default function DocsPage() {
               </div>
 
               <h1 className="relative font-display font-extrabold tracking-tight leading-[1.02] mb-6 text-[clamp(2.4rem,6.5vw,4rem)]">
-                The bell, <span className="vermilion">documented</span>.
+                The close, <span className="vermilion">documented</span>.
               </h1>
 
               <p className="relative text-gray-400 text-[17px] leading-relaxed max-w-2xl">
                 Yosuku is a prediction market built on DeepBook Predict — Sui&apos;s volatility-surface-priced
-                binary market. Pick a side on BTC, the oracle settles at the bell, the math decides. Below:
+                binary market. Pick a side on BTC, the oracle settles at close, the math decides. Below:
                 how to trade, how to build on it, and how to verify every claim on-chain.
               </p>
 
@@ -161,7 +161,7 @@ export default function DocsPage() {
 
             <Section num="01" id="overview" eyebrow="For everyone" title="Overview">
               <p className="text-[17px] text-gray-300 leading-relaxed">
-                A market is one question — <em className="text-white not-italic">&ldquo;Will BTC be above $X at the bell?&rdquo;</em> —
+                A market is one question — <em className="text-white not-italic">&ldquo;Will BTC be above $X at close?&rdquo;</em> —
                 and you take <span className="text-white">UP</span> or <span className="text-white">DOWN</span>. There&apos;s no one on
                 the other side: the price is computed live from a volatility surface (SVI → N(d2)), so a quote exists from the first
                 second. At expiry the oracle reports the price, settlement is automatic, and winners are paid.
@@ -171,7 +171,7 @@ export default function DocsPage() {
             <Section num="02" id="how-it-works" eyebrow="For everyone" title="How a market works">
               <p>
                 No order book, no counterparty, no claims to argue over. A vault quotes both sides and takes the other end of
-                every trade; the oracle decides the outcome at the bell.
+                every trade; the oracle decides the outcome at close.
               </p>
               <KeyVals items={[
                 ['Sign in', 'Google (zkLogin) — no seed phrase — or any Sui wallet'],
@@ -182,7 +182,7 @@ export default function DocsPage() {
 
             <Section num="03" id="four-ways" eyebrow="For everyone" title="Four ways in">
               <Cards items={[
-                { name: 'Tap', href: '/bell', body: 'One-tap UP/DOWN on the next bell. The ritual.' },
+                { name: 'Tap', href: '/bell', body: 'One-tap UP/DOWN on the next round. The ritual.' },
                 { name: 'Markets', href: '/markets', body: 'Every live strike, priced. Open a position at any level.' },
                 { name: 'Pool', href: '/pool', body: 'Be the house — supply liquidity, earn the spread.' },
                 { name: 'Strategies', href: '/strategies', body: 'Buy a strategist&apos;s playbook — verifiable, Seal-gated.' },
@@ -278,7 +278,7 @@ const quote   = await predict.quote(oracle.oracle_id, 63_000);  // SVI · N(d2)`
             </section>
 
             <div className="mt-16 pt-8 border-t border-white/[0.06] flex flex-wrap items-center gap-x-7 gap-y-2">
-              <Link href="/bell" className="font-display font-semibold text-white hover:text-vermilion transition-colors">Ring the bell →</Link>
+              <Link href="/bell" className="font-display font-semibold text-white hover:text-vermilion transition-colors">Make the call →</Link>
               <a href="https://www.npmjs.com/package/@yosuku/deepbook-predict" target="_blank" rel="noreferrer" className="font-mono text-xs text-gray-500 hover:text-white transition-colors">npm ↗</a>
               <a href="https://x.com/yosuku0" target="_blank" rel="noreferrer" className="font-mono text-xs text-gray-500 hover:text-white transition-colors">@yosuku0 ↗</a>
             </div>

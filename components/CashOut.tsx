@@ -106,7 +106,7 @@ export default function CashOut({ oracleId, expiry, isActive, embedded = false }
     return embedded ? (
       <div className="text-center py-10 text-[12px] text-gray-500 font-mono leading-relaxed">
         No open positions in this market.<br />
-        Bets you place show here to cash out before the bell.
+        Bets you place show here to cash out before close.
       </div>
     ) : null;
   }
@@ -161,7 +161,7 @@ export default function CashOut({ oracleId, expiry, isActive, embedded = false }
       })}
       {error && <p className="text-[11px] text-loss break-words">{error}</p>}
       <p className="text-[10px] text-gray-600">
-        Exit at the live bid — no need to wait for the bell.
+        Exit at the live bid — no need to wait for close.
       </p>
     </div>
   );

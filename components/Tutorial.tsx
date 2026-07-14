@@ -21,7 +21,7 @@ const steps: TutorialStep[] = [
   {
     title: 'Welcome to Yosuku',
     jp: 'ようこそ',
-    description: 'A prediction market on BTC. Pick a side, the oracle settles at the bell, the math decides. This is testnet — test funds only, no real money.',
+    description: 'A prediction market on BTC. Pick a side, the oracle settles at close, the math decides. This is testnet — test funds only, no real money.',
   },
   {
     title: 'How a market works',

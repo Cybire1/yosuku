@@ -114,7 +114,7 @@ export default function TheBell({ targetTime, roundDuration = 900 }: TheBellProp
         />
       </svg>
       <div className="bell-inner">
-        <span className="bell-label">Bell</span>
+        <span className="bell-label">Close</span>
         <span className="bell-time">{timeStr}</span>
         <span className="bell-jp">締切</span>
       </div>

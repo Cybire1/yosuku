@@ -106,8 +106,8 @@ export default function BetPlacedCard({
           </h3>
           <p className="mt-1.5 font-mono text-[10px] leading-relaxed text-white/40">
             {isRange
-              ? 'Wins if BTC is inside the band at the bell.'
-              : `Wins if BTC is ${call.dir === 'up' ? 'above' : 'below'} the strike at the bell.`}
+              ? 'Wins if BTC is inside the band at close.'
+              : `Wins if BTC is ${call.dir === 'up' ? 'above' : 'below'} the strike at close.`}
           </p>
 
           {/* wager strip */}
@@ -127,7 +127,7 @@ export default function BetPlacedCard({
           </div>
           {call.lev > 1 && (
             <p className="mt-2 font-mono text-[8.5px] leading-relaxed text-white/40">
-              ✦ {fmtLeverage(call.lev)} leverage — can knock out before the bell.
+              ✦ {fmtLeverage(call.lev)} leverage — can knock out before close.
             </p>
           )}
 

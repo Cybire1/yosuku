@@ -8,7 +8,7 @@
 // where the order id is already in hand.
 //
 // Honest by construction: the strike defaults to live spot and is the user's to
-// set; nothing is auto-forced. The take is a call ("BTC under $X at the bell"),
+// set; nothing is auto-forced. The take is a call ("BTC under $X at close"),
 // not a fabricated prediction of odds.
 
 import { useEffect, useMemo, useState } from 'react';
@@ -199,7 +199,7 @@ export default function TakeComposer624({ onClose, onPosted }: { onClose: () => 
             <div className="font-mono text-[9px] uppercase tracking-[0.16em] text-white/35">You're calling</div>
             <div className="mt-0.5 font-mono text-[12px] text-vermilion">
               {dir === 'up' ? '▲' : dir === 'down' ? '▼' : '◆'} {bandLabel}
-              <span className="text-white/40"> · {market ? `${CAD_LABEL[market.cadence]} bell` : 'no live bell'}</span>
+              <span className="text-white/40"> · {market ? `${CAD_LABEL[market.cadence]} market` : 'no live market'}</span>
             </div>
           </div>
 
@@ -209,7 +209,7 @@ export default function TakeComposer624({ onClose, onPosted }: { onClose: () => 
             style={{ outline: 'none' }}
             className="mt-3 w-full rounded-full bg-vermilion px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-vermilion-d disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {busy ? 'Posting…' : !address ? 'Connect a wallet' : !market ? 'No live bell for this horizon' : 'Post take'}
+            {busy ? 'Posting…' : !address ? 'Connect a wallet' : !market ? 'No live market for this horizon' : 'Post take'}
           </button>
         </div>
       </div>

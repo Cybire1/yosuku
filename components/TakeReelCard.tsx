@@ -27,7 +27,7 @@ function timeAgo(ms: number): string {
 function callParts(t: FeedTake): { glyph: string; dir: string; band: string; other: string } {
   if (t.side === 2) {
     const band = t.lowerUsd != null && t.higherUsd != null ? `${usd0(t.lowerUsd)}–${usd0(t.higherUsd)}` : 'a band';
-    return { glyph: '◆', dir: 'RANGE', band: `BTC ${band}`, other: 'Trade this bell' };
+    return { glyph: '◆', dir: 'RANGE', band: `BTC ${band}`, other: 'Trade this market' };
   }
   if (t.side === 1) return { glyph: '▼', dir: 'DOWN', band: `BTC under ${usd0(t.strikeUsd)}`, other: 'Take the other side' };
   return { glyph: '▲', dir: 'UP', band: `BTC over ${usd0(t.strikeUsd)}`, other: 'Take the other side' };
@@ -71,7 +71,7 @@ export default function TakeReelCard({ take }: { take: FeedTake }) {
                 {shortAddr(take.author)}
               </a>
               <div className="font-mono text-[9px] uppercase tracking-[0.14em] text-white/35">
-                {timeAgo(take.tsMs)}{take.cadence ? ` · ${take.cadence} bell` : ''}
+                {timeAgo(take.tsMs)}{take.cadence ? ` · ${take.cadence} market` : ''}
               </div>
             </div>
           </div>

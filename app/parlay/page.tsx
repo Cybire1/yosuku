@@ -21,15 +21,15 @@ export default function ParlayPage() {
         {/* Hero */}
         <div className="mb-12">
           <span className="font-mono text-[10px] tracking-[0.22em] uppercase text-vermilion/80 block mb-4">
-            One ticket · many bells
+            One ticket · many rounds
           </span>
           <h1 className="page-title">
             Parlay<span className="accent">.</span>
           </h1>
-          <p className="page-title-jp">連勝 — the bell streak</p>
+          <p className="page-title-jp">連勝 — the close streak</p>
           <p className="page-subtitle mt-5">
             Stack two or three BTC bells into a single ticket. The odds multiply, so a small
-            stake chases a big payout — but every leg has to land. The instant one bell rings
+            stake chases a big payout — but every leg has to land. The instant one leg settles
             against you, the ticket is dead and your stake is the most you can lose.
           </p>
         </div>
@@ -40,7 +40,7 @@ export default function ParlayPage() {
             number="01"
             title="Build the streak"
             jp="連勝を組む"
-            desc="Pick the bells, set the lines, watch the multiplier climb."
+            desc="Pick the markets, set the lines, watch the multiplier climb."
           />
           <div className="mt-6">
             <ParlayBuilder />
@@ -53,7 +53,7 @@ export default function ParlayPage() {
             number="02"
             title="Your tickets"
             jp="あなたの馬券"
-            desc="Each leg ticks green as its bell rings — claim the instant the streak lands."
+            desc="Each leg ticks green as it settles — claim the instant the streak lands."
           />
           <div className="mt-6">
             <ParlaySlip />
@@ -82,7 +82,7 @@ export default function ParlayPage() {
               {
                 n: '③',
                 t: 'Pre-funded payout',
-                d: 'The full winning payout is set aside up front, so it can never come up short. Win the streak and claim it the instant the last bell settles.',
+                d: 'The full winning payout is set aside up front, so it can never come up short. Win the streak and claim it the instant the last leg settles.',
               },
             ].map((c) => (
               <div key={c.n} className="rounded-2xl border border-white/[0.08] bg-neutral-900/40 p-5">

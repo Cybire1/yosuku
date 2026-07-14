@@ -573,7 +573,7 @@ export default function PortfolioTable() {
             <Clock className="w-7 h-7 text-gray-600 mx-auto mb-3" />
             <p className="text-sm text-gray-400 mb-1">No open bets right now</p>
             <p className="text-xs text-gray-600 max-w-xs mx-auto leading-relaxed">
-              Place a bet and it lands here live with a countdown to the bell.
+              Place a bet and it lands here live with a countdown to close.
               {settledPositions.length > 0 && <> Your finished bets are under <button onClick={() => setTab('settled')} className="text-gray-400 hover:text-white underline underline-offset-2">Settled ({settledPositions.length})</button>.</>}
             </p>
           </div>

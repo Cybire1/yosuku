@@ -131,7 +131,7 @@ function ReelCard({
             <span className="grid h-8 w-8 place-items-center rounded-full border border-vermilion/40 font-mono text-[15px] text-vermilion">₿</span>
             <div className="leading-tight">
               <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-white/70">BTC · oracle-settled</div>
-              <div className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.14em] text-white/35">{CAD_WORD[market.cadence]} round · bell {clockHM(market.expiry)}</div>
+              <div className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.14em] text-white/35">{CAD_WORD[market.cadence]} round · closes {clockHM(market.expiry)}</div>
             </div>
           </div>
           <div className="text-right">
@@ -177,7 +177,7 @@ function ReelCard({
             </div>
           ) : (
             <>
-              <div className="mb-2.5 text-center font-mono text-[9px] uppercase tracking-[0.18em] text-white/35">winning side pays $1 · settled by the oracle at the bell</div>
+              <div className="mb-2.5 text-center font-mono text-[9px] uppercase tracking-[0.18em] text-white/35">winning side pays $1 · settled by the oracle at close</div>
               <div className="grid grid-cols-2 gap-3">
                 <Link href="/markets" data-cursor="hover" style={{ outline: 'none' }}
                   className="rounded-xl border border-vermilion/60 bg-vermilion/10 py-3 text-center font-display text-base font-bold text-vermilion transition-colors hover:bg-vermilion/20">
@@ -285,9 +285,9 @@ export default function FeedPage() {
       <Header />
       <main className="feed-snap" style={{ outline: 'none' }}>
         {!loaded ? (
-          <EmptyReel>reading the bell…</EmptyReel>
+          <EmptyReel>reading the market…</EmptyReel>
         ) : reel.length === 0 ? (
-          <EmptyReel>between bells — a new round rolls every minute.</EmptyReel>
+          <EmptyReel>between rounds — a new one rolls every minute.</EmptyReel>
         ) : (
           reel.map((item) =>
             item.kind === 'market' ? (

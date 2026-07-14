@@ -85,8 +85,8 @@ export default function Marquee() {
   for (const asset of ASSET_ORDER) {
     if (spots[asset]) items.push({ label: asset, value: usd(spots[asset], DECIMALS[asset] ?? 2), direction: dirs[asset] ?? '' });
   }
-  if (nextBellMs) items.push({ label: 'NEXT BELL', value: fmtBell624(nextBellMs - Date.now()), direction: '' });
-  if (lastPrint) items.push({ label: 'LAST BELL', value: `BTC ${usd(lastPrint.priceUsd, 2)}`, direction: '' });
+  if (nextBellMs) items.push({ label: 'NEXT CLOSE', value: fmtBell624(nextBellMs - Date.now()), direction: '' });
+  if (lastPrint) items.push({ label: 'LAST PRINT', value: `BTC ${usd(lastPrint.priceUsd, 2)}`, direction: '' });
   if (items.length === 0) items.push({ label: 'YOSUKU', value: '予測', direction: '' });
 
   const renderCells = (keyPrefix: string) =>

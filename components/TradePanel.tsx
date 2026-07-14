@@ -446,7 +446,7 @@ export default function TradePanel({
     // just closed (the dominant intermittent failure on a 15-min round).
     if (Date.now() >= Number(oracle.expiry) - CLOSING_MARGIN_MS) {
       setShowConfirmModal(false);
-      setErrorMsg('This round just closed — pick the next bell.');
+      setErrorMsg('This round just closed — pick the next round.');
       return;
     }
     if (askOutOfBounds) {
@@ -801,7 +801,7 @@ export default function TradePanel({
                 >
                   {selectedStrike ? `$${(selectedStrike / FLOAT_SCALING).toLocaleString()}` : '—'}
                 </button>{' '}
-                when the bell rings?
+                when it closes?
               </p>
             </div>
 
@@ -900,7 +900,7 @@ export default function TradePanel({
                 </div>
               )}
               <p className="text-[12px] text-gray-300 leading-snug mt-1">
-                Wins if {oracle.underlying_asset || 'BTC'} settles <span className="text-amber-400 font-bold">inside the band</span> at the bell{fairPrice != null && selectedStrike && rangeUpperStrike ? <> · <span className="font-mono">~{Math.round(fairPrice * 100)}% chance</span></> : ''}.
+                Wins if {oracle.underlying_asset || 'BTC'} settles <span className="text-amber-400 font-bold">inside the band</span> at close{fairPrice != null && selectedStrike && rangeUpperStrike ? <> · <span className="font-mono">~{Math.round(fairPrice * 100)}% chance</span></> : ''}.
               </p>
             </div>
             {/* Lower strike */}
@@ -1298,7 +1298,7 @@ export default function TradePanel({
         <button
           type="button"
           onClick={() => {
-            if (roundClosing) { setErrorMsg('This round just closed — pick the next bell.'); return; }
+            if (roundClosing) { setErrorMsg('This round just closed — pick the next round.'); return; }
             if (askOutOfBounds) { setErrorMsg('This price is too certain to bet on — pick a less certain line or the other side.'); setStep('error'); return; }
             if (leveragedRightSideLosesMoney) { setErrorMsg('Leverage is not safe on this price — even a win would collect less than your margin. Use 1x or pick a less certain line.'); setStep('error'); return; }
             setShowConfirmModal(true);
@@ -1341,7 +1341,7 @@ export default function TradePanel({
               Trade confirmed!
             </span>
           ) : roundClosing ? (
-            'This round just closed — pick the next bell'
+            'This round just closed — pick the next round'
           ) : askOutOfBounds ? (
             'Price too certain to bet'
           ) : leveragedRightSideLosesMoney ? (
@@ -1448,7 +1448,7 @@ export default function TradePanel({
                     <p className="text-xs text-new-mint mt-1">
                       Wins {(positionQty / DUSDC_MULTIPLIER).toFixed(2)} DUSDC if {oracle.underlying_asset || 'BTC'}{' '}
                       {side === 'UP' ? 'is above' : side === 'DOWN' ? 'is below' : 'settles in range of'}{' '}
-                      {selectedStrike ? `$${(selectedStrike / FLOAT_SCALING).toLocaleString()}` : 'the line'} at the bell
+                      {selectedStrike ? `$${(selectedStrike / FLOAT_SCALING).toLocaleString()}` : 'the line'} at close
                     </p>
                   )}
                 </>

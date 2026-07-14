@@ -70,14 +70,14 @@ const ASSET_GLYPH: Record<string, string> = {
 };
 
 const HOW_STEPS: HowStep[] = [
-  { num: '01', jp: '\u5E02\u5834', kicker: 'Choose', title: 'Pick a market.', body: 'Every BTC market has a strike price and a fifteen-minute window. One question: above or below at the bell.', meta: '15-min rounds \u00B7 continuous' },
+  { num: '01', jp: '\u5E02\u5834', kicker: 'Choose', title: 'Pick a market.', body: 'Every BTC market has a strike price and a fifteen-minute window. One question: above or below at close.', meta: '15-min rounds \u00B7 continuous' },
   { num: '02', jp: '\u53D6\u5F15', kicker: 'Commit', title: 'Take a side.', body: 'One press. Your position is committed to Sui through DeepBook Predict. No order book, just a binary stance and a fixed window.', meta: 'Binary \u00B7 Instant \u00B7 On-chain' },
   { num: '03', jp: '\u6C7A\u6E08', kicker: 'Settle', title: 'Settle on-chain.', body: 'When the window closes, the oracle reports the final price. Winning contracts pay 1 DUSDC per unit; losing contracts pay 0.', meta: 'Oracle-settled \u00B7 Binary \u00B7 Verifiable' },
 ];
 
 const FEATURES: FeatureItem[] = [
-  { act: '01', idx: 'I', title: 'Two sides. ', em: 'One press.', desc: 'Pick above or below. The bell rings in fifteen minutes, the oracle reports, the chain decides. No order books, no appeals.', keys: ['One-tap UP/DOWN', '15-min rounds', 'Oracle-settled'], jp: '\u53D6\u5F15' },
-  { act: '02', idx: 'II', title: 'Leave when ', em: 'you like.', desc: 'Exit at the live bid before the bell \u2014 no lock-ins. Every quote is computed on-chain, and you can re-derive it in your browser to the cent.', keys: ['Cash out anytime', 'On-chain quotes', 'Checkable pricing'], jp: '\u81EA\u7531' },
+  { act: '01', idx: 'I', title: 'Two sides. ', em: 'One press.', desc: 'Pick above or below. The market closes in fifteen minutes, the oracle reports, the chain decides. No order books, no appeals.', keys: ['One-tap UP/DOWN', '15-min rounds', 'Oracle-settled'], jp: '\u53D6\u5F15' },
+  { act: '02', idx: 'II', title: 'Leave when ', em: 'you like.', desc: 'Exit at the live bid before close \u2014 no lock-ins. Every quote is computed on-chain, and you can re-derive it in your browser to the cent.', keys: ['Cash out anytime', 'On-chain quotes', 'Checkable pricing'], jp: '\u81EA\u7531' },
   { act: '03', idx: 'III', title: 'A side, or ', em: 'a range.', desc: 'Call any strike, or bracket a band between two. The whole volatility surface is tradable \u2014 not one question, every question.', keys: ['Any strike', 'Range positions', 'Live vol surface'], jp: '\u7BC4\u56F2' },
   { act: '04', idx: 'IV', title: 'Be the ', em: 'house.', desc: 'Supply the pool that quotes every market and earn the spread on every round. The house is not a company \u2014 it is a vault you can join.', keys: ['PLP pool', 'Earn the spread', 'On-chain vault'], jp: '\u80F4\u5143' },
   { act: '05', idx: 'V', title: 'A keeper with ', em: 'rules.', desc: 'Our agent trades through a vault whose limits live in Move. The chain checks its math on every action \u2014 caps, allowlists, a daily stop. Verifiable, not configurable.', keys: ['Attested agent', 'On-chain caps', 'Audit trail'], jp: '\u756A\u4EBA' },

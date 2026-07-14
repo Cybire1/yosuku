@@ -593,7 +593,7 @@ export default function Ticket624Drawer({
               }
             />
             <p className="font-mono text-[9.5px] leading-relaxed text-white/30 mt-4">
-              Oracle-settled at the bell. Your payout lands in YOUR trading account — claim it from Portfolio once the market settles.
+              Oracle-settled at close. Your payout lands in YOUR trading account — claim it from Portfolio once the market settles.
             </p>
           </div>
         ) : (

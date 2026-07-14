@@ -128,11 +128,11 @@ export default function ParlayBuilder() {
     setLegs((prev) => prev.map((l) => (l.key === key ? { ...l, ...patch } : l)));
   }, []);
 
-  // One-tap "BTC bell streak": UP at the 3 soonest distinct bells.
+  // One-tap "BTC close streak": UP at the 3 soonest distinct bells.
   const loadStreakPreset = useCallback(() => {
     const picks = btcBells.slice(0, PARLAY_MAX_LEGS);
     if (picks.length < 2) {
-      toast('Need at least two live BTC bells for a streak parlay.', 'error');
+      toast('Need at least two live BTC markets for a streak parlay.', 'error');
       return;
     }
     setLegs(picks.map((o) => ({
@@ -240,7 +240,7 @@ export default function ParlayBuilder() {
       setStep('success');
       refreshBalance();
       toast(
-        `Parlay placed — ${legs.length} legs, ${stakeDisplay.toFixed(2)} → ${payoutDisplay.toFixed(0)} DUSDC if every bell rings your way.`,
+        `Parlay placed — ${legs.length} legs, ${stakeDisplay.toFixed(2)} → ${payoutDisplay.toFixed(0)} DUSDC if every leg lands.`,
         'success',
       );
       setTimeout(() => { setStep('idle'); setLegs([]); }, 3500);
@@ -281,13 +281,13 @@ export default function ParlayBuilder() {
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-vermilion/30 bg-vermilion/[0.06] text-vermilion text-[11px] font-bold uppercase tracking-wider hover:bg-vermilion/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Zap className="w-3 h-3" />
-            BTC bell streak
+            BTC close streak
           </button>
         </div>
 
         <div className="p-5 space-y-3">
           {oraclesLoading && legs.length === 0 ? (
-            <div className="py-12 text-center text-gray-600 text-sm font-mono">Loading bells…</div>
+            <div className="py-12 text-center text-gray-600 text-sm font-mono">Loading markets…</div>
           ) : legs.length === 0 ? (
             <div className="py-10 text-center">
               <p className="text-sm text-gray-400 mb-1">No legs yet</p>
@@ -326,7 +326,7 @@ export default function ParlayBuilder() {
               onClick={() => addLeg()}
               className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-dashed border-white/10 text-gray-500 text-xs font-bold uppercase tracking-wider hover:border-white/20 hover:text-gray-300 transition-colors"
             >
-              <Plus className="w-3.5 h-3.5" /> Add another bell
+              <Plus className="w-3.5 h-3.5" /> Add another market
             </button>
           )}
 
@@ -377,7 +377,7 @@ export default function ParlayBuilder() {
                   <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-400/[0.06] border border-amber-400/15">
                     <AlertCircle className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
                     <span className="text-[11px] text-amber-400/90 leading-snug">
-                      Legs share a BTC bell — odds adjusted for correlation.
+                      Legs share a BTC market — odds adjusted for correlation.
                     </span>
                   </div>
                 )}
@@ -456,7 +456,7 @@ export default function ParlayBuilder() {
                     onClick={() => setQuoteRetry((k) => k + 1)}
                     className="w-full text-center text-[11px] text-rose-400/90 underline underline-offset-2 hover:text-rose-300"
                   >
-                    A leg can&apos;t be priced (bell inactive or settled) — retry
+                    A leg can&apos;t be priced (market inactive or settled) — retry
                   </button>
                 )}
 
@@ -539,7 +539,7 @@ export default function ParlayBuilder() {
           <div className="mt-3 flex items-start gap-2 px-1">
             <Trophy className="w-3.5 h-3.5 text-gray-600 flex-shrink-0 mt-0.5" />
             <p className="text-[10px] text-gray-600 leading-relaxed">
-              Every leg must settle in the money. The instant one bell rings against you, the ticket is dead — your stake is the most you can lose.
+              Every leg must settle in the money. The instant one leg settles against you, the ticket is dead — your stake is the most you can lose.
             </p>
           </div>
         )}
@@ -640,8 +640,8 @@ function LegRow({
               >
                 <span className="text-white font-mono truncate">
                   {oracle
-                    ? <>BTC bell · <Countdown expiryMs={oracle.expiry} className="text-[11px]" /></>
-                    : 'bell settled — pick another'}
+                    ? <>BTC market · <Countdown expiryMs={oracle.expiry} className="text-[11px]" /></>
+                    : 'market settled — pick another'}
                 </span>
                 <ChevronDown className={`w-3 h-3 text-gray-500 flex-shrink-0 transition-transform ${showBells ? 'rotate-180' : ''}`} />
               </button>
@@ -652,7 +652,7 @@ function LegRow({
                     className="absolute z-20 mt-1 left-0 right-0 max-h-44 overflow-y-auto rounded-lg border border-white/[0.1] bg-neutral-900 shadow-xl scrollbar-hide"
                   >
                     {bells.length === 0 && (
-                      <div className="px-3 py-2 text-[11px] text-gray-600">No live BTC bells</div>
+                      <div className="px-3 py-2 text-[11px] text-gray-600">No live BTC markets</div>
                     )}
                     {bells.map((o) => (
                       <button
@@ -662,7 +662,7 @@ function LegRow({
                           o.oracle_id === leg.oracleId ? 'bg-white/10 text-white' : 'text-gray-400 hover:bg-white/5 hover:text-white'
                         }`}
                       >
-                        <span className="font-mono">BTC bell</span>
+                        <span className="font-mono">BTC market</span>
                         <span className="font-mono text-[10px] text-gray-500">
                           {formatCountdown(getTimeRemaining(o.expiry))}
                         </span>
