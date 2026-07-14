@@ -225,8 +225,25 @@ type SubmitFn = (factory: () => Transaction | Promise<Transaction>) => Promise<{
 
 /** Join a market's room (gated on-chain). Gas-free via the Onara sponsor (wallet
  *  fallback). The one on-chain step of The Room — posting comments is off-chain
- *  (relayer/Walrus delivery), so it costs no gas at all. */
+ *  (relayer/Walrus delivery), so it costs no gas at all.
+ *
+ *  Retries on stale-gas-coin errors: the sponsored path pins one random coin from
+ *  the sponsor pool, and its version can go stale under concurrency ("Transaction
+ *  needs to be rebuilt because object … changed"). Each retry rebuilds fresh and
+ *  repins a different coin, so a transient version race resolves itself. */
 export async function joinRoom(opts: { submit: SubmitFn; ruleId: string; groupId: string }): Promise<string> {
-  const { digest } = await opts.submit(() => buildJoinRoomTx(opts.ruleId, opts.groupId));
-  return digest;
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      const { digest } = await opts.submit(() => buildJoinRoomTx(opts.ruleId, opts.groupId));
+      return digest;
+    } catch (e) {
+      lastErr = e;
+      const msg = String((e as Error)?.message ?? e);
+      const retriable = /rebuilt|rejected as invalid|not available|version|equivocat|reserved|conflict/i.test(msg);
+      if (!retriable || attempt === 3) throw e;
+      await new Promise((r) => setTimeout(r, 1200 * (attempt + 1))); // let chain state settle, then repin
+    }
+  }
+  throw lastErr;
 }
