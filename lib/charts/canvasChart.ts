@@ -408,15 +408,17 @@ export function drawPriceLine(
     ctx.restore();
 
     const label = opts.targetLabel ?? 'Target';
-    ctx.font = '10px JetBrains Mono, monospace';
-    const tw = ctx.measureText(label).width;
-    const pw = tw + 14, ph = 16;
-    const px = rightEdge - pw - 2, py = y - ph / 2;
-    ctx.fillStyle = 'rgba(38,38,44,0.95)';
-    roundRectPath(ctx, px, py, pw, ph, 8); ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,0.85)';
-    ctx.textAlign = 'left';
-    ctx.fillText(label, px + 7, y + 3.5);
+    if (label) {
+      ctx.font = '10px JetBrains Mono, monospace';
+      const tw = ctx.measureText(label).width;
+      const pw = tw + 14, ph = 16;
+      const px = rightEdge - pw - 2, py = y - ph / 2;
+      ctx.fillStyle = 'rgba(38,38,44,0.95)';
+      roundRectPath(ctx, px, py, pw, ph, 8); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      ctx.textAlign = 'left';
+      ctx.fillText(label, px + 7, y + 3.5);
+    }
   }
 
   // Current-price dot + glow — in verdict mode it wears the current verdict

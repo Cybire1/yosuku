@@ -193,7 +193,7 @@ function Spark624({ series, target }: { series: number[]; target: number | null 
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     if (series.length >= 2) {
-      drawPriceLine(ref.current, series, { target: target ?? undefined, verdict: true, padX: 4, padTop: 6, padBot: 6 });
+      drawPriceLine(ref.current, series, { target: target ?? undefined, targetLabel: '', verdict: true, padX: 4, padTop: 6, padBot: 6 });
     }
   }, [series, target]);
   return <canvas ref={ref} />;
@@ -272,7 +272,6 @@ function Market624Card({
               </span>
             )}
           </div>
-          <span className="strike-meta">UP LINE {strikeUp != null ? fmtUsd0(strikeUp) : '···'}</span>
         </div>
 
         <div className="mc-spark">
@@ -707,7 +706,6 @@ export default function MarketsPage() {
               <SectionHeader
                 number="01"
                 title="Live now"
-                jp="開催中"
                 cadences={['1 min', '5 min', '1 hr']}
               />
               <div className="markets-grid markets-grid-live">
@@ -736,7 +734,6 @@ export default function MarketsPage() {
             <SectionHeader
               number="02"
               title="Previous venue"
-              jp="旧市場"
               desc="The 15-minute rounds on the previous DeepBook Predict testnet — kept for receipts and old positions. New bets belong above."
               meta={prevOpen ? 'shown' : 'collapsed'}
             />
