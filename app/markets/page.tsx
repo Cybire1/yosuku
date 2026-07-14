@@ -68,7 +68,8 @@ function RailPlaceholder({ cadence }: { cadence: Cadence624 }) {
       <div className="mc-head">
         <span className="mc-asset">
           <span className="glyph">₿</span>
-          BTC · {CADENCE_WORD[cadence]}
+          <span className="mc-ticker">BTC</span>
+          <span className="mc-cadence">{CADENCE_WORD[cadence]}</span>
         </span>
         <span className="mc-countdown">
           <span className="clock-dot" />
@@ -244,7 +245,8 @@ function Market624Card({
       <div className="mc-head">
         <span className="mc-asset">
           <span className="glyph">₿</span>
-          BTC · {CADENCE_WORD[market.cadence]}
+          <span className="mc-ticker">BTC</span>
+          <span className="mc-cadence">{CADENCE_WORD[market.cadence]}</span>
         </span>
         <span className={`mc-countdown ${urgent || closing ? 'urgent' : ''}`}>
           <span className="clock-dot" />
