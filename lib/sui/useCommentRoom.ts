@@ -13,7 +13,7 @@
 // personal-message prompt) and reused across probe/join/post/poll.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useCurrentAccount, useSignTransaction } from '@mysten/dapp-kit';
+import { useCurrentAccount } from '@mysten/dapp-kit';
 import { useWalletSigner } from './useWalletSigner';
 import { useSmartSubmit } from './useSmartSubmit';
 import {
@@ -43,7 +43,6 @@ export interface UseCommentRoom {
 export function useCommentRoom(marketId: string | null, open: boolean): UseCommentRoom {
   const account = useCurrentAccount();
   const signer = useWalletSigner();
-  const { mutateAsync: signTransaction } = useSignTransaction();
   const { submit } = useSmartSubmit(); // join is gas-free via Onara (wallet fallback)
   // one client per session → one SessionKey prompt (see file header).
   const client = useMemo(() => (signer ? getMessagingClient(signer) : null), [signer]);
@@ -108,7 +107,7 @@ export function useCommentRoom(marketId: string | null, open: boolean): UseComme
     setError(null);
     setGate('joining');
     try {
-      const room = await ensureMarketRoom({ client, signer, signTransaction, marketId });
+      const room = await ensureMarketRoom(marketId); // created server-side (gas-free for the user)
       roomRef.current = room;
       await joinRoom({ submit, ruleId: room.ruleId, groupId: room.groupId });
       await new Promise((r) => setTimeout(r, RELAYER_SYNC_MS));
@@ -120,7 +119,7 @@ export function useCommentRoom(marketId: string | null, open: boolean): UseComme
       setError(`Join failed: ${String((e as Error)?.message ?? e).slice(0, 240)}`);
       setGate('joinable');
     }
-  }, [marketId, client, signer, signTransaction, me]);
+  }, [marketId, client, signer, submit, me]);
 
   const post = useCallback(async (text: string) => {
     if (!marketId || !client || !signer) return;

@@ -18,10 +18,7 @@ import { SealClient } from '@mysten/seal';
 import { createSuiStackMessagingClient, TESTNET_SUI_STACK_MESSAGING_PACKAGE_CONFIG } from '@mysten/sui-stack-messaging';
 import { TESTNET_SUI_GROUPS_PACKAGE_CONFIG } from '@mysten/sui-groups';
 import type { RoomComment } from '@/components/CommentRoom';
-import { grpc, gql, buildSignExecute } from './modernClients';
-
-/** dapp-kit's `useSignTransaction().mutateAsync` — used for our raw Move PTBs. */
-type SignTx = (input: { transaction: Transaction }) => Promise<{ bytes: string; signature: string }>;
+import { grpc, gql } from './modernClients';
 
 // ─── live constants ───
 
@@ -51,8 +48,6 @@ export const ROOMS = {
   betRegistry: '0xea58c10b34bbb90f226208c5895b8f159870a9f60d33bc5a11e1972763503dc6',
 } as const;
 
-/** The permission a MarketRoomRule needs on its group so `join()` can add members. */
-const EXT_ADMIN = `${GROUPS_PACKAGE_ID}::permissioned_group::ExtensionPermissionsAdmin`;
 
 // ─── the gate check (VERIFIED — same gRPC-simulate proven on-chain) ───
 
@@ -209,41 +204,20 @@ export async function findMarketRoom(marketId: string): Promise<RoomRefs | null>
 }
 
 /**
- * Get the room for `marketId`, creating it once if it doesn't exist. Creation:
- * (1) SDK createAndShareGroup (messaging group + Seal DEK), (2) our MarketRoomRule
- * bound to (group, market), (3) grant the rule ExtensionPermissionsAdmin so gated
- * join() can add members. Steps 1+3 go through the SDK (Signer); step 2 is a raw
- * Move PTB via the app's gRPC exec path. Idempotent: a second caller finds it.
+ * Get the room for `marketId`, creating it once if it doesn't exist. Creation is
+ * done SERVER-SIDE (/api/room/ensure) by the app's own funded key, so users never
+ * pay gas to open a room — they only join (Onara-sponsored) and post (off-chain).
+ * Idempotent: the route returns the existing room if one already exists.
  */
-export async function ensureMarketRoom(opts: {
-  client: MessagingClient;
-  signer: Signer;
-  signTransaction: SignTx;
-  marketId: string;
-  name?: string;
-}): Promise<RoomRefs> {
-  const existing = await findMarketRoom(opts.marketId);
-  if (existing) return existing;
-
-  const client = opts.client;
-  const uuid = roomUuid(opts.marketId);
-  await client.messaging.createAndShareGroup({ signer: opts.signer, uuid, name: opts.name ?? 'Yosuku market room' });
-  const groupId = String(client.messaging.derive.groupId({ uuid }));
-
-  // create + share the gated rule, bound to (group, market).
-  const tx = new Transaction();
-  const rule = tx.moveCall({
-    target: `${ROOMS.packageId}::market_room_rule::new`,
-    arguments: [tx.pure.id(groupId), tx.pure.id(opts.marketId)],
+export async function ensureMarketRoom(marketId: string): Promise<RoomRefs> {
+  const res = await fetch('/api/room/ensure', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ marketId }),
   });
-  tx.moveCall({ target: `${ROOMS.packageId}::market_room_rule::share`, arguments: [rule] });
-  const { objectTypes } = await buildSignExecute(tx, opts.signTransaction);
-  const ruleId = Object.entries(objectTypes).find(([, ty]) => String(ty).includes('MarketRoomRule'))?.[0];
-  if (!ruleId) throw new Error('room rule id not found among created objects');
-
-  // grant the rule admin so join() can add members.
-  await client.groups.grantPermissions({ signer: opts.signer, groupId, member: ruleId, permissionTypes: [EXT_ADMIN] });
-  return { ruleId, groupId };
+  const data = (await res.json().catch(() => ({}))) as RoomRefs & { error?: string };
+  if (!res.ok || !data.ruleId) throw new Error(data.error ?? `room ensure failed (${res.status})`);
+  return { ruleId: data.ruleId, groupId: data.groupId };
 }
 
 /** useSmartSubmit's submit: gas-free via the Onara sponsor, wallet fallback. */
