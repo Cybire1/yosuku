@@ -524,12 +524,15 @@ export default function MarketsPage() {
   const heroCanvasRef = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     if (!heroCanvasRef.current || liveSeries.length < 2) return;
+    // Hide the strike pill on phones — it crowds the narrow chart and the strike
+    // is already in the headline. Re-evaluated ~1/s as liveSeries updates.
+    const narrow = typeof window !== 'undefined' && window.innerWidth <= 768;
     let raf = 0;
     const drawFrame = (t: number) => {
       if (!heroCanvasRef.current) return;
       drawPriceLine(heroCanvasRef.current, liveSeries, {
         target: heroStrike ?? undefined,
-        targetLabel: heroStrike != null ? `UP line · $${Math.round(heroStrike).toLocaleString()}` : undefined,
+        targetLabel: heroStrike != null && !narrow ? `UP line · $${Math.round(heroStrike).toLocaleString()}` : '',
         verdict: true,
         gridLines: true,
         axisRight: 60,
@@ -589,7 +592,7 @@ export default function MarketsPage() {
                       BTC{heroMarket ? ` · ${CADENCE_WORD[heroMarket.cadence]}` : ''}
                     </span>
                   </div>
-                  <h2 className="font-display font-[800] text-3xl sm:text-4xl text-white tracking-tight leading-[1.05]">
+                  <h2 className="font-display font-[800] text-[1.6rem] sm:text-4xl text-white tracking-tight leading-[1.05]">
                     {heroStrike != null ? (
                       <>BTC holds above <span className="text-vermilion">{fmtUsd0(heroStrike)}</span>?</>
                     ) : (
@@ -638,7 +641,7 @@ export default function MarketsPage() {
                 <div className="hero-yesno">
                   <button
                     type="button"
-                    className="hyn hyn-yes font-display"
+                    className="hyn hyn-yes"
                     aria-label="Bet UP"
                     onClick={() => openTicket(heroMarket, 'up')}
                     data-cursor="hover"
@@ -648,7 +651,7 @@ export default function MarketsPage() {
                   </button>
                   <button
                     type="button"
-                    className="hyn hyn-no font-display"
+                    className="hyn hyn-no"
                     aria-label="Bet DOWN"
                     onClick={() => openTicket(heroMarket, 'down')}
                     data-cursor="hover"
