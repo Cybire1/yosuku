@@ -1,15 +1,15 @@
 'use client';
 
-// The Room — the position-gated comment thread under a take. Only people who bet
-// the market can read + post; the door is our on-chain gate (market_room_rule::join,
-// which checks bet_registry::has_bet), and the messages are E2E-encrypted through
-// the Sui Stack Messaging SDK (Seal). This component is the UI + gate-state UX; the
-// live send/read is wired in lib/sui/comments.ts once the relayer is public.
+// The Room — the position-gated, end-to-end-encrypted comment thread under a market.
+// Only wallets that bet the market can read + post (on-chain gate:
+// market_room_rule::join → bet_registry::has_bet); messages are E2E-encrypted via the
+// Sui Stack Messaging SDK + Seal.
 //
 // Gate states: connect → locked (no position) → joinable (has position) → joining
 // → joined (thread + composer).
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { Lock, ShieldCheck, Send, Loader2, X, ArrowRight, Sparkles } from 'lucide-react';
 
 export type RoomGate = 'connect' | 'locked' | 'joinable' | 'joining' | 'joined';
 
@@ -41,6 +41,43 @@ function hue(addr: string): number {
 
 const MAX_LEN = 280;
 
+/** Bespoke Room mark: a locked speech bubble — "encrypted conversation" in one glyph. */
+function RoomMark({ size = 22, className = '' }: { size?: number; className?: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className} aria-hidden>
+      <path
+        d="M5.2 3.6h13.6A2.7 2.7 0 0 1 21.5 6.3v7A2.7 2.7 0 0 1 18.8 16H11l-4.3 3.5a.6.6 0 0 1-1-.47V16H5.2A2.7 2.7 0 0 1 2.5 13.3v-7A2.7 2.7 0 0 1 5.2 3.6Z"
+        stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"
+      />
+      <rect x="8.9" y="9.7" width="6.2" height="4.5" rx="1.1" stroke="currentColor" strokeWidth="1.3" />
+      <path d="M10.4 9.7V8.4a1.6 1.6 0 0 1 3.2 0v1.3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+/** A haloed state icon — the focal mark for each onboarding state. */
+function StateIcon({ children, tone = 'vermilion' }: { children: ReactNode; tone?: 'vermilion' | 'muted' }) {
+  const v = tone === 'vermilion';
+  return (
+    <div className="relative flex h-16 w-16 items-center justify-center">
+      <div
+        className="absolute inset-0 rounded-2xl"
+        style={{ background: v ? 'radial-gradient(circle, rgba(224,77,38,0.28), transparent 70%)' : 'radial-gradient(circle, rgba(255,255,255,0.10), transparent 70%)' }}
+      />
+      <div
+        className="relative flex h-14 w-14 items-center justify-center rounded-2xl border"
+        style={{
+          borderColor: v ? 'rgba(224,77,38,0.35)' : 'rgba(255,255,255,0.12)',
+          background: v ? 'rgba(224,77,38,0.06)' : 'rgba(255,255,255,0.03)',
+          color: v ? 'var(--vermilion)' : 'rgba(255,255,255,0.5)',
+        }}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
 export default function CommentRoom({
   callLabel,
   gate,
@@ -62,21 +99,20 @@ export default function CommentRoom({
   onPost?: (text: string) => void;
   onBet?: () => void;
   busy?: boolean;
-  /** surfaced join/post error, shown inline instead of failing silently */
   error?: string | null;
-  /** a <ConnectButton/> passed in for the 'connect' state */
   connectSlot?: ReactNode;
 }) {
   const [draft, setDraft] = useState('');
+  const [mounted, setMounted] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    const id = requestAnimationFrame(() => setMounted(true)); // entrance transition
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
+    return () => { cancelAnimationFrame(id); document.removeEventListener('keydown', onKey); };
   }, [onClose]);
 
-  // stick to newest when joined
   useEffect(() => {
     if (gate === 'joined' && listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
   }, [comments.length, gate]);
@@ -89,57 +125,72 @@ export default function CommentRoom({
   };
 
   return (
-    <div className="fixed inset-0 z-[1000] flex items-end justify-center sm:items-center" role="dialog" aria-label="Comment room">
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
+    <div className="fixed inset-0 z-[1000] flex items-end justify-center sm:items-center" role="dialog" aria-label="The Room">
+      <div className={`absolute inset-0 bg-black/70 backdrop-blur-sm transition-opacity duration-300 ${mounted ? 'opacity-100' : 'opacity-0'}`} onClick={onClose} aria-hidden="true" />
       <div
         data-theme="dark"
-        className="relative z-10 flex max-h-[88dvh] w-full max-w-[440px] flex-col overflow-hidden rounded-t-3xl border border-white/[0.1] sm:rounded-3xl"
-        style={{ background: 'radial-gradient(130% 90% at 50% -10%, #16110c 0%, #0d0a08 46%, #080605 100%)' }}
+        className={`relative z-10 flex max-h-[88dvh] w-full max-w-[440px] flex-col overflow-hidden rounded-t-3xl border border-white/[0.1] shadow-[0_-20px_80px_-20px_rgba(224,77,38,0.25)] transition-all duration-300 ease-out sm:rounded-3xl ${mounted ? 'translate-y-0 opacity-100' : 'translate-y-6 opacity-0'}`}
+        style={{ background: 'radial-gradient(130% 90% at 50% -10%, #1a130d 0%, #0d0a08 46%, #080605 100%)' }}
       >
-        <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 z-20 h-px bg-gradient-to-r from-transparent via-vermilion/60 to-transparent" />
+        <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 z-20 h-px bg-gradient-to-r from-transparent via-vermilion/70 to-transparent" />
 
         {/* header */}
-        <div className="relative z-10 flex items-start justify-between gap-3 border-b border-white/[0.08] p-5">
-          <div className="min-w-0">
-            <div className="font-mono text-[9px] uppercase tracking-[0.22em] text-white/40">The room</div>
+        <div className="relative z-10 flex items-start gap-3.5 border-b border-white/[0.08] p-5">
+          <div
+            className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-vermilion/30 text-vermilion"
+            style={{ background: 'rgba(224,77,38,0.08)', boxShadow: '0 0 24px -6px rgba(224,77,38,0.5)' }}
+          >
+            <RoomMark size={21} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="font-mono text-[9px] uppercase tracking-[0.26em] text-white/40">The Room</div>
             <div className="mt-0.5 truncate font-display text-[15px] font-bold text-white">{callLabel}</div>
-            <div className="mt-1 inline-flex items-center gap-1.5 font-mono text-[9px] text-white/40">
-              <span className="text-vermilion/80">🔒</span> bettors only · end-to-end encrypted
+            <div className="mt-1.5 inline-flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.02] px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.12em] text-white/45">
+              <Lock size={9} className="text-vermilion/80" strokeWidth={2.4} /> Bettors only · Encrypted
             </div>
           </div>
-          <button onClick={onClose} className="shrink-0 rounded-full p-1.5 text-white/40 transition-colors hover:bg-white/[0.06] hover:text-white" aria-label="Close" style={{ outline: 'none' }}>✕</button>
+          <button onClick={onClose} className="shrink-0 rounded-full p-1.5 text-white/40 transition-colors hover:bg-white/[0.06] hover:text-white" aria-label="Close" style={{ outline: 'none' }}>
+            <X size={16} />
+          </button>
         </div>
 
         {/* body */}
         {gate === 'connect' && (
-          <div className="relative z-10 flex flex-col items-center gap-3 p-8 text-center">
-            <span aria-hidden className="font-jp text-[34px] text-white/15">賭</span>
-            <p className="font-mono text-[12px] leading-relaxed text-white/55">Connect your wallet to see the room.</p>
+          <div className="relative z-10 flex flex-col items-center gap-4 p-9 text-center">
+            <StateIcon tone="muted"><RoomMark size={26} /></StateIcon>
+            <div className="space-y-1.5">
+              <p className="font-display text-[17px] font-semibold text-white text-balance">A private room, per market.</p>
+              <p className="font-mono text-[11px] leading-relaxed text-white/45">Connect your wallet to see who's in — bettors only.</p>
+            </div>
             {connectSlot}
           </div>
         )}
 
         {gate === 'locked' && (
-          <div className="relative z-10 flex flex-col items-center gap-3 p-8 text-center">
-            <span aria-hidden className="text-[30px]">🔒</span>
-            <p className="font-display text-[17px] font-semibold text-white text-balance">Only people who bet this market can talk here.</p>
-            <p className="font-mono text-[11px] leading-relaxed text-white/45">Skin in the game unlocks the room — no lurkers, no talk without a position.</p>
-            <button onClick={onBet} style={{ outline: 'none' }} className="mt-1 rounded-full bg-vermilion px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-vermilion-d">
-              Place a bet to unlock
+          <div className="relative z-10 flex flex-col items-center gap-4 p-9 text-center">
+            <StateIcon tone="muted"><Lock size={24} strokeWidth={1.8} /></StateIcon>
+            <div className="space-y-1.5">
+              <p className="font-display text-[17px] font-semibold text-white text-balance">Skin in the game unlocks the room.</p>
+              <p className="font-mono text-[11px] leading-relaxed text-white/45">No lurkers, no talk without a position — that's the whole point.</p>
+            </div>
+            <button onClick={onBet} style={{ outline: 'none' }} className="group mt-1 inline-flex items-center gap-2 rounded-full bg-vermilion px-6 py-3 text-sm font-semibold text-white transition-all hover:bg-vermilion-d hover:gap-2.5">
+              Place a bet to unlock <ArrowRight size={15} className="transition-transform group-hover:translate-x-0.5" />
             </button>
           </div>
         )}
 
         {(gate === 'joinable' || gate === 'joining') && (
-          <div className="relative z-10 flex flex-col items-center gap-3 p-8 text-center">
-            <span className="rounded-full border border-vermilion/40 bg-vermilion/[0.08] px-3 py-1 font-mono text-[9px] uppercase tracking-[0.14em] text-vermilion">✓ position</span>
-            <p className="font-display text-[17px] font-semibold text-white text-balance">You've got skin in this market.</p>
-            <p className="font-mono text-[11px] leading-relaxed text-white/45">Join the room to read the thread and post. One signature to prove your position — gas-free.</p>
-            <button onClick={onJoin} disabled={gate === 'joining'} style={{ outline: 'none' }} className="mt-1 rounded-full bg-vermilion px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-vermilion-d disabled:opacity-60">
-              {gate === 'joining' ? 'Joining…' : 'Join the room'}
+          <div className="relative z-10 flex flex-col items-center gap-4 p-9 text-center">
+            <StateIcon tone="vermilion"><ShieldCheck size={26} strokeWidth={1.8} /></StateIcon>
+            <div className="space-y-1.5">
+              <p className="font-display text-[17px] font-semibold text-white text-balance">Your position's verified.</p>
+              <p className="font-mono text-[11px] leading-relaxed text-white/45">One tap to join the thread — gas-free, and every message end-to-end encrypted.</p>
+            </div>
+            <button onClick={onJoin} disabled={gate === 'joining'} style={{ outline: 'none' }} className="mt-1 inline-flex items-center gap-2 rounded-full bg-vermilion px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-vermilion-d disabled:opacity-60">
+              {gate === 'joining' ? <><Loader2 size={15} className="animate-spin" /> Joining…</> : <>Join the room</>}
             </button>
             {error && (
-              <code className="mt-2 block max-h-28 w-full overflow-auto rounded-lg border border-white/[0.08] bg-black/40 px-3 py-2 text-left font-mono text-[10px] leading-relaxed text-vermilion/80 break-all">
+              <code className="mt-1 block max-h-28 w-full overflow-auto rounded-lg border border-white/[0.08] bg-black/40 px-3 py-2 text-left font-mono text-[10px] leading-relaxed text-vermilion/80 break-all">
                 {error}
               </code>
             )}
@@ -148,17 +199,24 @@ export default function CommentRoom({
 
         {gate === 'joined' && (
           <>
-            <div ref={listRef} className="relative z-10 flex-1 space-y-4 overflow-y-auto p-5">
+            <div ref={listRef} className="relative z-10 flex-1 space-y-1 overflow-y-auto p-4">
               {comments.length === 0 ? (
-                <p className="py-10 text-center font-mono text-[11px] text-white/35">No one's said anything yet. Break the ice.</p>
+                <div className="flex flex-col items-center gap-3 py-12 text-center">
+                  <StateIcon tone="muted"><Sparkles size={22} strokeWidth={1.8} /></StateIcon>
+                  <p className="font-mono text-[11px] text-white/35">Quiet in here. Break the ice.</p>
+                </div>
               ) : (
                 comments.map((c) => (
-                  <div key={c.id} className="flex items-start gap-2.5">
-                    <span aria-hidden className="mt-0.5 h-7 w-7 shrink-0 rounded-full ring-1 ring-white/10" style={{ background: `radial-gradient(120% 120% at 30% 20%, hsl(${hue(c.author)} 55% 55%), hsl(${(hue(c.author) + 40) % 360} 45% 28%))` }} />
+                  <div key={c.id} className={`group flex items-start gap-2.5 rounded-xl px-2 py-1.5 ${c.mine ? '' : ''}`}>
+                    <span
+                      aria-hidden
+                      className="mt-0.5 h-7 w-7 shrink-0 rounded-full ring-1 ring-white/10"
+                      style={{ background: `radial-gradient(120% 120% at 30% 20%, hsl(${hue(c.author)} 60% 56%), hsl(${(hue(c.author) + 40) % 360} 48% 26%))` }}
+                    />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5 font-mono text-[10px]">
-                        <span className={c.mine ? 'text-vermilion' : 'text-white/70'}>{c.mine ? 'you' : shortAddr(c.author)}</span>
-                        {c.verified && <span className="text-white/30" title="signature verified">✓</span>}
+                        <span className={c.mine ? 'font-semibold text-vermilion' : 'text-white/70'}>{c.mine ? 'You' : shortAddr(c.author)}</span>
+                        {c.verified && <ShieldCheck size={10} className="text-emerald-400/70" strokeWidth={2.2} aria-label="signature verified" />}
                         <span className="text-white/25">· {timeAgo(c.tsMs)}</span>
                       </div>
                       <p className="mt-0.5 font-sans text-[13.5px] leading-snug text-white/90 break-words">{c.text}</p>
@@ -169,7 +227,8 @@ export default function CommentRoom({
             </div>
             {/* composer */}
             <div className="relative z-10 border-t border-white/[0.08] p-3" style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}>
-              <div className="flex items-end gap-2 rounded-2xl border border-white/[0.1] bg-white/[0.02] px-3 py-2 focus-within:border-vermilion/40">
+              <div className="flex items-end gap-2 rounded-2xl border border-white/[0.1] bg-white/[0.02] px-3 py-2 transition-colors focus-within:border-vermilion/40">
+                <Lock size={13} className="mb-2 shrink-0 text-white/25" strokeWidth={2.2} aria-label="end-to-end encrypted" />
                 <textarea
                   value={draft}
                   onChange={(e) => setDraft(e.target.value.slice(0, MAX_LEN))}
@@ -178,8 +237,8 @@ export default function CommentRoom({
                   rows={1}
                   className="max-h-24 min-h-[24px] flex-1 resize-none bg-transparent font-sans text-[13.5px] leading-snug text-white outline-none placeholder:text-white/25"
                 />
-                <button onClick={send} disabled={!draft.trim() || busy} style={{ outline: 'none' }} className="shrink-0 rounded-full bg-vermilion px-3.5 py-1.5 font-mono text-[10px] font-bold uppercase tracking-[0.1em] text-white transition-colors hover:bg-vermilion-d disabled:opacity-40">
-                  {busy ? '…' : 'Post'}
+                <button onClick={send} disabled={!draft.trim() || busy} style={{ outline: 'none' }} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-vermilion text-white transition-all hover:bg-vermilion-d disabled:opacity-30" aria-label="Post">
+                  {busy ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} strokeWidth={2.2} />}
                 </button>
               </div>
             </div>

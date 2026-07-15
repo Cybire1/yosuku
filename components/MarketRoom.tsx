@@ -10,6 +10,7 @@
 
 import React from 'react';
 import { ConnectButton } from '@mysten/dapp-kit';
+import { X, Wrench } from 'lucide-react';
 import CommentRoom from './CommentRoom';
 import { useCommentRoom } from '@/lib/sui/useCommentRoom';
 
@@ -74,10 +75,10 @@ function RoomFallback({ callLabel, onClose, error }: { callLabel: string; onClos
             <div className="font-mono text-[9px] uppercase tracking-[0.22em] text-white/40">The room</div>
             <div className="mt-0.5 truncate font-display text-[15px] font-bold text-white">{callLabel}</div>
           </div>
-          <button onClick={onClose} className="shrink-0 rounded-full p-1.5 text-white/40 hover:bg-white/[0.06] hover:text-white" aria-label="Close" style={{ outline: 'none' }}>✕</button>
+          <button onClick={onClose} className="shrink-0 rounded-full p-1.5 text-white/40 hover:bg-white/[0.06] hover:text-white" aria-label="Close" style={{ outline: 'none' }}><X size={16} /></button>
         </div>
         <div className="mt-6 flex flex-col items-center gap-3 text-center">
-          <span aria-hidden className="text-[26px]">🛠️</span>
+          <span aria-hidden className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/[0.12] bg-white/[0.03] text-white/50"><Wrench size={20} strokeWidth={1.8} /></span>
           <p className="font-display text-[15px] font-semibold text-white text-balance">The Room hit a snag opening.</p>
           <p className="font-mono text-[11px] leading-relaxed text-white/45">The rest of the app is unaffected. This is logged — if it keeps happening, screenshot this and send it over:</p>
           <code className="mt-1 block max-h-24 w-full overflow-auto rounded-lg border border-white/[0.08] bg-black/40 px-3 py-2 text-left font-mono text-[10px] leading-relaxed text-vermilion/80 break-all">
