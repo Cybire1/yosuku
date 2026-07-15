@@ -86,7 +86,6 @@ function RailPlaceholder({ cadence }: { cadence: Cadence624 }) {
     </div>
   );
 }
-const LIVE_HORIZON_LABELS = ['15-min', '30-min', '45-min', '1-hr'] as const; // previous venue only
 
 const fmtUsd0 = (n: number) => `$${Math.round(n).toLocaleString('en-US')}`;
 
@@ -556,8 +555,6 @@ export default function MarketsPage() {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
-  // previous venue (collapsed by default — mounts its hooks only when opened)
-  const [prevOpen, setPrevOpen] = useState(false);
 
   const nextExpiry = markets[0]?.expiry;
 
@@ -734,26 +731,6 @@ export default function MarketsPage() {
             </section>
           )}
 
-          {/* Previous venue — the old 15-minute rounds, collapsed */}
-          <section className="markets-section" data-section="previous" id="previous-venue" style={{ paddingBottom: prevOpen ? 0 : 24 }}>
-            <SectionHeader
-              number="02"
-              title="Previous venue"
-              desc="The 15-minute rounds on the previous DeepBook Predict testnet — kept for receipts and old positions. New bets belong above."
-              meta={prevOpen ? 'shown' : 'collapsed'}
-            />
-            <button
-              type="button"
-              className="w-full border border-white/[0.08] bg-white/[0.015] hover:bg-white/[0.03] transition-colors px-5 py-3.5 flex items-center justify-between font-mono text-[11px] uppercase tracking-[0.18em] text-white/50 hover:text-white"
-              onClick={() => setPrevOpen((v) => !v)}
-              aria-expanded={prevOpen}
-              data-cursor="hover"
-            >
-              <span>{prevOpen ? 'Hide the previous venue' : 'Show the previous venue'}</span>
-              <span>{prevOpen ? '↑' : '↓'}</span>
-            </button>
-            {prevOpen && <PreviousVenue />}
-          </section>
         </div>
       </main>
 
@@ -765,158 +742,6 @@ export default function MarketsPage() {
 
       {/* First-visit tutorial */}
       <Tutorial />
-    </div>
-  );
-}
-
-// ─── previous venue (old 15-min rounds) — mounts only when expanded ───
-
-function BellChips({ rows }: { rows: ReadonlyArray<readonly [string, { oracle_id: string; expiry: number }[]]> }) {
-  const [nowMs, setNowMs] = useState(0);
-  useEffect(() => {
-    const tick = () => setNowMs(Date.now());
-    tick();
-    const iv = setInterval(tick, 1000);
-    return () => clearInterval(iv);
-  }, []);
-  return (
-    <div className="later-bells">
-      {rows.map(([asset, list]) => (
-        <div key={asset} className="later-bells-row">
-          <span className="later-bells-asset">{asset}</span>
-          <div className="later-bells-chips">
-            {list.slice(0, 8).map((o) => (
-              <Link key={o.oracle_id} href={`/markets/${o.oracle_id}`} className="bell-chip" data-cursor="hover">
-                {fmtCountdown(o.expiry - nowMs)}
-              </Link>
-            ))}
-            {list.length > 8 && <span className="bell-chip more">+{list.length - 8}</span>}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function PreviousVenue() {
-  const { active, settled, loading, error } = useOracles();
-  const [prices, setPrices] = useState<Record<string, PriceData>>({});
-  const { price: btcPrice } = useBtcPrice();
-  const [nowMs, setNowMs] = useState(0);
-  useEffect(() => {
-    const tick = () => setNowMs(Date.now());
-    tick();
-    const iv = setInterval(tick, 1000);
-    return () => clearInterval(iv);
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    async function loadPrices() {
-      try {
-        const res = await fetch('/api/oracles?prices=1');
-        if (!res.ok) return;
-        const data = await res.json();
-        if (!cancelled && data.prices) setPrices(data.prices as Record<string, PriceData>);
-      } catch {
-        /* ignore */
-      }
-    }
-    loadPrices();
-    const interval = setInterval(loadPrices, 15_000);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, []);
-
-  const liveLadder = [...active]
-    .filter((o) => o.expiry > nowMs)
-    .sort((a, b) => a.expiry - b.expiry)
-    .slice(0, LIVE_HORIZON_LABELS.length)
-    .map((oracle, index) => ({ oracle, horizonLabel: LIVE_HORIZON_LABELS[index] ?? `${(index + 1) * 15}-min` }));
-  const ladderIds = new Set(liveLadder.map(({ oracle }) => oracle.oracle_id));
-  const byAsset = new Map<string, typeof active>();
-  for (const o of active) {
-    if (o.expiry <= nowMs || ladderIds.has(o.oracle_id)) continue;
-    const a = o.underlying_asset || 'BTC';
-    if (!byAsset.has(a)) byAsset.set(a, []);
-    byAsset.get(a)!.push(o);
-  }
-  for (const list of byAsset.values()) list.sort((a, b) => a.expiry - b.expiry);
-  const laterBells = Array.from(byAsset.entries()).filter(([, list]) => list.length > 0);
-  const recentSettled = settled.slice(0, 6);
-
-  return (
-    <div className="pt-8 space-y-12">
-      {loading && (
-        <div className="empty-state">
-          <div className="jp">予</div>
-          <h3>Loading previous venue…</h3>
-          <p>Fetching oracles from the old DeepBook Predict testnet</p>
-        </div>
-      )}
-      {error && !loading && (
-        <div className="empty-state">
-          <div className="jp">誤</div>
-          <h3>Previous venue unreachable</h3>
-          <p>{error}</p>
-        </div>
-      )}
-      {!loading && !error && active.length === 0 && recentSettled.length === 0 && (
-        <div className="empty-state">
-          <div className="jp">空</div>
-          <h3>No rounds on the previous venue</h3>
-          <p>The old testnet may have wound down — new markets live above.</p>
-        </div>
-      )}
-
-      {liveLadder.length > 0 && (
-        <div>
-          <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/40 mb-4">
-            Still running · 15 / 30 / 45 / 60 min rounds
-          </div>
-          <div className="markets-grid markets-grid-live">
-            {liveLadder.map(({ oracle, horizonLabel }) => {
-              const price = prices[oracle.oracle_id];
-              const referencePrice = price?.forward || price?.spot || (btcPrice ? btcPrice * FLOAT_SCALING : null);
-              const line = getCanonicalMarketLine({ oracle, settledOracles: settled, referencePrice });
-              return (
-                <MarketCard
-                  key={oracle.oracle_id}
-                  oracle={oracle}
-                  spotPrice={price?.spot}
-                  forwardPrice={price?.forward}
-                  seedStrike={line?.source === 'grid-fallback' ? null : line?.strike}
-                  horizonLabel={horizonLabel}
-                />
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {laterBells.length > 0 && (
-        <div>
-          <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/40 mb-4">
-            Upcoming rounds · tap a time to open it
-          </div>
-          <BellChips rows={laterBells} />
-        </div>
-      )}
-
-      {recentSettled.length > 0 && (
-        <div>
-          <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/40 mb-4">
-            Recently settled · receipts on Suiscan, payouts in DUSDC
-          </div>
-          <div className="markets-grid">
-            {recentSettled.map((oracle) => (
-              <MarketCard key={oracle.oracle_id} oracle={oracle} />
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
