@@ -147,12 +147,6 @@ export default function EarnPage() {
 
           <div className="hero-grid">
             <div className="hero-left">
-              {/* one text node so it reads as a single line — flex segments used to wrap into two columns on phones */}
-              <div className="eyebrow">
-                <span className="dash" />
-                <span className="live-dot" />
-                <span className="whitespace-nowrap">Be the house · earn the spread</span>
-              </div>
               <h1 className="page-title">
                 Earn real<br />
                 <span className="accent">yield</span>.
@@ -186,10 +180,6 @@ export default function EarnPage() {
                       <div className="font-mono text-[15px] text-vermilion tabular-nums">{utilization != null ? `${(utilization * 100).toFixed(1)}%` : '—'}</div>
                     </div>
                   </div>
-                  {/* compact honesty note — the risk line the hero blurb used to carry */}
-                  <p className="mt-7 font-mono text-[10px] leading-relaxed text-gray-400">
-                    Withdraw anytime · share price can dip if the vault takes losses.
-                  </p>
                 </>
               ) : (
                 <p className="font-mono text-xs text-gray-600 py-3">syncing vault from chain…</p>
@@ -202,7 +192,7 @@ export default function EarnPage() {
       <main>
         <div className="container max-w-5xl mx-auto pt-6 md:pt-10 pb-16">
           <>
-              <SectionHeader number="01" title="Supply the vault" desc="Your balance grows as the vault earns the spread." meta="withdraw anytime" />
+              <SectionHeader number="01" title="Supply the vault" meta="withdraw anytime" />
               <div className="grid md:grid-cols-2 gap-5 mb-10">
                 {/* deposit */}
                 <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-6">
@@ -213,9 +203,6 @@ export default function EarnPage() {
                     </div>
                   ) : (
                     <>
-                      <p className="font-mono text-[11px] text-gray-400 mb-5 leading-relaxed">
-                        You receive PLP at the live share price. Its value rises as the vault earns the spread — and can dip if the vault takes losses.
-                      </p>
                       <div className="flex items-baseline justify-between mb-3">
                         <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-gray-600">Amount</span>
                         <span className="font-mono text-[10px] text-gray-600">wallet {fmt(walletDusdc)} DUSDC</span>
@@ -255,7 +242,6 @@ export default function EarnPage() {
                   )}
                 </div>
               </div>
-              <p className="font-mono text-[10px] text-gray-700 text-center tracking-wider">protocol vault (PLP) · share price &amp; yield are live on-chain · testnet</p>
             </>
 
           {msg && <p className={`text-center mt-8 text-[12px] font-mono ${msg.includes('✓') ? 'text-gray-300' : 'text-vermilion'}`}>{msg}</p>}
