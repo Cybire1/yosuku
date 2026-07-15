@@ -426,7 +426,8 @@ export function drawDuel(
     else strikeExt = dlerp(1.08, 0, 1 - (1 - (cyc - CONTACT) / 16) ** 2);              // recover (ease-out)
   }
   const sType = round % 3;                               // 0 jab (lead) · 1 cross (rear) · 2 kick
-  const contact = dpulse(cyc, CONTACT + 1, 3);           // sharp impact window (burst + hit-stop feel)
+  // impact only when the strike is actually extended AND they're closed in — never on the wind-up or at range
+  const contact = dpulse(cyc, CONTACT, 2.6) * Math.max(0, Math.min(1, strikeExt)) * closeB;
 
   const build = (who: 'UP' | 'DOWN') => {
     const isUp = who === 'UP';
@@ -443,7 +444,7 @@ export function drawDuel(
       if (sType === 0) pL = e; else if (sType === 1) pR = e; else kick = e;
       const lunge = Math.max(0, Math.min(1, strikeExt));
       x = strikeExt < 0 ? baseX + face * strikeExt * 4        // small step back on the wind-up
-                        : baseX + (oppX - 16 * face - baseX) * lunge; // drive bodyweight through the snap
+                        : baseX + (oppX - 11 * face - baseX) * lunge; // drive bodyweight in so the fist reaches
       rot = face * (strikeExt < 0 ? strikeExt * 6 : strikeExt * 5);
       if (sType === 2) jump = e * 5;                         // slight lift on the kick
     } else {
@@ -462,7 +463,11 @@ export function drawDuel(
   else { drawStick(ctx, up.x, up.feetY, up); drawStick(ctx, dn.x, dn.feetY, dn); }
   if (contact > 0.12) {
     const def = above ? dn : up;
-    drawDuelBurst(ctx, def.x + def.hx * scale + (above ? -1 : 1) * 3 * scale, def.feetY - 60 * scale + def.hy * scale, contact, above ? DUEL_UP : DUEL_DOWN, scale / 0.24);
+    const isKick = sType === 2;
+    // punches land on the head; kicks land at the waist
+    const hitX = def.x + (isKick ? 0 : def.hx * scale) + (above ? -1 : 1) * 4 * scale;
+    const hitY = isKick ? def.feetY - 34 * scale : def.feetY - 100 * scale + def.hy * scale;
+    drawDuelBurst(ctx, hitX, hitY, contact, above ? DUEL_UP : DUEL_DOWN, scale / 0.24);
   }
 }
 
