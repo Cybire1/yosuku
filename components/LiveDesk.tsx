@@ -375,8 +375,8 @@ export default function LiveDesk() {
         <>
           {/* framing: young + public. The net can read negative — that's transparency, not spin. */}
           <div className="flex items-center justify-between px-4 pt-3">
-            <span className="font-mono text-[9px] uppercase tracking-[0.18em] text-white/40">Track record · every trade public</span>
-            <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-white/30">{stats.settled} trades · all of them public</span>
+            <span className="font-mono text-[9px] uppercase tracking-[0.18em] text-white/40">Track record</span>
+            <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-white/30">{stats.settled} trades · public</span>
           </div>
           <div className="px-4 pt-2 pb-2">
             <EquitySparkline points={stats.curve} width={520} height={64} className="w-full h-[64px]" />
@@ -421,7 +421,7 @@ export default function LiveDesk() {
                 </p>
                 <a href={SUISCAN_ACC(VAULT624.enclaveAgent)} target="_blank" rel="noreferrer"
                   className="mt-1.5 inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.12em] text-white/35 hover:text-vermilion transition-colors">
-                  Runs by itself · every trade public — check them on-chain ↗
+                  Every trade, public on-chain ↗
                 </a>
               </div>
             </div>
@@ -461,11 +461,8 @@ export default function LiveDesk() {
                 <div className="border-l-2 border-vermilion pl-3 py-0.5">
                   <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-vermilion">
                     <span className="inline-block w-1.5 h-1.5 rounded-full bg-vermilion mr-1.5 align-middle animate-pulse" />
-                    Copying — watching Bitcoin for the next signal
+                    Copying · watching Bitcoin
                   </span>
-                  <p className="font-mono text-[10px] text-white/40 mt-1 leading-relaxed break-words">
-                    Wins and losses land straight in your balance below.
-                  </p>
                 </div>
 
                 {/* your live numbers */}
@@ -473,12 +470,12 @@ export default function LiveDesk() {
                   <div className="px-3 py-3">
                     <div className="font-mono text-[9px] uppercase tracking-[0.18em] text-white/40 mb-1">Your desk balance</div>
                     <div className="font-display font-[800] text-2xl text-white tabular-nums leading-none">{fmtDusdc(ledger)}</div>
-                    <div className="font-mono text-[9px] text-white/30 mt-1">test USDC · only you can withdraw it</div>
+                    <div className="font-mono text-[9px] text-white/30 mt-1">only you can withdraw</div>
                   </div>
                   <div className="px-3 py-3 border-l border-white/[0.06]">
                     <div className="font-mono text-[9px] uppercase tracking-[0.18em] text-white/40 mb-1">Your limits</div>
                     <div className="font-mono text-sm text-white tabular-nums">≤ {fmtDusdc(subCap)} / trade</div>
-                    <div className="font-mono text-[9px] text-white/30 mt-1">≤ {subLev}× · blocked on-chain above this</div>
+                    <div className="font-mono text-[9px] text-white/30 mt-1">≤ {subLev}× · on-chain cap</div>
                   </div>
                 </div>
 

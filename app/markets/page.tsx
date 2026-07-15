@@ -603,12 +603,6 @@ export default function MarketsPage() {
                           ? `$${Math.round(spot - heroStrike).toLocaleString()} above the UP line`
                           : `needs +$${Math.round(heroStrike - spot).toLocaleString()} for UP to win`}
                       </span>
-                      {heroMsLeft != null && (
-                        <>
-                          <span className="text-gray-600">·</span>
-                          <span className="text-gray-400">{fmtCountdown(heroMsLeft)} left</span>
-                        </>
-                      )}
                     </div>
                   )}
                 </div>
