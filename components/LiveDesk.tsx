@@ -401,7 +401,7 @@ export default function LiveDesk() {
       </div>
 
       <div className="group/desk relative rounded-xl border border-white/[0.1] bg-bg overflow-hidden">
-        <div className="grid lg:grid-cols-[1.15fr_0.85fr] divide-y lg:divide-y-0 lg:divide-x divide-white/[0.08]">
+        <div className="grid">
           {/* ── left: the hero card + join flow (min-w-0 stops the mobile grid blowout) ── */}
           <div className="p-6 sm:p-7 min-w-0">
             {/* hero identity — glyph · name · ONE attested chip · one line of what it does */}
@@ -428,11 +428,6 @@ export default function LiveDesk() {
 
             {/* the record — a curve, not a log: the striking visual */}
             <div className="mt-6">{recordCard}</div>
-
-            {/* the anchor line — stated ONCE, the whole brand in one sentence */}
-            <p className="mt-5 text-[15px] sm:text-[16px] font-display font-[600] text-white/90 leading-snug tracking-tight">
-              It trades your money. <span className="text-vermilion">It cannot take it.</span>
-            </p>
 
             {!address ? (
               /* ── state: disconnected — small footprint, one CTA ── */
@@ -545,9 +540,6 @@ export default function LiveDesk() {
                   </div>
                 )}
 
-                <p className="font-mono text-[10px] text-white/30 leading-relaxed max-w-md break-words">
-                  Pause stops new trades; anything open finishes and pays into your balance.
-                </p>
               </div>
             ) : sub ? (
               /* ── state: PAUSED ── */
@@ -664,63 +656,6 @@ export default function LiveDesk() {
             )}
           </div>
 
-          {/* ── right: last 3 trades — a tight strip, not a scrolling log ── */}
-          <div className="flex flex-col min-w-0 bg-white/[0.012]">
-            <div className="flex items-center justify-between gap-3 px-5 py-3.5 border-b border-white/[0.08]">
-              {copying ? (
-                <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-vermilion">
-                  <span className="inline-block w-1 h-1 rounded-full bg-vermilion mr-1.5 align-middle animate-pulse" />
-                  Watching for the next signal
-                </span>
-              ) : (
-                <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/40 shrink-0">Latest trades</span>
-              )}
-              {stats.copiers > 0 && (
-                <span className="font-mono text-[10px] text-white/30 tabular-nums shrink-0"
-                  title="Distinct wallets this desk has copy-traded for (on-chain, all-time)">
-                  {stats.copiers} copied
-                </span>
-              )}
-            </div>
-            <div className="flex-1 flex flex-col divide-y divide-white/[0.05]">
-              {!feedLoaded ? (
-                <div className="flex-1 flex items-center justify-center font-mono text-[11px] uppercase tracking-[0.2em] text-white/30 px-5">reading the chain…</div>
-              ) : latest3.length === 0 ? (
-                <div className="flex-1 flex items-center justify-center px-5 text-center">
-                  <p className="text-[13px] text-white/45 leading-snug">Nothing yet — it sits out until Bitcoin trends.</p>
-                </div>
-              ) : (
-                latest3.map((e, i) => {
-                  const won = e.payoutMicro > 0;
-                  const row = (
-                    <div className="flex items-center gap-3 px-5 py-4 w-full h-full hover:bg-white/[0.02] transition-colors">
-                      <span className={`inline-flex items-center justify-center h-8 w-8 rounded-full shrink-0 font-mono text-[12px] ${
-                        won ? 'border border-vermilion/50 text-vermilion' : 'border border-white/15 text-white/40'}`}>
-                        {won ? '↑' : '↓'}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <div className="font-mono text-[13px] text-white tabular-nums leading-tight">
-                          {won ? `Won ${fmtDusdc(e.payoutMicro / M)}` : 'Lost — nothing back'}
-                        </div>
-                        <div className="font-mono text-[10px] text-white/35 mt-0.5">{e.ts ? ago(e.ts) : 'settled'}</div>
-                      </div>
-                      <span className="font-mono text-[12px] text-vermilion w-4 text-right shrink-0">{e.digest ? '↗' : ''}</span>
-                    </div>
-                  );
-                  return e.digest ? (
-                    <a key={`s-${i}`} href={SUISCAN_TX(e.digest)} target="_blank" rel="noreferrer" className="flex-1 flex items-stretch">{row}</a>
-                  ) : (
-                    <div key={`s-${i}`} className="flex-1 flex items-stretch">{row}</div>
-                  );
-                })
-              )}
-            </div>
-            {latest3.length > 0 && (
-              <div className="px-5 py-3 border-t border-white/[0.08]">
-                <p className="font-mono text-[10px] text-white/30">Tap any trade to verify on Sui ↗</p>
-              </div>
-            )}
-          </div>
         </div>
       </div>
 
