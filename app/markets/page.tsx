@@ -733,7 +733,7 @@ export default function MarketsPage() {
       <Footer />
 
       {/* The Bell — rings at the next 6-24 settle */}
-      {nextExpiry && <TheBell targetTime={nextExpiry} />}
+      {nextExpiry && <TheBell targetTime={nextExpiry} now={now} />}
 
       {/* First-visit tutorial */}
       <Tutorial />
