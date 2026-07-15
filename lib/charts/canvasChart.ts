@@ -396,8 +396,8 @@ export function drawDuel(
   const span = xMax - xMin;
   if (span < 120) return;
   const f = now / 16.667;
-  const wf = Math.min(1, span / 800); // narrow (mobile) cards → notably smaller fighters
-  const scale = 0.10 + 0.085 * wf;
+  const wf = Math.min(1, span / 800); // wide (desktop) → full size; narrow (mobile) → much smaller
+  const scale = Math.max(0.13, Math.min(0.28, 0.06 + 0.22 * wf));
   const mid = (xMin + xMax) / 2, A = span * 0.44;
   // roam the full width; slightly different frequencies → they meet at varied spots
   const upX0 = mid + A * Math.sin(f * 0.016 + 0.4);
