@@ -143,8 +143,7 @@ export default function CommentRoom({
             <RoomMark size={21} />
           </div>
           <div className="min-w-0 flex-1">
-            <div className="font-mono text-[9px] uppercase tracking-[0.26em] text-white/40">The Room</div>
-            <div className="mt-0.5 truncate font-display text-[15px] font-bold text-white">{callLabel}</div>
+            <div className="truncate font-display text-[15px] font-bold text-white">{callLabel}</div>
             <div className="mt-1.5 inline-flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.02] px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.12em] text-white/45">
               <Lock size={9} className="text-vermilion/80" strokeWidth={2.4} /> Bettors only · Encrypted
             </div>
@@ -158,10 +157,7 @@ export default function CommentRoom({
         {gate === 'connect' && (
           <div className="relative z-10 flex flex-col items-center gap-4 p-9 text-center">
             <StateIcon tone="muted"><RoomMark size={26} /></StateIcon>
-            <div className="space-y-1.5">
-              <p className="font-display text-[17px] font-semibold text-white text-balance">A private room, per market.</p>
-              <p className="font-mono text-[11px] leading-relaxed text-white/45">Connect your wallet to see who's in — bettors only.</p>
-            </div>
+            <p className="font-display text-[17px] font-semibold text-white text-balance">A private room, per market.</p>
             {connectSlot}
           </div>
         )}
@@ -169,10 +165,7 @@ export default function CommentRoom({
         {gate === 'locked' && (
           <div className="relative z-10 flex flex-col items-center gap-4 p-9 text-center">
             <StateIcon tone="muted"><Lock size={24} strokeWidth={1.8} /></StateIcon>
-            <div className="space-y-1.5">
-              <p className="font-display text-[17px] font-semibold text-white text-balance">Skin in the game unlocks the room.</p>
-              <p className="font-mono text-[11px] leading-relaxed text-white/45">No lurkers, no talk without a position — that's the whole point.</p>
-            </div>
+            <p className="font-display text-[17px] font-semibold text-white text-balance">Skin in the game unlocks the room.</p>
             <button onClick={onBet} style={{ outline: 'none' }} className="group mt-1 inline-flex items-center gap-2 rounded-full bg-vermilion px-6 py-3 text-sm font-semibold text-white transition-all hover:bg-vermilion-d hover:gap-2.5">
               Place a bet to unlock <ArrowRight size={15} className="transition-transform group-hover:translate-x-0.5" />
             </button>
@@ -182,10 +175,7 @@ export default function CommentRoom({
         {(gate === 'joinable' || gate === 'joining') && (
           <div className="relative z-10 flex flex-col items-center gap-4 p-9 text-center">
             <StateIcon tone="vermilion"><ShieldCheck size={26} strokeWidth={1.8} /></StateIcon>
-            <div className="space-y-1.5">
-              <p className="font-display text-[17px] font-semibold text-white text-balance">Your position's verified.</p>
-              <p className="font-mono text-[11px] leading-relaxed text-white/45">One tap to join the thread — gas-free, and every message end-to-end encrypted.</p>
-            </div>
+            <p className="font-display text-[17px] font-semibold text-white text-balance">Your position's verified.</p>
             <button onClick={onJoin} disabled={gate === 'joining'} style={{ outline: 'none' }} className="mt-1 inline-flex items-center gap-2 rounded-full bg-vermilion px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-vermilion-d disabled:opacity-60">
               {gate === 'joining' ? <><Loader2 size={15} className="animate-spin" /> Joining…</> : <>Join the room</>}
             </button>
