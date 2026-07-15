@@ -17,6 +17,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useCurrentAccount, useSignTransaction } from '@mysten/dapp-kit';
 import { Transaction } from '@mysten/sui/transactions';
+import type { Signer } from '@mysten/sui/cryptography';
 import { grpc, buildSignExecute } from './modernClients';
 import { getSponsorStatus, submitSponsored, type SponsorStatus } from '../sponsor';
 
@@ -120,5 +121,27 @@ export function useSmartSubmit() {
     [account?.address, sponsor, signTransaction],
   );
 
-  return { submit, sponsorReady: !!sponsor, sponsorAddress: sponsor?.address ?? null };
+  // Sponsored submit signed by an ARBITRARY @mysten/sui Signer — used by The Room's
+  // Ed25519 messaging delegate (it holds no gas, so this is sponsored-only, no wallet
+  // fallback). Same Onara path as submit(); the sponsor pays gas, the delegate signs the tx.
+  const submitAs = useCallback(
+    async (as: Signer, build: TxFactory): Promise<SubmitResult> => {
+      const s = sponsor ?? (await getSponsorStatus());
+      if (!s) throw new Error('The gas sponsor is unavailable right now — joining the room needs it. Try again in a moment.');
+      const address = as.toSuiAddress();
+      const tx = await build();
+      tx.setSender(address);
+      tx.setGasOwner(s.address);
+      const gasPayment = await pickSponsorGasPayment(s.address);
+      if (gasPayment) tx.setGasPayment(gasPayment);
+      const bytes = await tx.build({ client: grpc });
+      const signed = await as.signTransaction(bytes);
+      const r = await submitSponsored({ sender: address, txBytes: signed.bytes, txSignature: signed.signature });
+      await grpc.waitForTransaction({ digest: r.digest });
+      return { digest: r.digest, sponsored: true };
+    },
+    [sponsor],
+  );
+
+  return { submit, submitAs, sponsorReady: !!sponsor, sponsorAddress: sponsor?.address ?? null };
 }

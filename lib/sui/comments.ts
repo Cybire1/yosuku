@@ -84,6 +84,14 @@ export function addRecordBet(tx: Transaction, marketId: string): Transaction {
   return tx;
 }
 
+/** Standalone record tx — self-attest the SENDER as a bettor on `marketId`. Used by the
+ *  Room's Ed25519 messaging delegate so it can join on behalf of a zkLogin owner who
+ *  already holds a position (the owner's real bet is checked client-side before this runs).
+ *  Onara-sponsored via the trading-624 policy (bet_registry::record). */
+export function buildRecordBetTx(marketId: string): Transaction {
+  return addRecordBet(new Transaction(), marketId);
+}
+
 /** Join a market's room (gated: aborts if the sender hasn't bet the market).
  *  Grants MessagingReader + MessagingSender. `ruleId`/`groupId` are the room's
  *  shared objects created by market_room_rule::create_market_room. */
