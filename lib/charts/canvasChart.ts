@@ -373,11 +373,11 @@ function drawStick(
   ctx.fillStyle = color; ctx.beginPath(); ctx.arc(0, -61, 13, 0, Math.PI * 2); ctx.fill();
   ctx.restore();
 }
-function drawDuelBurst(ctx: CanvasRenderingContext2D, x: number, y: number, a: number, color: string) {
+function drawDuelBurst(ctx: CanvasRenderingContext2D, x: number, y: number, a: number, color: string, m: number) {
   ctx.save();
   ctx.globalAlpha = Math.max(0, Math.min(1, a));
-  ctx.strokeStyle = color; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
-  const grow = 5 + a * 9;
+  ctx.strokeStyle = color; ctx.lineWidth = Math.max(1.3, 2.4 * m); ctx.lineCap = 'round';
+  const grow = (4 + a * 8) * m; // burst scales with the fighter, so it never dwarfs a small figure
   for (const d of [30, 90, 150, 210, 270, 330]) {
     const r = (d * Math.PI) / 180;
     ctx.beginPath();
@@ -385,55 +385,57 @@ function drawDuelBurst(ctx: CanvasRenderingContext2D, x: number, y: number, a: n
     ctx.lineTo(x + Math.cos(r) * grow, y + Math.sin(r) * grow);
     ctx.stroke();
   }
-  ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x, y, 3 * a, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x, y, 2.6 * a * m, 0, Math.PI * 2); ctx.fill();
   ctx.restore();
 }
 export function drawDuel(
   ctx: CanvasRenderingContext2D,
   o: { yAtX: (x: number) => number; xMin: number; xMax: number; h: number; now: number; above: boolean },
 ) {
-  const { yAtX, xMin, xMax, h, now, above } = o;
+  const { yAtX, xMin, xMax, now, above } = o;
   const span = xMax - xMin;
   if (span < 120) return;
   const f = now / 16.667;
-  const wf = Math.min(1, span / 800); // wide (desktop) → full size; narrow (mobile) → much smaller
-  const scale = Math.max(0.13, Math.min(0.28, 0.06 + 0.22 * wf));
-  const mid = (xMin + xMax) / 2, A = span * 0.44;
-  // roam the full width; slightly different frequencies → they meet at varied spots
-  const upX0 = mid + A * Math.sin(f * 0.016 + 0.4);
-  const dnX0 = mid + A * Math.sin(f * 0.0193 + 3.4);
-  const clash = dsmooth(84, 22, Math.abs(dnX0 - upX0)); // 0 apart → 1 clashing
+  const wf = Math.min(1, span / 800);
+  const scale = Math.max(0.16, Math.min(0.29, 0.12 + 0.17 * wf)); // slightly bigger, still mobile-responsive
+  const mid = (xMin + xMax) / 2;
+  // A real bout: the two square up and stay engaged, closing to trade blows then backing off,
+  // while the whole fight drifts SLOWLY across the card (roams, but not fast or to the extremes).
+  const drift = mid + span * 0.2 * Math.sin(f * 0.0052);
+  const sep = 22 + 38 * (0.5 + 0.5 * Math.sin(f * 0.05)); // gap opens/closes ~4s → approach · clash · retreat
+  const upX0 = drift - sep / 2, dnX0 = drift + sep / 2;
+  const clash = dsmooth(50, 22, sep); // 1 = trading blows, 0 = squared up at range
+  const beat = f * 0.13; // strike cadence during a clash
   const build = (who: 'UP' | 'DOWN') => {
     const isUp = who === 'UP';
     const baseX = isUp ? upX0 : dnX0;
     const oppX = isUp ? dnX0 : upX0;
-    const face = oppX >= baseX ? 1 : -1;
+    const face = isUp ? 1 : -1; // squared up; they don't cross
     const isAggr = isUp === above;
-    const phase = isUp ? 0 : 17;
-    const bob = Math.sin((f + phase) * 0.5);
-    let punch = 0.04 + 0.2 * Math.max(0, Math.sin((f + phase) * 0.6)) ** 2;
+    const phase = isUp ? 0 : 11;
+    const bob = Math.sin((f + phase) * 0.45);
+    let punch = 0.04 + 0.13 * Math.max(0, Math.sin((f + phase) * 0.55)) ** 2;
     let kick = 0, rot = 0, x = baseX, jump = 0;
     if (isAggr) {
-      const swing = clash * Math.max(0, Math.sin(f * 0.5));
-      if (Math.floor(f / 26) % 2 === 0) kick = swing; else punch = Math.max(punch, swing);
-      x = baseX + (oppX - 20 * face - baseX) * (clash * 0.85); // close in so blows land
-      jump = clash > 0.6 ? ((clash - 0.6) / 0.4) * 22 * Math.max(0, Math.sin(f * 0.55)) : 0; // hop in close combat
+      const swing = clash * Math.max(0, Math.sin(beat));
+      if (Math.floor(beat / Math.PI) % 3 === 2) kick = swing; else punch = Math.max(punch, swing);
+      x = baseX + (oppX - 15 * face - baseX) * (clash * 0.7); // lean in so blows land
+      jump = clash > 0.78 ? ((clash - 0.78) / 0.22) * 11 * Math.max(0, Math.sin(beat)) : 0; // rare hop
     } else {
-      const reel = clash * Math.max(0, Math.sin(f * 0.5 + 1.3));
-      rot = -face * 22 * reel;
-      x = baseX - face * clash * clash * 18; // knocked back → they bounce apart
+      const reel = clash * Math.max(0, Math.sin(beat + 1.6));
+      rot = -face * 18 * reel;
+      punch = Math.max(punch, clash * 0.26 * Math.max(0, Math.sin(beat + 3.0))); // throws some back
+      x = baseX - face * reel * 6; // rocked back a touch
     }
-    const feetY = yAtX(x) - jump + bob * 2 * (1 - clash);
+    const feetY = yAtX(x) - jump + bob * 1.5 * (1 - clash);
     return { x, feetY, face, punch, kick, rot, bob, scale, color: isUp ? DUEL_UP : DUEL_DOWN };
   };
   const up = build('UP'), dn = build('DOWN');
   if (above) { drawStick(ctx, dn.x, dn.feetY, dn); drawStick(ctx, up.x, up.feetY, up); }
   else { drawStick(ctx, up.x, up.feetY, up); drawStick(ctx, dn.x, dn.feetY, dn); }
-  if (clash > 0.5) {
-    const def = above ? dn : up;
-    const burstA = clash * Math.max(0, Math.sin(f * 0.5 + 1.3));
-    if (burstA > 0.12) drawDuelBurst(ctx, def.x, def.feetY - 61 * scale, burstA, above ? DUEL_UP : DUEL_DOWN);
-  }
+  const def = above ? dn : up;
+  const burstA = clash * Math.max(0, Math.sin(beat + 1.6));
+  if (burstA > 0.2) drawDuelBurst(ctx, def.x + (above ? -1 : 1) * 8 * scale, def.feetY - 58 * scale, burstA, above ? DUEL_UP : DUEL_DOWN, scale / 0.27);
 }
 
 // ─── Draw a smooth price line + area against a dashed target line ───
