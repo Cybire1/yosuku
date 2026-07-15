@@ -201,9 +201,15 @@ function ReelCard({
 function EmptyReel({ children }: { children: ReactNode }) {
   return (
     <section className="feed-card flex items-center justify-center px-3 pt-2 pb-[92px]">
-      <div className="relative z-10 flex h-full w-full max-w-[460px] flex-col items-center justify-center gap-3 rounded-[26px] border border-white/[0.1] bg-[#0a0807] text-center">
+      <div className="relative z-10 flex h-full w-full max-w-[460px] flex-col items-center justify-center gap-3.5 rounded-[26px] border border-white/[0.1] bg-[#0a0807] text-center">
         <span aria-hidden className="font-jp text-[40px] text-white/10">賭</span>
         <div className="font-display text-xl font-bold text-white">{children}</div>
+        {/* motion cue so the state reads as live/working, never frozen */}
+        <div aria-hidden className="mt-0.5 flex items-center gap-1.5">
+          <span className="h-1.5 w-1.5 rounded-full bg-vermilion" style={{ animation: 'pulseDot 1.2s ease-in-out infinite' }} />
+          <span className="h-1.5 w-1.5 rounded-full bg-vermilion" style={{ animation: 'pulseDot 1.2s ease-in-out infinite', animationDelay: '0.2s' }} />
+          <span className="h-1.5 w-1.5 rounded-full bg-vermilion" style={{ animation: 'pulseDot 1.2s ease-in-out infinite', animationDelay: '0.4s' }} />
+        </div>
       </div>
     </section>
   );
@@ -279,6 +285,11 @@ export default function FeedPage() {
 
   const reel = useMemo(() => weaveReel(rounds, takes), [rounds, takes]);
 
+  // The Take pill only makes sense once there's a live card/take to attach to.
+  // Hiding it on the load/empty screen keeps UP/DOWN (predict BTC) as the first
+  // action a viewer meets, not "write a take."
+  const hasReel = loaded && reel.length > 0;
+
   return (
     <>
       <Marquee />
@@ -302,16 +313,18 @@ export default function FeedPage() {
       {/* Post a take — the social entry point. Anchored on the RIGHT RAIL, mid-card
           (TikTok-style), so it never covers a card's bottom action row (UP/DOWN on
           a market, "take the other side" on a take). Icon + label pill. */}
-      <button
-        onClick={() => setComposerOpen(true)}
-        aria-label="Post a take"
-        data-cursor="hover"
-        style={{ outline: 'none' }}
-        className="fixed right-4 top-1/2 z-40 inline-flex -translate-y-1/2 flex-col items-center gap-1.5 rounded-2xl bg-vermilion px-5 py-4 text-white shadow-[0_12px_32px_-10px_rgba(224,77,38,0.55)] transition-colors hover:bg-vermilion-d"
-      >
-        <Feather size={24} />
-        <span className="font-display text-[13px] font-bold leading-none">Take</span>
-      </button>
+      {hasReel && (
+        <button
+          onClick={() => setComposerOpen(true)}
+          aria-label="Post a take"
+          data-cursor="hover"
+          style={{ outline: 'none' }}
+          className="fixed right-4 top-1/2 z-40 inline-flex -translate-y-1/2 flex-col items-center gap-1.5 rounded-2xl bg-vermilion px-5 py-4 text-white shadow-[0_12px_32px_-10px_rgba(224,77,38,0.55)] transition-colors hover:bg-vermilion-d"
+        >
+          <Feather size={24} />
+          <span className="font-display text-[13px] font-bold leading-none">Take</span>
+        </button>
+      )}
 
       {composerOpen && <TakeComposer624 onClose={() => setComposerOpen(false)} onPosted={reloadTakes} />}
     </>

@@ -187,7 +187,7 @@ export default function EarnPage() {
                     </div>
                   </div>
                   {/* compact honesty note — the risk line the hero blurb used to carry */}
-                  <p className="mt-7 font-mono text-[10px] leading-relaxed text-gray-600">
+                  <p className="mt-7 font-mono text-[10px] leading-relaxed text-gray-400">
                     Withdraw anytime · share price can dip if the vault takes losses.
                   </p>
                 </>
@@ -200,7 +200,7 @@ export default function EarnPage() {
       </section>
 
       <main>
-        <div className="container max-w-5xl mx-auto pt-6 md:pt-10 pb-24">
+        <div className="container max-w-5xl mx-auto pt-6 md:pt-10 pb-16">
           <>
               <SectionHeader number="01" title="Supply the vault" desc="Your balance grows as the vault earns the spread." meta="withdraw anytime" />
               <div className="grid md:grid-cols-2 gap-5 mb-10">
@@ -213,7 +213,7 @@ export default function EarnPage() {
                     </div>
                   ) : (
                     <>
-                      <p className="font-mono text-[11px] text-gray-500 mb-5 leading-relaxed">
+                      <p className="font-mono text-[11px] text-gray-400 mb-5 leading-relaxed">
                         You receive PLP at the live share price. Its value rises as the vault earns the spread — and can dip if the vault takes losses.
                       </p>
                       <div className="flex items-baseline justify-between mb-3">
@@ -260,7 +260,11 @@ export default function EarnPage() {
 
           {msg && <p className={`text-center mt-8 text-[12px] font-mono ${msg.includes('✓') ? 'text-gray-300' : 'text-vermilion'}`}>{msg}</p>}
         </div>
-        <Footer />
+        {/* the global 120px footer top-margin leaves a void on this short page —
+            neutralize it so the footer follows content at a normal rhythm */}
+        <div className="[&_.footer]:mt-0">
+          <Footer />
+        </div>
       </main>
     </div>
   );

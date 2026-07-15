@@ -194,17 +194,17 @@ export default function LeaderboardPage() {
 
           {/* Loading state */}
           {lbLoading && (
-            <div style={{ textAlign: 'center', padding: '64px 0', fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'rgba(255,255,255,0.3)' }}>
+            <div style={{ textAlign: 'center', padding: '64px 0', fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--gray-500)' }}>
               Reading on-chain trade data…
             </div>
           )}
 
           {/* Empty state — window is complete but no realized calls yet */}
           {!lbLoading && rankings.length === 0 && (
-            <div style={{ textAlign: 'center', padding: '96px 24px', fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'rgba(255,255,255,0.42)', lineHeight: 2 }}>
-              <div style={{ fontSize: '30px', marginBottom: '14px', opacity: 0.35 }}>◷</div>
+            <div style={{ textAlign: 'center', padding: '96px 24px', fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--gray-500)', lineHeight: 2 }}>
+              <div style={{ fontSize: '30px', marginBottom: '14px', opacity: 0.5 }}>◷</div>
               No realized calls in this window yet.<br />
-              <span style={{ color: 'rgba(255,255,255,0.28)' }}>
+              <span style={{ color: 'var(--gray-600)' }}>
                 The board ranks traders by realized P&amp;L, so names appear once settled positions are redeemed. Check back after the next few bells settle.
               </span>
             </div>
@@ -305,10 +305,14 @@ export default function LeaderboardPage() {
                   })}
                 </div>
               </div>
+            </section>
+          )}
 
-              {/* You bar */}
-              {address && (
-                <div className="you-bar" data-cursor="hover">
+          {/* Your rank — shown whenever a wallet is connected, independent of how
+              many other traders are ranked. Its own "Unranked" empty state covers
+              the low-volume case where the field beyond the podium is still empty. */}
+          {address && !lbLoading && (
+            <div className="you-bar" data-cursor="hover">
                   <div className="you-rank">
                     <span className="lbl">Your rank</span>
                     <span>
@@ -329,9 +333,7 @@ export default function LeaderboardPage() {
                     <div className="item"><span className="lbl">Streak</span><span className="v">{userRankData ? String(userRankData.trader.bestStreak).padStart(2, '0') : '\u2014'}</span></div>
                   </div>
                   <a className="you-cta" href="/portfolio">Your ledger →</a>
-                </div>
-              )}
-            </section>
+            </div>
           )}
 
         </div>

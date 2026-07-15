@@ -366,6 +366,9 @@ export default function HomePage() {
   useEffect(() => {
     const el = howRef.current;
     if (!el) return;
+    // Fallback: if the observer can't run, reveal immediately so the section
+    // is never left permanently blank (e.g. a full-page screenshot capture).
+    if (typeof IntersectionObserver === 'undefined') { el.classList.add('in-view'); return; }
     const obs = new IntersectionObserver(
       (entries) => {
         entries.forEach(entry => {
@@ -383,6 +386,9 @@ export default function HomePage() {
   /* ── IntersectionObserver for .fade-up ── */
   useEffect(() => {
     const els = document.querySelectorAll('.fade-up');
+    // Fallback: reveal all if the observer is unavailable, so no content
+    // section can be stranded at opacity:0 with no way to become visible.
+    if (typeof IntersectionObserver === 'undefined') { els.forEach(e => e.classList.add('in-view')); return; }
     const obs = new IntersectionObserver(
       (entries) => {
         entries.forEach(entry => {
@@ -504,7 +510,7 @@ export default function HomePage() {
               {/* Background arc */}
               <circle
                 cx="150" cy="150" r="115"
-                fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="3"
+                fill="none" stroke="var(--white)" strokeOpacity={0.06} strokeWidth="3"
                 pathLength="100"
               />
               {/* Yes arc */}
@@ -583,38 +589,38 @@ export default function HomePage() {
                   <svg viewBox="0 0 200 160">
                     {i === 0 && (
                       <g>
-                        <rect x="20" y="10" width="160" height="140" rx="4" fill="none" stroke="rgba(255,255,255,0.08)" />
-                        <rect x="30" y="20" width="40" height="10" rx="2" fill="rgba(255,255,255,0.06)" />
-                        <text x="35" y="28" fontSize="6" fill="rgba(255,255,255,0.4)" fontFamily="monospace">{'\u20BF'} BTC</text>
-                        <line x1="30" y1="50" x2="170" y2="50" stroke="rgba(255,255,255,0.06)" />
-                        <text x="30" y="70" fontSize="9" fill="rgba(255,255,255,0.6)" fontFamily="system-ui">BTC above $95,000?</text>
-                        <rect x="30" y="90" width="140" height="20" rx="3" fill="none" stroke="rgba(255,255,255,0.08)" />
+                        <rect x="20" y="10" width="160" height="140" rx="4" fill="none" stroke="var(--white)" strokeOpacity={0.08} />
+                        <rect x="30" y="20" width="40" height="10" rx="2" fill="var(--white)" fillOpacity={0.06} />
+                        <text x="35" y="28" fontSize="6" fill="var(--white)" fillOpacity={0.4} fontFamily="monospace">{'\u20BF'} BTC</text>
+                        <line x1="30" y1="50" x2="170" y2="50" stroke="var(--white)" strokeOpacity={0.06} />
+                        <text x="30" y="70" fontSize="9" fill="var(--white)" fillOpacity={0.6} fontFamily="system-ui">BTC above $95,000?</text>
+                        <rect x="30" y="90" width="140" height="20" rx="3" fill="none" stroke="var(--white)" strokeOpacity={0.08} />
                         <rect x="30" y="90" width="90" height="20" rx="3" fill="rgba(224,77,38,0.15)" />
                         <text x="60" y="104" fontSize="8" fill="var(--vermilion)" fontFamily="monospace">64% UP</text>
                         <rect x="30" y="120" width="65" height="24" rx="3" fill="rgba(224,77,38,0.1)" />
-                        <rect x="105" y="120" width="65" height="24" rx="3" fill="rgba(255,255,255,0.04)" />
+                        <rect x="105" y="120" width="65" height="24" rx="3" fill="var(--white)" fillOpacity={0.04} />
                         <text x="47" y="136" fontSize="8" fill="var(--vermilion)" fontFamily="monospace">UP</text>
-                        <text x="127" y="136" fontSize="8" fill="rgba(255,255,255,0.4)" fontFamily="monospace">DOWN</text>
+                        <text x="127" y="136" fontSize="8" fill="var(--white)" fillOpacity={0.4} fontFamily="monospace">DOWN</text>
                       </g>
                     )}
                     {i === 1 && (
                       <g>
-                        <circle cx="100" cy="80" r="50" fill="none" stroke="rgba(255,255,255,0.08)" />
+                        <circle cx="100" cy="80" r="50" fill="none" stroke="var(--white)" strokeOpacity={0.08} />
                         <circle cx="100" cy="80" r="50" fill="none" stroke="var(--vermilion)" strokeWidth="2" pathLength="100" strokeDasharray="64 36" strokeLinecap="round" style={{ transform: 'rotate(-90deg)', transformOrigin: '100px 80px' }} />
                         <text x="100" y="76" textAnchor="middle" fontSize="18" fontWeight="700" fill="var(--white)" fontFamily="monospace">64%</text>
-                        <text x="100" y="90" textAnchor="middle" fontSize="7" fill="rgba(255,255,255,0.4)" fontFamily="monospace" letterSpacing="0.1em">UP</text>
-                        <line x1="30" y1="140" x2="170" y2="140" stroke="rgba(255,255,255,0.06)" />
-                        <text x="100" y="155" textAnchor="middle" fontSize="7" fill="rgba(255,255,255,0.3)" fontFamily="monospace">POSITION COMMITTED</text>
+                        <text x="100" y="90" textAnchor="middle" fontSize="7" fill="var(--white)" fillOpacity={0.4} fontFamily="monospace" letterSpacing="0.1em">UP</text>
+                        <line x1="30" y1="140" x2="170" y2="140" stroke="var(--white)" strokeOpacity={0.06} />
+                        <text x="100" y="155" textAnchor="middle" fontSize="7" fill="var(--white)" fillOpacity={0.3} fontFamily="monospace">POSITION COMMITTED</text>
                       </g>
                     )}
                     {i === 2 && (
                       <g>
-                        <rect x="30" y="20" width="140" height="120" rx="4" fill="none" stroke="rgba(255,255,255,0.08)" />
-                        <line x1="30" y1="50" x2="170" y2="50" stroke="rgba(255,255,255,0.06)" />
-                        <text x="100" y="40" textAnchor="middle" fontSize="7" fill="rgba(255,255,255,0.4)" fontFamily="monospace" letterSpacing="0.1em">SETTLEMENT</text>
+                        <rect x="30" y="20" width="140" height="120" rx="4" fill="none" stroke="var(--white)" strokeOpacity={0.08} />
+                        <line x1="30" y1="50" x2="170" y2="50" stroke="var(--white)" strokeOpacity={0.06} />
+                        <text x="100" y="40" textAnchor="middle" fontSize="7" fill="var(--white)" fillOpacity={0.4} fontFamily="monospace" letterSpacing="0.1em">SETTLEMENT</text>
                         <circle cx="100" cy="85" r="20" fill="none" stroke="var(--vermilion)" strokeWidth="1.5" />
                         <path d="M90,85 L97,92 L112,77" fill="none" stroke="var(--vermilion)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                        <text x="100" y="120" textAnchor="middle" fontSize="7" fill="rgba(255,255,255,0.4)" fontFamily="monospace">ORACLE CONFIRMED</text>
+                        <text x="100" y="120" textAnchor="middle" fontSize="7" fill="var(--white)" fillOpacity={0.4} fontFamily="monospace">ORACLE CONFIRMED</text>
                         <text x="100" y="132" textAnchor="middle" fontSize="7" fill="var(--vermilion)" fontFamily="monospace">ABOVE $95,000 {'\u2713'}</text>
                       </g>
                     )}
@@ -677,67 +683,86 @@ export default function HomePage() {
                     <svg viewBox="0 0 280 200">
                       {i === 0 && (
                         <g>
-                          <text x="140" y="40" textAnchor="middle" fontSize="10" fill="rgba(255,255,255,0.3)" fontFamily="monospace" letterSpacing="0.16em">STRIKE / WINDOW / SETTLE</text>
-                          <line x1="40" y1="55" x2="240" y2="55" stroke="rgba(255,255,255,0.06)" />
-                          <rect x="40" y="70" width="60" height="90" rx="3" fill="none" stroke="rgba(255,255,255,0.08)" />
+                          <text x="140" y="40" textAnchor="middle" fontSize="10" fill="var(--white)" fillOpacity={0.3} fontFamily="monospace" letterSpacing="0.16em">STRIKE / WINDOW / SETTLE</text>
+                          <line x1="40" y1="55" x2="240" y2="55" stroke="var(--white)" strokeOpacity={0.06} />
+                          <rect x="40" y="70" width="60" height="90" rx="3" fill="none" stroke="var(--white)" strokeOpacity={0.08} />
                           <text x="70" y="90" textAnchor="middle" fontSize="8" fill="var(--vermilion)" fontFamily="monospace">$95,000</text>
-                          <text x="70" y="105" textAnchor="middle" fontSize="6" fill="rgba(255,255,255,0.3)" fontFamily="monospace">STRIKE</text>
-                          <rect x="110" y="70" width="60" height="90" rx="3" fill="none" stroke="rgba(255,255,255,0.08)" />
+                          <text x="70" y="105" textAnchor="middle" fontSize="6" fill="var(--white)" fillOpacity={0.3} fontFamily="monospace">STRIKE</text>
+                          <rect x="110" y="70" width="60" height="90" rx="3" fill="none" stroke="var(--white)" strokeOpacity={0.08} />
                           <text x="140" y="90" textAnchor="middle" fontSize="8" fill="var(--white)" fontFamily="monospace">01:00</text>
-                          <text x="140" y="105" textAnchor="middle" fontSize="6" fill="rgba(255,255,255,0.3)" fontFamily="monospace">WINDOW</text>
+                          <text x="140" y="105" textAnchor="middle" fontSize="6" fill="var(--white)" fillOpacity={0.3} fontFamily="monospace">WINDOW</text>
                           <rect x="180" y="70" width="60" height="90" rx="3" fill="none" stroke="rgba(224,77,38,0.15)" />
                           <text x="210" y="90" textAnchor="middle" fontSize="8" fill="var(--vermilion)" fontFamily="monospace">{'\u2713'}</text>
-                          <text x="210" y="105" textAnchor="middle" fontSize="6" fill="rgba(255,255,255,0.3)" fontFamily="monospace">SETTLE</text>
+                          <text x="210" y="105" textAnchor="middle" fontSize="6" fill="var(--white)" fillOpacity={0.3} fontFamily="monospace">SETTLE</text>
                           <line x1="40" y1="130" x2="240" y2="130" stroke="rgba(224,77,38,0.3)" strokeDasharray="4 3" />
-                          <text x="140" y="150" textAnchor="middle" fontSize="7" fill="rgba(255,255,255,0.2)" fontFamily="monospace">ORACLE PRICE FEED</text>
+                          <text x="140" y="150" textAnchor="middle" fontSize="7" fill="var(--white)" fillOpacity={0.2} fontFamily="monospace">ORACLE PRICE FEED</text>
                         </g>
                       )}
                       {i === 1 && (
                         <g>
-                          <text x="140" y="40" textAnchor="middle" fontSize="10" fill="rgba(255,255,255,0.3)" fontFamily="monospace" letterSpacing="0.16em">BINARY POSITION</text>
-                          <line x1="40" y1="55" x2="240" y2="55" stroke="rgba(255,255,255,0.06)" />
+                          <text x="140" y="40" textAnchor="middle" fontSize="10" fill="var(--white)" fillOpacity={0.3} fontFamily="monospace" letterSpacing="0.16em">BINARY POSITION</text>
+                          <line x1="40" y1="55" x2="240" y2="55" stroke="var(--white)" strokeOpacity={0.06} />
                           <rect x="50" y="70" width="80" height="100" rx="4" fill="rgba(224,77,38,0.08)" stroke="rgba(224,77,38,0.3)" />
                           <text x="90" y="105" textAnchor="middle" fontSize="24" fontWeight="700" fill="var(--vermilion)" fontFamily="system-ui">{'\u2191'}</text>
                           <text x="90" y="125" textAnchor="middle" fontSize="9" fill="var(--vermilion)" fontFamily="monospace">ABOVE</text>
-                          <text x="90" y="140" textAnchor="middle" fontSize="7" fill="rgba(255,255,255,0.3)" fontFamily="monospace">64%</text>
-                          <rect x="150" y="70" width="80" height="100" rx="4" fill="rgba(255,255,255,0.02)" stroke="rgba(255,255,255,0.08)" />
-                          <text x="190" y="105" textAnchor="middle" fontSize="24" fontWeight="700" fill="rgba(255,255,255,0.4)" fontFamily="system-ui">{'\u2193'}</text>
-                          <text x="190" y="125" textAnchor="middle" fontSize="9" fill="rgba(255,255,255,0.4)" fontFamily="monospace">BELOW</text>
-                          <text x="190" y="140" textAnchor="middle" fontSize="7" fill="rgba(255,255,255,0.3)" fontFamily="monospace">36%</text>
+                          <text x="90" y="140" textAnchor="middle" fontSize="7" fill="var(--white)" fillOpacity={0.3} fontFamily="monospace">64%</text>
+                          <rect x="150" y="70" width="80" height="100" rx="4" fill="var(--white)" fillOpacity={0.02} stroke="var(--white)" strokeOpacity={0.08} />
+                          <text x="190" y="105" textAnchor="middle" fontSize="24" fontWeight="700" fill="var(--white)" fillOpacity={0.4} fontFamily="system-ui">{'\u2193'}</text>
+                          <text x="190" y="125" textAnchor="middle" fontSize="9" fill="var(--white)" fillOpacity={0.4} fontFamily="monospace">BELOW</text>
+                          <text x="190" y="140" textAnchor="middle" fontSize="7" fill="var(--white)" fillOpacity={0.3} fontFamily="monospace">36%</text>
                         </g>
                       )}
                       {i === 2 && (
                         <g>
-                          <text x="140" y="40" textAnchor="middle" fontSize="10" fill="rgba(255,255,255,0.3)" fontFamily="monospace" letterSpacing="0.16em">DETERMINISTIC SETTLEMENT</text>
-                          <line x1="40" y1="55" x2="240" y2="55" stroke="rgba(255,255,255,0.06)" />
-                          <line x1="60" y1="80" x2="60" y2="160" stroke="rgba(255,255,255,0.08)" />
-                          <line x1="140" y1="80" x2="140" y2="160" stroke="rgba(255,255,255,0.08)" />
-                          <line x1="220" y1="80" x2="220" y2="160" stroke="rgba(255,255,255,0.08)" />
-                          <circle cx="60" cy="100" r="12" fill="none" stroke="rgba(255,255,255,0.2)" />
-                          <text x="60" y="104" textAnchor="middle" fontSize="8" fill="rgba(255,255,255,0.5)" fontFamily="monospace">1</text>
-                          <text x="60" y="130" textAnchor="middle" fontSize="6" fill="rgba(255,255,255,0.3)" fontFamily="monospace">ORACLE</text>
-                          <text x="60" y="140" textAnchor="middle" fontSize="6" fill="rgba(255,255,255,0.3)" fontFamily="monospace">REPORTS</text>
+                          <text x="140" y="40" textAnchor="middle" fontSize="10" fill="var(--white)" fillOpacity={0.3} fontFamily="monospace" letterSpacing="0.16em">DETERMINISTIC SETTLEMENT</text>
+                          <line x1="40" y1="55" x2="240" y2="55" stroke="var(--white)" strokeOpacity={0.06} />
+                          <line x1="60" y1="80" x2="60" y2="160" stroke="var(--white)" strokeOpacity={0.08} />
+                          <line x1="140" y1="80" x2="140" y2="160" stroke="var(--white)" strokeOpacity={0.08} />
+                          <line x1="220" y1="80" x2="220" y2="160" stroke="var(--white)" strokeOpacity={0.08} />
+                          <circle cx="60" cy="100" r="12" fill="none" stroke="var(--white)" strokeOpacity={0.2} />
+                          <text x="60" y="104" textAnchor="middle" fontSize="8" fill="var(--white)" fillOpacity={0.5} fontFamily="monospace">1</text>
+                          <text x="60" y="130" textAnchor="middle" fontSize="6" fill="var(--white)" fillOpacity={0.3} fontFamily="monospace">ORACLE</text>
+                          <text x="60" y="140" textAnchor="middle" fontSize="6" fill="var(--white)" fillOpacity={0.3} fontFamily="monospace">REPORTS</text>
                           <line x1="72" y1="100" x2="128" y2="100" stroke="rgba(224,77,38,0.3)" strokeDasharray="3 2" />
                           <circle cx="140" cy="100" r="12" fill="none" stroke="rgba(224,77,38,0.4)" />
                           <text x="140" y="104" textAnchor="middle" fontSize="8" fill="var(--vermilion)" fontFamily="monospace">2</text>
-                          <text x="140" y="130" textAnchor="middle" fontSize="6" fill="rgba(255,255,255,0.3)" fontFamily="monospace">CONTRACT</text>
-                          <text x="140" y="140" textAnchor="middle" fontSize="6" fill="rgba(255,255,255,0.3)" fontFamily="monospace">EXECUTES</text>
+                          <text x="140" y="130" textAnchor="middle" fontSize="6" fill="var(--white)" fillOpacity={0.3} fontFamily="monospace">CONTRACT</text>
+                          <text x="140" y="140" textAnchor="middle" fontSize="6" fill="var(--white)" fillOpacity={0.3} fontFamily="monospace">EXECUTES</text>
                           <line x1="152" y1="100" x2="208" y2="100" stroke="rgba(224,77,38,0.3)" strokeDasharray="3 2" />
                           <circle cx="220" cy="100" r="12" fill="none" stroke="var(--vermilion)" />
                           <text x="220" y="104" textAnchor="middle" fontSize="8" fill="var(--vermilion)" fontFamily="monospace">3</text>
-                          <text x="220" y="130" textAnchor="middle" fontSize="6" fill="rgba(255,255,255,0.3)" fontFamily="monospace">PAYOUTS</text>
-                          <text x="220" y="140" textAnchor="middle" fontSize="6" fill="rgba(255,255,255,0.3)" fontFamily="monospace">FLOW</text>
+                          <text x="220" y="130" textAnchor="middle" fontSize="6" fill="var(--white)" fillOpacity={0.3} fontFamily="monospace">PAYOUTS</text>
+                          <text x="220" y="140" textAnchor="middle" fontSize="6" fill="var(--white)" fillOpacity={0.3} fontFamily="monospace">FLOW</text>
                         </g>
                       )}
                       {i === 3 && (
                         <g>
-                          <text x="140" y="40" textAnchor="middle" fontSize="10" fill="rgba(255,255,255,0.3)" fontFamily="monospace" letterSpacing="0.16em">REPUTATION SYSTEM</text>
-                          <line x1="40" y1="55" x2="240" y2="55" stroke="rgba(255,255,255,0.06)" />
+                          <text x="140" y="40" textAnchor="middle" fontSize="10" fill="var(--white)" fillOpacity={0.3} fontFamily="monospace" letterSpacing="0.16em">REPUTATION SYSTEM</text>
+                          <line x1="40" y1="55" x2="240" y2="55" stroke="var(--white)" strokeOpacity={0.06} />
                           {[0, 1, 2, 3, 4].map(j => (
                             <g key={j}>
-                              <rect x="50" y={70 + j * 22} width={160 - j * 20} height="16" rx="2" fill={j === 0 ? 'rgba(224,77,38,0.15)' : 'rgba(255,255,255,0.03)'} stroke={j === 0 ? 'rgba(224,77,38,0.3)' : 'rgba(255,255,255,0.06)'} />
-                              <text x="56" y={81 + j * 22} fontSize="7" fill={j === 0 ? 'var(--vermilion)' : 'rgba(255,255,255,0.3)'} fontFamily="monospace">#{j + 1}</text>
-                              <text x={45 + (160 - j * 20)} y={81 + j * 22} fontSize="7" fill={j === 0 ? 'var(--vermilion)' : 'rgba(255,255,255,0.3)'} fontFamily="monospace" textAnchor="end">{(92 - j * 8).toFixed(1)}%</text>
+                              <rect x="50" y={70 + j * 22} width={160 - j * 20} height="16" rx="2" fill={j === 0 ? 'rgba(224,77,38,0.15)' : 'var(--white)'} fillOpacity={j === 0 ? 1 : 0.03} stroke={j === 0 ? 'rgba(224,77,38,0.3)' : 'var(--white)'} strokeOpacity={j === 0 ? 1 : 0.06} />
+                              <text x="56" y={81 + j * 22} fontSize="7" fill={j === 0 ? 'var(--vermilion)' : 'var(--white)'} fillOpacity={j === 0 ? 1 : 0.3} fontFamily="monospace">#{j + 1}</text>
+                              <text x={45 + (160 - j * 20)} y={81 + j * 22} fontSize="7" fill={j === 0 ? 'var(--vermilion)' : 'var(--white)'} fillOpacity={j === 0 ? 1 : 0.3} fontFamily="monospace" textAnchor="end">{(92 - j * 8).toFixed(1)}%</text>
+                            </g>
+                          ))}
+                        </g>
+                      )}
+                      {i === 4 && (
+                        <g>
+                          <text x="140" y="40" textAnchor="middle" fontSize="10" fill="var(--white)" fillOpacity={0.3} fontFamily="monospace" letterSpacing="0.16em">ON-CHAIN GUARDRAILS</text>
+                          <line x1="40" y1="55" x2="240" y2="55" stroke="var(--white)" strokeOpacity={0.06} />
+                          <rect x="40" y="72" width="72" height="88" rx="4" fill="rgba(224,77,38,0.08)" stroke="rgba(224,77,38,0.3)" />
+                          <circle cx="76" cy="104" r="16" fill="none" stroke="var(--vermilion)" strokeWidth="1.5" />
+                          <path d="M69,104 L74,109 L84,98" fill="none" stroke="var(--vermilion)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                          <text x="76" y="140" textAnchor="middle" fontSize="7" fill="var(--vermilion)" fontFamily="monospace">AGENT</text>
+                          <text x="76" y="150" textAnchor="middle" fontSize="6" fill="var(--white)" fillOpacity={0.3} fontFamily="monospace">ATTESTED</text>
+                          <line x1="112" y1="104" x2="136" y2="104" stroke="rgba(224,77,38,0.3)" strokeDasharray="3 2" />
+                          {['CAP', 'ALLOWLIST', 'DAILY STOP'].map((r, k) => (
+                            <g key={r}>
+                              <rect x="140" y={74 + k * 30} width="100" height="22" rx="3" fill="var(--white)" fillOpacity={0.03} stroke="var(--white)" strokeOpacity={0.08} />
+                              <text x="150" y={89 + k * 30} fontSize="7" fill="var(--white)" fillOpacity={0.6} fontFamily="monospace">{r}</text>
+                              <path d={`M221,${85 + k * 30} l3,3 l6,-6`} fill="none" stroke="var(--vermilion)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
                             </g>
                           ))}
                         </g>
@@ -833,7 +858,7 @@ export default function HomePage() {
               <div className="faq-cat">Mechanics <span className="count">02</span></div>
               <div className="faq-cat">Access <span className="count">01</span></div>
             </div>
-            <a href="#" className="ask" data-cursor="hover">
+            <a href="https://x.com/yosuku0" target="_blank" rel="noreferrer" className="ask" data-cursor="hover">
               Ask a question <span className="arr">{'\u2197'}</span>
             </a>
           </aside>
@@ -940,9 +965,24 @@ export default function HomePage() {
         <div className="footer-bottom">
           <span className="footer-meta">&copy; 2026 YOSUKU</span>
           <div className="legal-links">
-            <a href="#" data-cursor="hover">Terms</a>
-            <a href="#" data-cursor="hover">Privacy</a>
-            <a href="#" data-cursor="hover">Cookies</a>
+            {['Terms', 'Privacy', 'Cookies'].map(t => (
+              <span
+                key={t}
+                title="Coming soon"
+                aria-disabled="true"
+                style={{
+                  color: 'var(--gray-500)',
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '10px',
+                  letterSpacing: '0.16em',
+                  textTransform: 'uppercase',
+                  opacity: 0.6,
+                  cursor: 'default',
+                }}
+              >
+                {t}
+              </span>
+            ))}
           </div>
           <span className="footer-sayonara">{'\u307E\u305F\u3001\u6B21\u306E\u9418\u3067\u3002'}</span>
         </div>

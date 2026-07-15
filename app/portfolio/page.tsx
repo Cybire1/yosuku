@@ -263,7 +263,8 @@ export default function PortfolioPage() {
             <div className="w-6 h-6 border border-gray-600 border-t-white rounded-full animate-spin mx-auto" />
           </div>
         ) : !address ? (
-          <div className="border border-white/[0.08] rounded bg-bg p-16 text-center">
+          <div className="flex items-center justify-center min-h-[calc(100vh-360px)]">
+          <div className="w-full border border-white/[0.08] rounded bg-bg p-16 text-center">
             <div className="w-16 h-16 mx-auto mb-6 border border-white/10 rounded-full flex items-center justify-center">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-gray-500">
                 <rect x="2" y="6" width="20" height="14" rx="2" />
@@ -278,6 +279,7 @@ export default function PortfolioPage() {
               <ConnectButton />
               <a href="/how-it-works" className="text-[11px] text-gray-600 hover:text-white transition-colors">New to Sui? Any wallet works — test funds are free →</a>
             </div>
+          </div>
           </div>
         ) : (
           <div className="space-y-8">

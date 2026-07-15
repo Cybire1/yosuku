@@ -32,6 +32,7 @@ import {
   glyphFromAddress,
   SUISCAN_TX,
   SUISCAN_ACC,
+  STRATEGY_PKG,
   xIntentUrl,
   type StrategyCard,
   type CopyTrade,
@@ -48,6 +49,9 @@ import { useSmartSubmit } from '@/lib/sui/useSmartSubmit';
 const ZERO_ADDR = '0x0000000000000000000000000000000000000000000000000000000000000000';
 const SUISCAN_OBJ = (id: string) => `https://suiscan.xyz/testnet/object/${id}`;
 const DAY = 86_400_000;
+// Recent copy-trades is proof-of-liveness, not an archive — show the latest few and
+// send the curious to the on-chain record for the rest (keeps the page from ballooning).
+const RECENT_TRADES_LIMIT = 8;
 
 // Deterministic kanji glyph tile per strategy — the desk's own visual language.
 // (Photo portraits looked like fake people, and a 5-image pool guaranteed duplicate
@@ -553,12 +557,12 @@ export default function StrategiesPage() {
                 {copyTrades.length === 0 ? (
                   <div className="font-mono text-[11px] uppercase tracking-[0.2em] text-white/30 px-5 py-8 text-center">No copy-trades settled yet — be the first.</div>
                 ) : (
-                  copyTrades.map((t, i) => {
+                  copyTrades.slice(0, RECENT_TRADES_LIMIT).map((t, i) => {
                     const tradeName = codenameFromAddress(t.strategy || t.agent);
                     const inner = (
                       <div className="flex items-center gap-3 px-5 py-3 hover:bg-white/[0.02] transition-colors">
                         <AgentPortrait seed={t.strategy || t.agent} name={tradeName} size="small" />
-                        <span className="font-display font-[700] text-[13px] text-white w-28 shrink-0 truncate">{tradeName}</span>
+                        <span className="font-display font-[700] text-[13px] text-white w-28 min-w-0 truncate">{tradeName}</span>
                         <a
                           href={SUISCAN_ACC(t.subscriber)} target="_blank" rel="noreferrer"
                           onClick={(e) => e.stopPropagation()}
@@ -567,7 +571,7 @@ export default function StrategiesPage() {
                           {fmtAddr(t.subscriber)}
                         </a>
                         <span className="flex-1" />
-                        <span className="font-mono text-[12px] text-white/70 tabular-nums">{fmtDusdc(t.notional)} test USDC</span>
+                        <span className="font-mono text-[12px] text-white/70 tabular-nums whitespace-nowrap shrink-0">{fmtDusdc(t.notional)} test USDC</span>
                         <span className="font-mono text-[11px] text-white/40 w-10 text-right shrink-0 tabular-nums">{t.leverageBps / 10000}×</span>
                         <span className="font-mono text-[11px] text-white/30 w-14 text-right shrink-0">{ago(t.ts)}</span>
                         <span className="font-mono text-[11px] text-vermilion w-4 text-right shrink-0">{t.digest ? '↗' : ''}</span>
@@ -587,6 +591,14 @@ export default function StrategiesPage() {
                       <div key={i}>{inner}</div>
                     );
                   })
+                )}
+                {copyTrades.length > RECENT_TRADES_LIMIT && (
+                  <a
+                    href={SUISCAN_OBJ(STRATEGY_PKG)} target="_blank" rel="noreferrer"
+                    className="block px-5 py-3 text-center font-mono text-[10px] uppercase tracking-[0.18em] text-white/40 hover:text-white transition-colors"
+                  >
+                    View all {copyTrades.length} on-chain ↗
+                  </a>
                 )}
               </div>
             </section>

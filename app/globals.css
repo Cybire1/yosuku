@@ -3739,6 +3739,12 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
 [data-theme="light"] .bg-neutral-900\/60,
 [data-theme="light"] .bg-neutral-900\/50 { background-color: rgba(251,247,238,0.94); }
 
+/* translucent bg-bg opacity utilities (e.g. the strategies sticky filter bar):
+   the /opacity variants compile to color-mix over --color-bg, which is NOT theme-
+   flipped, so they'd render a near-black bar on cream (dark-on-dark tab labels).
+   Re-aim to frosted paper, matching the header/nav chrome. */
+[data-theme="light"] .bg-bg\/85 { background-color: rgba(244,238,227,0.85); }
+
 /* frosted header / floating nav → warm translucent */
 [data-theme="light"] .header,
 [data-theme="light"] .mobile-bottom-nav { background: rgba(244,238,227,0.82); }
@@ -3755,6 +3761,23 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
 [data-theme="light"] .mc-strip .ramp .bar { background: rgba(20,18,16,0.10); }
 [data-theme="light"] .hero-chart-foot .ramp .fill,
 [data-theme="light"] .mc-strip .ramp .fill { background: linear-gradient(90deg, var(--vermilion), #E6A489); }
+
+/* footer top hairline: authored rgba(255,255,255,0.06) is invisible on cream → re-ink. */
+[data-theme="light"] .footer { border-top-color: rgba(20,18,16,0.08); }
+
+/* The Room chat strip: authored white-on-white for the dark canvas → ghost text on
+   cream. Re-ink the surface + label so the bettors-only chat is discoverable in light,
+   and re-aim the hover's color:#fff (invisible on the vermilion-tinted cream) to ink. */
+[data-theme="light"] .mc-room {
+  background: rgba(20,18,16,0.035);
+  border-color: rgba(20,18,16,0.08);
+  color: rgba(20,18,16,0.62);
+}
+[data-theme="light"] .mc-room:hover {
+  background: rgba(230,57,40,0.08);
+  border-color: rgba(230,57,40,0.32);
+  color: #141210;
+}
 
 /* the floating bell-countdown orb — a clean WHITE disc that lifts off the cream page
    (a cream disc vanishes into it). A soft shadow gives the raised-control feel; the
