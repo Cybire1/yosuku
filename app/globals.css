@@ -1132,9 +1132,6 @@ body.urgent::before {
   background: rgba(255,255,255,0.022);
   box-shadow: 0 14px 60px rgba(0,0,0,0.5);
 }
-.market-card.urgent {
-  border-color: rgba(224,77,38,0.4);
-}
 .market-card.flash {
   animation: cardFlash 1.6s var(--ease);
 }

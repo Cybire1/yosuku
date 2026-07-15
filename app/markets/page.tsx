@@ -228,7 +228,7 @@ function Market624Card({
   return (
     <>
     <article
-      className={`market-card ${urgent ? 'urgent' : ''}`}
+      className="market-card"
       role="button"
       tabIndex={0}
       aria-label={`${question} Opens the bet ticket.`}
