@@ -1000,7 +1000,9 @@ body.urgent::before {
 .tape-label .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--vermilion); animation: pulseDot 1.4s var(--ease) infinite; }
 
 /* ───────── Section header — torii style ───────── */
-.markets-section { padding: 72px 0 0; }
+.markets-section { padding: 28px 0 0; }
+/* markets hero sits closer to the Live-now grid — the big cream gap read as empty */
+.markets-hero { padding-bottom: 20px; }
 .section-head {
   display: flex; align-items: flex-end; justify-content: space-between;
   gap: 24px;

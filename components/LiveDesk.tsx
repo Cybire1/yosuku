@@ -563,9 +563,6 @@ export default function LiveDesk() {
                   className="w-full sm:w-auto rounded-full bg-vermilion hover:bg-vermilion-d text-white text-[13px] font-semibold px-7 py-3 transition-colors">
                   Copy this strategy →
                 </button>
-                <p className="font-mono text-[10px] text-white/30 mt-3">
-                  One signature to join · withdraw anytime · you can lose what you put on.
-                </p>
               </div>
             ) : (
               /* ── state: JOIN (open) — one decision (the amount), one signature ── */

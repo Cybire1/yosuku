@@ -46,12 +46,6 @@ export default function TakeReelCard({ take }: { take: FeedTake }) {
   return (
     <section className="feed-card flex items-center justify-center px-3 pt-2 pb-[92px]">
       <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 opacity-70"
-        style={{ background: 'radial-gradient(52% 42% at 50% 34%, rgba(224,77,38,0.07), transparent 70%)' }}
-      />
-
-      <div
         data-theme="dark"
         className="relative z-10 flex h-full w-full max-w-[460px] flex-col overflow-hidden rounded-[26px] border border-white/[0.1] shadow-[0_30px_120px_-30px_rgba(0,0,0,0.9)]"
         style={{ background: 'radial-gradient(130% 80% at 50% -8%, #16110d 0%, #0c0a08 44%, #080605 100%)' }}

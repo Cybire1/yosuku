@@ -53,9 +53,6 @@ const DAY = 86_400_000;
 // send the curious to the on-chain record for the rest (keeps the page from ballooning).
 const RECENT_TRADES_LIMIT = 8;
 
-// Deterministic kanji glyph tile per strategy — the desk's own visual language.
-// (Photo portraits looked like fake people, and a 5-image pool guaranteed duplicate
-// faces side-by-side in an 8-card grid. A seeded glyph is unique, honest, on-brand.)
 // Per-agent accent — a deterministic hue from the agent id, so the catalogue reads
 // as distinct identities instead of one card repeated. Curated palette, all legible on near-black.
 const AGENT_ACCENTS = ['#E04D26', '#F7931A', '#2FA47C', '#5B8DEF', '#C05CD8', '#22B8CF', '#E0A62E', '#D8556B'];
@@ -65,15 +62,40 @@ function accentForAgent(id: string): string {
   return AGENT_ACCENTS[Math.abs(h) % AGENT_ACCENTS.length];
 }
 
+// Generated avatar image, unique per agent — a deterministic gradient marble. Not a photo
+// (those read as fake faces + duplicated in a grid); a seeded image is varied, honest, on-brand.
+function GeneratedAvatar({ seed, accent }: { seed: string; accent: string }) {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (Math.imul(h, 31) + seed.charCodeAt(i)) | 0;
+  const a = Math.abs(h);
+  const base = a % 360;
+  const p = (shift: number, lo: number, hi: number) => lo + ((a >> shift) % Math.max(1, hi - lo));
+  const id = `av${a.toString(36)}`;
+  return (
+    <svg viewBox="0 0 80 80" className="h-full w-full" aria-hidden preserveAspectRatio="xMidYMid slice">
+      <defs>
+        <radialGradient id={id} cx="32%" cy="26%" r="90%">
+          <stop offset="0%" stopColor={`hsl(${base} 66% 62%)`} />
+          <stop offset="100%" stopColor={accent} />
+        </radialGradient>
+      </defs>
+      <rect width="80" height="80" fill={`url(#${id})`} />
+      <circle cx={p(2, 12, 52)} cy={p(4, 12, 52)} r={p(6, 18, 28)} fill={`hsl(${(base + 72) % 360} 62% 52%)`} opacity="0.55" />
+      <circle cx={p(9, 34, 68)} cy={p(11, 34, 68)} r={p(13, 12, 20)} fill={`hsl(${(base + 200) % 360} 58% 42%)`} opacity="0.5" />
+      <circle cx={p(15, 44, 70)} cy={p(17, 10, 30)} r="5.5" fill="rgba(255,255,255,0.4)" />
+    </svg>
+  );
+}
+
 function AgentPortrait({ seed, name, size = 'card', accent = '#E04D26' }: { seed: string; name: string; size?: 'small' | 'card' | 'drawer'; accent?: string }) {
-  const dimensions = size === 'small' ? 'h-8 w-8 text-base' : size === 'drawer' ? 'h-16 w-16 text-3xl' : 'h-16 w-16 text-3xl';
+  const dimensions = size === 'small' ? 'h-8 w-8' : 'h-16 w-16';
   return (
     <div
-      aria-label={`${name} agent glyph`}
-      className={`relative shrink-0 grid place-items-center overflow-hidden border bg-white/[0.03] font-jp ${dimensions}`}
-      style={{ color: accent, borderColor: `${accent}40` }}
+      aria-label={`${name} avatar`}
+      className={`relative shrink-0 overflow-hidden rounded-xl border ${dimensions}`}
+      style={{ borderColor: `${accent}40` }}
     >
-      {glyphFromAddress(seed)}
+      <GeneratedAvatar seed={seed} accent={accent} />
       <span className="absolute bottom-1 right-1 h-1.5 w-1.5 rounded-full border border-black/70" style={{ background: accent, boxShadow: `0 0 8px ${accent}cc` }} />
     </div>
   );
@@ -478,8 +500,6 @@ export default function StrategiesPage() {
                         <AgentPortrait seed={card.id} name={agentName} accent={accent} />
                         <div className="min-w-0 flex-1 pt-1">
                           <h3 className="font-display font-[800] text-xl text-white truncate tracking-tight leading-[1.05]">{agentName}</h3>
-                          <a href={SUISCAN_ACC(card.agent)} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
-                            className="mt-1 inline-block font-mono text-[10px] uppercase tracking-[0.12em] text-white/35 hover:text-white transition-colors">On-chain record ↗</a>
                         </div>
                         {/* leverage — pinned to the right of the header for balance */}
                         <div className="shrink-0 text-right pt-0.5">

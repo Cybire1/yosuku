@@ -26,7 +26,7 @@ import { fmtBell624 } from '@/lib/sui/bell624';
 import { fetchTakes, type FeedTake } from '@/lib/sui/takeBoard';
 import TakeReelCard from '@/components/TakeReelCard';
 import TakeComposer624 from '@/components/TakeComposer624';
-import { Feather } from 'lucide-react';
+import { Feather, ChevronUp } from 'lucide-react';
 
 const CAD_WORD: Record<Cadence624, string> = { '1m': '1-min', '5m': '5-min', '1h': '1-hour' };
 
@@ -177,7 +177,6 @@ function ReelCard({
             </div>
           ) : (
             <>
-              <div className="mb-2.5 text-center font-mono text-[9px] uppercase tracking-[0.18em] text-white/35">winning side pays $1 · settled by the oracle at close</div>
               <div className="grid grid-cols-2 gap-3">
                 <Link href="/markets" data-cursor="hover" style={{ outline: 'none' }}
                   className="rounded-xl border border-vermilion/60 bg-vermilion/10 py-3 text-center font-display text-base font-bold text-vermilion transition-colors hover:bg-vermilion/20">
@@ -265,6 +264,7 @@ export default function FeedPage() {
   // community takes (poll 20s) — the social half of the reel
   const [takes, setTakes] = useState<FeedTake[]>([]);
   const [composerOpen, setComposerOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
   const reloadTakes = useMemo(
     () => () => { fetchTakes(30).then(setTakes).catch(() => {}); },
     [],
@@ -294,7 +294,7 @@ export default function FeedPage() {
     <>
       <Marquee />
       <Header />
-      <main className="feed-snap" style={{ outline: 'none' }}>
+      <main className="feed-snap" style={{ outline: 'none' }} onScroll={() => setScrolled(true)}>
         {!loaded ? (
           <EmptyReel>reading the market…</EmptyReel>
         ) : reel.length === 0 ? (
@@ -324,6 +324,14 @@ export default function FeedPage() {
           <Feather size={24} />
           <span className="font-display text-[13px] font-bold leading-none">Take</span>
         </button>
+      )}
+
+      {/* swipe-for-more hint — the reel is a snap scroll; nudge first-time viewers, then fade */}
+      {hasReel && (
+        <div aria-hidden className={`pointer-events-none fixed inset-x-0 bottom-[100px] z-40 flex flex-col items-center gap-0.5 transition-opacity duration-500 ${scrolled ? 'opacity-0' : 'opacity-90'}`}>
+          <ChevronUp size={22} className="animate-bounce text-vermilion" strokeWidth={2.6} />
+          <span className="font-mono text-[9px] uppercase tracking-[0.24em] text-white/45">Swipe for more</span>
+        </div>
       )}
 
       {composerOpen && <TakeComposer624 onClose={() => setComposerOpen(false)} onPosted={reloadTakes} />}
