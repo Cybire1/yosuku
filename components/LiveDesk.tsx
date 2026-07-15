@@ -465,19 +465,6 @@ export default function LiveDesk() {
                 </div>
 
                 {/* truth-telling: "copying" while unaffordable is a lie — say so */}
-                {underfundedBalance && (
-                  <div className="border border-vermilion/40 bg-vermilion/[0.04] px-4 py-3 max-w-md">
-                    <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-vermilion mb-1">Too low to catch the next trade</p>
-                    <p className="text-[12px] text-white/70 leading-snug break-words">
-                      Recent trades cost about {fmtDusdc(stats.typicalCost)} each and your balance is{' '}
-                      {fmtDusdc(ledger)} — the strategy will skip you until you add more.
-                    </p>
-                    <div className="mt-2 flex items-center gap-2">
-                      <button onClick={() => setManage('add')} className="rounded-md border border-vermilion/50 bg-vermilion/[0.06] px-2.5 py-0.5 font-mono text-[10px] text-vermilion hover:bg-vermilion/[0.12] transition-colors">Add money →</button>
-                      {walletDusdc <= 0 && faucetChip}
-                    </div>
-                  </div>
-                )}
                 {underfundedCap && (
                   <div className="border border-white/15 bg-white/[0.02] px-4 py-3 max-w-md">
                     <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/60 mb-1">Your cap sits below recent trades</p>
@@ -649,11 +636,6 @@ export default function LiveDesk() {
         </div>
       </div>
 
-      {/* standing disclosure — the one place testnet / can-lose / oracle-settled is said */}
-      <p className="mt-3 font-mono text-[10px] leading-relaxed text-gray-600 max-w-3xl break-words">
-        Play-money USDC on Sui testnet — not real dollars. Markets settle from a price oracle, not
-        a committee vote. Copied trades can lose; only put on what you can afford to lose.
-      </p>
     </section>
   );
 }

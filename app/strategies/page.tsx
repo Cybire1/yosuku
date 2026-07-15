@@ -401,14 +401,8 @@ export default function StrategiesPage() {
           onRead={readListing}
         />
 
-        {/* previous-venue dateline — the catalogue below is real history on the old deployment */}
-        <div className="flex items-center gap-3 mt-14 mb-2">
-          <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/30">Previous venue — records preserved</span>
-          <div className="h-px flex-1 bg-white/10" />
-        </div>
-
         {/* control bar — curated tabs (replaces the dead leaderboard) */}
-        <div className="sticky top-[64px] z-20 -mx-4 px-4 py-3 mb-7 bg-bg/85 backdrop-blur-md border-b border-white/[0.06]">
+        <div className="sticky top-[64px] z-20 mt-14 -mx-4 px-4 py-3 mb-7 bg-bg/85 backdrop-blur-md border-b border-white/[0.06]">
           <div className="flex items-center gap-5 overflow-x-auto no-scrollbar">
             {TABS.map((t) => {
               const on = tab === t.key;
@@ -463,15 +457,6 @@ export default function StrategiesPage() {
                     >
                       <Crosshairs />
 
-                      {/* dateline: folio · tier — last filed */}
-                      <div className="flex items-center justify-between font-mono text-[10px] uppercase tracking-[0.25em] pb-3 mb-4 border-b border-white/[0.08]">
-                        <span className="flex items-center gap-3">
-                          <span className="text-white/30">Nº {folio}</span>
-                          <TierWord tier={tier} />
-                        </span>
-                        <span className="text-white/40">{ago(card.lastActive) || '—'}</span>
-                      </div>
-
                       {/* Strategy identity is seeded from the strategy object, not the shared executor. */}
                       <div className="flex items-start gap-3">
                         <AgentPortrait seed={card.id} name={agentName} />
@@ -519,9 +504,7 @@ export default function StrategiesPage() {
                               </>
                             )}
                           </span>
-                        ) : (
-                          <span className="text-white/40 tracking-[0.22em]">[ Awaiting first copy ]</span>
-                        )}
+                        ) : null}
                       </div>
 
                       {/* CTA */}
@@ -537,7 +520,7 @@ export default function StrategiesPage() {
                           // here would take a fee and never fill. Send new copiers to the Live Desk.
                           <a href="#live-desk" onClick={scrollToDesk}
                             className="group/cta w-full py-3 font-mono text-[11px] uppercase tracking-[0.14em] font-semibold border border-white/12 text-white/55 hover:text-white hover:border-white/30 transition-colors inline-flex items-center justify-center gap-2">
-                            Archived record · copy live on the desk <span className="transition-transform group-hover/cta:-translate-y-0.5">↑</span>
+                            Copy on the desk <span className="transition-transform group-hover/cta:-translate-y-0.5">↑</span>
                           </a>
                         )}
                       </div>
