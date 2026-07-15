@@ -183,9 +183,6 @@ export default function EarnPage() {
                 Earn real<br />
                 <span className="accent">yield</span>.
               </h1>
-              <p className="mt-6 max-w-md text-gray-400 leading-relaxed text-[15px]">
-                Supply DUSDC, earn the trading spread from every market. Withdraw anytime — the share price can dip if the vault takes losses.
-              </p>
             </div>
 
             {/* live vault dashboard — every number below is the live on-chain object, or the panel says so */}
@@ -207,6 +204,10 @@ export default function EarnPage() {
                     <ReserveRow label="Available to withdraw" value={availableWithdraw != null ? fmt(availableWithdraw) : '—'} unit="DUSDC" />
                     <ReserveRow label="Utilization" value={utilization != null ? `${(utilization * 100).toFixed(1)}%` : '—'} accent />
                   </div>
+                  {/* compact honesty note — the risk line the hero blurb used to carry */}
+                  <p className="mt-4 pt-3.5 border-t border-white/[0.06] font-mono text-[10px] leading-relaxed text-gray-600">
+                    Withdraw anytime · share price can dip if the vault takes losses.
+                  </p>
                 </>
               ) : (
                 <p className="font-mono text-xs text-gray-600 py-3">syncing vault from chain…</p>
