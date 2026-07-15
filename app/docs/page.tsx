@@ -14,7 +14,7 @@ const CONTRACTS: { label: string; id: string; type: 'object' | 'tx' }[] = [
   { label: 'DeepBook Predict package', id: '0xf5ea2b3749c65d6e56507cc35388719aadb28f9cab873696a2f8687f5c785138', type: 'object' },
   { label: 'yosuku_vault (attested agent vault)', id: '0x1c95fb3703d841e1cb7b0742c9426fc7fb4e3c35903c8efd67bb0ae625e5f034', type: 'object' },
   { label: 'Strategy market', id: '0x5bde72a992105011e851abd8f96026c27fc97440ac4db0a1f1356252b58be7dc', type: 'object' },
-  { label: 'Attested Bellkeeper trade (proof)', id: '9zN7JacN5AdzKLRHRh5vDDocx5CTns6HqFSrfWEavAbj', type: 'tx' },
+  { label: 'Attested Sensei trade (proof)', id: '9zN7JacN5AdzKLRHRh5vDDocx5CTns6HqFSrfWEavAbj', type: 'tx' },
 ];
 
 // Sidebar nav, grouped — the spine of the docs.
@@ -228,7 +228,7 @@ const quote   = await predict.quote(oracle.oracle_id, 63_000);  // SVI · N(d2)`
 
             <Section num="07" id="agent" eyebrow="The moat" title="The attested agent">
               <p>
-                The Bellkeeper is an autonomous strategist that trades a contract-custodied vault. Its authority is bounded
+                Sensei is an autonomous strategist that trades a contract-custodied vault. Its authority is bounded
                 <span className="text-white"> on-chain</span>, not by trust: every decision is signed inside a TEE, the signature is
                 re-checked against the exact trade params, and hard caps are enforced regardless of what the agent said. An agent
                 that <span className="text-white">provably can&apos;t overspend and can&apos;t lie about what it ran</span> — only
