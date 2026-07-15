@@ -340,6 +340,101 @@ function chartSurfaceLight(canvas: HTMLCanvasElement): boolean {
   return light;
 }
 
+// ─── UP-vs-DOWN stick duel that roams the live price line ───
+// Two small line-fighters roam the FULL width of the chart, riding the price line
+// as terrain: they drift apart to both ends, close to clash, and knock each other
+// back. Whoever's winning the market (price above / below the UP line) presses.
+const DUEL_UP = '#57D39A', DUEL_DOWN = '#F0584A';
+const dmix = (a: number[], b: number[], t: number): number[] => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+const dsmooth = (e0: number, e1: number, x: number): number => { const t = Math.max(0, Math.min(1, (e0 - x) / (e0 - e1))); return t * t * (3 - 2 * t); };
+function drawStick(
+  ctx: CanvasRenderingContext2D, cx: number, feetY: number,
+  p: { face: number; rot: number; punch: number; kick: number; bob: number; scale: number; color: string },
+) {
+  const { face, rot, punch, kick, bob, scale, color } = p;
+  let lEl = dmix([face * 8, -46], [face * 22, -45], punch), lHa = dmix([face * 13, -55], [face * 49, -46], punch);
+  let rEl = [face * -9, -50], rHa = [face * 4, -58];
+  const wv = 1 - punch, bY = bob * 4 * wv, bX = bob * 2.4 * face * wv;
+  lEl = [lEl[0] + bX, lEl[1] + bY]; lHa = [lHa[0] + bX, lHa[1] + bY];
+  rEl = [rEl[0] - bX, rEl[1] - bY * 1.3]; rHa = [rHa[0] - bX, rHa[1] - bY * 1.3];
+  const lKn = dmix([face * 9, 22], [face * 27, 4], kick), lFo = dmix([face * 13, 46], [face * 53, -3], kick);
+  const rKn = [face * -11, 22], rFo = [face * -18, 46];
+  ctx.save();
+  ctx.translate(cx, feetY - 46 * scale);
+  ctx.rotate((rot * Math.PI) / 180);
+  ctx.scale(scale, scale);
+  ctx.strokeStyle = color; ctx.lineWidth = 8; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  const seg = (a: number[], b: number[], c?: number[]) => { ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); if (c) ctx.lineTo(c[0], c[1]); ctx.stroke(); };
+  seg([0, 0], rKn, rFo);
+  seg([0, 0], lKn, lFo);
+  ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -46); ctx.stroke();
+  seg([0, -42], rEl, rHa);
+  seg([0, -42], lEl, lHa);
+  ctx.fillStyle = color; ctx.beginPath(); ctx.arc(0, -61, 13, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+function drawDuelBurst(ctx: CanvasRenderingContext2D, x: number, y: number, a: number, color: string) {
+  ctx.save();
+  ctx.globalAlpha = Math.max(0, Math.min(1, a));
+  ctx.strokeStyle = color; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
+  const grow = 5 + a * 9;
+  for (const d of [30, 90, 150, 210, 270, 330]) {
+    const r = (d * Math.PI) / 180;
+    ctx.beginPath();
+    ctx.moveTo(x + Math.cos(r) * grow * 0.5, y + Math.sin(r) * grow * 0.5);
+    ctx.lineTo(x + Math.cos(r) * grow, y + Math.sin(r) * grow);
+    ctx.stroke();
+  }
+  ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x, y, 3 * a, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+export function drawDuel(
+  ctx: CanvasRenderingContext2D,
+  o: { yAtX: (x: number) => number; xMin: number; xMax: number; h: number; now: number; above: boolean },
+) {
+  const { yAtX, xMin, xMax, h, now, above } = o;
+  const span = xMax - xMin;
+  if (span < 120) return;
+  const f = now / 16.667;
+  const scale = Math.max(0.16, Math.min(0.27, h * 0.0011)); // small + responsive (mobile shrinks)
+  const mid = (xMin + xMax) / 2, A = span * 0.44;
+  // roam the full width; slightly different frequencies → they meet at varied spots
+  const upX0 = mid + A * Math.sin(f * 0.016 + 0.4);
+  const dnX0 = mid + A * Math.sin(f * 0.0193 + 3.4);
+  const clash = dsmooth(84, 22, Math.abs(dnX0 - upX0)); // 0 apart → 1 clashing
+  const build = (who: 'UP' | 'DOWN') => {
+    const isUp = who === 'UP';
+    const baseX = isUp ? upX0 : dnX0;
+    const oppX = isUp ? dnX0 : upX0;
+    const face = oppX >= baseX ? 1 : -1;
+    const isAggr = isUp === above;
+    const phase = isUp ? 0 : 17;
+    const bob = Math.sin((f + phase) * 0.5);
+    let punch = 0.04 + 0.2 * Math.max(0, Math.sin((f + phase) * 0.6)) ** 2;
+    let kick = 0, rot = 0, x = baseX, jump = 0;
+    if (isAggr) {
+      const swing = clash * Math.max(0, Math.sin(f * 0.5));
+      if (Math.floor(f / 26) % 2 === 0) kick = swing; else punch = Math.max(punch, swing);
+      x = baseX + (oppX - 20 * face - baseX) * (clash * 0.85); // close in so blows land
+      jump = clash > 0.6 ? ((clash - 0.6) / 0.4) * 22 * Math.max(0, Math.sin(f * 0.55)) : 0; // hop in close combat
+    } else {
+      const reel = clash * Math.max(0, Math.sin(f * 0.5 + 1.3));
+      rot = -face * 22 * reel;
+      x = baseX - face * clash * clash * 18; // knocked back → they bounce apart
+    }
+    const feetY = yAtX(x) - jump + bob * 2 * (1 - clash);
+    return { x, feetY, face, punch, kick, rot, bob, scale, color: isUp ? DUEL_UP : DUEL_DOWN };
+  };
+  const up = build('UP'), dn = build('DOWN');
+  if (above) { drawStick(ctx, dn.x, dn.feetY, dn); drawStick(ctx, up.x, up.feetY, up); }
+  else { drawStick(ctx, up.x, up.feetY, up); drawStick(ctx, dn.x, dn.feetY, dn); }
+  if (clash > 0.5) {
+    const def = above ? dn : up;
+    const burstA = clash * Math.max(0, Math.sin(f * 0.5 + 1.3));
+    if (burstA > 0.12) drawDuelBurst(ctx, def.x, def.feetY - 61 * scale, burstA, above ? DUEL_UP : DUEL_DOWN);
+  }
+}
+
 // ─── Draw a smooth price line + area against a dashed target line ───
 // The right metaphor for an "up or down vs a target" market: one line, the
 // price-to-beat as a dashed Target, a soft gradient fill, and a glowing
@@ -364,6 +459,7 @@ export function drawPriceLine(
     xLabels?: string[];     // evenly spaced labels along the bottom
     motion?: boolean;       // animated live chart treatment
     now?: number;           // requestAnimationFrame timestamp
+    fighters?: boolean;     // draw the roaming UP-vs-DOWN stick duel on the price line
   } = {},
 ): void {
   if (!canvas || series.length < 2) return;
@@ -527,6 +623,19 @@ export function drawPriceLine(
   ctx.beginPath(); ctx.arc(last.x, last.y, motion ? 9 + pulse * 4 : 9, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = dotCol;
   ctx.beginPath(); ctx.arc(last.x, last.y, motion ? 3.8 + pulse * 0.8 : 3.5, 0, Math.PI * 2); ctx.fill();
+
+  // The roaming UP-vs-DOWN stick duel, riding the price line end to end
+  if (opts.fighters) {
+    const yAtX = (x: number): number => {
+      if (x <= pts[0].x) return pts[0].y;
+      for (let i = 1; i < pts.length; i++) {
+        if (x <= pts[i].x) { const t = (x - pts[i - 1].x) / (pts[i].x - pts[i - 1].x || 1); return pts[i - 1].y + (pts[i].y - pts[i - 1].y) * t; }
+      }
+      return pts[pts.length - 1].y;
+    };
+    const above = opts.target != null ? series[series.length - 1] >= (opts.target as number) : true;
+    drawDuel(ctx, { yAtX, xMin: padX, xMax: last.x, h, now, above });
+  }
 
   // X-axis labels
   if (opts.xLabels && opts.xLabels.length > 1) {

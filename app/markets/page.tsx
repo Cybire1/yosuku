@@ -540,6 +540,7 @@ export default function MarketsPage() {
         padBot: 12,
         motion: true,
         now: t,
+        fighters: true,
       });
       raf = window.requestAnimationFrame(drawFrame);
     };
