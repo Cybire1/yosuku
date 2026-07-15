@@ -400,9 +400,9 @@ function drawDuelBurst(ctx: CanvasRenderingContext2D, x: number, y: number, a: n
 }
 export function drawDuel(
   ctx: CanvasRenderingContext2D,
-  o: { yAtX: (x: number) => number; xMin: number; xMax: number; h: number; now: number; above: boolean },
+  o: { yAtX: (x: number) => number; xMin: number; xMax: number; h: number; now: number; above: boolean; move?: number },
 ) {
-  const { yAtX, xMin, xMax, now, above } = o;
+  const { yAtX, xMin, xMax, now, above, move = 0 } = o;
   const span = xMax - xMin;
   if (span < 120) return;
   const f = now / 16.667;
@@ -461,13 +461,32 @@ export function drawDuel(
   // draw the defender first so the aggressor overlaps on top through the strike
   if (above) { drawStick(ctx, dn.x, dn.feetY, dn); drawStick(ctx, up.x, up.feetY, up); }
   else { drawStick(ctx, up.x, up.feetY, up); drawStick(ctx, dn.x, dn.feetY, dn); }
-  if (contact > 0.12) {
-    const def = above ? dn : up;
-    const isKick = sType === 2;
-    // punches land on the head; kicks land at the waist
-    const hitX = def.x + (isKick ? 0 : def.hx * scale) + (above ? -1 : 1) * 4 * scale;
-    const hitY = isKick ? def.feetY - 34 * scale : def.feetY - 100 * scale + def.hy * scale;
-    drawDuelBurst(ctx, hitX, hitY, contact, above ? DUEL_UP : DUEL_DOWN, scale / 0.24);
+  const def = above ? dn : up;
+  const isKick = sType === 2;
+  // punches land on the head; kicks land at the waist
+  const hitX = def.x + (isKick ? 0 : def.hx * scale) + (above ? -1 : 1) * 4 * scale;
+  const hitY = isKick ? def.feetY - 34 * scale : def.feetY - 100 * scale + def.hy * scale;
+  if (contact > 0.12) drawDuelBurst(ctx, hitX, hitY, contact, above ? DUEL_UP : DUEL_DOWN, scale / 0.24);
+
+  // ── hit number: a tiny "+N" attack-pop rises from the impact and fades (game juice). N tracks
+  //    the real recent price move, so the winner lands harder when the market's ripping. ──
+  const POP_LEN = 17;
+  if (cyc >= CONTACT && cyc <= CONTACT + POP_LEN) {
+    const p = (cyc - CONTACT) / POP_LEN;
+    const a = p < 0.16 ? p / 0.16 : 1 - (p - 0.16) / 0.84;   // quick pop-in, slow fade
+    const popS = p < 0.16 ? 0.55 + 0.45 * (p / 0.16) : 1;    // little scale-in
+    const val = Math.max(1, Math.round(Math.abs(move)));
+    const fontPx = (10 + 30 * scale) * popS;
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, Math.min(1, a));
+    ctx.font = `700 ${fontPx}px ui-monospace, "JetBrains Mono", monospace`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const tx = hitX + (above ? -1 : 1) * 6 * scale, ty = hitY - 8 * scale - p * 26 * scale;
+    ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(6,10,9,0.9)';  // dark outline so it reads over the line
+    ctx.strokeText(`+${val}`, tx, ty);
+    ctx.fillStyle = above ? DUEL_UP : DUEL_DOWN;
+    ctx.fillText(`+${val}`, tx, ty);
+    ctx.restore();
   }
 }
 
@@ -636,7 +655,7 @@ export function drawPriceLine(
     if (label) {
       ctx.font = '10px JetBrains Mono, monospace';
       const tw = ctx.measureText(label).width;
-      const pw = tw + 14, ph = 16;
+      const pw = tw + 10, ph = 16;
       // Anchor the strike pill to the LEFT edge: the current-price dot and the
       // right-axis price labels both live on the right, so a right-anchored pill
       // collides with them whenever spot ≈ strike. Left keeps it clear.
@@ -645,7 +664,7 @@ export function drawPriceLine(
       roundRectPath(ctx, px, py, pw, ph, 8); ctx.fill();
       ctx.fillStyle = 'rgba(255,255,255,0.85)';
       ctx.textAlign = 'left';
-      ctx.fillText(label, px + 7, y + 3.5);
+      ctx.fillText(label, px + 5, y + 3.5);
     }
   }
 
@@ -670,7 +689,9 @@ export function drawPriceLine(
       return pts[pts.length - 1].y;
     };
     const above = opts.target != null ? series[series.length - 1] >= (opts.target as number) : true;
-    drawDuel(ctx, { yAtX, xMin: padX, xMax: last.x, h, now, above });
+    const k = Math.min(6, series.length - 1); // recent move (~last few ticks) → the hit's "damage"
+    const move = k > 0 ? series[series.length - 1] - series[series.length - 1 - k] : 0;
+    drawDuel(ctx, { yAtX, xMin: padX, xMax: last.x, h, now, above, move });
   }
 
   // X-axis labels
