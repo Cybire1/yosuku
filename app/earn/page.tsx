@@ -85,7 +85,6 @@ export default function EarnPage() {
   const sharePrice = vaultStats && vaultStats.totalPlpSupply > 0
     ? vaultStats.vaultValue / vaultStats.totalPlpSupply
     : null;
-  const availableWithdraw = vaultStats ? vaultStats.availableForWithdraw / DUSDC_MULTIPLIER : null;
   const utilization = vaultStats && vaultStats.balance > 0
     ? vaultStats.maxPayout / vaultStats.balance
     : null;
@@ -186,26 +185,34 @@ export default function EarnPage() {
             </div>
 
             {/* live vault dashboard — every number below is the live on-chain object, or the panel says so */}
-            <div className="rounded-2xl border border-white/[0.10] bg-gradient-to-b from-white/[0.04] to-transparent p-5 md:p-7 backdrop-blur-sm">
-              <div className="flex items-center justify-between mb-4">
-                <span className="font-mono text-[10px] tracking-[0.22em] uppercase text-gray-500 flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-vermilion" style={{ boxShadow: '0 0 8px var(--vermilion)' }} /> Live vault
-                </span>
-                <span className="font-mono text-[9px] tracking-[0.2em] uppercase text-gray-700">金庫 · on-chain</span>
-              </div>
+            <div className="rounded-2xl border border-white/[0.10] bg-gradient-to-b from-white/[0.04] to-transparent p-6 md:p-8 backdrop-blur-sm">
               {vaultStats ? (
                 <>
-                  <div className="font-display text-4xl font-extrabold tracking-tight">
-                    {sharePrice != null ? sharePrice.toFixed(4) : '—'}
-                    <span className="text-sm text-gray-500 font-mono font-normal ml-2">DUSDC / share</span>
+                  {/* share price is the hero; a quiet pulse marks it live on-chain */}
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <div className="font-display text-5xl font-extrabold leading-none tracking-tight">
+                        {sharePrice != null ? sharePrice.toFixed(4) : '—'}
+                      </div>
+                      <div className="mt-2.5 font-mono text-[11px] uppercase tracking-[0.16em] text-gray-500">DUSDC / share</div>
+                    </div>
+                    <span className="mt-1 flex shrink-0 items-center gap-1.5 font-mono text-[9px] uppercase tracking-[0.2em] text-gray-600">
+                      <span className="h-1.5 w-1.5 rounded-full bg-vermilion" style={{ boxShadow: '0 0 8px var(--vermilion)' }} />
+                      on-chain
+                    </span>
                   </div>
-                  <div className="mt-5 space-y-3.5">
-                    <ReserveRow label="Vault value" value={vaultValue != null ? fmt(vaultValue) : '—'} unit="DUSDC" />
-                    <ReserveRow label="Available to withdraw" value={availableWithdraw != null ? fmt(availableWithdraw) : '—'} unit="DUSDC" />
-                    <ReserveRow label="Utilization" value={utilization != null ? `${(utilization * 100).toFixed(1)}%` : '—'} accent />
+                  <div className="mt-8 grid grid-cols-2 gap-5">
+                    <div>
+                      <div className="mb-1.5 font-mono text-[9px] uppercase tracking-[0.18em] text-gray-600">Vault value</div>
+                      <div className="font-mono text-[15px] text-white tabular-nums">{vaultValue != null ? fmt(vaultValue) : '—'} <span className="text-xs text-gray-600">DUSDC</span></div>
+                    </div>
+                    <div>
+                      <div className="mb-1.5 font-mono text-[9px] uppercase tracking-[0.18em] text-gray-600">Utilization</div>
+                      <div className="font-mono text-[15px] text-vermilion tabular-nums">{utilization != null ? `${(utilization * 100).toFixed(1)}%` : '—'}</div>
+                    </div>
                   </div>
                   {/* compact honesty note — the risk line the hero blurb used to carry */}
-                  <p className="mt-4 pt-3.5 border-t border-white/[0.06] font-mono text-[10px] leading-relaxed text-gray-600">
+                  <p className="mt-7 font-mono text-[10px] leading-relaxed text-gray-600">
                     Withdraw anytime · share price can dip if the vault takes losses.
                   </p>
                 </>
