@@ -340,88 +340,6 @@ function chartSurfaceLight(canvas: HTMLCanvasElement): boolean {
   return light;
 }
 
-// ─── UP-vs-DOWN stick duel that rides the live-price dot ───
-// Two line-fighters spar on the current-price point. Whoever's winning the
-// market (price above / below the UP line) is the aggressor and lands the blows.
-const DUEL_UP = '#57D39A', DUEL_DOWN = '#F0584A';
-function mix2(a: number[], b: number[], t: number): number[] { return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]; }
-function drawStick(
-  ctx: CanvasRenderingContext2D, cx: number, lineY: number,
-  p: { face: number; rot: number; punch: number; kick: number; bob: number; scale: number; color: string },
-) {
-  const { face, rot, punch, kick, bob, scale, color } = p;
-  let lEl = mix2([face * 8, -46], [face * 22, -45], punch), lHa = mix2([face * 13, -55], [face * 49, -46], punch);
-  let rEl = [face * -9, -50], rHa = [face * 4, -58];
-  const wv = 1 - punch, bY = bob * 4 * wv, bX = bob * 2.4 * face * wv;
-  lEl = [lEl[0] + bX, lEl[1] + bY]; lHa = [lHa[0] + bX, lHa[1] + bY];
-  rEl = [rEl[0] - bX, rEl[1] - bY * 1.3]; rHa = [rHa[0] - bX, rHa[1] - bY * 1.3];
-  const lKn = mix2([face * 9, 22], [face * 27, 4], kick), lFo = mix2([face * 13, 46], [face * 53, -3], kick);
-  const rKn = [face * -11, 22], rFo = [face * -18, 46];
-  ctx.save();
-  ctx.translate(cx, lineY - 46 * scale);
-  ctx.rotate((rot * Math.PI) / 180);
-  ctx.scale(scale, scale);
-  ctx.strokeStyle = color; ctx.lineWidth = 8; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-  const seg = (a: number[], b: number[], c?: number[]) => { ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); if (c) ctx.lineTo(c[0], c[1]); ctx.stroke(); };
-  seg([0, 0], rKn, rFo);
-  seg([0, 0], lKn, lFo);
-  ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -46); ctx.stroke();
-  seg([0, -42], rEl, rHa);
-  seg([0, -42], lEl, lHa);
-  ctx.fillStyle = color; ctx.beginPath(); ctx.arc(0, -61, 13, 0, Math.PI * 2); ctx.fill();
-  ctx.restore();
-}
-function drawDuelBurst(ctx: CanvasRenderingContext2D, x: number, y: number, a: number, color: string) {
-  ctx.save();
-  ctx.globalAlpha = Math.max(0, Math.min(1, a));
-  ctx.strokeStyle = color; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
-  const grow = 5 + a * 10;
-  for (const d of [30, 90, 150, 210, 270, 330]) {
-    const r = (d * Math.PI) / 180;
-    ctx.beginPath();
-    ctx.moveTo(x + Math.cos(r) * grow * 0.5, y + Math.sin(r) * grow * 0.5);
-    ctx.lineTo(x + Math.cos(r) * grow, y + Math.sin(r) * grow);
-    ctx.stroke();
-  }
-  ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x, y, 3 * a, 0, Math.PI * 2); ctx.fill();
-  ctx.restore();
-}
-export function drawDuel(ctx: CanvasRenderingContext2D, dotX: number, dotY: number, now: number, above: boolean) {
-  if (dotX < 80) return; // not enough room to the left of the dot
-  const f = now / 16.667, scale = 0.4;
-  const aggr = above ? 'UP' : 'DOWN';
-  const upX = dotX - 46, dnX = dotX - 12; // spar just left of the live dot
-  const EP = 84, e = f % EP;
-  const strikeType = Math.floor(f / EP) % 2 === 0 ? 'kick' : 'punch';
-  const hitAt = 50;
-  const ext = e < hitAt ? Math.max(0, Math.min(1, (e - (hitAt - 13)) / 13)) : Math.max(0, 1 - (e - hitAt) / 12);
-  const reel = Math.max(0, 1 - Math.abs(e - (hitAt + 4)) / 10);
-  const build = (who: 'UP' | 'DOWN') => {
-    const face = who === 'UP' ? 1 : -1;
-    const phase = who === 'UP' ? 0 : 17;
-    const baseX = who === 'UP' ? upX : dnX;
-    const oppX = who === 'UP' ? dnX : upX;
-    const bob = Math.sin((f + phase) * 0.5);
-    const idle = 0.04 + 0.2 * Math.max(0, Math.sin((f + phase) * 0.6)) ** 2;
-    let punch = idle, kick = 0, rot = 0, x = baseX;
-    if (who === aggr) {
-      if (strikeType === 'punch') punch = Math.max(idle, ext); else kick = ext;
-      x = baseX + (oppX - 22 * face - baseX) * ext;
-    } else {
-      rot = -face * 24 * reel;
-    }
-    return { x, face, punch, kick, rot, bob, scale, color: who === 'UP' ? DUEL_UP : DUEL_DOWN };
-  };
-  const up = build('UP'), dn = build('DOWN');
-  // draw the defender first, aggressor on top
-  if (aggr === 'UP') { drawStick(ctx, dn.x, dotY, dn); drawStick(ctx, up.x, dotY, up); }
-  else { drawStick(ctx, up.x, dotY, up); drawStick(ctx, dn.x, dotY, dn); }
-  if (reel > 0.15) {
-    const def = aggr === 'UP' ? dn : up;
-    drawDuelBurst(ctx, def.x, dotY - 40, reel, aggr === 'UP' ? DUEL_UP : DUEL_DOWN);
-  }
-}
-
 // ─── Draw a smooth price line + area against a dashed target line ───
 // The right metaphor for an "up or down vs a target" market: one line, the
 // price-to-beat as a dashed Target, a soft gradient fill, and a glowing
@@ -446,7 +364,6 @@ export function drawPriceLine(
     xLabels?: string[];     // evenly spaced labels along the bottom
     motion?: boolean;       // animated live chart treatment
     now?: number;           // requestAnimationFrame timestamp
-    fighters?: boolean;     // draw the UP-vs-DOWN stick duel riding the live-price dot
   } = {},
 ): void {
   if (!canvas || series.length < 2) return;
@@ -610,12 +527,6 @@ export function drawPriceLine(
   ctx.beginPath(); ctx.arc(last.x, last.y, motion ? 9 + pulse * 4 : 9, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = dotCol;
   ctx.beginPath(); ctx.arc(last.x, last.y, motion ? 3.8 + pulse * 0.8 : 3.5, 0, Math.PI * 2); ctx.fill();
-
-  // The UP-vs-DOWN stick duel, riding the live-price dot
-  if (opts.fighters) {
-    const above = opts.target != null ? series[series.length - 1] >= (opts.target as number) : true;
-    drawDuel(ctx, last.x, last.y, now, above);
-  }
 
   // X-axis labels
   if (opts.xLabels && opts.xLabels.length > 1) {
