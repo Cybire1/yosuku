@@ -465,6 +465,11 @@ export default function StrategiesPage() {
                           <a href={SUISCAN_ACC(card.agent)} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
                             className="mt-1 inline-block font-mono text-[10px] uppercase tracking-[0.12em] text-white/35 hover:text-white transition-colors">On-chain record ↗</a>
                         </div>
+                        {/* leverage — pinned to the right of the header for balance */}
+                        <div className="shrink-0 text-right pt-0.5">
+                          <div className="font-display font-[800] text-3xl text-white leading-none tabular-nums">{card.maxLeverage}<span className="text-vermilion">×</span></div>
+                          <div className="font-mono text-[9px] uppercase tracking-[0.2em] text-white/40 mt-1">Most leverage</div>
+                        </div>
                       </div>
 
                       {/* filed stamps — agent memory / Walrus playbook */}
@@ -479,22 +484,16 @@ export default function StrategiesPage() {
                         </div>
                       )}
 
-                      {/* leverage pull-quote — the focal mass that carries sparse cards */}
-                      <div className="border-l-2 border-vermilion pl-3 my-5">
-                        <div className="font-display font-[800] text-3xl text-white leading-none tabular-nums">{card.maxLeverage}<span className="text-vermilion">×</span></div>
-                        <div className="font-mono text-[9px] uppercase tracking-[0.2em] text-white/40 mt-1.5">Most leverage</div>
-                      </div>
-
                       {/* ruled stat table */}
-                      <div className="grid grid-cols-3 border-y border-white/[0.08]">
+                      <div className="grid grid-cols-3 border-y border-white/[0.08] mt-5">
                         <LedgerStat label="Most per trade" value={`${fmtDusdc(card.maxMargin)}`} />
                         <LedgerStat label="Fee" value={card.subFee === 0 ? 'Free' : fmtDusdc(card.subFee)} divide />
                         <LedgerStat label="Copiers" value={card.subscribers > 0 ? String(card.subscribers) : '—'} divide />
                       </div>
 
-                      {/* record line — never blank */}
-                      <div className="font-mono text-[10px] uppercase tracking-[0.18em] py-4 mb-1">
-                        {card.copyTrades > 0 ? (
+                      {/* record line — only when there are copy-trades (else no phantom gap) */}
+                      {card.copyTrades > 0 && (
+                        <div className="font-mono text-[10px] uppercase tracking-[0.18em] py-4 mb-1">
                           <span className="inline-flex items-center gap-2">
                             <span className="text-white/60 tabular-nums">{card.copyTrades} copy-trades</span>
                             {card.realizedTrades > 0 && (
@@ -504,8 +503,8 @@ export default function StrategiesPage() {
                               </>
                             )}
                           </span>
-                        ) : null}
-                      </div>
+                        </div>
+                      )}
 
                       {/* CTA */}
                       <div className="mt-auto">
@@ -812,7 +811,7 @@ function MemoryMarket({ listings, strategies, address, busy, text, onBuy, onRead
 }) {
   const stratById = useMemo(() => new Map(strategies.map((s) => [s.id, s])), [strategies]);
   return (
-    <section className="mt-16 sm:mt-20">
+    <section className="mt-10 sm:mt-12">
       {/* header — a giant paper kanji watermark behind an editorial headline */}
       <div className="relative">
         <div aria-hidden className="pointer-events-none absolute -top-10 right-0 font-jp font-[800] text-[6.5rem] md:text-[9rem] leading-none text-white/[0.028] select-none tracking-tighter">記憶</div>
