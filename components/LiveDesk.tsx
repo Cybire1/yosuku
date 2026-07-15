@@ -393,12 +393,6 @@ export default function LiveDesk() {
 
   return (
     <section className="mt-2 mb-4">
-      {/* section dateline — one label, one live tag */}
-      <div className="flex items-center gap-3 mb-5">
-        <h2 className="font-mono text-[11px] uppercase tracking-[0.22em] text-white/45"><span className="text-vermilion">⊙</span> The live desk</h2>
-        <div className="h-px flex-1 bg-white/10" />
-        <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/35">DeepBook Predict · testnet</span>
-      </div>
 
       <div className="group/desk relative rounded-xl border border-white/[0.1] bg-bg overflow-hidden">
         <div className="grid">
@@ -419,10 +413,6 @@ export default function LiveDesk() {
                 <p className="text-[13.5px] text-white/70 leading-snug mt-2 break-words">
                   An automated strategy that follows Bitcoin&apos;s trend, up or down.
                 </p>
-                <a href={SUISCAN_ACC(VAULT624.enclaveAgent)} target="_blank" rel="noreferrer"
-                  className="mt-1.5 inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.12em] text-white/35 hover:text-vermilion transition-colors">
-                  Every trade, public on-chain ↗
-                </a>
               </div>
             </div>
 

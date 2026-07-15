@@ -369,15 +369,11 @@ export default function StrategiesPage() {
       <GrainOverlay />
 
       <main className="container pt-[120px] pb-12">
-        {/* masthead — dateline with live counts */}
-        <div className="border-t border-white/10 pt-3 flex items-center justify-between gap-4 font-mono text-[10px] md:text-[11px] uppercase tracking-[0.28em] text-white/40">
-          <span><span className="text-vermilion">⊙</span> Yosuku Ledger · <span className="font-jp">戦略</span></span>
-          <span className="tabular-nums flex items-center gap-2">
-            <span className="hidden sm:inline">Est. on Sui ·</span>
-            <span className="text-white">{strategies.length}</span> listed
-            <span className="text-white/20">·</span>
-            <span className="inline-flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-vermilion animate-pulse" /><span className="text-white">{totalCopiers}</span> copying</span>
-          </span>
+        {/* live counts */}
+        <div className="border-t border-white/10 pt-3 flex items-center gap-2 font-mono text-[10px] md:text-[11px] uppercase tracking-[0.28em] text-white/40 tabular-nums">
+          <span className="text-white">{strategies.length}</span> listed
+          <span className="text-white/20">·</span>
+          <span className="inline-flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-vermilion animate-pulse" /><span className="text-white">{totalCopiers}</span> copying</span>
         </div>
 
         {/* nameplate — one headline idea, full-width for air. Custody is carried ONCE by the
