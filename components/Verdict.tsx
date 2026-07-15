@@ -14,7 +14,7 @@ import ClaimWinnings from './ClaimWinnings';
 /**
  * The settled market answered personally. "UP wins" is the market's outcome;
  * the first thing a position-holder should see is THEIR outcome — then a
- * one-tap path into the next round, which is the loop of a 15-minute market.
+ * one-tap path into the next round — the loop of fast rounds, one close into the next.
  */
 interface VerdictProps {
   oracle: OracleData;

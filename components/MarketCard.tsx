@@ -242,7 +242,7 @@ export default function MarketCard({ oracle, spotPrice, forwardPrice, seedStrike
       <div className="mc-head">
         <span className="mc-asset">
           <span className="glyph">{glyph}</span>
-          {asset} · {horizonLabel ?? '15-min'}
+          {asset} · {horizonLabel ?? 'Fast round'}
         </span>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           {onToggleFavorite && (

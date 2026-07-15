@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { readFile, writeFile } from 'node:fs/promises';
 
 const PREDICT_BASE = 'https://predict-server.testnet.mystenlabs.com';
-const ORACLE_CACHE_TTL = 30_000;      // 15-minute rounds need a short market-list cache
+const ORACLE_CACHE_TTL = 30_000;      // fast rounds need a short market-list cache
 const PRICE_CACHE_TTL = 10_000;       // 10 seconds for prices
 const ORACLE_COLD_TIMEOUT_MS = 30_000; // /oracles is ~2MB and can be slow on cold local dev
 const PRICE_TIMEOUT_MS = 8_000;

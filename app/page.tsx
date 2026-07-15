@@ -70,13 +70,13 @@ const ASSET_GLYPH: Record<string, string> = {
 };
 
 const HOW_STEPS: HowStep[] = [
-  { num: '01', jp: '\u5E02\u5834', kicker: 'Choose', title: 'Pick a market.', body: 'Every BTC market has a strike price and a fifteen-minute window. One question: above or below at close.', meta: '15-min rounds \u00B7 continuous' },
+  { num: '01', jp: '\u5E02\u5834', kicker: 'Choose', title: 'Pick a market.', body: 'Every BTC market has a strike price and a fixed window \u2014 1-minute, 5-minute, or hourly rounds. One question: above or below at close.', meta: 'Fast rounds \u00B7 continuous' },
   { num: '02', jp: '\u53D6\u5F15', kicker: 'Commit', title: 'Take a side.', body: 'One press. Your position is committed to Sui through DeepBook Predict. No order book, just a binary stance and a fixed window.', meta: 'Binary \u00B7 Instant \u00B7 On-chain' },
   { num: '03', jp: '\u6C7A\u6E08', kicker: 'Settle', title: 'Settle on-chain.', body: 'When the window closes, the oracle reports the final price. Winning contracts pay 1 DUSDC per unit; losing contracts pay 0.', meta: 'Oracle-settled \u00B7 Binary \u00B7 Verifiable' },
 ];
 
 const FEATURES: FeatureItem[] = [
-  { act: '01', idx: 'I', title: 'Two sides. ', em: 'One press.', desc: 'Pick above or below. The market closes in fifteen minutes, the oracle reports, the chain decides. No order books, no appeals.', keys: ['One-tap UP/DOWN', '15-min rounds', 'Oracle-settled'], jp: '\u53D6\u5F15' },
+  { act: '01', idx: 'I', title: 'Two sides. ', em: 'One press.', desc: 'Pick above or below. The round closes on the clock, the oracle reports, the chain decides. No order books, no appeals.', keys: ['One-tap UP/DOWN', 'Fast rounds', 'Oracle-settled'], jp: '\u53D6\u5F15' },
   { act: '02', idx: 'II', title: 'Leave when ', em: 'you like.', desc: 'Exit at the live bid before close \u2014 no lock-ins. Every quote is computed on-chain, and you can re-derive it in your browser to the cent.', keys: ['Cash out anytime', 'On-chain quotes', 'Checkable pricing'], jp: '\u81EA\u7531' },
   { act: '03', idx: 'III', title: 'A side, or ', em: 'a range.', desc: 'Call any strike, or bracket a band between two. The whole volatility surface is tradable \u2014 not one question, every question.', keys: ['Any strike', 'Range positions', 'Live vol surface'], jp: '\u7BC4\u56F2' },
   { act: '04', idx: 'IV', title: 'Be the ', em: 'house.', desc: 'Supply the pool that quotes every market and earn the spread on every round. The house is not a company \u2014 it is a vault you can join.', keys: ['PLP pool', 'Earn the spread', 'On-chain vault'], jp: '\u80F4\u5143' },
@@ -87,7 +87,7 @@ const FAQ_DATA: FaqItem[] = [
   { q: 'What does YOSUKU settle on?', a: 'DeepBook Predict oracle markets on Sui. Every settlement is deterministic, verifiable on-chain, and independent of YOSUKU as an operator. The oracle reports; the contract executes.', tags: ['Oracle', 'Sui'], cat: 'Protocol' },
   { q: 'How does YOSUKU make money?', a: 'Plain Predict trades pay the protocol spread baked into the quote. Optional leverage pays a premium to the underwriting reserve that fronts extra notional.', tags: ['Fees', 'Transparency'], cat: 'Protocol' },
   { q: 'Can I lose more than I stake?', a: 'No. Plain binaries are fixed-downside. With optional leverage, the reserve fronts capital and is repaid first from wins, but your max loss is still your margin.', tags: ['Risk', 'Binary'], cat: 'Mechanics' },
-  { q: 'Why fifteen-minute windows?', a: 'Short enough to be engaging and testable, long enough for genuine price discovery. Fifteen minutes is the smallest window where oracle latency is negligible relative to the round duration.', tags: ['Design', 'Cadence'], cat: 'Mechanics' },
+  { q: 'Why fixed windows?', a: 'Every round runs on a clock — 1-minute, 5-minute, and 1-hour BTC markets. Short windows stay engaging and testable; longer ones leave room for price discovery. Pick the tempo that suits you — the oracle settles each one at its close.', tags: ['Design', 'Cadence'], cat: 'Mechanics' },
   { q: 'Is this available in my country?', a: 'YOSUKU is a decentralised protocol on Sui. There is no geo-blocking at the protocol level. However, you are responsible for compliance with your local regulations.', tags: ['Legal', 'Access'], cat: 'Access' },
 ];
 
@@ -95,7 +95,7 @@ const SPEC_ROWS: SpecRow[] = [
   { label: 'Chain', value: 'Sui Network (L1)' },
   { label: 'Settlement', value: 'DeepBook Predict oracle, deterministic' },
   { label: 'Oracle', value: 'Predict oracle surface' },
-  { label: 'Round cadence', value: '15 minutes, continuous' },
+  { label: 'Round cadence', value: '1-minute, 5-minute, 1-hour' },
   { label: 'Asset', value: 'DUSDC' },
   { label: 'Latency', value: 'Sub-second finality' },
   { label: 'Audits', value: 'In progress' },
@@ -562,7 +562,7 @@ export default function HomePage() {
           <span>02 &mdash; How it works</span>
           <span className="jp">{'\u4E09\u6B69'} &middot; three steps</span>
         </div>
-        <h2 className="section-title fade-up">Three steps. Fifteen minutes. On-chain.</h2>
+        <h2 className="section-title fade-up">Three steps. Before the bell. On-chain.</h2>
 
         <div className="how-steps" ref={howRef}>
           {HOW_STEPS.map((step, i) => (
@@ -683,7 +683,7 @@ export default function HomePage() {
                           <text x="70" y="90" textAnchor="middle" fontSize="8" fill="var(--vermilion)" fontFamily="monospace">$95,000</text>
                           <text x="70" y="105" textAnchor="middle" fontSize="6" fill="rgba(255,255,255,0.3)" fontFamily="monospace">STRIKE</text>
                           <rect x="110" y="70" width="60" height="90" rx="3" fill="none" stroke="rgba(255,255,255,0.08)" />
-                          <text x="140" y="90" textAnchor="middle" fontSize="8" fill="var(--white)" fontFamily="monospace">15:00</text>
+                          <text x="140" y="90" textAnchor="middle" fontSize="8" fill="var(--white)" fontFamily="monospace">01:00</text>
                           <text x="140" y="105" textAnchor="middle" fontSize="6" fill="rgba(255,255,255,0.3)" fontFamily="monospace">WINDOW</text>
                           <rect x="180" y="70" width="60" height="90" rx="3" fill="none" stroke="rgba(224,77,38,0.15)" />
                           <text x="210" y="90" textAnchor="middle" fontSize="8" fill="var(--vermilion)" fontFamily="monospace">{'\u2713'}</text>
@@ -868,7 +868,7 @@ export default function HomePage() {
       {/* ═══════ LANDING FOOTER ═══════ */}
       <footer className="landing-footer">
         <div className="footer-headline">
-          <h2>Quiet markets, loud answers &mdash; <em>every fifteen minutes.</em></h2>
+          <h2>Quiet markets, loud answers &mdash; <em>every round.</em></h2>
           <div className="actions">
             <span className="lbl">The floor is open</span>
             <Link href="/markets" className="cta" data-cursor="hover">
@@ -944,7 +944,7 @@ export default function HomePage() {
             <a href="#" data-cursor="hover">Privacy</a>
             <a href="#" data-cursor="hover">Cookies</a>
           </div>
-          <span className="footer-sayonara">{'\u307E\u305F\u3001\u5341\u4E94\u5206\u5F8C\u306B\u3002'}</span>
+          <span className="footer-sayonara">{'\u307E\u305F\u3001\u6B21\u306E\u9418\u3067\u3002'}</span>
         </div>
 
         <div className="footer-watermark">

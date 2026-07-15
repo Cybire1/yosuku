@@ -443,7 +443,7 @@ export default function TradePanel({
   const handleTrade = useCallback(async () => {
     if (!address || !selectedStrike || !isValidAmount || !isRangeValid) return;
     // Fresh re-check at trade time: never send a mint that will abort because the round
-    // just closed (the dominant intermittent failure on a 15-min round).
+    // just closed (the dominant intermittent failure on fast rounds).
     if (Date.now() >= Number(oracle.expiry) - CLOSING_MARGIN_MS) {
       setShowConfirmModal(false);
       setErrorMsg('This round just closed — pick the next round.');
@@ -1481,7 +1481,7 @@ export default function TradePanel({
         {/* Trading account is auto-provisioned silently on market open (see the
             auto-provision effect) — no visible "create account" step. */}
 
-        {/* Daily loss stop — honest brakes on a 15-minute market */}
+        {/* Daily loss stop — honest brakes on fast rounds */}
         <div className="flex items-center justify-between text-[10px] px-1">
           <span className="text-gray-600">
             Daily stop{dailyStopLimit !== null && (

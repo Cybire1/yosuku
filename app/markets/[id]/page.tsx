@@ -377,7 +377,7 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
             <h1 className="font-display font-[800] text-3xl sm:text-4xl text-white tracking-tight leading-tight">
               {asset} above <span className="text-vermilion">{formatPrice(midStrikeDollars)}</span>?
             </h1>
-            {/* Price to beat — the heartbeat of a 15-min market: distance to the bar + time left */}
+            {/* Price to beat — the heartbeat of a fast round: distance to the bar + time left */}
             {isTradable && spot !== null && (
               <div className="flex items-center gap-2 mt-3 font-mono text-base">
                 <span className={spot >= midStrikeDollars ? 'text-profit font-semibold' : 'text-loss font-semibold'}>
@@ -444,7 +444,7 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
         {isSettled && <Verdict oracle={oracle} />}
 
         {/* Spot — the one orienting number a bettor needs. Forward (≈ spot on a
-            15-min round) and volume/OI (terminal jargon, tiny testnet numbers)
+            fast round) and volume/OI (terminal jargon, tiny testnet numbers)
             removed: they added density without helping the decision. */}
         {spot && (
           <div className="flex items-center mb-8">

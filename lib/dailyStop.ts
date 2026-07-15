@@ -1,4 +1,4 @@
-// Daily loss stop — an honest brake on a 15-minute market.
+// Daily loss stop — an honest brake on a fast-round market.
 // Client-side, per-browser: the user sets a max net loss per day (DUSDC);
 // realized P&L (cash-outs and settlements) is recorded, and the trade panel
 // refuses new entries once the stop is hit. Resets at local midnight.

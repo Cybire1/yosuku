@@ -22,7 +22,7 @@ export default function HowItWorksPage() {
     {
       number: 2,
       title: 'Pick a Market',
-      description: 'Each market has a BTC strike price and a fifteen-minute window. Will BTC be above or below the strike when the window closes?',
+      description: 'Each market has a BTC strike price and a set round — anywhere from one minute to an hour. Will BTC be above or below the strike when the round closes?',
       icon: Target,
       numClass: 'bg-new-blue/10 text-new-blue',
       iconClass: 'text-new-blue',
@@ -57,8 +57,8 @@ export default function HowItWorksPage() {
       icon: TrendingUp,
     },
     {
-      title: 'Fifteen-Minute Windows',
-      description: 'Markets run in fifteen-minute windows — short enough to be engaging, long enough for genuine price discovery. Continuous rounds, always open.',
+      title: 'Fast Rounds',
+      description: 'Markets run in fast, fixed rounds — from one minute to an hour, short enough to be engaging, long enough for genuine price discovery. Continuous rounds, always open.',
       icon: Clock,
     },
     {
@@ -297,7 +297,7 @@ export default function HowItWorksPage() {
             >
               <div className="flex flex-col gap-4">
                 {[
-                  { step: '1', label: 'Window Closes', desc: 'The 15-minute market window expires.' },
+                  { step: '1', label: 'Window Closes', desc: 'The market round reaches its scheduled close.' },
                   { step: '2', label: 'Oracle Reports', desc: 'The Predict oracle reports the final BTC price to the Sui smart contract.' },
                   { step: '3', label: 'Settlement', desc: 'The DeepBook Predict contract compares settlement price vs strike. Winners are determined automatically.' },
                   { step: '4', label: 'Payout', desc: 'Winning positions receive 1 DUSDC per unit. Losing positions receive 0. Payouts are claimable immediately.' },

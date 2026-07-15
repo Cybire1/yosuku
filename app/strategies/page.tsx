@@ -140,7 +140,7 @@ export default function StrategiesPage() {
   const [listing, setListing] = useState(false);
   const [form, setForm] = useState({
     preset: 'momentum' as PresetKey,
-    lookback: 6,          // # of 15-min samples the enclave reads (2–12)
+    lookback: 6,          // # of recent rounds the enclave reads (2–12)
     thresholdPct: '0.2',  // minimum BTC move to act on
     hosting: 'attested' as 'attested' | 'self',
     agent: '',            // self-host only: the creator's own bot wallet
@@ -653,7 +653,7 @@ export default function StrategiesPage() {
                         <div>
                           <div className="flex items-baseline justify-between mb-2">
                             <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500">Lookback</span>
-                            <span className="font-mono text-[12px] text-white tabular-nums">{form.lookback}<span className="text-white/40"> × 15m</span></span>
+                            <span className="font-mono text-[12px] text-white tabular-nums">{form.lookback}<span className="text-white/40"> rounds</span></span>
                           </div>
                           <input type="range" min={2} max={12} step={1} value={form.lookback}
                             onChange={(e) => setForm((f) => ({ ...f, lookback: Number(e.target.value) }))}
@@ -768,7 +768,7 @@ export default function StrategiesPage() {
 
             {/* standing disclosure */}
             <p className="mt-10 font-mono text-[10px] leading-relaxed text-gray-600 max-w-2xl">
-              Agents trade test USDC on Sui testnet, on 15-min Bitcoin up/down markets. You can lose your full budget. The agent
+              Agents trade test USDC on Sui testnet, on fast Bitcoin up/down rounds (1-minute, 5-minute, and 1-hour). You can lose your full budget. The agent
               cannot withdraw or divert it — verify every position on Sui.
             </p>
           </>

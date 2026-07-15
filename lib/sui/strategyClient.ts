@@ -39,7 +39,7 @@ export const ATTESTED_AGENT =
 export type PresetKey = 'momentum' | 'reversion';
 export interface StrategySpec {
   preset: PresetKey;
-  lookback: number;      // # of recent 15-min samples the engine reads (2–12)
+  lookback: number;      // # of recent price samples the engine reads (2–12)
   thresholdBps: number;  // minimum move (bps) to act on; below it → sit the round out
 }
 
@@ -59,10 +59,8 @@ export const PRESETS: Record<PresetKey, { name: string; tagline: string; how: st
 /** Plain-language description of exactly what the enclave will do with this spec. */
 export function describeSpec(s: StrategySpec): string {
   const dir = s.preset === 'momentum' ? 'with' : 'against';
-  const mins = s.lookback * 15;
-  const win = mins >= 60 ? `${(mins / 60).toFixed(mins % 60 ? 1 : 0)}h` : `${mins}m`;
   const pct = (s.thresholdBps / 100).toFixed(2).replace(/\.?0+$/, '');
-  return `Every 15 min it reads the last ${s.lookback} prices (~${win}). If BTC moved at least ${pct}%, it bets ${dir} that move. Otherwise it sits out.`;
+  return `Every round it reads the last ${s.lookback} prices. If BTC moved at least ${pct}%, it bets ${dir} that move. Otherwise it sits out.`;
 }
 
 /** Compact, deterministic serialization for the attested keeper + enclave. */
@@ -262,7 +260,7 @@ export function buildLeaderboardShareText(rows: StrategyLeaderboardRow[]): strin
     '',
     ...lines,
     '',
-    'Agents trade 15-min BTC markets. MemWal stores the memory. Sui verifies the proof.',
+    'Agents trade fast BTC rounds. MemWal stores the memory. Sui verifies the proof.',
     '',
     'Copy a strategy on Yosuku.',
   ].join('\n');
