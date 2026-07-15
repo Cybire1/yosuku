@@ -52,15 +52,25 @@ const DAY = 86_400_000;
 // Deterministic kanji glyph tile per strategy — the desk's own visual language.
 // (Photo portraits looked like fake people, and a 5-image pool guaranteed duplicate
 // faces side-by-side in an 8-card grid. A seeded glyph is unique, honest, on-brand.)
-function AgentPortrait({ seed, name, size = 'card' }: { seed: string; name: string; size?: 'small' | 'card' | 'drawer' }) {
+// Per-agent accent — a deterministic hue from the agent id, so the catalogue reads
+// as distinct identities instead of one card repeated. Curated palette, all legible on near-black.
+const AGENT_ACCENTS = ['#E04D26', '#F7931A', '#2FA47C', '#5B8DEF', '#C05CD8', '#22B8CF', '#E0A62E', '#D8556B'];
+function accentForAgent(id: string): string {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (Math.imul(h, 31) + id.charCodeAt(i)) | 0;
+  return AGENT_ACCENTS[Math.abs(h) % AGENT_ACCENTS.length];
+}
+
+function AgentPortrait({ seed, name, size = 'card', accent = '#E04D26' }: { seed: string; name: string; size?: 'small' | 'card' | 'drawer'; accent?: string }) {
   const dimensions = size === 'small' ? 'h-8 w-8 text-base' : size === 'drawer' ? 'h-16 w-16 text-3xl' : 'h-16 w-16 text-3xl';
   return (
     <div
       aria-label={`${name} agent glyph`}
-      className={`relative shrink-0 grid place-items-center overflow-hidden border border-white/10 bg-white/[0.03] font-jp text-vermilion ${dimensions}`}
+      className={`relative shrink-0 grid place-items-center overflow-hidden border bg-white/[0.03] font-jp ${dimensions}`}
+      style={{ color: accent, borderColor: `${accent}40` }}
     >
       {glyphFromAddress(seed)}
-      <span className="absolute bottom-1 right-1 h-1.5 w-1.5 rounded-full border border-black/70 bg-vermilion shadow-[0_0_8px_rgba(224,77,38,0.8)]" />
+      <span className="absolute bottom-1 right-1 h-1.5 w-1.5 rounded-full border border-black/70" style={{ background: accent, boxShadow: `0 0 8px ${accent}cc` }} />
     </div>
   );
 }
@@ -379,7 +389,7 @@ export default function StrategiesPage() {
         {/* nameplate — one headline idea, full-width for air. Custody is carried ONCE by the
             desk's own anchor line; no re-teaching here. */}
         <div className="mt-7 pb-7 border-b border-white/15">
-          <h1 className="font-display font-[800] text-[2.5rem] leading-[0.92] md:text-[4.25rem] xl:text-[5.25rem] text-white tracking-tight max-w-5xl">
+          <h1 className="font-display font-[800] text-[1.9rem] leading-[1.0] md:text-[2.6rem] xl:text-[3rem] text-white tracking-tight max-w-3xl">
             Copy a strategy.<br /><span className="text-white/60">Keep your money.</span>
           </h1>
         </div>
@@ -449,17 +459,19 @@ export default function StrategiesPage() {
                   const sub = subscriptionByStrategy.get(card.id);
                   const folio = String(i + 1).padStart(2, '0');
                   const agentName = codenameFromAddress(card.id);
+                  const accent = accentForAgent(card.agent || card.id);
                   return (
                     <div
                       key={card.id}
                       id={`strategy-${card.id}`}
                       className="group relative bg-bg p-5 flex flex-col transition-colors duration-200 hover:bg-white/[0.02]"
                     >
+                      <div aria-hidden className="absolute top-0 left-0 right-0 h-[2px]" style={{ background: accent, opacity: 0.85 }} />
                       <Crosshairs />
 
                       {/* Strategy identity is seeded from the strategy object, not the shared executor. */}
                       <div className="flex items-start gap-3">
-                        <AgentPortrait seed={card.id} name={agentName} />
+                        <AgentPortrait seed={card.id} name={agentName} accent={accent} />
                         <div className="min-w-0 flex-1 pt-1">
                           <h3 className="font-display font-[800] text-xl text-white truncate tracking-tight leading-[1.05]">{agentName}</h3>
                           <a href={SUISCAN_ACC(card.agent)} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
@@ -467,22 +479,23 @@ export default function StrategiesPage() {
                         </div>
                         {/* leverage — pinned to the right of the header for balance */}
                         <div className="shrink-0 text-right pt-0.5">
-                          <div className="font-display font-[800] text-3xl text-white leading-none tabular-nums">{card.maxLeverage}<span className="text-vermilion">×</span></div>
+                          <div className="font-display font-[800] text-3xl text-white leading-none tabular-nums">{card.maxLeverage}<span style={{ color: accent }}>×</span></div>
                           <div className="font-mono text-[9px] uppercase tracking-[0.2em] text-white/40 mt-1">Most leverage</div>
                         </div>
                       </div>
 
-                      {/* filed stamps — agent memory / Walrus playbook */}
-                      {(card.hasMemory || card.hasCapsule) && (
-                        <div className="flex flex-wrap gap-1.5 mt-3">
-                          {card.hasMemory && (
-                            <span className="inline-flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.18em] text-vermilion border border-vermilion/40 px-2 py-1">◈ Agent memory</span>
-                          )}
-                          {card.hasCapsule && (
-                            <span className="inline-flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.18em] text-white/40 border border-white/15 px-2 py-1">▤ Walrus playbook</span>
-                          )}
-                        </div>
-                      )}
+                      {/* status + filed stamps — honest 'archived' + any memory/playbook */}
+                      <div className="flex flex-wrap items-center gap-1.5 mt-3">
+                        <span className="inline-flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-[0.18em] text-white/45 border border-white/12 px-2 py-1">
+                          <span className="h-1 w-1 rounded-full bg-white/40" /> Archived
+                        </span>
+                        {card.hasMemory && (
+                          <span className="inline-flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.18em] text-vermilion border border-vermilion/40 px-2 py-1">◈ Agent memory</span>
+                        )}
+                        {card.hasCapsule && (
+                          <span className="inline-flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.18em] text-white/40 border border-white/15 px-2 py-1">▤ Walrus playbook</span>
+                        )}
+                      </div>
 
                       {/* ruled stat table */}
                       <div className="grid grid-cols-3 border-y border-white/[0.08] mt-5">
