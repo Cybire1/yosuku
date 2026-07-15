@@ -303,7 +303,7 @@ export default function PortfolioPage() {
                     <span className="text-sm ml-2" style={{ color: '#6B6353' }}>DUSDC</span>
                   </div>
                   <p className="font-mono text-[10px] mt-1" style={{ color: '#6B6353' }}>
-                    trading + private + leverage funds inside Yosuku · total with wallet {accountSnapshot.totalVisibleDusdc.toFixed(2)}
+                    {accountSnapshot.totalVisibleDusdc.toFixed(2)} total with your wallet
                   </p>
                 </div>
                 <div className="flex items-center gap-5">
@@ -329,7 +329,7 @@ export default function PortfolioPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-5 lg:grid-cols-10 gap-4 gap-y-5 pt-4" style={{ borderTop: '1px solid rgba(201,191,166,0.3)' }}>
+              <div className="grid grid-cols-2 sm:grid-cols-5 lg:grid-cols-10 gap-x-4 gap-y-3.5 pt-4" style={{ borderTop: '1px solid rgba(201,191,166,0.3)' }}>
                 <div>
                   <span className="font-mono text-[8px] tracking-[0.14em] uppercase" style={{ color: '#6B6353' }}>Wallet</span>
                   <div className="font-mono text-sm" style={{ color: '#1A1612' }}>{accountSnapshot.walletDusdc.toFixed(2)}</div>
@@ -396,7 +396,7 @@ export default function PortfolioPage() {
                         TradingVault live
                       </span>
                       <p className="font-mono text-[10px] mt-1 max-w-2xl" style={{ color: '#6B6353' }}>
-                        Deposit funds your Trading Balance; every bet — normal, private, or leverage — draws from it, and withdrawals come back to your wallet. One balance.
+                        One balance for every bet. Withdraw to your wallet anytime.
                       </p>
                     </div>
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
