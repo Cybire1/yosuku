@@ -346,18 +346,25 @@ function chartSurfaceLight(canvas: HTMLCanvasElement): boolean {
 // back. Whoever's winning the market (price above / below the UP line) presses.
 const DUEL_UP = '#57D39A', DUEL_DOWN = '#F0584A';
 const dmix = (a: number[], b: number[], t: number): number[] => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
-const dsmooth = (e0: number, e1: number, x: number): number => { const t = Math.max(0, Math.min(1, (e0 - x) / (e0 - e1))); return t * t * (3 - 2 * t); };
+const dlerp = (a: number, b: number, t: number): number => a + (b - a) * t;
+const dpulse = (x: number, c: number, w: number): number => { const t = Math.max(0, 1 - Math.abs(x - c) / w); return t * t * (3 - 2 * t); };
+// A parametric line-fighter. Both arms punch independently (pL = lead jab, pR = rear
+// cross), the lead leg kicks, the resting hands weave in an organic boxing-guard bob
+// (gx/gy), and the head snaps (hx/hy) when hit. Poses are keyframe-mixed 0..1.
 function drawStick(
   ctx: CanvasRenderingContext2D, cx: number, feetY: number,
-  p: { face: number; rot: number; punch: number; kick: number; bob: number; scale: number; color: string },
+  p: { face: number; rot: number; pL: number; pR: number; kick: number; gx: number; gy: number; hx: number; hy: number; scale: number; color: string },
 ) {
-  const { face, rot, punch, kick, bob, scale, color } = p;
-  let lEl = dmix([face * 8, -46], [face * 22, -45], punch), lHa = dmix([face * 13, -55], [face * 49, -46], punch);
-  let rEl = [face * -9, -50], rHa = [face * 4, -58];
-  const wv = 1 - punch, bY = bob * 4 * wv, bX = bob * 2.4 * face * wv;
-  lEl = [lEl[0] + bX, lEl[1] + bY]; lHa = [lHa[0] + bX, lHa[1] + bY];
-  rEl = [rEl[0] - bX, rEl[1] - bY * 1.3]; rHa = [rHa[0] - bX, rHa[1] - bY * 1.3];
-  const lKn = dmix([face * 9, 22], [face * 27, 4], kick), lFo = dmix([face * 13, 46], [face * 53, -3], kick);
+  const { face, rot, pL, pR, kick, gx, gy, hx, hy, scale, color } = p;
+  // lead (front) arm: guard by the chin → straight jab fully extended
+  let lEl = dmix([face * 9, -45], [face * 24, -45], pL), lHa = dmix([face * 14, -55], [face * 52, -46], pL);
+  // rear (back) arm: tucked guard → cross driven across the body
+  let rEl = dmix([face * -8, -47], [face * 21, -44], pR), rHa = dmix([face * -3, -56], [face * 50, -45], pR);
+  // organic guard bob on whichever hand isn't committed, counter-phased L/R
+  const wl = 1 - pL, wr = 1 - pR;
+  lEl = [lEl[0] + gx * 0.5 * wl, lEl[1] + gy * 0.5 * wl]; lHa = [lHa[0] + gx * wl, lHa[1] + gy * wl];
+  rEl = [rEl[0] - gx * 0.5 * wr, rEl[1] - gy * 0.5 * wr]; rHa = [rHa[0] - gx * wr, rHa[1] - gy * wr];
+  const lKn = dmix([face * 9, 22], [face * 27, 4], kick), lFo = dmix([face * 13, 46], [face * 55, -5], kick);
   const rKn = [face * -11, 22], rFo = [face * -18, 46];
   ctx.save();
   ctx.translate(cx, feetY - 46 * scale);
@@ -367,25 +374,28 @@ function drawStick(
   const seg = (a: number[], b: number[], c?: number[]) => { ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); if (c) ctx.lineTo(c[0], c[1]); ctx.stroke(); };
   seg([0, 0], rKn, rFo);
   seg([0, 0], lKn, lFo);
-  ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -46); ctx.stroke();
-  seg([0, -42], rEl, rHa);
-  seg([0, -42], lEl, lHa);
-  ctx.fillStyle = color; ctx.beginPath(); ctx.arc(0, -61, 13, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(hx * 0.28, -46); ctx.stroke(); // torso leans a touch with the recoil
+  seg([hx * 0.28, -42], rEl, rHa);
+  seg([hx * 0.28, -42], lEl, lHa);
+  ctx.fillStyle = color; ctx.beginPath(); ctx.arc(hx, -61 + hy, 13, 0, Math.PI * 2); ctx.fill();
   ctx.restore();
 }
+// A crisp impact spark: alternating short/long spokes + a bright core flash, sized to the fighter.
 function drawDuelBurst(ctx: CanvasRenderingContext2D, x: number, y: number, a: number, color: string, m: number) {
+  a = Math.max(0, Math.min(1, a));
   ctx.save();
-  ctx.globalAlpha = Math.max(0, Math.min(1, a));
-  ctx.strokeStyle = color; ctx.lineWidth = Math.max(1.3, 2.4 * m); ctx.lineCap = 'round';
-  const grow = (4 + a * 8) * m; // burst scales with the fighter, so it never dwarfs a small figure
-  for (const d of [30, 90, 150, 210, 270, 330]) {
-    const r = (d * Math.PI) / 180;
+  ctx.strokeStyle = color; ctx.lineCap = 'round'; ctx.lineWidth = Math.max(1.2, 2.2 * m);
+  ctx.globalAlpha = a;
+  const grow = (4 + a * 7) * m; // scales with the fighter, so it never dwarfs a small figure
+  [15, 60, 105, 150, 195, 240, 285, 330].forEach((d, i) => {
+    const r = (d * Math.PI) / 180, len = grow * (i % 2 ? 0.62 : 1.05);
     ctx.beginPath();
-    ctx.moveTo(x + Math.cos(r) * grow * 0.5, y + Math.sin(r) * grow * 0.5);
-    ctx.lineTo(x + Math.cos(r) * grow, y + Math.sin(r) * grow);
+    ctx.moveTo(x + Math.cos(r) * grow * 0.42, y + Math.sin(r) * grow * 0.42);
+    ctx.lineTo(x + Math.cos(r) * len, y + Math.sin(r) * len);
     ctx.stroke();
-  }
-  ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x, y, 2.6 * a * m, 0, Math.PI * 2); ctx.fill();
+  });
+  ctx.globalAlpha = a * 0.95; ctx.fillStyle = '#FFF3E0';
+  ctx.beginPath(); ctx.arc(x, y, Math.max(1.2, 2.3 * a * m), 0, Math.PI * 2); ctx.fill();
   ctx.restore();
 }
 export function drawDuel(
@@ -399,43 +409,61 @@ export function drawDuel(
   const wf = Math.min(1, span / 800);
   const scale = Math.max(0.16, Math.min(0.29, 0.12 + 0.17 * wf)); // slightly bigger, still mobile-responsive
   const mid = (xMin + xMax) / 2;
-  // A real bout: the two square up and stay engaged, closing to trade blows then backing off,
-  // while the whole fight drifts SLOWLY across the card (roams, but not fast or to the extremes).
-  const drift = mid + span * 0.2 * Math.sin(f * 0.0052);
-  const sep = 22 + 38 * (0.5 + 0.5 * Math.sin(f * 0.05)); // gap opens/closes ~4s → approach · clash · retreat
+  const drift = mid + span * 0.18 * Math.sin(f * 0.005); // the whole bout drifts slowly across the card
+
+  // ── one committed strike per round: square up · close · SNAP · impact · recover · back off ──
+  const CYC = 84, CONTACT = 48;                          // frames; the blow lands at CONTACT
+  const cyc = ((f % CYC) + CYC) % CYC;
+  const round = Math.floor(f / CYC);
+  const closeB = dpulse(cyc, CONTACT, 20);               // 0 at range → 1 at contact (one approach+retreat)
+  const sep = 56 - 36 * closeB;                          // closest exactly when the blow lands
   const upX0 = drift - sep / 2, dnX0 = drift + sep / 2;
-  const clash = dsmooth(50, 22, sep); // 1 = trading blows, 0 = squared up at range
-  const beat = f * 0.13; // strike cadence during a clash
+  // aggressor's strike extension: anticipation (coil back) → snap (accelerate out) → follow-through
+  let strikeExt = 0;
+  if (cyc >= 40 && cyc <= 64) {
+    if (cyc < 45) strikeExt = -0.3 * ((cyc - 40) / 5);                                 // wind up: pull the fist back
+    else if (cyc < CONTACT) strikeExt = dlerp(-0.3, 1.08, ((cyc - 45) / (CONTACT - 45)) ** 2); // SNAP (ease-in, fast)
+    else strikeExt = dlerp(1.08, 0, 1 - (1 - (cyc - CONTACT) / 16) ** 2);              // recover (ease-out)
+  }
+  const sType = round % 3;                               // 0 jab (lead) · 1 cross (rear) · 2 kick
+  const contact = dpulse(cyc, CONTACT + 1, 3);           // sharp impact window (burst + hit-stop feel)
+
   const build = (who: 'UP' | 'DOWN') => {
     const isUp = who === 'UP';
+    const face = isUp ? 1 : -1;                          // squared up; they never cross
     const baseX = isUp ? upX0 : dnX0;
     const oppX = isUp ? dnX0 : upX0;
-    const face = isUp ? 1 : -1; // squared up; they don't cross
     const isAggr = isUp === above;
-    const phase = isUp ? 0 : 11;
-    const bob = Math.sin((f + phase) * 0.45);
-    let punch = 0.04 + 0.13 * Math.max(0, Math.sin((f + phase) * 0.55)) ** 2;
-    let kick = 0, rot = 0, x = baseX, jump = 0;
+    // organic boxing-guard bob (small circle), calmer as they close in
+    const ph = isUp ? 0 : 2.1, amp = 1 - 0.6 * closeB;
+    let gx = Math.cos(f * 0.17 + ph) * 3.0 * amp, gy = Math.sin(f * 0.23 + ph) * 2.4 * amp;
+    let pL = 0, pR = 0, kick = 0, rot = 0, x = baseX, jump = 0, hx = 0, hy = 0;
     if (isAggr) {
-      const swing = clash * Math.max(0, Math.sin(beat));
-      if (Math.floor(beat / Math.PI) % 3 === 2) kick = swing; else punch = Math.max(punch, swing);
-      x = baseX + (oppX - 15 * face - baseX) * (clash * 0.7); // lean in so blows land
-      jump = clash > 0.78 ? ((clash - 0.78) / 0.22) * 11 * Math.max(0, Math.sin(beat)) : 0; // rare hop
+      const e = Math.max(0, strikeExt);
+      if (sType === 0) pL = e; else if (sType === 1) pR = e; else kick = e;
+      const lunge = Math.max(0, Math.min(1, strikeExt));
+      x = strikeExt < 0 ? baseX + face * strikeExt * 4        // small step back on the wind-up
+                        : baseX + (oppX - 16 * face - baseX) * lunge; // drive bodyweight through the snap
+      rot = face * (strikeExt < 0 ? strikeExt * 6 : strikeExt * 5);
+      if (sType === 2) jump = e * 5;                         // slight lift on the kick
     } else {
-      const reel = clash * Math.max(0, Math.sin(beat + 1.6));
-      rot = -face * 18 * reel;
-      punch = Math.max(punch, clash * 0.26 * Math.max(0, Math.sin(beat + 3.0))); // throws some back
-      x = baseX - face * reel * 6; // rocked back a touch
+      // defender: head snaps back, torso recoils, knocked back — timed just after contact, decaying
+      const react = dpulse(cyc, CONTACT + 3, 10);
+      hx = -face * 8 * react; hy = -4 * react;
+      rot = -face * 15 * react; x = baseX - face * 8 * react;
+      gx *= 1 - react; gy *= 1 - react;
     }
-    const feetY = yAtX(x) - jump + bob * 1.5 * (1 - clash);
-    return { x, feetY, face, punch, kick, rot, bob, scale, color: isUp ? DUEL_UP : DUEL_DOWN };
+    const feetY = yAtX(x) - jump;
+    return { x, feetY, face, pL, pR, kick, rot, gx, gy, hx, hy, scale, color: isUp ? DUEL_UP : DUEL_DOWN };
   };
   const up = build('UP'), dn = build('DOWN');
+  // draw the defender first so the aggressor overlaps on top through the strike
   if (above) { drawStick(ctx, dn.x, dn.feetY, dn); drawStick(ctx, up.x, up.feetY, up); }
   else { drawStick(ctx, up.x, up.feetY, up); drawStick(ctx, dn.x, dn.feetY, dn); }
-  const def = above ? dn : up;
-  const burstA = clash * Math.max(0, Math.sin(beat + 1.6));
-  if (burstA > 0.2) drawDuelBurst(ctx, def.x + (above ? -1 : 1) * 8 * scale, def.feetY - 58 * scale, burstA, above ? DUEL_UP : DUEL_DOWN, scale / 0.27);
+  if (contact > 0.12) {
+    const def = above ? dn : up;
+    drawDuelBurst(ctx, def.x + def.hx * scale + (above ? -1 : 1) * 3 * scale, def.feetY - 60 * scale + def.hy * scale, contact, above ? DUEL_UP : DUEL_DOWN, scale / 0.24);
+  }
 }
 
 // ─── Draw a smooth price line + area against a dashed target line ───
