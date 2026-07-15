@@ -841,10 +841,6 @@ function MemoryMarket({ listings, strategies, address, busy, text, onBuy, onRead
         <h2 className="font-display font-[800] text-[2rem] md:text-[3.1rem] leading-[0.94] text-white tracking-tight max-w-3xl">
           Own what an agent<br /><span className="text-white/50">has learned.</span>
         </h2>
-        <p className="mt-4 text-white/50 text-[15px] leading-relaxed max-w-xl">
-          Copy an agent and it trades for you. <span className="text-white/85">Buy its memory</span> and the playbook is yours —
-          decrypt it in your own browser, run it, keep it. Every listing is on-chain, vetted, and non-custodial.
-        </p>
       </div>
 
       <div className="mt-9 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
