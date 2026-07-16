@@ -403,6 +403,9 @@ export function drawDuel(
   o: { yAtX: (x: number) => number; xMin: number; xMax: number; h: number; now: number; above: boolean; move?: number },
 ) {
   const { yAtX, xMin, xMax, now, above, move = 0 } = o;
+  // The ATTACKER follows the price MOVEMENT: ticking up → YES (up) presses, ticking down → NO
+  // (down) presses. On a dead-flat tick, the current market leader (above/below the line) presses.
+  const attackUp = move > 0 ? true : move < 0 ? false : above;
   const span = xMax - xMin;
   if (span < 120) return;
   const f = now / 16.667;
@@ -434,7 +437,7 @@ export function drawDuel(
     const face = isUp ? 1 : -1;                          // squared up; they never cross
     const baseX = isUp ? upX0 : dnX0;
     const oppX = isUp ? dnX0 : upX0;
-    const isAggr = isUp === above;
+    const isAggr = isUp === attackUp;
     // organic boxing-guard bob (small circle), calmer as they close in
     const ph = isUp ? 0 : 2.1, amp = 1 - 0.6 * closeB;
     let gx = Math.cos(f * 0.17 + ph) * 3.0 * amp, gy = Math.sin(f * 0.23 + ph) * 2.4 * amp;
@@ -459,14 +462,14 @@ export function drawDuel(
   };
   const up = build('UP'), dn = build('DOWN');
   // draw the defender first so the aggressor overlaps on top through the strike
-  if (above) { drawStick(ctx, dn.x, dn.feetY, dn); drawStick(ctx, up.x, up.feetY, up); }
+  if (attackUp) { drawStick(ctx, dn.x, dn.feetY, dn); drawStick(ctx, up.x, up.feetY, up); }
   else { drawStick(ctx, up.x, up.feetY, up); drawStick(ctx, dn.x, dn.feetY, dn); }
-  const def = above ? dn : up;
+  const def = attackUp ? dn : up;
   const isKick = sType === 2;
   // punches land on the head; kicks land at the waist
-  const hitX = def.x + (isKick ? 0 : def.hx * scale) + (above ? -1 : 1) * 4 * scale;
+  const hitX = def.x + (isKick ? 0 : def.hx * scale) + (attackUp ? -1 : 1) * 4 * scale;
   const hitY = isKick ? def.feetY - 34 * scale : def.feetY - 100 * scale + def.hy * scale;
-  if (contact > 0.12) drawDuelBurst(ctx, hitX, hitY, contact, above ? DUEL_UP : DUEL_DOWN, scale / 0.24);
+  if (contact > 0.12) drawDuelBurst(ctx, hitX, hitY, contact, attackUp ? DUEL_UP : DUEL_DOWN, scale / 0.24);
 
   // ── hit number: a tiny "+N" attack-pop rises from the impact and fades (game juice). N tracks
   //    the real recent price move, so the winner lands harder when the market's ripping. ──
@@ -476,7 +479,7 @@ export function drawDuel(
     const a = (p < 0.14 ? p / 0.14 : Math.pow(1 - (p - 0.14) / 0.86, 1.5)) * 0.7; // snap in, graceful out, a little sheer
     const popS = p < 0.14 ? 0.62 + 0.38 * (p / 0.14) : 1;                 // subtle scale-in
     const val = Math.max(1, Math.round(Math.abs(move)));
-    const label = `${above ? '+' : '−'}${val}`;                     // UP lands a gain (+ green); DOWN a loss (− red)
+    const label = `${attackUp ? '+' : '−'}${val}`;                  // up-tick = YES lands (+ green); down-tick = NO lands (− red)
     const fontPx = (4 + 12 * scale) * popS;                              // extra-small + sheer
     ctx.save();
     ctx.globalAlpha = Math.max(0, Math.min(1, a));
@@ -484,8 +487,8 @@ export function drawDuel(
     (ctx as CanvasRenderingContext2D & { letterSpacing?: string }).letterSpacing = '0.3px';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.shadowColor = 'rgba(4,8,7,0.7)'; ctx.shadowBlur = 3;             // soft halo, not a hard outline
-    const tx = hitX + (above ? -1 : 1) * 5 * scale, ty = hitY - 6 * scale - p * 22 * scale;
-    ctx.fillStyle = above ? DUEL_UP : DUEL_DOWN;
+    const tx = hitX + (attackUp ? -1 : 1) * 5 * scale, ty = hitY - 6 * scale - p * 22 * scale;
+    ctx.fillStyle = attackUp ? DUEL_UP : DUEL_DOWN;
     ctx.fillText(label, tx, ty);
     ctx.restore();
   }
