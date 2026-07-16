@@ -140,21 +140,12 @@ export default function LeaderboardPage() {
               <div className="lb-hero-eyebrow">
                 <span className="dash" />
                 <span>The ranking sheet</span>
-                <span className="vermilion">— live from the markets</span>
               </div>
               <h1 className="lb-hero-title">
                 The<br />
                 <span className="vermilion">house</span><br />
                 of names.
               </h1>
-              <p className="lb-hero-sub">
-                {lbLoading
-                  ? 'Reading on-chain trade data…'
-                  : meta.rankedTraders > 0
-                    ? `${meta.rankedTraders.toLocaleString()} traders closed positions in the last 7 days.`
-                    : 'No positions have closed in the last 7 days yet — the board fills as players cash out winning bets.'}
-                {' '}Ranked by real profit — winnings cashed out minus what you put in.
-              </p>
             </div>
             <div className="lb-meta-col">
               <div>
@@ -217,7 +208,6 @@ export default function LeaderboardPage() {
                 number="01"
                 title="The podium"
                 desc="The top three players by profit over the last 7 days."
-                meta="live · refreshes automatically"
               />
 
               <div className="podium">
