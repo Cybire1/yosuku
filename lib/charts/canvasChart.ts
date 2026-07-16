@@ -550,8 +550,9 @@ export function drawPriceLine(
   const pts = series.map((v, i) => ({ x: xFor(i), y: yFor(v) }));
 
   // Faint gridlines + right-edge price labels
+  const axisFont = w < 480 ? 8 : 10;   // shrink the price labels on narrow (mobile) charts
   if (opts.gridLines) {
-    ctx.font = '10px JetBrains Mono, monospace';
+    ctx.font = `${axisFont}px JetBrains Mono, monospace`;
     const rows = 4;
     for (let i = 0; i <= rows; i++) {
       const y = padTop + (i / rows) * (h - padTop - padBot);
