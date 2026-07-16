@@ -87,15 +87,25 @@ function GeneratedAvatar({ seed, accent }: { seed: string; accent: string }) {
   );
 }
 
+// A stock persona photo per agent (deterministic by seed) so each strategy reads as a trader,
+// not a gradient blob. Falls back to the seeded gradient if the image can't load.
 function AgentPortrait({ seed, name, size = 'card', accent = '#E04D26' }: { seed: string; name: string; size?: 'small' | 'card' | 'drawer'; accent?: string }) {
+  const [failed, setFailed] = useState(false);
   const dimensions = size === 'small' ? 'h-8 w-8' : 'h-16 w-16';
+  const px = size === 'small' ? 96 : 160;
+  const src = `https://i.pravatar.cc/${px}?u=${encodeURIComponent(seed)}`;
   return (
     <div
       aria-label={`${name} avatar`}
       className={`relative shrink-0 overflow-hidden rounded-xl border ${dimensions}`}
       style={{ borderColor: `${accent}40` }}
     >
-      <GeneratedAvatar seed={seed} accent={accent} />
+      {failed ? (
+        <GeneratedAvatar seed={seed} accent={accent} />
+      ) : (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={src} alt="" className="h-full w-full object-cover" loading="lazy" referrerPolicy="no-referrer" onError={() => setFailed(true)} />
+      )}
       <span className="absolute bottom-1 right-1 h-1.5 w-1.5 rounded-full border border-black/70" style={{ background: accent, boxShadow: `0 0 8px ${accent}cc` }} />
     </div>
   );
@@ -628,22 +638,16 @@ export default function StrategiesPage() {
               <div className="flex flex-wrap items-end justify-between gap-4 border-b border-white/[0.08] pb-4">
                 <div className="min-w-0">
                   <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-vermilion mb-1.5">Creator studio</div>
-                  <h2 className="font-display font-[800] text-2xl sm:text-[26px] text-white leading-none">Launch an agent</h2>
+                  <div className="flex items-center gap-2.5">
+                    <h2 className="font-display font-[800] text-2xl sm:text-[26px] text-white leading-none">Launch an agent</h2>
+                    <span className="shrink-0 font-mono text-[9px] uppercase tracking-[0.16em] text-vermilion border border-vermilion/40 rounded-full px-2 py-0.5">Coming soon</span>
+                  </div>
                   <p className="text-[13px] text-gray-400 mt-2.5 max-w-md leading-snug">
-                    Pick a strategy, set the caps it can never cross, publish. It runs on autopilot, and the
-                    vault contract on Sui enforces the caps — it can trade your copiers&apos; funds, never take them.
+                    We&apos;re rebuilding Sensei as your personalized trading assistant — it reads the market with
+                    you and can place your calls inside limits it can never cross. Wiring it to the live venue now.
                   </p>
                 </div>
-                {address ? (
-                  <button
-                    onClick={() => setShowList((v) => !v)}
-                    className="shrink-0 rounded-full border border-vermilion/40 bg-vermilion/[0.07] px-5 py-2.5 text-[13px] font-semibold text-vermilion hover:bg-vermilion/[0.14] transition-colors"
-                  >
-                    {showList ? '× Close' : 'Launch an agent →'}
-                  </button>
-                ) : (
-                  <span className="shrink-0 font-mono text-[12px] text-gray-600">Connect a wallet to launch.</span>
-                )}
+                <span className="shrink-0 font-mono text-[12px] text-gray-600">Coming soon</span>
               </div>
 
               {address && showList && (

@@ -771,14 +771,15 @@ export function glyphFromAddress(addr: string): string {
   return KANJI_POOL[Math.abs(hash) % KANJI_POOL.length];
 }
 
-// Deterministic memorable codename for an agent — gives each strategy an identity to remember
-// instead of a bare 0x… address. Two-word, brand-flavoured, stable per address.
-const CODE_A = ['Vermilion', 'Onyx', 'Crimson', 'Cobalt', 'Ember', 'Slate', 'Ivory', 'Indigo', 'Saffron', 'Jade', 'Ash', 'Glass', 'Iron', 'Mist', 'Dusk', 'Flint'];
-const CODE_B = ['Falcon', 'Drift', 'Kestrel', 'Vector', 'Cipher', 'Helix', 'Talon', 'Quanta', 'Ronin', 'Atlas', 'Nexus', 'Pulse', 'Forge', 'Strider', 'Oracle', 'Maru'];
+// Deterministic human name for an agent — gives each strategy a person to remember instead of a
+// bare 0x… address. A real first + last name reads as a trader, not a generated bot codename.
+// Stable per address.
+const NAME_FIRST = ['Kai', 'Mara', 'Devin', 'Yuki', 'Rosa', 'Theo', 'Nadia', 'Owen', 'Lena', 'Arun', 'Mika', 'Cole', 'Sana', 'Bruno', 'Ivy', 'Rey', 'Hana', 'Milo', 'Zara', 'Finn', 'Noor', 'Dario', 'Elle', 'Kenji'];
+const NAME_LAST = ['Ryder', 'Vance', 'Okafor', 'Tanaka', 'Mercer', 'Duval', 'Sato', 'Brooks', 'Novak', 'Reyes', 'Holt', 'Ansari', 'Frost', 'Kang', 'Beck', 'Costa', 'Wray', 'Ito', 'Nash', 'Ozturk', 'Vega', 'Lund', 'Hale', 'Mori'];
 export function codenameFromAddress(addr: string): string {
   let h = 0;
   for (let i = 0; i < addr.length; i++) h = ((h << 5) - h + addr.charCodeAt(i)) | 0;
-  return `${CODE_A[Math.abs(h) % CODE_A.length]} ${CODE_B[Math.abs(h >> 5) % CODE_B.length]}`;
+  return `${NAME_FIRST[Math.abs(h) % NAME_FIRST.length]} ${NAME_LAST[Math.abs(h >> 5) % NAME_LAST.length]}`;
 }
 
 export const SUISCAN_TX = (d: string) => `https://suiscan.xyz/testnet/tx/${d}`;
