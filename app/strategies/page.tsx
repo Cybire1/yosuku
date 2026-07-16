@@ -91,12 +91,24 @@ function GeneratedAvatar({ seed, accent }: { seed: string; accent: string }) {
 // on-chain id (no photo pool to collide, no fake faces), on-brand, and identical everywhere the
 // agent appears (card / drawer / trade rows) so the mark IS its identity.
 function AgentPortrait({ seed, name, size = 'card', accent = '#E04D26' }: { seed: string; name: string; size?: 'small' | 'card' | 'drawer'; accent?: string }) {
+  const [failed, setFailed] = useState(false);
   const dim = size === 'small' ? 'h-9 w-9' : 'h-14 w-14';
   const glyph = glyphFromAddress(seed);
+  // Illustrated persona per agent — deterministic, unique per on-chain id (no photo-pool
+  // duplicates, no real faces), on a warm paper tile that reads in both themes. Falls back to
+  // the seeded ink sigil if the drawing can't load.
+  const src = `https://api.dicebear.com/9.x/notionists/svg?seed=${encodeURIComponent(seed)}&backgroundColor=f4eee1&radius=12`;
   return (
     <div aria-label={`${name} — agent mark`} className={`strat-sigil shrink-0 ${dim}`}>
-      <GeneratedAvatar seed={seed} accent={accent} />
-      <span className="glyph" style={{ fontSize: size === 'small' ? '15px' : '22px' }}>{glyph}</span>
+      {failed ? (
+        <>
+          <GeneratedAvatar seed={seed} accent={accent} />
+          <span className="glyph" style={{ fontSize: size === 'small' ? '15px' : '22px' }}>{glyph}</span>
+        </>
+      ) : (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={src} alt="" className="h-full w-full object-cover" loading="lazy" referrerPolicy="no-referrer" onError={() => setFailed(true)} />
+      )}
     </div>
   );
 }
