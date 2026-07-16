@@ -4761,3 +4761,51 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
 @keyframes xt-payoff { from { opacity: 0; transform: translateY(11px); color: #fff; } to { opacity: 1; transform: none; color: var(--xt-verm); } }
 .xt-payoff { opacity: 0; animation: xt-payoff 0.72s var(--e-out) 0.3s both; }
 @media (prefers-reduced-motion: reduce) { .xt-payoff { opacity: 1; animation: none; color: var(--xt-verm); } }
+
+/* ══════════════════════════════════════════════════════════════
+   Earn — dimensional vault card + theme-aware surfaces (light-mode)
+   ══════════════════════════════════════════════════════════════ */
+.earn-vault {
+  position: relative; overflow: hidden; border-radius: 20px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: linear-gradient(158deg, rgba(255,255,255,0.078), rgba(255,255,255,0.022));
+  box-shadow: 0 34px 70px -30px rgba(0,0,0,0.9), inset 0 1px 0 rgba(255,255,255,0.09);
+}
+[data-theme="light"] .earn-vault {
+  border-color: rgba(20,18,16,0.12);
+  background: linear-gradient(158deg, #ffffff, #faf5ec);
+  box-shadow: 0 22px 48px -24px rgba(20,18,16,0.26), 0 3px 8px -3px rgba(20,18,16,0.11), inset 0 1px 0 rgba(255,255,255,0.95);
+}
+.earn-vault-glow { position: absolute; top: -42%; right: -16%; width: 62%; height: 130%; pointer-events: none;
+  background: radial-gradient(closest-side, rgba(224,77,38,0.11), transparent 72%); }
+[data-theme="light"] .earn-vault-glow { background: radial-gradient(closest-side, rgba(224,77,38,0.08), transparent 72%); }
+.earn-vault-accent { position: absolute; top: 0; left: 26px; width: 46px; height: 2px; border-radius: 0 0 2px 2px; background: var(--color-vermilion); opacity: 0.9; }
+
+.earn-livedot { display:inline-block; width:6px; height:6px; border-radius:50%; background: var(--color-new-mint); animation: earn-pulse 2.4s ease-out infinite; }
+@keyframes earn-pulse { 0% { box-shadow: 0 0 0 0 rgba(52,211,153,0.45); } 70%,100% { box-shadow: 0 0 0 6px rgba(52,211,153,0); } }
+@media (prefers-reduced-motion: reduce) { .earn-livedot { animation: none; } }
+
+.earn-hair { height: 1px; background: rgba(255,255,255,0.08); }
+[data-theme="light"] .earn-hair { background: rgba(20,18,16,0.10); }
+
+.earn-meter { height: 5px; border-radius: 3px; background: rgba(255,255,255,0.08); overflow: hidden; }
+[data-theme="light"] .earn-meter { background: rgba(20,18,16,0.09); }
+.earn-meter-fill { height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--color-vermilion), #f0774f); box-shadow: 0 0 8px rgba(224,77,38,0.45); transition: width .6s cubic-bezier(0.2,0,0,1); }
+
+.earn-chipg { border: 1px solid rgba(52,211,153,0.30); background: rgba(52,211,153,0.09); }
+[data-theme="light"] .earn-chipg { border-color: rgba(45,160,110,0.35); background: rgba(45,160,110,0.10); }
+
+/* the other earn surfaces (were hardcoded white-opacity → invisible on cream) */
+.earn-card { border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.02); border-radius: 16px; }
+[data-theme="light"] .earn-card { border-color: rgba(20,18,16,0.10); background: rgba(20,18,16,0.015); box-shadow: 0 20px 44px -32px rgba(20,18,16,0.16); }
+.earn-field { border: 1px solid rgba(255,255,255,0.10); transition: border-color .2s; }
+.earn-field:focus-within { border-color: rgba(255,255,255,0.25); }
+[data-theme="light"] .earn-field { border-color: rgba(20,18,16,0.16); background: rgba(255,255,255,0.45); }
+[data-theme="light"] .earn-field:focus-within { border-color: rgba(224,77,38,0.5); }
+[data-theme="light"] .earn-field input::placeholder { color: rgba(20,18,16,0.32); }
+.earn-chip { border: 1px solid rgba(255,255,255,0.10); }
+[data-theme="light"] .earn-chip { border-color: rgba(20,18,16,0.14); }
+.earn-ghost { border: 1px solid rgba(255,255,255,0.15); transition: border-color .2s, color .2s; }
+.earn-ghost:hover { border-color: rgba(255,255,255,0.30); }
+[data-theme="light"] .earn-ghost { border-color: rgba(20,18,16,0.2); }
+[data-theme="light"] .earn-ghost:hover { border-color: rgba(224,77,38,0.5); }

@@ -153,32 +153,53 @@ export default function EarnPage() {
               </h1>
             </div>
 
-            {/* live vault dashboard — every number below is the live on-chain object, or the panel says so */}
-            <div className="rounded-2xl border border-white/[0.10] bg-gradient-to-b from-white/[0.04] to-transparent p-6 md:p-8 backdrop-blur-sm">
+            {/* live vault dashboard — every number is the live on-chain object, or the panel says so */}
+            <div className="earn-vault p-6 md:p-8 backdrop-blur-sm">
+              <div className="earn-vault-glow" />
+              <div className="earn-vault-accent" />
               {vaultStats ? (
-                <>
-                  {/* share price is the hero; a quiet pulse marks it live on-chain */}
-                  <div className="flex items-start justify-between">
+                <div className="relative">
+                  <div className="flex items-center justify-between mb-6">
+                    <span className="inline-flex items-center gap-2 font-mono text-[10px] tracking-[0.22em] uppercase text-gray-500"><span className="earn-livedot" /> live vault</span>
+                    <span className="font-mono text-[10px] tracking-[0.18em] uppercase text-gray-500">Predict PLP</span>
+                  </div>
+
+                  {/* share price is the hero — with its growth since par + a rising micro-line */}
+                  <div className="flex items-end gap-3">
+                    <div className="font-display text-[clamp(2.8rem,5vw,3.5rem)] font-extrabold leading-[0.88] tracking-tight tabular-nums">
+                      {sharePrice != null ? sharePrice.toFixed(4) : '—'}
+                    </div>
+                    {sharePrice != null && sharePrice > 1.0001 && (
+                      <span className="earn-chipg rounded-full px-2.5 py-1 mb-1 inline-flex items-center gap-1.5 font-mono text-[11px] text-new-mint">
+                        <svg width="8" height="8" viewBox="0 0 8 8" aria-hidden><path d="M4 0 L8 7 L0 7 Z" fill="#34D399" /></svg>
+                        {((sharePrice - 1) * 100).toFixed(2)}%
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-2.5 flex items-center gap-2.5">
+                    <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-gray-500">Value per share</span>
+                    <span className="font-mono text-[10px] text-gray-500/70 hidden sm:inline">· since 1.0000 par</span>
+                    <svg width="58" height="16" viewBox="0 0 58 16" className="ml-auto shrink-0 opacity-90" aria-hidden>
+                      <path d="M1,15 C15,13 26,11 36,7 C44,4 52,3 57,1" fill="none" stroke="#34D399" strokeWidth="1.5" strokeLinecap="round" />
+                    </svg>
+                  </div>
+
+                  <div className="earn-hair my-6" />
+
+                  <div className="grid grid-cols-2 gap-5">
                     <div>
-                      <div className="font-display text-5xl font-extrabold leading-none tracking-tight">
-                        {sharePrice != null ? sharePrice.toFixed(4) : '—'}
-                      </div>
-                      <div className="mt-2.5 font-mono text-[11px] uppercase tracking-[0.16em] text-gray-500">Value per share</div>
+                      <div className="mb-1.5 font-mono text-[9px] uppercase tracking-[0.18em] text-gray-500">Vault value</div>
+                      <div className="font-mono text-[15px] tabular-nums">{vaultValue != null ? fmt(vaultValue) : '—'} <span className="text-xs text-gray-500">DUSDC</span></div>
+                    </div>
+                    <div>
+                      <div className="mb-1.5 font-mono text-[9px] uppercase tracking-[0.18em] text-gray-500">Utilization</div>
+                      <div className="font-mono text-[15px] text-vermilion tabular-nums mb-2">{utilization != null ? `${(utilization * 100).toFixed(1)}%` : '—'}</div>
+                      <div className="earn-meter"><div className="earn-meter-fill" style={{ width: `max(4px, ${Math.min(100, (utilization ?? 0) * 100)}%)` }} /></div>
                     </div>
                   </div>
-                  <div className="mt-8 grid grid-cols-2 gap-5">
-                    <div>
-                      <div className="mb-1.5 font-mono text-[9px] uppercase tracking-[0.18em] text-gray-600">Vault value</div>
-                      <div className="font-mono text-[15px] text-white tabular-nums">{vaultValue != null ? fmt(vaultValue) : '—'} <span className="text-xs text-gray-600">DUSDC</span></div>
-                    </div>
-                    <div>
-                      <div className="mb-1.5 font-mono text-[9px] uppercase tracking-[0.18em] text-gray-600">Utilization</div>
-                      <div className="font-mono text-[15px] text-vermilion tabular-nums">{utilization != null ? `${(utilization * 100).toFixed(1)}%` : '—'}</div>
-                    </div>
-                  </div>
-                </>
+                </div>
               ) : (
-                <p className="font-mono text-xs text-gray-600 py-3">loading the vault…</p>
+                <p className="relative font-mono text-xs text-gray-500 py-3">loading the vault…</p>
               )}
             </div>
           </div>
@@ -191,7 +212,7 @@ export default function EarnPage() {
               <SectionHeader number="01" title="Supply the vault" meta="withdraw anytime" />
               <div className="grid md:grid-cols-2 gap-5 mb-10">
                 {/* deposit */}
-                <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-6">
+                <div className="earn-card p-6">
                   {!address ? (
                     <div className="py-8 text-center">
                       <p className="font-mono text-xs text-gray-500 mb-4">Connect a wallet to supply.</p>
@@ -203,14 +224,14 @@ export default function EarnPage() {
                         <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-gray-600">Amount</span>
                         <span className="font-mono text-[10px] text-gray-600">wallet {fmt(walletDusdc)} DUSDC</span>
                       </div>
-                      <div className="flex items-center gap-2 border border-white/10 rounded-xl px-4 py-3.5 mb-3 focus-within:border-white/25 transition-colors">
+                      <div className="flex items-center gap-2 earn-field rounded-xl px-4 py-3.5 mb-3">
                         <input value={plpAmount} onChange={(e) => setPlpAmount(e.target.value.replace(/[^0-9.]/g, ''))} placeholder="0.00" inputMode="decimal" className="bg-transparent flex-1 outline-none font-mono text-2xl min-w-0" />
                         <button onClick={() => setPlpAmount((Math.floor(walletDusdc * 100) / 100).toFixed(2))} className="font-mono text-[10px] uppercase tracking-wider text-vermilion hover:text-white transition-colors">Max</button>
                         <span className="font-mono text-sm text-gray-500">DUSDC</span>
                       </div>
                       <div className="grid grid-cols-4 gap-2 mb-4">
                         {['50', '100', '250', '500'].map((a) => (
-                          <button key={a} onClick={() => setPlpAmount(a)} className={`rounded-lg py-2 font-mono text-xs border transition-all ${plpAmount === a ? 'bg-vermilion/15 border-vermilion/50 text-white' : 'border-white/10 text-gray-500 hover:text-gray-300'}`}>{a}</button>
+                          <button key={a} onClick={() => setPlpAmount(a)} className={`rounded-lg py-2 font-mono text-xs border transition-all ${plpAmount === a ? 'bg-vermilion/15 border-vermilion/50 text-white' : 'earn-chip text-gray-500 hover:text-gray-300'}`}>{a}</button>
                         ))}
                       </div>
                       <button onClick={doDepositPlp} disabled={busy === 'plp-deposit'} className="block w-full sm:w-auto sm:mx-auto sm:px-16 bg-vermilion text-white font-semibold rounded-full py-3.5 hover:bg-vermilion-d active:scale-[0.98] transition-all disabled:opacity-60">
@@ -221,7 +242,7 @@ export default function EarnPage() {
                 </div>
 
                 {/* your position */}
-                <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-6">
+                <div className="earn-card p-6">
                   <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-gray-600 mb-4">Your position</div>
                   {!address ? (
                     <p className="font-mono text-xs text-gray-500 py-10 text-center">Connect a wallet to see it.</p>
@@ -231,7 +252,7 @@ export default function EarnPage() {
                     <>
                       <div className="font-display text-4xl font-extrabold tracking-tight">{fmt(myValue)} <span className="text-base text-gray-500 font-mono font-normal">DUSDC</span></div>
                       <div className="font-mono text-[11px] text-gray-500 mt-1 mb-5">{fmt(myPlp)} shares · at {sharePrice != null ? sharePrice.toFixed(4) : '—'} / share</div>
-                      <button onClick={doWithdrawPlp} disabled={busy === 'plp-withdraw' || plpCoins.length === 0} className="w-full border border-white/15 rounded-full py-3 font-mono text-xs uppercase tracking-wider text-vermilion hover:text-white hover:border-white/30 transition-colors disabled:opacity-50">
+                      <button onClick={doWithdrawPlp} disabled={busy === 'plp-withdraw' || plpCoins.length === 0} className="w-full earn-ghost rounded-full py-3 font-mono text-xs uppercase tracking-wider text-vermilion hover:text-white transition-colors disabled:opacity-50">
                         {busy === 'plp-withdraw' ? 'Withdrawing…' : 'Withdraw all'}
                       </button>
                     </>
