@@ -89,6 +89,8 @@ export default function LiveDesk() {
 
   const deskName = codenameFromAddress(VAULT624.enclaveAgent);
   const deskGlyph = glyphFromAddress(VAULT624.enclaveAgent);
+  const [deskImgFail, setDeskImgFail] = useState(false);
+  const deskAvatarSrc = `https://api.dicebear.com/9.x/notionists/svg?seed=${encodeURIComponent(VAULT624.enclaveAgent)}&backgroundColor=f4eee1&radius=12`;
 
   const [ledger, setLedger] = useState(0);
   const [sub, setSub] = useState<Sub624 | null>(null);
@@ -364,30 +366,23 @@ export default function LiveDesk() {
   // A cumulative-P&L sparkline (rises on wins, drops into drawdown on losses)
   // sitting over exactly three numbers: Won · Lost · Net. Losses are never hidden
   // — the curve draws them and the net can read negative in muted white.
-  const recordCard = (
+  // When there's no settled record yet, show nothing here — an empty placeholder box + copy
+  // just adds noise. The record appears once trades settle.
+  const recordCard = stats.settled === 0 ? null : (
     <div className="rounded-lg border border-white/[0.08] bg-white/[0.015] overflow-hidden">
-      {stats.settled === 0 ? (
-        <div className="px-4 py-6 text-center">
-          <p className="text-[13px] text-white/55 leading-snug">No finished trades yet — you&apos;d be early.</p>
-          <p className="font-mono text-[10px] text-white/30 mt-1">The record fills as trades settle on Sui.</p>
-        </div>
-      ) : (
-        <>
-          {/* framing: young + public. The net can read negative — that's transparency, not spin. */}
-          <div className="flex items-center justify-between px-4 pt-3">
-            <span className="font-mono text-[9px] uppercase tracking-[0.18em] text-white/40">Track record</span>
-            <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-white/30">{stats.settled} trades · public</span>
-          </div>
-          <div className="px-4 pt-2 pb-2">
-            <EquitySparkline points={stats.curve} width={520} height={64} className="w-full h-[64px]" />
-          </div>
-          <div className="grid grid-cols-3 divide-x divide-white/[0.07] border-t border-white/[0.07]">
-            <RecordStat label="Won" value={String(stats.wins)} />
-            <RecordStat label="Lost" value={String(stats.losses)} />
-            <RecordStat label="Net so far" value={netStr} accent={netUp ? 'up' : 'down'} />
-          </div>
-        </>
-      )}
+      {/* framing: young + public. The net can read negative — that's transparency, not spin. */}
+      <div className="flex items-center justify-between px-4 pt-3">
+        <span className="font-mono text-[9px] uppercase tracking-[0.18em] text-white/40">Track record</span>
+        <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-white/30">{stats.settled} trades · public</span>
+      </div>
+      <div className="px-4 pt-2 pb-2">
+        <EquitySparkline points={stats.curve} width={520} height={64} className="w-full h-[64px]" />
+      </div>
+      <div className="grid grid-cols-3 divide-x divide-white/[0.07] border-t border-white/[0.07]">
+        <RecordStat label="Won" value={String(stats.wins)} />
+        <RecordStat label="Lost" value={String(stats.losses)} />
+        <RecordStat label="Net so far" value={netStr} accent={netUp ? 'up' : 'down'} />
+      </div>
     </div>
   );
 
@@ -400,9 +395,16 @@ export default function LiveDesk() {
           <div className="p-6 sm:p-7 min-w-0">
             {/* hero identity — glyph · name · ONE attested chip · one line of what it does */}
             <div className="flex items-start gap-4">
-              <div className="shrink-0 h-14 w-14 rounded-lg border border-vermilion/40 bg-vermilion/[0.07] flex items-center justify-center">
-                <span className="font-jp text-2xl text-vermilion leading-none">{deskGlyph}</span>
-              </div>
+              {deskImgFail ? (
+                <div className="shrink-0 h-14 w-14 rounded-lg border border-vermilion/40 bg-vermilion/[0.07] flex items-center justify-center">
+                  <span className="font-jp text-2xl text-vermilion leading-none">{deskGlyph}</span>
+                </div>
+              ) : (
+                <div className="strat-sigil shrink-0 h-14 w-14">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={deskAvatarSrc} alt="" className="h-full w-full object-cover" loading="lazy" referrerPolicy="no-referrer" onError={() => setDeskImgFail(true)} />
+                </div>
+              )}
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
                   <h3 className="font-display font-[800] text-[1.7rem] text-white tracking-tight leading-none">{deskName}</h3>

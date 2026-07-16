@@ -155,7 +155,6 @@ export default function EarnPage() {
 
             {/* live vault dashboard — every number is the live on-chain object, or the panel says so */}
             <div className="earn-vault p-6 md:p-8 backdrop-blur-sm">
-              <div className="earn-vault-glow" />
               <div className="earn-vault-accent" />
               {vaultStats ? (
                 <div className="relative">
