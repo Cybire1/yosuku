@@ -37,7 +37,7 @@ type NavLink = {
 
 const PRIMARY_NAV: NavLink[] = [
   { name: 'Markets', href: '/markets' },
-  { name: 'Feed', href: '/feed' },
+  { name: 'Reels', href: '/reels' },
   { name: 'Earn', href: '/earn' },
   { name: 'Strategies', href: '/strategies', beta: true },
   { name: 'Leaderboard', href: '/leaderboard', icon: Trophy },
@@ -59,7 +59,7 @@ const AUTO_FUND_AT = 1_000_000; // 1 DUSDC (6 decimals)
 
 const MOBILE_NAV: NavLink[] = [
   { name: 'Markets', href: '/markets', icon: ChartLine },
-  { name: 'Feed', href: '/feed', icon: GalleryVerticalEnd },
+  { name: 'Reels', href: '/reels', icon: GalleryVerticalEnd },
   { name: 'Earn', href: '/earn', icon: BadgeDollarSign },
   { name: 'Strategies', href: '/strategies', icon: Bot },
   { name: 'Portfolio', href: '/portfolio', icon: WalletCards },

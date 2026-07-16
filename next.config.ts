@@ -28,6 +28,11 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  // The scroll-to-bet reel moved from /feed → /reels. Keep old links (shares,
+  // bookmarks, deep-links) working.
+  async redirects() {
+    return [{ source: '/feed', destination: '/reels', permanent: true }];
+  },
 };
 
 export default nextConfig;
