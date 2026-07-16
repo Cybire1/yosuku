@@ -254,11 +254,11 @@ body.urgent::before {
 .sensei-drawer {
   position: fixed; top: 0; right: 0; bottom: 0; z-index: 960; width: min(400px, 92vw);
   display: flex; flex-direction: column;
-  background: linear-gradient(180deg, rgba(20,16,13,0.98), rgba(14,11,9,0.98)); backdrop-filter: blur(16px);
+  background: #130e0b; backdrop-filter: blur(16px);
   border-left: 1px solid rgba(255,255,255,0.08); box-shadow: -30px 0 70px -30px rgba(0,0,0,0.7);
   transform: translateX(104%); transition: transform 420ms cubic-bezier(.22,1,.36,1);
 }
-[data-theme="light"] .sensei-drawer { background: linear-gradient(180deg, #fbf6ec, #f4ecdd); border-left-color: rgba(20,18,16,0.1); }
+[data-theme="light"] .sensei-drawer { background: #f7f1e6; border-left-color: rgba(20,18,16,0.1); }
 .sensei-drawer.open { transform: translateX(0); }
 .sensei-drawer-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 20px 20px 16px; border-bottom: 1px solid rgba(255,255,255,0.07); }
 [data-theme="light"] .sensei-drawer-head { border-bottom-color: rgba(20,18,16,0.08); }
@@ -271,12 +271,38 @@ body.urgent::before {
 .sd-nextclose.urgent { color: var(--vermilion); }
 .sd-close { background: none; border: 0; color: var(--gray-500); font-size: 15px; cursor: pointer; padding: 4px; line-height: 1; }
 .sd-close:hover { color: var(--white); }
-.sensei-drawer-msgs { flex: 1; overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 12px; }
-.sd-msg { max-width: 88%; border-radius: 16px; padding: 11px 14px; font-size: 14px; line-height: 1.5; }
-.sd-msg.assistant { align-self: flex-start; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); color: #e8e2d8; border-bottom-left-radius: 5px; }
-[data-theme="light"] .sd-msg.assistant { background: rgba(20,18,16,0.04); border-color: rgba(20,18,16,0.08); color: #2a2520; }
-.sd-msg.user { align-self: flex-end; background: var(--vermilion); color: #fff; border-bottom-right-radius: 5px; }
-.sd-msg-who { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase; color: rgba(224,77,38,0.85); margin-bottom: 5px; }
+.sensei-drawer-msgs { flex: 1; overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+/* a message is an avatar + a bubble on one row; it pops in on arrival */
+.sd-row { display: flex; align-items: flex-end; gap: 8px; animation: sdPop 340ms cubic-bezier(.22,1,.36,1) both; }
+.sd-row.user { justify-content: flex-end; }
+@keyframes sdPop { from { opacity: 0; transform: translateY(9px) scale(0.985); } to { opacity: 1; transform: none; } }
+/* Sensei's 先 avatar — a small brush-mark seal, not an emoji */
+.sd-ava {
+  flex: none; width: 27px; height: 27px; border-radius: 50%; display: grid; place-items: center; margin-bottom: 1px;
+  font-family: 'Noto Serif JP', var(--font-display), serif; font-weight: 700; font-size: 13px; line-height: 1; color: var(--vermilion);
+  background: rgba(224,77,38,0.13); border: 1px solid rgba(224,77,38,0.32);
+}
+[data-theme="light"] .sd-ava { background: rgba(224,77,38,0.1); border-color: rgba(224,77,38,0.28); }
+/* modern bubble */
+.sd-msg { max-width: 82%; border-radius: 17px; padding: 11px 14px; font-size: 14px; line-height: 1.55; word-break: break-word; }
+.sd-msg.assistant { background: rgba(255,255,255,0.055); border: 1px solid rgba(255,255,255,0.09); color: #ece6dc; border-bottom-left-radius: 6px; }
+[data-theme="light"] .sd-msg.assistant { background: #fffdf8; border-color: rgba(20,18,16,0.09); color: #2a2520; box-shadow: 0 2px 9px -5px rgba(40,24,8,0.16); }
+.sd-msg.user { background: var(--vermilion); color: #fff; border-bottom-right-radius: 6px; box-shadow: 0 3px 12px -6px rgba(224,77,38,0.7); }
+/* typewriter caret — blinking brush tip */
+.sd-caret { display: inline-block; width: 2px; height: 1.05em; margin-left: 1.5px; border-radius: 1px; background: var(--vermilion); vertical-align: -2px; animation: sdCaret 0.72s step-end infinite; }
+@keyframes sdCaret { 50% { opacity: 0; } }
+/* interactive quick-reply chips under Sensei's latest answer */
+.sd-chips { display: flex; flex-wrap: wrap; gap: 7px; padding: 1px 0 1px 35px; animation: sdPop 360ms cubic-bezier(.22,1,.36,1) both; }
+.sd-chip {
+  border: 1px solid rgba(224,77,38,0.34); background: rgba(224,77,38,0.06); color: var(--vermilion);
+  border-radius: 999px; padding: 7px 13px; font-size: 12.5px; font-weight: 600; cursor: pointer; white-space: nowrap;
+  transition: background 150ms var(--ease, ease), transform 150ms var(--ease, ease), border-color 150ms var(--ease, ease);
+}
+.sd-chip:hover { background: rgba(224,77,38,0.14); border-color: rgba(224,77,38,0.62); transform: translateY(-1px); }
+.sd-chip:active { transform: translateY(0) scale(0.96); }
+[data-theme="light"] .sd-chip { background: rgba(224,77,38,0.07); }
+[data-theme="light"] .sd-chip:hover { background: rgba(224,77,38,0.13); }
+@media (prefers-reduced-motion: reduce) { .sd-row, .sd-chips { animation: none; } .sd-caret { animation: none; } }
 .sensei-drawer-starters { display: flex; flex-wrap: wrap; gap: 7px; padding: 0 18px 10px; }
 .sd-starter { border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.02); color: var(--gray-300); border-radius: 999px; padding: 7px 12px; font-size: 12px; cursor: pointer; transition: border-color 160ms var(--ease), color 160ms var(--ease); }
 [data-theme="light"] .sd-starter { border-color: rgba(20,18,16,0.14); color: #4a443c; }

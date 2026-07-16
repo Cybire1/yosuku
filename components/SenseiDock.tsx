@@ -31,6 +31,36 @@ function fmt(secs: number): string {
   return h > 0 ? `${p(h)}:${p(m)}:${p(sec)}` : `${p(m)}:${p(sec)}`;
 }
 
+const REDUCE_MOTION = typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+// Award-winning reveal: Sensei's reply types itself in, word by word, with a caret.
+function Typewriter({ text, onDone, onType }: { text: string; onDone: () => void; onType?: () => void }) {
+  const [n, setN] = useState(0);
+  const words = text.split(/(\s+)/);
+  useEffect(() => {
+    setN(0);
+    let i = 0;
+    const id = setInterval(() => {
+      i += 1;
+      setN(i);
+      onType?.();
+      if (i >= words.length) { clearInterval(id); onDone(); }
+    }, 24);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [text]);
+  return (<>{words.slice(0, n).join('')}{n < words.length && <span className="sd-caret" aria-hidden />}</>);
+}
+
+// Interactive follow-ups: contextual chips under Sensei's answer the user can tap.
+function chipsFor(reply: string): string[] {
+  const r = reply.toLowerCase();
+  if (/sit (this|it|the next|out)|coin.?flip|don'?t (take|bet)|skip it|take a breath|pause|tilt|no bet/.test(r)) return ['Good call — skip it', 'Show me another market', 'Why sit out?'];
+  if (/\bup\b/.test(r) && /\bdown\b/.test(r)) return ['Why that side?', "What's the risk?", 'What would flip it?'];
+  if (/risk|thin|tight|lean|shakeout/.test(r)) return ['What would flip it?', 'How much should I risk?', 'Read the next market'];
+  return ['Why?', "What's the risk?", 'Read the next market'];
+}
+
 export default function SenseiDock({ targetTime, now }: Props) {
   const account = useCurrentAccount();
   const [secsLeft, setSecsLeft] = useState(0);
@@ -39,6 +69,7 @@ export default function SenseiDock({ targetTime, now }: Props) {
   const [msgs, setMsgs] = useState<Msg[]>([INTRO]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [typingIdx, setTypingIdx] = useState(-1);
   const scrollRef = useRef<HTMLDivElement>(null);
   const sendTimes = useRef<number[]>([]);
 
@@ -96,7 +127,9 @@ export default function SenseiDock({ targetTime, now }: Props) {
         body: JSON.stringify({ messages: next.map(({ role, content }) => ({ role, content })), market: snapshot, userId: account?.address, restless }),
       });
       const j = await res.json();
-      setMsgs((m) => [...m, { role: 'assistant', content: res.ok && j.reply ? j.reply : (j.error || 'Something went wrong — try again.') }]);
+      const reply = res.ok && j.reply ? j.reply : (j.error || 'Something went wrong — try again.');
+      setMsgs((m) => [...m, { role: 'assistant', content: reply }]);
+      setTypingIdx(REDUCE_MOTION ? -1 : next.length);
     } catch {
       setMsgs((m) => [...m, { role: 'assistant', content: 'Network error — try again.' }]);
     } finally { setLoading(false); }
@@ -143,12 +176,28 @@ export default function SenseiDock({ targetTime, now }: Props) {
 
         <div ref={scrollRef} className="sensei-drawer-msgs">
           {msgs.map((m, i) => (
-            <div key={i} className={`sd-msg ${m.role}`}>
-              {m.role === 'assistant' && <div className="sd-msg-who">Sensei</div>}
-              {m.content}
+            <div key={i} className={`sd-row ${m.role}`}>
+              {m.role === 'assistant' && <span className="sd-ava" aria-hidden>先</span>}
+              <div className={`sd-msg ${m.role}`}>
+                {m.role === 'assistant' && i === typingIdx
+                  ? <Typewriter text={m.content} onDone={() => setTypingIdx(-1)} onType={() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight })} />
+                  : m.content}
+              </div>
             </div>
           ))}
-          {loading && <div className="sd-msg assistant"><span className="sensei-dots"><i /><i /><i /></span></div>}
+          {loading && (
+            <div className="sd-row assistant">
+              <span className="sd-ava" aria-hidden>先</span>
+              <div className="sd-msg assistant"><span className="sensei-dots"><i /><i /><i /></span></div>
+            </div>
+          )}
+          {!loading && msgs.length > 1 && msgs[msgs.length - 1].role === 'assistant' && typingIdx === -1 && (
+            <div className="sd-chips">
+              {chipsFor(msgs[msgs.length - 1].content).map((c) => (
+                <button key={c} className="sd-chip" onClick={() => send(c)} data-cursor="hover">{c}</button>
+              ))}
+            </div>
+          )}
         </div>
 
         {msgs.length === 1 && (
