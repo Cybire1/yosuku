@@ -102,18 +102,22 @@ export default function SenseiDock({ targetTime, now }: Props) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        aria-label="Open Sensei — your trading assistant"
+        aria-label="Open Sensei AI — your trading assistant"
         data-cursor="hover"
         className={`sensei-dock ${urgent ? 'urgent' : ''} ${open ? 'is-open' : ''}`}
       >
-        <svg viewBox="0 0 72 72" className="sensei-dock-ring" aria-hidden>
-          <circle cx="36" cy="36" r={R} className="sd-track" />
-          <circle cx="36" cy="36" r={R} className="sd-fill" style={{ strokeDasharray: TAU, strokeDashoffset: TAU * (1 - frac) }} />
-        </svg>
-        <span className="sensei-dock-face">
-          <span className="sd-label">Sensei</span>
-          <span className="sd-time">{targetTime ? fmt(secsLeft) : '先'}</span>
+        <span className="sensei-dock-avatar">
+          <svg viewBox="0 0 72 72" className="sensei-dock-ring" aria-hidden>
+            <circle cx="36" cy="36" r={R} className="sd-track" />
+            <circle cx="36" cy="36" r={R} className="sd-fill" style={{ strokeDasharray: TAU, strokeDashoffset: TAU * (1 - frac) }} />
+          </svg>
+          <span className="sd-avatar-glyph">先</span>
         </span>
+        <span className="sensei-dock-copy">
+          <span className="sd-name">Sensei <b>AI</b></span>
+          <span className="sd-sub">{targetTime ? `Read this round · ${fmt(secsLeft)}` : 'Ask the market'}</span>
+        </span>
+        <span className="sd-arrow" aria-hidden>→</span>
         <span className="sensei-dock-pulse" aria-hidden />
       </button>
 

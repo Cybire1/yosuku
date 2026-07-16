@@ -208,28 +208,45 @@ body.urgent::before {
 /* ── SenseiDock: the floating countdown orb that opens the assistant drawer ── */
 .sensei-dock {
   position: fixed; right: 22px; bottom: 22px; z-index: 900;
-  width: 72px; height: 72px; border-radius: 50%; border: 0; padding: 0; cursor: pointer;
-  background: rgba(23,19,16,0.92); backdrop-filter: blur(8px);
-  box-shadow: 0 18px 44px -16px rgba(0,0,0,0.6), inset 0 0 0 1px rgba(255,255,255,0.06);
-  display: grid; place-items: center;
+  display: inline-flex; align-items: center; gap: 11px;
+  padding: 8px 15px 8px 8px; border: 0; cursor: pointer; border-radius: 999px;
+  background: rgba(23,19,16,0.93); backdrop-filter: blur(10px);
+  box-shadow: 0 18px 44px -16px rgba(0,0,0,0.6), inset 0 0 0 1px rgba(224,77,38,0.22);
   transition: transform 260ms cubic-bezier(.34,1.56,.64,1), box-shadow 220ms var(--ease), opacity 220ms var(--ease);
+  animation: senseiDockBreathe 3.6s ease-in-out infinite;
 }
-[data-theme="light"] .sensei-dock { background: rgba(255,255,255,0.94); box-shadow: 0 18px 44px -16px rgba(40,18,6,0.28), inset 0 0 0 1px rgba(20,18,16,0.08); }
-.sensei-dock:hover { transform: translateY(-3px) scale(1.04); }
-.sensei-dock:active { transform: scale(0.96); }
-.sensei-dock.is-open { transform: scale(0.9); opacity: 0.55; }
-.sensei-dock-ring { position: absolute; inset: 0; width: 72px; height: 72px; transform: rotate(-90deg); }
-.sensei-dock-ring .sd-track { fill: none; stroke: rgba(255,255,255,0.1); stroke-width: 3; }
+[data-theme="light"] .sensei-dock { background: rgba(255,255,255,0.95); box-shadow: 0 18px 44px -16px rgba(40,18,6,0.26), inset 0 0 0 1px rgba(224,77,38,0.22); }
+@keyframes senseiDockBreathe {
+  0%, 100% { box-shadow: 0 18px 44px -16px rgba(0,0,0,0.6), inset 0 0 0 1px rgba(224,77,38,0.22), 0 0 0 0 rgba(224,77,38,0); }
+  50% { box-shadow: 0 18px 44px -16px rgba(0,0,0,0.6), inset 0 0 0 1px rgba(224,77,38,0.42), 0 0 22px -3px rgba(224,77,38,0.34); }
+}
+.sensei-dock:hover { transform: translateY(-3px); }
+.sensei-dock:active { transform: translateY(0) scale(0.98); }
+.sensei-dock.is-open { transform: scale(0.94); opacity: 0.5; }
+.sensei-dock-avatar { position: relative; width: 46px; height: 46px; flex: none; display: grid; place-items: center; }
+.sensei-dock-ring { position: absolute; inset: 0; width: 46px; height: 46px; transform: rotate(-90deg); }
+.sensei-dock-ring .sd-track { fill: none; stroke: rgba(255,255,255,0.12); stroke-width: 4; }
 [data-theme="light"] .sensei-dock-ring .sd-track { stroke: rgba(20,18,16,0.12); }
-.sensei-dock-ring .sd-fill { fill: none; stroke: var(--vermilion); stroke-width: 3; stroke-linecap: round; transition: stroke-dashoffset 900ms linear; filter: drop-shadow(0 0 4px rgba(224,77,38,0.5)); }
-.sensei-dock-face { position: relative; display: flex; flex-direction: column; align-items: center; line-height: 1; }
-.sensei-dock-face .sd-label { font-family: var(--font-mono); font-size: 7.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--vermilion); margin-bottom: 3px; }
-.sensei-dock-face .sd-time { font-family: var(--font-display); font-weight: 700; font-size: 15px; color: var(--white); font-variant-numeric: tabular-nums; }
-[data-theme="light"] .sensei-dock-face .sd-time { color: #1A1613; }
-.sensei-dock-pulse { position: absolute; inset: -4px; border-radius: 50%; border: 1px solid var(--vermilion); opacity: 0; pointer-events: none; }
-.sensei-dock.urgent .sensei-dock-pulse { animation: senseiDockPulse 1.4s var(--ease) infinite; }
-@keyframes senseiDockPulse { 0% { opacity: 0.5; transform: scale(1); } 100% { opacity: 0; transform: scale(1.35); } }
-@media (max-width: 768px) { .sensei-dock { bottom: 90px; right: 16px; } }
+.sensei-dock-ring .sd-fill { fill: none; stroke: var(--vermilion); stroke-width: 4; stroke-linecap: round; transition: stroke-dashoffset 900ms linear; filter: drop-shadow(0 0 4px rgba(224,77,38,0.55)); }
+.sd-avatar-glyph { position: relative; font-family: 'Noto Serif JP', var(--font-display); font-weight: 700; font-size: 18px; color: var(--white); line-height: 1; }
+[data-theme="light"] .sd-avatar-glyph { color: #1A1613; }
+.sensei-dock-copy { display: flex; flex-direction: column; align-items: flex-start; text-align: left; line-height: 1.15; }
+.sensei-dock-copy .sd-name { font-family: var(--font-display); font-weight: 800; font-size: 14px; letter-spacing: -0.01em; color: var(--white); }
+.sensei-dock-copy .sd-name b { color: var(--vermilion); font-weight: 800; }
+[data-theme="light"] .sensei-dock-copy .sd-name { color: #1A1613; }
+.sensei-dock-copy .sd-sub { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.02em; color: var(--gray-500); font-variant-numeric: tabular-nums; margin-top: 1px; }
+.sd-arrow { font-family: var(--font-display); font-size: 15px; color: var(--vermilion); margin-left: 1px; transition: transform 240ms var(--ease); }
+.sensei-dock:hover .sd-arrow { transform: translateX(3px); }
+.sensei-dock-pulse { position: absolute; inset: 0; border-radius: 999px; border: 1px solid var(--vermilion); opacity: 0; pointer-events: none; }
+.sensei-dock.urgent { animation: none; }
+.sensei-dock.urgent .sensei-dock-pulse { animation: senseiDockPulse 1.5s var(--ease) infinite; }
+.sensei-dock.urgent .sensei-dock-copy .sd-sub { color: var(--vermilion); }
+@keyframes senseiDockPulse { 0% { opacity: 0.5; transform: scale(1); } 100% { opacity: 0; transform: scale(1.05); } }
+@media (max-width: 768px) {
+  .sensei-dock { bottom: 90px; right: 16px; padding: 7px; gap: 0; }
+  .sensei-dock .sensei-dock-copy, .sensei-dock .sd-arrow { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .sensei-dock { animation: none; } }
 
 /* ── the Sensei drawer ── */
 .sensei-drawer-scrim { position: fixed; inset: 0; z-index: 950; background: rgba(6,5,4,0.5); backdrop-filter: blur(3px); opacity: 0; pointer-events: none; transition: opacity 300ms var(--ease); }
@@ -4967,3 +4984,11 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
 .strat-sigil .glyph { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--font-jp); color: rgba(255,255,255,0.9); text-shadow: 0 1px 4px rgba(0,0,0,0.5); }
 
 .strat-mem { background: rgba(224,77,38,0.12); color: var(--color-vermilion); }
+
+/* ── Earn — compact one-page layout (scoped; the hero CSS is shared with other pages) ── */
+.earn-page .page-hero { padding: 92px 0 12px; }
+.earn-page .page-title { font-size: clamp(2.3rem, 4.6vw, 3.8rem); line-height: 0.94; }
+.earn-page .hero-grid { align-items: center; padding-bottom: 14px; }
+.earn-page .hero-grid .hero-left { margin-bottom: 0; }
+.earn-page main > .container { padding-top: 10px !important; padding-bottom: 22px !important; }
+.earn-page .section-head { margin-bottom: 16px !important; }
