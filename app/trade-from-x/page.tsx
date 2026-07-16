@@ -236,19 +236,17 @@ function CustodyRail() {
           </g>
           {/* sealed withdraw door */}
           <g className="xt-seal">
-            <rect x="176" y="190" width="152" height="30" rx="8" fill="#130c0b" stroke={V} strokeOpacity="0.55" />
-            <line x1="184" y1="205" x2="320" y2="205" stroke={V} strokeWidth="1" strokeOpacity="0.5" />
-            <text x="200" y="208" textAnchor="middle" fontFamily="var(--font-mono)" fontSize="9" fill="#8a7d78">withdraw()</text>
-            <text x="252" y="208" textAnchor="middle" fontFamily="var(--font-mono)" fontSize="9" fill="#8a7d78">transfer()</text>
-            <text x="300" y="208" textAnchor="middle" fontFamily="var(--font-mono)" fontSize="9" fill="#8a7d78">sweep()</text>
-            {/* lock-with-slash */}
-            <g transform="translate(330,205)">
-              <rect x="-6" y="-4" width="12" height="9" rx="1.5" fill="none" stroke={V} strokeWidth="1.3" />
-              <path d="M-3,-4 v-2.5 a3,3 0 0 1 6,0 v2.5" fill="none" stroke={V} strokeWidth="1.3" />
-              <line x1="-8" y1="7" x2="8" y2="-8" stroke={V} strokeWidth="1.4" />
+            <rect x="150" y="189" width="204" height="32" rx="8" fill="#140c0b" stroke={V} strokeOpacity="0.5" />
+            {/* lock-with-slash, docked left inside the box */}
+            <g transform="translate(167,205)">
+              <rect x="-5" y="-3" width="10" height="7.5" rx="1.5" fill="none" stroke={V} strokeWidth="1.2" />
+              <path d="M-2.5,-3 v-2 a2.5,2.5 0 0 1 5,0 v2" fill="none" stroke={V} strokeWidth="1.2" />
+              <line x1="-7.5" y1="6" x2="7.5" y2="-6.5" stroke={V} strokeWidth="1.3" />
             </g>
+            <text x="183" y="208.5" fontFamily="var(--font-mono)" fontSize="8.5" fill="#9a8d87">withdraw() · transfer() · sweep()</text>
+            <line x1="183" y1="205" x2="347" y2="205" stroke={V} strokeWidth="1" strokeOpacity="0.55" />
           </g>
-          <text x="252" y="234" textAnchor="middle" fontFamily="var(--font-mono)" fontSize="8.5" fill="#7c7770">no such function in the contract</text>
+          <text x="252" y="235" textAnchor="middle" fontFamily="var(--font-mono)" fontSize="8.5" fill="#8a847d">no such function in the contract</text>
 
           {/* attack packet — travels the tweet wire, tries the withdraw stub, dies at the seal */}
           <g className="xt-attack-only">
