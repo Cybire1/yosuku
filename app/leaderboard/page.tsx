@@ -232,7 +232,7 @@ export default function LeaderboardPage() {
                     <div className="podium-portrait">{glyphFromAddress(p.owner)}</div>
                     <div className="podium-name">{fmtAddr(p.owner)}</div>
                     <div className="podium-pnl">
-                      <span className="sign">{p.pnl >= 0 ? '+' : ''}</span>{fmtPnl(p.pnl)}<span className="cur">test USDC</span>
+                      <span className="sign">{p.pnl >= 0 ? '+' : ''}</span>{fmtPnl(p.pnl)}<span className="cur">DUSDC</span>
                     </div>
                   </div>
                 ))}
