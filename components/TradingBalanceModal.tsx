@@ -195,7 +195,7 @@ export default function TradingBalanceModal({ onClose }: { onClose: () => void }
           onClick={openFaucet}
           className="mt-2.5 w-full rounded-full border border-vermilion/40 bg-vermilion/[0.07] py-2.5 text-[13px] font-semibold text-vermilion transition-colors hover:bg-vermilion/[0.14]"
         >
-          + Get test USDC
+          + Get DUSDC
         </button>
 
         <div className="mt-3.5 border-t border-white/[0.06] pt-3 text-center">

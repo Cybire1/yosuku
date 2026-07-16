@@ -328,7 +328,7 @@ export default function TradeReceipt({
             <TxRow label="Mint tx" digest={trade.mintDigest} />
             <TxRow label={meta.settleTxLabel} digest={trade.redeemDigest} />
             <p className="mt-3.5 whitespace-nowrap text-center font-mono text-[7.5px] uppercase tracking-[0.24em] text-white/30">
-              All amounts in test USDC · Sui testnet
+              All amounts in DUSDC · Sui testnet
             </p>
             {shareSlot ? (
               <div className={`mt-4 flex justify-center border px-4 py-2.5 transition-colors ${heat ? 'border-vermilion/35 bg-vermilion/[0.06] hover:border-vermilion/60' : 'border-white/[0.12] bg-white/[0.02] hover:border-white/25'}`}>

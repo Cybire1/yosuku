@@ -9,7 +9,7 @@ const OFFICIAL_FAUCET = 'https://tally.so/r/Xx102L';
 const short = (a: string) => `${a.slice(0, 8)}…${a.slice(-6)}`;
 
 /**
- * In-app "onramp" for testnet. A connected user taps once and gets test USDC
+ * In-app "onramp" for testnet. A connected user taps once and gets DUSDC
  * dripped to their wallet — no leaving the site, no wallet juggling. Falls
  * back to the official DeepBook faucet when the instant drip is empty.
  */
@@ -47,7 +47,7 @@ export default function AddFunds({ open, onClose, onFunded }: { open: boolean; o
       const d = await r.json();
       if (!r.ok || d.error) throw new Error(d.error || 'Faucet error');
       setState('done');
-      setMsg(d.alreadyFunded ? 'You already have wallet DUSDC — ready to trade.' : `${d.amount} test USDC added to your wallet.`);
+      setMsg(d.alreadyFunded ? 'You already have wallet DUSDC — ready to trade.' : `${d.amount} DUSDC added to your wallet.`);
       onFunded?.();
     } catch (e) {
       setState('error'); setMsg(String(e instanceof Error ? e.message : e));
@@ -77,7 +77,7 @@ export default function AddFunds({ open, onClose, onFunded }: { open: boolean; o
           <span className="w-1.5 h-1.5 rounded-full bg-vermilion" style={{ boxShadow: '0 0 12px var(--vermilion)' }} />
           <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-gray-500">Add funds · testnet</span>
         </div>
-        <h2 id="add-funds-title" className="font-display text-2xl font-extrabold tracking-tight mb-1">Get test USDC</h2>
+        <h2 id="add-funds-title" className="font-display text-2xl font-extrabold tracking-tight mb-1">Get DUSDC</h2>
         <p className="text-gray-400 text-sm leading-relaxed mb-6">
           Yosuku runs on testnet — these are play chips, not real money. Tap once and they land in your wallet. When you bet, Yosuku moves only what is needed into your Trading Balance.
         </p>
@@ -114,7 +114,7 @@ export default function AddFunds({ open, onClose, onFunded }: { open: boolean; o
                 disabled={state === 'loading'}
                 className="w-full bg-white text-black font-semibold rounded-full py-3 hover:scale-[1.02] active:scale-[0.97] transition-transform disabled:opacity-60"
               >
-                {state === 'loading' ? 'Adding…' : 'Get 2 test USDC'}
+                {state === 'loading' ? 'Adding…' : 'Get 2 DUSDC'}
               </button>
             )}
 
@@ -124,7 +124,7 @@ export default function AddFunds({ open, onClose, onFunded }: { open: boolean; o
 
             <div className="mt-5 pt-4 border-t border-white/[0.06] text-center">
               <a href={OFFICIAL_FAUCET} target="_blank" rel="noreferrer" className="font-mono text-[11px] text-gray-500 hover:text-vermilion transition-colors">
-                Need more? Get test USDC from the DeepBook faucet ↗
+                Need more? Get DUSDC from the DeepBook faucet ↗
               </a>
             </div>
           </>

@@ -97,7 +97,7 @@ export function buildCallTweetText(c: OpenBetCard): string {
   const band = callBandLabel(c).toLowerCase();
   const lev = c.lev > 1 ? ` (${fmtLeverage(c.lev)})` : '';
   return (
-    `My call: ${band}${lev} — ${fmt2(c.stakeDusdc)} to win ${fmt2(c.winDusdc)} test USDC, ` +
+    `My call: ${band}${lev} — ${fmt2(c.stakeDusdc)} to win ${fmt2(c.winDusdc)} DUSDC, ` +
     `oracle-settles ${fmtSettleUtc(c.expiryMs)} on Sui testnet. Will it land? ` +
     `yosuku.xyz @yosuku0`
   );
@@ -365,7 +365,7 @@ export async function renderOpenBetShareCard(call: OpenBetCard): Promise<Blob> {
   ctx.font = `500 22px ${mono}`;
   ctx.fillStyle = 'rgba(255,255,255,0.45)';
   ctx.textAlign = 'center';
-  drawTracked(ctx, 'TEST USDC', W / 2, 824, 5, 'center');
+  drawTracked(ctx, 'DUSDC', W / 2, 824, 5, 'center');
 
   // ── leverage caveat (only when > 1) ──
   let infoY = 900;

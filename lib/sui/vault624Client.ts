@@ -158,7 +158,7 @@ export function buildJoinDesk624(p: {
 }): Transaction {
   const tx = new Transaction();
   if (p.amountMicro > 0n) {
-    if (p.coinIds.length === 0) throw new Error('no test USDC coins to deposit');
+    if (p.coinIds.length === 0) throw new Error('no DUSDC coins to deposit');
     const primary = tx.object(p.coinIds[0]);
     if (p.coinIds.length > 1) tx.mergeCoins(primary, p.coinIds.slice(1).map((id) => tx.object(id)));
     const [pay] = tx.splitCoins(primary, [tx.pure.u64(p.amountMicro)]);
@@ -196,7 +196,7 @@ export function buildEnableTweetTrading624(p: {
 }): Transaction {
   const tx = new Transaction();
   if (p.amountMicro > 0n) {
-    if (p.coinIds.length === 0) throw new Error('no test USDC coins to deposit');
+    if (p.coinIds.length === 0) throw new Error('no DUSDC coins to deposit');
     const primary = tx.object(p.coinIds[0]);
     if (p.coinIds.length > 1) tx.mergeCoins(primary, p.coinIds.slice(1).map((id) => tx.object(id)));
     const [pay] = tx.splitCoins(primary, [tx.pure.u64(p.amountMicro)]);

@@ -333,17 +333,17 @@ export default function Ticket624Drawer({
           : stake <= 0
             ? 'Enter your bet'
             : belowMinHard
-              ? `Bet at least ${fmt2(MIN_STAKE)} test USDC`
+              ? `Bet at least ${fmt2(MIN_STAKE)} DUSDC`
               : spot == null
                 ? 'Waiting for the oracle price…'
                 : needsAccount
-                  ? (firstBetShortWallet ? `Add ${fmt2(stake - walletDusdc)} test USDC to your wallet` : null)
+                  ? (firstBetShortWallet ? `Add ${fmt2(stake - walletDusdc)} DUSDC to your wallet` : null)
                   : needsDeposit
                     ? (canOneTapTopUp
                         ? null
                         : thinMarginOk
                           ? (quoteErr ? 'Quote failed — see below' : !quote ? 'Getting the live price…' : null)
-                          : `Add ${fmt2(stake - acctBalance - walletDusdc)} more test USDC to your wallet`)
+                          : `Add ${fmt2(stake - acctBalance - walletDusdc)} more DUSDC to your wallet`)
                     : quoteErr
                       ? 'Quote failed — see below'
                       : !quote
@@ -359,7 +359,7 @@ export default function Ticket624Drawer({
       return;
     }
     if (Math.floor(amt * DUSDC_MULTIPLIER) > acct.walletMicro) {
-      toast(`Wallet balance too low — you hold ${fmt2(acct.walletMicro / DUSDC_MULTIPLIER)} test USDC`, 'error');
+      toast(`Wallet balance too low — you hold ${fmt2(acct.walletMicro / DUSDC_MULTIPLIER)} DUSDC`, 'error');
       return;
     }
     setBusy('fund');
@@ -371,7 +371,7 @@ export default function Ticket624Drawer({
       await sponsoredSubmit(() => buildDepositTx({ wrapperId, coinIds, amountMicro }));
       acct.refreshWallet();
       acct.refreshAcctBalance();
-      toast(`Added ${fmt2(amt)} test USDC`, 'success');
+      toast(`Added ${fmt2(amt)} DUSDC`, 'success');
       setFundStr('');
     } catch (e) {
       toast(`Deposit failed: ${String(e instanceof Error ? e.message : e).slice(0, 140)}`, 'error');
@@ -801,7 +801,7 @@ export default function Ticket624Drawer({
                   value={stakeStr}
                   onChange={(e) => setStakeStr(e.target.value.replace(/[^0-9.]/g, ''))}
                   className="min-w-0 flex-1 bg-transparent font-display text-[1.75rem] leading-none font-bold text-white tabular-nums outline-none placeholder:text-white/18 caret-vermilion"
-                  aria-label="Bet amount in test USDC"
+                  aria-label="Bet amount in DUSDC"
                 />
                 <span className="shrink-0 font-mono text-[9px] uppercase tracking-[0.12em] text-white/35">DUSDC</span>
               </div>
@@ -829,7 +829,7 @@ export default function Ticket624Drawer({
               </div>
               {belowMinHard && (
                 <p className="font-mono text-[9px] text-vermilion mt-2">
-                  Minimum {fmt2(MIN_STAKE)} test USDC.
+                  Minimum {fmt2(MIN_STAKE)} DUSDC.
                 </p>
               )}
             </div>
@@ -880,7 +880,7 @@ export default function Ticket624Drawer({
               <div className="border border-vermilion/25 bg-vermilion/[0.04] p-4 mb-4">
                 <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-vermilion mb-1.5">Top up to place this</div>
                 <p className="font-mono text-[10px] text-gray-500 mb-2.5">
-                  Account holds {fmt2(acctBalance)} · this bet is {fmt2(stake)} · wallet holds {fmt2(acct.walletMicro / DUSDC_MULTIPLIER)} test USDC — grab more from the faucet if you&apos;re short.
+                  Account holds {fmt2(acctBalance)} · this bet is {fmt2(stake)} · wallet holds {fmt2(acct.walletMicro / DUSDC_MULTIPLIER)} DUSDC — grab more from the faucet if you&apos;re short.
                 </p>
                 <div className="rounded-xl border border-white/[0.08] bg-black/30 px-3 py-2 focus-within:border-vermilion/50">
                   <div className="flex items-center justify-between">
@@ -890,7 +890,7 @@ export default function Ticket624Drawer({
                       value={fundStr}
                       onChange={(e) => setFundStr(e.target.value.replace(/[^0-9.]/g, ''))}
                       className="w-full bg-transparent font-display text-xl font-bold text-white outline-none placeholder:text-gray-600"
-                      aria-label="Deposit amount in test USDC"
+                      aria-label="Deposit amount in DUSDC"
                     />
                     <div className="flex gap-1.5 shrink-0">
                       {[1, 5, 10].map((n) => (

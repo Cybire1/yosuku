@@ -193,7 +193,7 @@ export default function StrategiesPage() {
     if (!address) return;
     const priceMicro = BigInt(Math.round(l.price * DUSDC_MULTIPLIER));
     const haveMicro = dusdcCoins.reduce((s, c) => s + c.balance, BigInt(0));
-    if (haveMicro < priceMicro) { toast(`Wallet needs ${l.price} test USDC for this pass`, 'error'); return; }
+    if (haveMicro < priceMicro) { toast(`Wallet needs ${l.price} DUSDC for this pass`, 'error'); return; }
     setMktBusy(`buy:${l.listingId}`);
     try {
       await submit(() => buildBuyPassTx({ listingId: l.listingId, coinIds: dusdcCoins.map((c) => c.coinObjectId), priceMicro, owner: address }));
@@ -295,7 +295,7 @@ export default function StrategiesPage() {
     if (!address || !memoryInfo || !drawerId) return;
     const priceMicro = BigInt(Math.round(memoryInfo.price * DUSDC_MULTIPLIER));
     const walletMicro = dusdcCoins.reduce((s, c) => s + c.balance, BigInt(0));
-    if (walletMicro < priceMicro) { toast(`Wallet balance too low — needs ${memoryInfo.price} test USDC for the memory pass`, 'error'); return; }
+    if (walletMicro < priceMicro) { toast(`Wallet balance too low — needs ${memoryInfo.price} DUSDC for the memory pass`, 'error'); return; }
     setBuyingMemory(true);
     try {
       await submit(() => buildBuyPassTx({ listingId: memoryInfo.listingId, coinIds: dusdcCoins.map((c) => c.coinObjectId), priceMicro, owner: address }));
@@ -329,7 +329,7 @@ export default function StrategiesPage() {
     const feeMicro = BigInt(Math.floor(card.subFee * DUSDC_MULTIPLIER));
     const needed = topUpMicro + feeMicro;
     if (walletDusdc < needed) {
-      toast(`Wallet balance too low — needs ${(Number(needed) / DUSDC_MULTIPLIER).toFixed(2)} test USDC for budget + fee`, 'error');
+      toast(`Wallet balance too low — needs ${(Number(needed) / DUSDC_MULTIPLIER).toFixed(2)} DUSDC for budget + fee`, 'error');
       return;
     }
     setSubscribingId(card.id);
@@ -591,7 +591,7 @@ export default function StrategiesPage() {
                           {fmtAddr(t.subscriber)}
                         </a>
                         <span className="flex-1" />
-                        <span className="font-mono text-[12px] text-white/70 tabular-nums whitespace-nowrap shrink-0">{fmtDusdc(t.notional)} test USDC</span>
+                        <span className="font-mono text-[12px] text-white/70 tabular-nums whitespace-nowrap shrink-0">{fmtDusdc(t.notional)} DUSDC</span>
                         <span className="font-mono text-[11px] text-white/40 w-10 text-right shrink-0 tabular-nums">{t.leverageBps / 10000}×</span>
                         <span className="font-mono text-[11px] text-white/30 w-14 text-right shrink-0">{ago(t.ts)}</span>
                         <span className="font-mono text-[11px] text-vermilion w-4 text-right shrink-0">{t.digest ? '↗' : ''}</span>
@@ -723,10 +723,10 @@ export default function StrategiesPage() {
                             ))}
                           </div>
                         </Field>
-                        <Field label="Most per trade (test USDC)">
+                        <Field label="Most per trade (DUSDC)">
                           <input type="number" min="0" step="1" value={form.maxMargin} onChange={(e) => setForm((f) => ({ ...f, maxMargin: e.target.value }))} className={INPUT_NUM} />
                         </Field>
-                        <Field label="Subscription fee (test USDC)">
+                        <Field label="Subscription fee (DUSDC)">
                           <input type="number" min="0" step="0.1" value={form.subFee} onChange={(e) => setForm((f) => ({ ...f, subFee: e.target.value }))} className={INPUT_NUM} />
                         </Field>
                       </div>
@@ -800,7 +800,7 @@ export default function StrategiesPage() {
 
             {/* standing disclosure */}
             <p className="mt-10 font-mono text-[10px] leading-relaxed text-gray-600 max-w-2xl">
-              Agents trade test USDC on Sui testnet, on fast Bitcoin up/down rounds (1-minute, 5-minute, and 1-hour). You can lose your full budget. The agent
+              Agents trade DUSDC on Sui testnet, on fast Bitcoin up/down rounds (1-minute, 5-minute, and 1-hour). You can lose your full budget. The agent
               cannot withdraw or divert it — verify every position on Sui.
             </p>
           </>
@@ -948,7 +948,7 @@ function MemoryCapsule({ l, strat, address, busy, text, onBuy, onRead, idx }: {
           </div>
           <div className="flex items-baseline gap-1">
             <span className="font-display font-[800] text-white text-lg tabular-nums">{l.price}</span>
-            <span className="font-mono text-[9.5px] text-white/40">test USDC</span>
+            <span className="font-mono text-[9.5px] text-white/40">DUSDC</span>
           </div>
         </div>
 
@@ -1108,7 +1108,7 @@ function CopyDrawer(props: {
   const agentName = codenameFromAddress(card.id);
 
   const cta = topUp > 0.000001
-    ? `Add ${fmtDusdc(topUp)} test USDC & start copying`
+    ? `Add ${fmtDusdc(topUp)} DUSDC & start copying`
     : `Start copying with current Copy Balance${free ? ' · gas-free' : ''}`;
 
   return (
@@ -1146,15 +1146,15 @@ function CopyDrawer(props: {
         <div className="border-l-2 border-white/15 pl-4 mb-5">
           <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/40 mb-1">How it trades</p>
           <p className="text-[12.5px] text-white/70 leading-snug">
-            Each time this agent trades — a Bitcoin up/down call on its momentum read — it opens a position <span className="text-white font-semibold">you own</span>, capped at {fmtDusdc(card.maxMargin)} test USDC and {card.maxLeverage}× per trade. It pays out to you on exit. It&apos;s a directional bet — it can win or lose.
+            Each time this agent trades — a Bitcoin up/down call on its momentum read — it opens a position <span className="text-white font-semibold">you own</span>, capped at {fmtDusdc(card.maxMargin)} DUSDC and {card.maxLeverage}× per trade. It pays out to you on exit. It&apos;s a directional bet — it can win or lose.
           </p>
         </div>
 
         {/* caps + record */}
         <div className="grid grid-cols-3 gap-3 mb-2">
           <CapStat label="Most leverage" value={`${card.maxLeverage}×`} unit="" />
-          <CapStat label="Most / trade" value={fmtDusdc(card.maxMargin)} unit="test USDC" />
-          <CapStat label="Fee" value={card.subFee === 0 ? 'Free' : fmtDusdc(card.subFee)} unit={card.subFee === 0 ? '' : 'test USDC'} />
+          <CapStat label="Most / trade" value={fmtDusdc(card.maxMargin)} unit="DUSDC" />
+          <CapStat label="Fee" value={card.subFee === 0 ? 'Free' : fmtDusdc(card.subFee)} unit={card.subFee === 0 ? '' : 'DUSDC'} />
         </div>
         <div className="grid grid-cols-3 gap-3 pb-4 mb-4 border-b border-white/[0.06]">
           <CapStat label="Copiers" value={card.subscribers > 0 ? String(card.subscribers) : '—'} unit="" />
@@ -1199,7 +1199,7 @@ function CopyDrawer(props: {
               </div>
             ) : !address ? (
               <>
-                <p className="text-[12px] text-gray-300 leading-snug mb-2">Own this agent&apos;s memory as a tradable on-chain asset — {fmtDusdc(memoryInfo.price)} test USDC.</p>
+                <p className="text-[12px] text-gray-300 leading-snug mb-2">Own this agent&apos;s memory as a tradable on-chain asset — {fmtDusdc(memoryInfo.price)} DUSDC.</p>
                 <ConnectButton />
               </>
             ) : (
@@ -1212,7 +1212,7 @@ function CopyDrawer(props: {
                   disabled={buyingMemory}
                   className="w-full rounded-full py-2.5 text-[13px] font-semibold bg-vermilion text-white hover:bg-vermilion-d transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  {buyingMemory ? 'Buying…' : `Buy Memory Pass · ${fmtDusdc(memoryInfo.price)} test USDC`}
+                  {buyingMemory ? 'Buying…' : `Buy Memory Pass · ${fmtDusdc(memoryInfo.price)} DUSDC`}
                 </button>
               </>
             )}
@@ -1228,7 +1228,7 @@ function CopyDrawer(props: {
             <div className="border-l-2 border-vermilion pl-4 mb-4">
               <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-vermilion mb-1"><span className="inline-block w-1.5 h-1.5 rounded-full bg-vermilion mr-1.5 align-middle" />Copying</p>
               <p className="text-[12.5px] text-white/70 leading-relaxed">
-                This agent&apos;s signals are copied into your vault — up to {fmtDusdc(sub.maxMargin)} test USDC each, at most {sub.maxLeverageBps / 10_000}×, every position yours.
+                This agent&apos;s signals are copied into your vault — up to {fmtDusdc(sub.maxMargin)} DUSDC each, at most {sub.maxLeverageBps / 10_000}×, every position yours.
               </p>
             </div>
             <p className="text-[12px] text-gray-500 leading-relaxed mb-4">
@@ -1249,7 +1249,7 @@ function CopyDrawer(props: {
           <div>
             <div className="flex items-center justify-between mb-1">
               <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400">Copy Balance</span>
-              <span className="font-mono text-[10px] text-gray-600">in vault: {fmtDusdc(currentVaultDusdc)} test USDC</span>
+              <span className="font-mono text-[10px] text-gray-600">in vault: {fmtDusdc(currentVaultDusdc)} DUSDC</span>
             </div>
             <p className="font-mono text-[10px] text-gray-600 leading-relaxed mb-2">
               Add funds to your shared Copy Balance. Your current balance remains at risk across copied agents until you withdraw or pause them.
@@ -1262,7 +1262,7 @@ function CopyDrawer(props: {
                   onChange={(e) => setBudget(e.target.value.replace(/[^0-9.]/g, ''))}
                   className="w-full bg-transparent font-display text-2xl font-bold text-white outline-none focus:outline-none focus-visible:outline-none placeholder:text-gray-600"
                 />
-                <span className="font-mono text-xs font-semibold text-gray-300 shrink-0">test USDC</span>
+                <span className="font-mono text-xs font-semibold text-gray-300 shrink-0">DUSDC</span>
               </div>
               <div className="mt-2 flex items-center justify-between">
                 <span className="font-mono text-[10px] text-gray-500">Your limit. Edit anytime. Pause anytime.</span>
@@ -1278,16 +1278,16 @@ function CopyDrawer(props: {
             {/* live worked example */}
             <p className="mt-3 text-[12px] text-gray-400 leading-relaxed">
               {valid ? (
-                <>You set a <span className="text-white font-semibold">{fmtDusdc(target)} test USDC</span> copy balance (shared across the agents you copy). This agent can put at most <span className="text-white font-semibold">{fmtDusdc(cap)} test USDC</span> on each copied trade, up to {card.maxLeverage}×. It can never exceed this — or withdraw your balance.</>
+                <>You set a <span className="text-white font-semibold">{fmtDusdc(target)} DUSDC</span> copy balance (shared across the agents you copy). This agent can put at most <span className="text-white font-semibold">{fmtDusdc(cap)} DUSDC</span> on each copied trade, up to {card.maxLeverage}×. It can never exceed this — or withdraw your balance.</>
               ) : (
-                <>Set a copy balance (shared across the agents you copy). This agent puts at most {fmtDusdc(card.maxMargin)} test USDC on each trade, up to {card.maxLeverage}× — never more, and can never withdraw it.</>
+                <>Set a copy balance (shared across the agents you copy). This agent puts at most {fmtDusdc(card.maxMargin)} DUSDC on each trade, up to {card.maxLeverage}× — never more, and can never withdraw it.</>
               )}
             </p>
 
             {valid && (
               <div className="grid grid-cols-2 gap-2 mt-3">
-                <CapStat label="Add now" value={fmtDusdc(topUp)} unit="test USDC" />
-                <CapStat label="Wallet needed" value={fmtDusdc(walletNeed)} unit="test USDC" />
+                <CapStat label="Add now" value={fmtDusdc(topUp)} unit="DUSDC" />
+                <CapStat label="Wallet needed" value={fmtDusdc(walletNeed)} unit="DUSDC" />
               </div>
             )}
 

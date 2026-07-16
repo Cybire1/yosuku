@@ -3,7 +3,7 @@
 // ── The Live Desk — join/copy flow for yosuku_spike::vault624 (DeepBook Predict 6-24) ──
 //
 // One attested desk: the enclave agent trades subscribers' pooled-but-ledgered
-// test USDC under per-user hard caps. Deposits credit YOUR ledger entry; the
+// DUSDC under per-user hard caps. Deposits credit YOUR ledger entry; the
 // agent has no funds-out path; settles force-credit the position owner;
 // withdraw pays the sender only.
 //
@@ -220,7 +220,7 @@ export default function LiveDesk() {
       });
       const d = await r.json().catch(() => ({}));
       if (r.ok && !d.error) {
-        toast(`${d.amount ?? 2} test USDC added to your wallet`, 'success');
+        toast(`${d.amount ?? 2} DUSDC added to your wallet`, 'success');
         refreshWallet();
       } else {
         // rate-limited / empty — hand off to the full Add-funds panel, not a wall
@@ -237,7 +237,7 @@ export default function LiveDesk() {
     const amt = depositValue;
     if (amt <= 0 && ledger <= 0) { toast('Enter an amount to put on the desk', 'error'); return; }
     if (amt > walletDusdc) {
-      toast(`Your wallet holds ${fmtDusdc(walletDusdc)} test USDC — tap “Get free test USDC” or lower the amount`, 'error');
+      toast(`Your wallet holds ${fmtDusdc(walletDusdc)} DUSDC — tap “Get free DUSDC” or lower the amount`, 'error');
       return;
     }
     setBusy('join');
@@ -262,15 +262,15 @@ export default function LiveDesk() {
     if (!address || busy || preview) return;
     const amt = parseFloat(depositStr.replace(',', '.'));
     if (!Number.isFinite(amt) || amt <= 0) { toast('Enter an amount above 0', 'error'); return; }
-    if (amt > walletDusdc) { toast(`Your wallet holds ${fmtDusdc(walletDusdc)} test USDC`, 'error'); return; }
-    if (dusdcCoins.length === 0) { toast('No test USDC in this wallet yet — tap “Get free test USDC”', 'error'); return; }
+    if (amt > walletDusdc) { toast(`Your wallet holds ${fmtDusdc(walletDusdc)} DUSDC`, 'error'); return; }
+    if (dusdcCoins.length === 0) { toast('No DUSDC in this wallet yet — tap “Get free DUSDC”', 'error'); return; }
     setBusy('deposit');
     try {
       await submitTx(() => buildVaultDeposit624({
         coinIds: dusdcCoins.map((c) => c.coinObjectId),
         amountMicro: BigInt(Math.floor(amt * M)),
       }));
-      toast(`Added ${fmtDusdc(amt)} test USDC to your desk balance`, 'success');
+      toast(`Added ${fmtDusdc(amt)} DUSDC to your desk balance`, 'success');
       setDepositStr(''); setManage(null);
       burst();
     } catch (e) {
@@ -282,11 +282,11 @@ export default function LiveDesk() {
     if (!address || busy || preview) return;
     const amt = parseFloat(withdrawStr.replace(',', '.'));
     if (!Number.isFinite(amt) || amt <= 0) { toast('Enter an amount above 0', 'error'); return; }
-    if (amt > ledger + 0.000001) { toast(`Your desk balance is ${fmtDusdc(ledger)} test USDC`, 'error'); return; }
+    if (amt > ledger + 0.000001) { toast(`Your desk balance is ${fmtDusdc(ledger)} DUSDC`, 'error'); return; }
     setBusy('withdraw');
     try {
       await submitTx(() => buildVaultWithdraw624({ amountMicro: BigInt(Math.floor(amt * M)) }));
-      toast(`${fmtDusdc(amt)} test USDC is back in your wallet`, 'success');
+      toast(`${fmtDusdc(amt)} DUSDC is back in your wallet`, 'success');
       setWithdrawStr(''); setManage(null);
       burst();
     } catch (e) {
@@ -303,7 +303,7 @@ export default function LiveDesk() {
         maxMarginMicro: BigInt(Math.round(capValue * M)),
         maxLeverage1e9: BigInt(levCap) * LEV_1X_624,
       }));
-      toast(`Limits updated — at most ${fmtDusdc(capValue)} test USDC per trade, ${levCap}×`, 'success');
+      toast(`Limits updated — at most ${fmtDusdc(capValue)} DUSDC per trade, ${levCap}×`, 'success');
       setCapStr(''); setManage(null);
       burst();
     } catch (e) {
@@ -353,7 +353,7 @@ export default function LiveDesk() {
   const faucetChip = (
     <button onClick={getTestUsdc} disabled={fauceting}
       className="whitespace-nowrap rounded-md border border-vermilion/50 bg-vermilion/[0.06] px-2.5 py-0.5 font-mono text-[10px] text-vermilion hover:bg-vermilion/[0.12] transition-colors disabled:opacity-60">
-      {fauceting ? 'Sending…' : 'Get free test USDC →'}
+      {fauceting ? 'Sending…' : 'Get free DUSDC →'}
     </button>
   );
 
@@ -491,7 +491,7 @@ export default function LiveDesk() {
                   <div className="max-w-md">
                     <AmountRow
                       value={depositStr} onChange={setDepositStr}
-                      hint={<span>Wallet: {fmtDusdc(walletDusdc)} test USDC{walletDusdc <= 0 ? <> · {faucetChip}</> : null}</span>}
+                      hint={<span>Wallet: {fmtDusdc(walletDusdc)} DUSDC{walletDusdc <= 0 ? <> · {faucetChip}</> : null}</span>}
                       chips={[1, 5]} onChip={addDeposit} chipCls={chipCls}
                       action={<button onClick={deposit} disabled={busy === 'deposit'} className={BTN_PRIMARY}>{busy === 'deposit' ? 'Adding…' : 'Add to desk →'}</button>}
                     />
@@ -524,7 +524,7 @@ export default function LiveDesk() {
                 <div className="border-l-2 border-white/20 pl-3 py-0.5">
                   <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/60">Paused — no new trades</span>
                   <p className="font-mono text-[10px] text-white/40 mt-1 leading-relaxed">
-                    Your {fmtDusdc(ledger)} test USDC stays yours. Resume with one signature, or take it back below.
+                    Your {fmtDusdc(ledger)} DUSDC stays yours. Resume with one signature, or take it back below.
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
@@ -549,7 +549,7 @@ export default function LiveDesk() {
                   <div className="max-w-md">
                     <AmountRow
                       value={depositStr} onChange={setDepositStr}
-                      hint={<span>Wallet: {fmtDusdc(walletDusdc)} test USDC{walletDusdc <= 0 ? <> · {faucetChip}</> : null}</span>}
+                      hint={<span>Wallet: {fmtDusdc(walletDusdc)} DUSDC{walletDusdc <= 0 ? <> · {faucetChip}</> : null}</span>}
                       chips={[1, 5]} onChip={addDeposit} chipCls={chipCls}
                       action={<button onClick={deposit} disabled={busy === 'deposit'} className={BTN_PRIMARY}>{busy === 'deposit' ? 'Adding…' : 'Add to desk →'}</button>}
                     />
@@ -578,7 +578,7 @@ export default function LiveDesk() {
                     value={depositStr} onChange={setDepositStr}
                     hint={walletDusdc <= 0
                       ? <span className="inline-flex flex-wrap items-center gap-1.5">Wallet empty — no problem: {faucetChip}</span>
-                      : <span>Wallet: {fmtDusdc(walletDusdc)} test USDC — edit freely.</span>}
+                      : <span>Wallet: {fmtDusdc(walletDusdc)} DUSDC — edit freely.</span>}
                     chips={[1, 5]} onChip={addDeposit} chipCls={chipCls}
                   />
                   {ledger > 0 && (
@@ -622,7 +622,7 @@ export default function LiveDesk() {
                   </button>
                   <p className="font-mono text-[10px] text-white/30 mt-2">
                     {belowFloor
-                      ? `The desk needs about ${fmtDusdc(MIN_LEDGER)} test USDC on it to place a trade — anything less gets skipped.`
+                      ? `The desk needs about ${fmtDusdc(MIN_LEDGER)} DUSDC on it to place a trade — anything less gets skipped.`
                       : 'Deposit and copy-permission in one signature.'}
                   </p>
                 </div>

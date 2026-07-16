@@ -173,8 +173,8 @@ export function buildTradeTweetText(trade: SettledTrade): string {
     how = `redeemed ${when}`;
   }
   return (
-    `${fmtPnl(trade.pnlMicro)} test USDC on BTC ${band} (${fmtLeverage(trade.leverageX)}) — ${how}. ` +
-    `${fmtDusdc(trade.stakeMicro)} → ${fmtDusdc(trade.payoutMicro)} test USDC (Sui testnet). ` +
+    `${fmtPnl(trade.pnlMicro)} DUSDC on BTC ${band} (${fmtLeverage(trade.leverageX)}) — ${how}. ` +
+    `${fmtDusdc(trade.stakeMicro)} → ${fmtDusdc(trade.payoutMicro)} DUSDC (Sui testnet). ` +
     `yosuku.xyz @yosuku0`
   );
 }
@@ -319,7 +319,7 @@ export async function renderTradeShareCard(trade: SettledTrade): Promise<Blob> {
   const verm = (a: number) => `rgba(${vr},${vg},${vb},${a})`;
 
   const pnlText = fmtPnl(trade.pnlMicro);
-  const subLine = `BTC · ${tradeBandLabel(trade)} · ${fmtLeverage(trade.leverageX)} · ${fmtDusdc(trade.stakeMicro)} → ${fmtDusdc(trade.payoutMicro)} TEST USDC`;
+  const subLine = `BTC · ${tradeBandLabel(trade)} · ${fmtLeverage(trade.leverageX)} · ${fmtDusdc(trade.stakeMicro)} → ${fmtDusdc(trade.payoutMicro)} DUSDC`;
   const folio = shortOrderId(trade);
 
   await Promise.all([
@@ -406,7 +406,7 @@ export async function renderTradeShareCard(trade: SettledTrade): Promise<Blob> {
   // ── P&L hero ──
   ctx.font = `600 19px ${mono}`;
   ctx.fillStyle = 'rgba(255,255,255,0.45)';
-  drawTracked(ctx, 'REALIZED P&L · TEST USDC', W / 2, 648, 5, 'center');
+  drawTracked(ctx, 'REALIZED P&L · DUSDC', W / 2, 648, 5, 'center');
 
   const pnlPx = fitFontPx(ctx, pnlText, display, 800, 232, W - 2 * MARGIN);
   ctx.font = `800 ${pnlPx}px ${display}`;

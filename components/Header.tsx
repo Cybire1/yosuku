@@ -123,7 +123,7 @@ export default function Header() {
     return () => window.removeEventListener('yosuku:open-funds', open);
   }, []);
 
-  // Auto top-up: when a connected user falls to ≤ 1 DUSDC, silently drip test USDC
+  // Auto top-up: when a connected user falls to ≤ 1 DUSDC, silently drip DUSDC
   // from the in-app faucet — no tap, no hunting. Each page is a FULL reload that mounts a
   // fresh Header, so the in-memory refs below reset on every navigation; the real guard is
   // a per-address cooldown in localStorage (survives reloads) so a low wallet can't
@@ -168,12 +168,12 @@ export default function Header() {
             if (firstTime) {
               window.dispatchEvent(new CustomEvent('yosuku:credited', { detail: { amount, firstTime: true } }));
             } else {
-              toast(`${amount} test USDC added to your wallet automatically`, 'success');
+              toast(`${amount} DUSDC added to your wallet automatically`, 'success');
             }
           }
         } else {
           // rate-limited / empty — a quiet cue, NOT a forced modal on every page.
-          toast('Faucet busy — tap your balance to add test USDC', 'info');
+          toast('Faucet busy — tap your balance to add DUSDC', 'info');
         }
       } catch { /* network hiccup — clear cooldown so the next balance tick can retry */
         try { localStorage.removeItem(cdKey); } catch { /* ignore */ }
@@ -274,7 +274,7 @@ export default function Header() {
                 <span className="flex items-center gap-1.5">
                   <Coins className="w-3.5 h-3.5 text-gray-500" />
                   <span className="text-white font-semibold tabular-nums">{((tradingVaultBalance.available + dusdcRaw) / 1e6).toFixed(2)}</span>
-                  <span className="hidden sm:inline text-gray-500">test USDC</span>
+                  <span className="hidden sm:inline text-gray-500">DUSDC</span>
                 </span>
                 <span className="text-vermilion font-bold ml-0.5 text-[15px] leading-none">+</span>
               </button>

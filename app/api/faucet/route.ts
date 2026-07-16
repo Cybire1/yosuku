@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
     // 3. balance gate — already holding more than 3 DUSDC means they can trade; don't fund
     const have = BigInt((await client.getBalance({ owner: address, coinType: DUSDC_TYPE })).totalBalance);
     if (have > FUND_CAP) {
-      return NextResponse.json({ ok: true, alreadyFunded: true, balance: Number(have) / 1e6, message: 'You already have test USDC — ready to trade.' });
+      return NextResponse.json({ ok: true, alreadyFunded: true, balance: Number(have) / 1e6, message: 'You already have DUSDC — ready to trade.' });
     }
     // 2. per-account on-chain gate
     if (await fundedRecently(client, address)) {
@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
     const coins = (await client.getCoins({ owner: faucet.toSuiAddress(), coinType: DUSDC_TYPE })).data;
     const total = coins.reduce((s, c) => s + BigInt(c.balance), BigInt(0));
     if (total < DRIP) {
-      return NextResponse.json({ error: 'The instant faucet is empty right now — grab test USDC from the DeepBook faucet.', faucetUrl: OFFICIAL_FAUCET }, { status: 503 });
+      return NextResponse.json({ error: 'The instant faucet is empty right now — grab DUSDC from the DeepBook faucet.', faucetUrl: OFFICIAL_FAUCET }, { status: 503 });
     }
 
     const tx = new Transaction();

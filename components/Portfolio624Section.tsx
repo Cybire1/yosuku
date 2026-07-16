@@ -57,7 +57,6 @@ const SUISCAN_OBJ = (id: string) => `https://suiscan.xyz/testnet/object/${id}`;
 // ─── tiny formatters (local by design — this component has no old-deployment deps) ───
 
 const fmt2 = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const fmtUsd = (n: number) => `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const fmtUsd0 = (n: number) => `$${Math.round(n).toLocaleString('en-US')}`;
 const fmtAddr = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 const micro = (n: bigint) => Number(n) / DUSDC_MULTIPLIER;
@@ -386,9 +385,9 @@ export default function Portfolio624Section() {
                           {!settled && <span className="text-vermilion mr-1.5">●</span>}{status}
                         </span>
                         <span className="font-display font-[700] text-[13px] text-white">BTC {bandLabel(pos.lowerTick, pos.higherTick)}</span>
-                        <span className="font-mono text-[10px] text-white/40">
-                          {st && !settled && !expired && now > 0 ? `settles in ${fmtCountdown(st.expiry - now)}` : settled && settleUsd != null ? `settled at ${fmtUsd(settleUsd)}` : ''}
-                        </span>
+                        {st && !settled && !expired && now > 0 && (
+                          <span className="font-mono text-[10px] text-white/40">settles in {fmtCountdown(st.expiry - now)}</span>
+                        )}
                         <span className="flex-1" />
                         <span className="font-mono text-[11px] text-white/70 tabular-nums">{fmt2(micro(pos.qtyMicro))} DUSDC</span>
                         <span className="font-mono text-[11px] text-white/40 tabular-nums w-8 text-right">{Number.isInteger(levX) ? levX : levX.toFixed(1)}×</span>
@@ -418,7 +417,6 @@ export default function Portfolio624Section() {
                         <span className="font-display font-[700] text-[13px] text-white/60 tabular-nums">
                           paid {h.payoutMicro != null ? fmt2(micro(h.payoutMicro)) : '—'} DUSDC
                         </span>
-                        {h.settlementUsd != null && <span className="font-mono text-[10px] text-white/35">at {fmtUsd(h.settlementUsd)}</span>}
                         <span className="flex-1" />
                         <span className="font-mono text-[11px] text-white/30 tabular-nums">{now > 0 ? ago(h.tsMs, now) : ''}</span>
                         {receipt && (

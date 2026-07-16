@@ -634,7 +634,7 @@ export async function placeTopUpAndBet624(p: {
   const depositMicro = shortfall < p.walletDusdcMicro ? shortfall : p.walletDusdcMicro;
   if (depositMicro <= 0n) throw new Error('account already funded — no top-up needed');
   const totalMicro = acctMicro + depositMicro;
-  if (totalMicro < stakeMicro) throw new Error('not enough test USDC to cover the bet + fees — top up your wallet');
+  if (totalMicro < stakeMicro) throw new Error('not enough DUSDC to cover the bet + fees — top up your wallet');
 
   const isRange = p.band != null && p.band.lowerUsd < p.band.higherUsd;
   const { lowerTick, higherTick } = isRange

@@ -320,11 +320,11 @@ export default function MarketsLivePage() {
             : stake <= 0
               ? 'Enter your bet'
               : belowMinHard
-                ? `Bet at least ${fmt2(MIN_STAKE)} test USDC`
+                ? `Bet at least ${fmt2(MIN_STAKE)} DUSDC`
                 : spot == null
                   ? 'Waiting for the oracle price…'
                   : stake > acctBalance
-                    ? `Add ${fmt2(stake - acctBalance)} test USDC first`
+                    ? `Add ${fmt2(stake - acctBalance)} DUSDC first`
                     : quoteErr
                       ? 'Quote failed — see below'
                       : !quote
@@ -681,7 +681,7 @@ export default function MarketsLivePage() {
                         onChange={(e) => setPayoutStr(e.target.value.replace(/[^0-9.]/g, ''))}
                         className="min-w-0 flex-1 bg-transparent font-display text-2xl font-bold text-white tabular-nums outline-none placeholder:text-white/20 caret-vermilion"
                       />
-                      <span className="font-mono text-[11px] font-semibold uppercase tracking-wider text-gray-400 shrink-0">test USDC</span>
+                      <span className="font-mono text-[11px] font-semibold uppercase tracking-wider text-gray-400 shrink-0">DUSDC</span>
                     </div>
                     <div className="mt-2 flex items-center justify-between">
                       <span className="font-mono text-[10px] text-gray-500">
@@ -695,7 +695,7 @@ export default function MarketsLivePage() {
                     </div>
                   </div>
                   {belowMinHard && (
-                    <p className="font-mono text-[10px] text-vermilion mt-2">Bet at least {fmt2(MIN_STAKE)} test USDC — that&apos;s the venue&apos;s minimum.</p>
+                    <p className="font-mono text-[10px] text-vermilion mt-2">Bet at least {fmt2(MIN_STAKE)} DUSDC — that&apos;s the venue&apos;s minimum.</p>
                   )}
                 </div>
 
@@ -748,14 +748,14 @@ export default function MarketsLivePage() {
                 return (
                   <>
                     <div className={`grid grid-cols-1 mt-4 border-y border-white/[0.08] divide-y divide-white/[0.06] ${ghost ? 'opacity-60' : ''}`}>
-                      <TicketStat label={ghost ? 'You bet · e.g.' : 'You bet'} value={`${fmt2(betShown)} test USDC`} ghost={ghost} />
+                      <TicketStat label={ghost ? 'You bet · e.g.' : 'You bet'} value={`${fmt2(betShown)} DUSDC`} ghost={ghost} />
                       <TicketStat label={live ? 'If you win' : 'If you win ≈'} value={quoting && !ghost ? 'quoting…' : `${fmt2(winAmt)} back`} strong ghost={ghost} />
                       <TicketStat label="If you lose" value={`${fmt2(betShown)} — your bet`} ghost={ghost} />
                       {live ? <TicketStat label="Chance to win" value={`${(probUsed * 100).toFixed(0)}%`} ghost={false} /> : null}
                     </div>
                     <p className="font-mono text-[9.5px] leading-relaxed text-white/35 mt-3">
                       {ghost
-                        ? `Example at a ${EX_STAKE} test USDC bet — type your own amount above.`
+                        ? `Example at a ${EX_STAKE} DUSDC bet — type your own amount above.`
                         : live
                           ? 'Live market price, refreshed every 12s. You never pay more than you bet — if the price moves while you sign, it safely rejects instead.'
                           : quoteErr

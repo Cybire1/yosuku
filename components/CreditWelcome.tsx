@@ -77,7 +77,7 @@ export default function CreditWelcome() {
               You&apos;re funded
             </span>
             <h2 id="credit-title" className="font-display text-2xl font-extrabold tracking-tight text-white mt-1.5">
-              {credit.amount} test USDC is in your wallet
+              {credit.amount} DUSDC is in your wallet
             </h2>
             <p className="text-gray-400 text-[13px] leading-relaxed mt-2 mb-5">
               On the house — these are testnet play chips, not real money. You&apos;re ready to take your first side.
