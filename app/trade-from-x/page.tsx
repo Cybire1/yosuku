@@ -107,8 +107,8 @@ export default function XTradePage() {
                 <span className="xt-ul absolute left-0 -bottom-1 h-px w-full bg-vermilion" />
               </span>
             </h1>
-            <p className="xt-boot mt-6 text-gray-400 leading-relaxed max-w-[46ch]" style={{ animationDelay: '440ms' }}>
-              Connect once, then tweet your bets at <span className="text-white">@yosukuapp</span>. A bounded agent opens the position from <span className="text-white">your own</span> vault — and by construction can only ever return funds to you. Even a perfect prompt injection moves nothing.
+            <p className="xt-boot mt-6 text-gray-400 leading-relaxed max-w-[40ch]" style={{ animationDelay: '440ms' }}>
+              Tweet your bets at <span className="text-white">@yosukuapp</span>. A bounded agent trades <span className="text-white">your own</span> funds — and can&apos;t take them.
             </p>
             <div className="xt-boot mt-6 flex items-center gap-3 font-mono text-[11px] text-gray-500" style={{ animationDelay: '560ms' }}>
               <span className="inline-flex items-center gap-1.5"><Dot c={M} /> your keys, your funds</span>
@@ -152,7 +152,7 @@ export default function XTradePage() {
           <Step n="3" title="Link your X account" state={code ? 'done' : step === 3 ? 'active' : 'idle'} spine={{ from: 3, cur: step }} isLast>
             {!code ? (
               <>
-                <p className="text-[13px] text-gray-400 leading-relaxed mb-4">Get a one-time code, then tweet it from your X account — that&apos;s the proof you own the handle.</p>
+                <p className="text-[13px] text-gray-400 mb-4">Tweet a one-time code to prove your handle.</p>
                 <button onClick={getCode} disabled={!addr || !deposited || busy} className="xt-cta bg-vermilion text-[#08080b] disabled:opacity-40 rounded-full px-6 py-2.5 font-display font-bold text-sm inline-flex items-center gap-2">
                   {busy ? 'Generating…' : 'Get my connect code'}
                 </button>
@@ -173,15 +173,15 @@ export default function XTradePage() {
             <span className="text-gray-600 shrink-0">›</span>
             <span key={ex} className="xt-boot text-white truncate" style={{ animationDuration: '.5s' }}>{EXAMPLES[ex]}</span>
           </div>
-          <p className="mt-3 font-mono text-[11px] text-gray-500">the agent opens it from your vault, replies with the receipt, and settles straight back to you.</p>
+          <p className="mt-3 font-mono text-[11px] text-gray-500">opens from your vault · settles back to you.</p>
         </div>
 
         {/* ── persistent trust footer ── */}
         <div className="mt-8 border-t border-white/[0.07] pt-6 flex flex-col gap-2.5">
-          <div className="flex items-center gap-2 font-mono text-[11px] text-gray-500"><Dot c={V} /> the contract has no withdraw function the agent can call — verify it yourself:</div>
-          <ProofLink href="https://suiscan.xyz/testnet/tx/Cn69DaM49d5bATJLGyhokudS39F4s6j1rSPDLMhUy1Hb">agent opened a position — owned by the vault, not the agent</ProofLink>
-          <ProofLink href="https://suiscan.xyz/testnet/tx/BmuJroQS4wgG9yvVBCDsq7xmdYVD6WyLsFPsBN8Em8rr">no-divert exit — 0.953 DUSDC returned to the user, agent ±0.000</ProofLink>
-          <p className="mt-1 font-mono text-[10.5px] text-gray-600 leading-relaxed max-w-[62ch]">testnet. what we do <span className="text-gray-400">not</span> claim: that the agent picks winning bets, or that you can&apos;t lose a bet. what is true by construction: it has no function that moves your funds anywhere but into a position you own.</p>
+          <div className="flex items-center gap-2 font-mono text-[11px] text-gray-500"><Dot c={V} /> no withdraw function exists — verify:</div>
+          <ProofLink href="https://suiscan.xyz/testnet/tx/Cn69DaM49d5bATJLGyhokudS39F4s6j1rSPDLMhUy1Hb">position owned by the vault, not the agent</ProofLink>
+          <ProofLink href="https://suiscan.xyz/testnet/tx/BmuJroQS4wgG9yvVBCDsq7xmdYVD6WyLsFPsBN8Em8rr">exit returned 0.953 to the user · agent ±0</ProofLink>
+          <p className="mt-1 font-mono text-[10.5px] text-gray-600">testnet · you can lose a bet · the agent just can&apos;t take your funds.</p>
         </div>
       </section>
     </main>
@@ -260,8 +260,8 @@ function CustodyRail() {
           </g>
         </svg>
       </div>
-      <figcaption className="mt-3 font-mono text-[11px] leading-relaxed text-gray-500">
-        <span className="text-gray-300">you tweet → the agent opens → the position is yours.</span> even a perfect injection finds no withdraw door.
+      <figcaption className="mt-3 font-mono text-[11px] text-gray-400">
+        you tweet → the agent opens → <span className="text-gray-200">the position is yours.</span>
       </figcaption>
     </figure>
   );
@@ -273,7 +273,7 @@ function CapabilityReceipt({ amount, setAmount, disabled, depositing, onDeposit 
   return (
     <div>
       <p className="font-display text-[15px] leading-snug text-gray-200 mb-4">
-        You fund <span className="text-white">{amt || '—'} DUSDC</span> and grant the agent <span className="text-vermilion">one</span> power: open a position you own.
+        Fund <span className="text-white">{amt || '—'} DUSDC</span>. Grant <span className="text-vermilion">one</span> power: open a position you own.
       </p>
 
       {/* amount + presets */}
@@ -291,22 +291,21 @@ function CapabilityReceipt({ amount, setAmount, disabled, depositing, onDeposit 
       <div className="grid sm:grid-cols-2 gap-2.5 mb-4">
         <div className="rounded-xl border border-new-mint/20 bg-new-mint/[0.03] p-3.5">
           <div className="font-mono text-[10px] tracking-[0.2em] uppercase text-new-mint/80 mb-2 inline-flex items-center gap-1.5"><Dot c={M} /> can</div>
-          <div className="text-[12.5px] text-gray-300 leading-relaxed">open a position from your vault, capped at <span className="text-white">{amt || '—'} DUSDC</span> / trade, ≤ 3×.</div>
+          <div className="text-[12.5px] text-gray-300 leading-relaxed">open a position you own — ≤ <span className="text-white">{amt || '—'}</span>/trade, ≤ 3×.</div>
         </div>
         <div className="rounded-xl border border-vermilion/20 bg-vermilion/[0.03] p-3.5">
           <div className="font-mono text-[10px] tracking-[0.2em] uppercase text-vermilion/80 mb-2 inline-flex items-center gap-1.5"><Dot c={V} /> cannot</div>
-          <div className="text-[12.5px] text-gray-400 leading-relaxed"><span className="line-through decoration-vermilion/50">withdraw · transfer · drain</span> — no such function exists.</div>
+          <div className="text-[12.5px] text-gray-400 leading-relaxed"><span className="line-through decoration-vermilion/50">withdraw · transfer · drain</span> — no such function.</div>
         </div>
       </div>
 
-      {/* the one-line summary + sign */}
-      <div className="rounded-xl border border-white/10 bg-black/30 px-4 py-3 mb-3.5 font-mono text-[11.5px] text-gray-400 leading-relaxed">
-        signing: fund <span className="text-gray-200">{amt || '—'} DUSDC</span> · authorize <span className="text-gray-200">open-position only</span> · settles to <span className="text-new-mint">you</span> · revocable anytime.
+      {/* one line, then sign */}
+      <div className="rounded-xl border border-white/10 bg-black/30 px-4 py-2.5 mb-3.5 font-mono text-[11.5px] text-gray-400">
+        fund <span className="text-gray-200">{amt || '—'} DUSDC</span> · open-position only · revocable
       </div>
       <button onClick={onDeposit} disabled={disabled || depositing || amt <= 0} className="xt-cta w-full sm:w-auto bg-vermilion text-[#08080b] disabled:opacity-40 rounded-full px-7 py-3 font-display font-bold text-sm inline-flex items-center justify-center gap-2">
         {depositing ? 'Confirm in your wallet…' : 'Fund + Authorize · 1 signature'}
       </button>
-      <p className="mt-2.5 font-mono text-[10.5px] text-gray-600">worst case, fully hijacked: it can only move funds <span className="text-gray-400">into a position you own</span> — 0 DUSDC can ever leave your vault.</p>
     </div>
   );
 }
@@ -315,7 +314,7 @@ function CapabilityReceipt({ amount, setAmount, disabled, depositing, onDeposit 
 function CodeTicket({ code, tweetHref, copied, onCopy }: { code: string; tweetHref: string; copied: boolean; onCopy: () => void }) {
   return (
     <div>
-      <p className="text-[13px] text-gray-400 mb-3">Tweet this from your X account — it proves you own the handle:</p>
+      <p className="text-[13px] text-gray-400 mb-3">Tweet this to prove your handle:</p>
       <div className={`flex items-center gap-2 rounded-xl border px-4 py-3.5 transition-colors ${copied ? 'border-new-mint/40 bg-new-mint/[0.05] xt-bloom' : 'border-vermilion/40 bg-vermilion/[0.06]'}`}>
         <code className="font-mono text-[15px] flex-1 break-all relative">
           <span className={copied ? 'text-new-mint' : 'text-vermilion'}>@yosukuapp connect {code}</span>
@@ -328,7 +327,7 @@ function CodeTicket({ code, tweetHref, copied, onCopy }: { code: string; tweetHr
       <div className={`mt-3.5 flex flex-wrap gap-2.5 ${copied ? 'xt-bloom rounded-full' : ''}`}>
         <a href={tweetHref} target="_blank" rel="noreferrer" className="xt-cta bg-vermilion text-[#08080b] rounded-full px-6 py-2.5 font-display font-bold text-sm inline-flex items-center gap-2">Post it on X <ArrowRight className="w-4 h-4" /></a>
       </div>
-      <p className="mt-4 font-mono text-[11px] text-gray-500 leading-relaxed">once the relay sees it, it replies <span className="text-new-mint">connected</span>. code valid ~30 min · then just tweet your bets.</p>
+      <p className="mt-4 font-mono text-[11px] text-gray-500">replies <span className="text-new-mint">connected</span> · valid ~30 min.</p>
     </div>
   );
 }
