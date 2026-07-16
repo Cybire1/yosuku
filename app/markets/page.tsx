@@ -28,7 +28,7 @@ import MarketCard from '@/components/MarketCard';
 import MarketRoom from '@/components/MarketRoom';
 import SectionHeader from '@/components/SectionHeader';
 import WordMarketBoard from '@/components/WordMarketBoard';
-import TheBell from '@/components/TheBell';
+import SenseiDock from '@/components/SenseiDock';
 import Tutorial from '@/components/Tutorial';
 import Ticket624Drawer from '@/components/Ticket624Drawer';
 import {
@@ -726,7 +726,7 @@ export default function MarketsPage() {
       <Footer />
 
       {/* The Bell — rings at the next 6-24 settle */}
-      {nextExpiry && <TheBell targetTime={nextExpiry} now={now} />}
+      {nextExpiry && <SenseiDock targetTime={nextExpiry} now={now} />}
 
       {/* First-visit tutorial */}
       <Tutorial />

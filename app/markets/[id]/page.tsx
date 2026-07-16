@@ -7,7 +7,7 @@ import Footer from '@/components/Footer';
 import Marquee from '@/components/Marquee';
 import GrainOverlay from '@/components/GrainOverlay';
 import CustomCursor from '@/components/CustomCursor';
-import TheBell from '@/components/TheBell';
+import SenseiDock from '@/components/SenseiDock';
 import TradeFlow from '@/components/TradeFlow';
 import TradePanel from '@/components/TradePanel';
 import CashOut from '@/components/CashOut';
@@ -543,7 +543,7 @@ export default function MarketDetailPage({ params }: { params: Promise<{ id: str
         <Footer />
       </main>
 
-      {isActive && <TheBell targetTime={oracle.expiry} />}
+      {isActive && <SenseiDock targetTime={oracle.expiry} />}
     </div>
   );
 }
