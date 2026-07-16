@@ -470,20 +470,20 @@ export function drawDuel(
 
   // ── hit number: a tiny "+N" attack-pop rises from the impact and fades (game juice). N tracks
   //    the real recent price move, so the winner lands harder when the market's ripping. ──
-  const POP_LEN = 17;
+  const POP_LEN = 18;
   if (cyc >= CONTACT && cyc <= CONTACT + POP_LEN) {
     const p = (cyc - CONTACT) / POP_LEN;
-    const a = p < 0.16 ? p / 0.16 : 1 - (p - 0.16) / 0.84;   // quick pop-in, slow fade
-    const popS = p < 0.16 ? 0.55 + 0.45 * (p / 0.16) : 1;    // little scale-in
+    const a = p < 0.14 ? p / 0.14 : Math.pow(1 - (p - 0.14) / 0.86, 1.5); // snap in, graceful out
+    const popS = p < 0.14 ? 0.62 + 0.38 * (p / 0.14) : 1;                 // subtle scale-in
     const val = Math.max(1, Math.round(Math.abs(move)));
-    const fontPx = (10 + 30 * scale) * popS;
+    const fontPx = (6 + 20 * scale) * popS;                              // small + refined
     ctx.save();
     ctx.globalAlpha = Math.max(0, Math.min(1, a));
-    ctx.font = `700 ${fontPx}px ui-monospace, "JetBrains Mono", monospace`;
+    ctx.font = `600 ${fontPx}px ui-monospace, "JetBrains Mono", monospace`;
+    (ctx as CanvasRenderingContext2D & { letterSpacing?: string }).letterSpacing = '0.3px';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    const tx = hitX + (above ? -1 : 1) * 6 * scale, ty = hitY - 8 * scale - p * 26 * scale;
-    ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(6,10,9,0.9)';  // dark outline so it reads over the line
-    ctx.strokeText(`+${val}`, tx, ty);
+    ctx.shadowColor = 'rgba(4,8,7,0.7)'; ctx.shadowBlur = 3;             // soft halo, not a hard outline
+    const tx = hitX + (above ? -1 : 1) * 5 * scale, ty = hitY - 6 * scale - p * 22 * scale;
     ctx.fillStyle = above ? DUEL_UP : DUEL_DOWN;
     ctx.fillText(`+${val}`, tx, ty);
     ctx.restore();
