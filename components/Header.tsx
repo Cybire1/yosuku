@@ -274,7 +274,7 @@ export default function Header() {
                 <span className="flex items-center gap-1.5">
                   <Coins className="w-3.5 h-3.5 text-gray-500" />
                   <span className="text-white font-semibold tabular-nums">{((tradingVaultBalance.available + dusdcRaw) / 1e6).toFixed(2)}</span>
-                  <span className="hidden sm:inline text-gray-500">DUSDC</span>
+                  <span className="hidden sm:inline text-gray-500">test USDC</span>
                 </span>
                 <span className="text-vermilion font-bold ml-0.5 text-[15px] leading-none">+</span>
               </button>

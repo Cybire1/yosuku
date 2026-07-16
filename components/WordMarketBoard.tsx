@@ -101,12 +101,16 @@ export default function WordMarketBoard() {
               return (
                 <div key={q.market.id} className="wq-card">
                   <div className="wq-top">
-                    <span className="wq-chip">₿</span>
-                    <span className="wq-meta">BTC · oracle‑settled</span>
+                    <span className="wq-btc" aria-hidden><span>₿</span></span>
+                    <span className="wq-meta">Bitcoin</span>
                     <span className={`wq-clock ${msLeft < 60_000 ? 'urgent' : ''}`}>{fmtCountdown(msLeft)}</span>
                   </div>
                   <div className="wq-q">{q.text}</div>
-                  <div className="wq-close">closes {clockHM(q.closeMs)}</div>
+                  <div className="wq-oddsbar" aria-hidden><div className="wq-oddsfill" style={{ width: `${yes}%` }} /></div>
+                  <div className="wq-oddsrow">
+                    <span className="wq-close">closes {clockHM(q.closeMs)}</span>
+                    <span className="wq-yeslead"><b>{yes}%</b> lean yes</span>
+                  </div>
                   <div className="wq-actions">
                     <button className="wq-btn yes" onClick={() => go(q, 'yes')} data-cursor="hover">
                       <span className="wq-side">Yes</span><span className="wq-cents">{yes}¢</span>

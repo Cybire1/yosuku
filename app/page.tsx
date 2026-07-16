@@ -71,33 +71,33 @@ const ASSET_GLYPH: Record<string, string> = {
 
 const HOW_STEPS: HowStep[] = [
   { num: '01', jp: '\u5E02\u5834', kicker: 'Choose', title: 'Pick a market.', body: 'Every BTC market has a strike price and a fixed window \u2014 1-minute, 5-minute, or hourly rounds. One question: above or below at close.', meta: 'Fast rounds \u00B7 continuous' },
-  { num: '02', jp: '\u53D6\u5F15', kicker: 'Commit', title: 'Take a side.', body: 'One press. Your position is committed to Sui through DeepBook Predict. No order book, just a binary stance and a fixed window.', meta: 'Binary \u00B7 Instant \u00B7 On-chain' },
-  { num: '03', jp: '\u6C7A\u6E08', kicker: 'Settle', title: 'Settle on-chain.', body: 'When the window closes, the oracle reports the final price. Winning contracts pay 1 DUSDC per unit; losing contracts pay 0.', meta: 'Oracle-settled \u00B7 Binary \u00B7 Verifiable' },
+  { num: '02', jp: '\u53D6\u5F15', kicker: 'Commit', title: 'Take a side.', body: 'One press and your call is locked in. No order book, no haggling — just up or down before the clock runs out.', meta: 'One tap \u00B7 instant' },
+  { num: '03', jp: '\u6C7A\u6E08', kicker: 'Settle', title: 'Settle on-chain.', body: 'When the clock hits zero, the final price decides it automatically. Call it right and you get paid; call it wrong and your stake is gone. No waiting on anyone.', meta: 'Pays out on the price \u00B7 no waiting' },
 ];
 
 const FEATURES: FeatureItem[] = [
-  { act: '01', idx: 'I', title: 'Two sides. ', em: 'One press.', desc: 'Pick above or below. The round closes on the clock, the oracle reports, the chain decides. No order books, no appeals.', keys: ['One-tap UP/DOWN', 'Fast rounds', 'Oracle-settled'], jp: '\u53D6\u5F15' },
-  { act: '02', idx: 'II', title: 'Leave when ', em: 'you like.', desc: 'Exit at the live bid before close \u2014 no lock-ins. Every quote is computed on-chain, and you can re-derive it in your browser to the cent.', keys: ['Cash out anytime', 'On-chain quotes', 'Checkable pricing'], jp: '\u81EA\u7531' },
-  { act: '03', idx: 'III', title: 'A side, or ', em: 'a range.', desc: 'Call any strike, or bracket a band between two. The whole volatility surface is tradable \u2014 not one question, every question.', keys: ['Any strike', 'Range positions', 'Live vol surface'], jp: '\u7BC4\u56F2' },
-  { act: '04', idx: 'IV', title: 'Be the ', em: 'house.', desc: 'Supply the pool that quotes every market and earn the spread on every round. The house is not a company \u2014 it is a vault you can join.', keys: ['PLP pool', 'Earn the spread', 'On-chain vault'], jp: '\u80F4\u5143' },
-  { act: '05', idx: 'V', title: 'A keeper with ', em: 'rules.', desc: 'Our agent trades through a vault whose limits live in Move. The chain checks its math on every action \u2014 caps, allowlists, a daily stop. Verifiable, not configurable.', keys: ['Attested agent', 'On-chain caps', 'Audit trail'], jp: '\u756A\u4EBA' },
+  { act: '01', idx: 'I', title: 'Two sides. ', em: 'One press.', desc: 'Pick above or below. When the clock runs out, the live price decides — automatically, with no order books and no appeals.', keys: ['One-tap UP/DOWN', 'Fast rounds', 'Auto-paid'], jp: '\u53D6\u5F15' },
+  { act: '02', idx: 'II', title: 'Leave when ', em: 'you like.', desc: 'Change your mind? Cash out at the live price any time before the round closes \u2014 no lock-ins, no penalties.', keys: ['Cash out anytime', 'Live pricing', 'Always fair'], jp: '\u81EA\u7531' },
+  { act: '03', idx: 'III', title: 'A side, or ', em: 'a range.', desc: 'Bet on a single price, or on a range between two. However you read the market, there\u2019s a way to play it.', keys: ['Any price', 'Pick a range', 'Every angle'], jp: '\u7BC4\u56F2' },
+  { act: '04', idx: 'IV', title: 'Be the ', em: 'house.', desc: 'Put money into the pool that backs every market and earn a cut of every round. Here the house isn\u2019t a company \u2014 it\u2019s a pool anyone can join.', keys: ['Join the pool', 'Earn a cut', 'Open to all'], jp: '\u80F4\u5143' },
+  { act: '05', idx: 'V', title: 'A keeper with ', em: 'rules.', desc: 'Our Autopilot trades inside hard limits it can\u2019t break \u2014 spending caps, an approved list, and a daily stop. The rules are locked in, not up for negotiation.', keys: ['Runs on Autopilot', 'Hard limits', 'Every move logged'], jp: '\u756A\u4EBA' },
 ];
 
 const FAQ_DATA: FaqItem[] = [
-  { q: 'What does YOSUKU settle on?', a: 'DeepBook Predict oracle markets on Sui. Every settlement is deterministic, verifiable on-chain, and independent of YOSUKU as an operator. The oracle reports; the contract executes.', tags: ['Oracle', 'Sui'], cat: 'Protocol' },
-  { q: 'How does YOSUKU make money?', a: 'Plain Predict trades pay the protocol spread baked into the quote. Optional leverage pays a premium to the underwriting reserve that fronts extra notional.', tags: ['Fees', 'Transparency'], cat: 'Protocol' },
-  { q: 'Can I lose more than I stake?', a: 'No. Plain binaries are fixed-downside. With optional leverage, the reserve fronts capital and is repaid first from wins, but your max loss is still your margin.', tags: ['Risk', 'Binary'], cat: 'Mechanics' },
-  { q: 'Why fixed windows?', a: 'Every round runs on a clock — 1-minute, 5-minute, and 1-hour BTC markets. Short windows stay engaging and testable; longer ones leave room for price discovery. Pick the tempo that suits you — the oracle settles each one at its close.', tags: ['Design', 'Cadence'], cat: 'Mechanics' },
-  { q: 'Is this available in my country?', a: 'YOSUKU is a decentralised protocol on Sui. There is no geo-blocking at the protocol level. However, you are responsible for compliance with your local regulations.', tags: ['Legal', 'Access'], cat: 'Access' },
+  { q: 'What does YOSUKU settle on?', a: 'The live price of Bitcoin, straight from the market. Every result is decided automatically by that price — not by YOSUKU. We can’t tip the scales.', tags: ['Oracle', 'Sui'], cat: 'Protocol' },
+  { q: 'How does YOSUKU make money?', a: 'A small margin is built into the price you see. If you choose to amplify a bet, there’s a small extra fee for that. That’s it.', tags: ['Fees', 'Transparency'], cat: 'Protocol' },
+  { q: 'Can I lose more than I stake?', a: 'No. The most you can ever lose is what you put in — even if you choose to amplify a bet.', tags: ['Risk', 'Binary'], cat: 'Mechanics' },
+  { q: 'Why fixed windows?', a: 'Every round runs on a clock — 1-minute, 5-minute, and 1-hour Bitcoin markets. Short ones are quick and fun; longer ones give the price room to move. Pick the pace that suits you — each one settles the moment it closes.', tags: ['Design', 'Timing'], cat: 'Mechanics' },
+  { q: 'Is this available in my country?', a: 'YOSUKU runs on an open network, so there’s no country-based block built in. That said, it’s on you to follow the rules where you live.', tags: ['Legal', 'Access'], cat: 'Access' },
 ];
 
 const SPEC_ROWS: SpecRow[] = [
-  { label: 'Chain', value: 'Sui Network (L1)' },
-  { label: 'Settlement', value: 'DeepBook Predict oracle, deterministic' },
-  { label: 'Oracle', value: 'Predict oracle surface' },
-  { label: 'Round cadence', value: '1-minute, 5-minute, 1-hour' },
-  { label: 'Asset', value: 'DUSDC' },
-  { label: 'Latency', value: 'Sub-second finality' },
+  { label: 'Runs on', value: 'Sui' },
+  { label: 'Payouts', value: 'Automatic, on the closing price' },
+  { label: 'Prices', value: 'Live market price' },
+  { label: 'Round length', value: '1 minute, 5 minutes, or 1 hour' },
+  { label: 'Money', value: 'Test dollars (not real money)' },
+  { label: 'Speed', value: 'Settles in under a second' },
   { label: 'Audits', value: 'In progress' },
 ];
 
@@ -568,7 +568,7 @@ export default function HomePage() {
           <span>02 &mdash; How it works</span>
           <span className="jp">{'\u4E09\u6B69'} &middot; three steps</span>
         </div>
-        <h2 className="section-title fade-up">Three steps. Before the bell. On-chain.</h2>
+        <h2 className="section-title fade-up">Three steps. Before the clock runs out.</h2>
 
         <div className="how-steps" ref={howRef}>
           {HOW_STEPS.map((step, i) => (
@@ -801,7 +801,7 @@ export default function HomePage() {
         <div className="manifesto-runline bl" />
         <div className="manifesto-runline br" />
         <blockquote className="manifesto-quote">
-          &ldquo;The market is a room of opinions. We built a quieter room &mdash; strike, window, settle.&rdquo;
+          &ldquo;The market is a room of opinions. We built a quieter room &mdash; pick a side, wait for the clock, get paid.&rdquo;
         </blockquote>
         <div className="manifesto-attr">
           <span className="seal">{'\u4E88'}</span>
@@ -814,11 +814,11 @@ export default function HomePage() {
           <div className="split-left">
             <div className="section-eyebrow">03 &mdash; Architecture</div>
             <h2>
-              Sub-second settlement. Custodial of nothing. <em>Owner of everything.</em>
+              Fast payouts. We hold nothing. <em>Owner of everything.</em>
             </h2>
             <p>
-              Built on Sui for parallel execution and instant finality. DeepBook Predict supplies
-              the oracle-priced market surface, settlement rules, and shared liquidity vault.
+              Built on Sui, so every bet is fast and final the second a round closes. Prices come straight
+              from the live market, and payouts settle automatically.
             </p>
             <div className="footrule">
               <span><b>Sui L1</b> &middot; Native</span>
@@ -827,7 +827,7 @@ export default function HomePage() {
           </div>
           <div className="split-right">
             <div className="spec-head">
-              <span>Protocol specifications</span>
+              <span>The basics</span>
               <span>{'\u4ED5\u69D8'}</span>
             </div>
             {SPEC_ROWS.map((row, i) => (
@@ -913,7 +913,7 @@ export default function HomePage() {
               </svg>
               <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '15px', letterSpacing: '0.18em' }}>YOSUKU</span>
             </div>
-            <p className="tagline">Prediction markets on Sui. Oracle-settled, sub-second finality.</p>
+            <p className="tagline">Bet on Bitcoin in seconds. Runs on Sui, pays out automatically.</p>
             <div className="seal">
               <span className="seal-dot">{'\u4E88\u6E2C'}</span>
               <span>Tokyo &middot; 2026</span>

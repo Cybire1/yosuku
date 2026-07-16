@@ -282,7 +282,7 @@ function Market624Card({
 
         {!closing ? (
           <div className="mc-strip">
-            <span>{odds?.upCents != null ? 'LIVE · VENUE-QUOTED' : 'QUOTING THE VENUE…'}</span>
+            <span>{odds?.upCents != null ? 'LIVE ODDS' : 'LOADING ODDS…'}</span>
             <span className="ramp">
               <span>UP</span>
               <span className="bar">
@@ -616,7 +616,7 @@ export default function MarketsPage() {
                 <canvas ref={heroCanvasRef} />
               </div>
               <div className="hero-chart-foot">
-                <span>ORACLE-SETTLED · EACH SIDE PRICED FOR ITS OWN BAND</span>
+                <span>SETTLES ON ITS OWN THE MOMENT TIME'S UP</span>
                 <span className="ramp">
                   <span>UP</span>
                   <span className="bar">
@@ -673,7 +673,7 @@ export default function MarketsPage() {
             <div className="empty-state">
               <div className="jp">予</div>
               <h3>Reading live markets…</h3>
-              <p>Fetching cadence markets from DeepBook Predict</p>
+              <p>Loading the latest Bitcoin markets</p>
             </div>
           )}
           {markets.length === 0 && marketsErr && (
@@ -715,7 +715,7 @@ export default function MarketsPage() {
 
           {/* Word markets — the same live markets, said in plain language */}
           <section className="markets-section">
-            <SectionHeader number="02" title="Say it in words" jp="言葉" desc="The same live markets, as plain-language calls with a scheduled close." />
+            <SectionHeader number="02" title="Just ask" jp="言葉" desc="No chart to read — will Bitcoin be up? Just answer yes or no." />
             <WordMarketBoard />
           </section>
 

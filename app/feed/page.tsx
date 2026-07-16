@@ -130,7 +130,7 @@ function ReelCard({
           <div className="flex items-center gap-2.5">
             <span className="grid h-8 w-8 place-items-center rounded-full border border-vermilion/40 font-mono text-[15px] text-vermilion">₿</span>
             <div className="leading-tight">
-              <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-white/70">BTC · oracle-settled</div>
+              <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-white/70">BTC · settles on the price</div>
               <div className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.14em] text-white/35">{CAD_WORD[market.cadence]} round · closes {clockHM(market.expiry)}</div>
             </div>
           </div>
@@ -156,7 +156,7 @@ function ReelCard({
                 {above ? `+$${Math.round(spot - line)}` : `−$${Math.round(line - spot)}`} vs line
               </span>
             )}
-            <span className="text-[10px] uppercase tracking-[0.14em] text-white/35">live oracle</span>
+            <span className="text-[10px] uppercase tracking-[0.14em] text-white/35">live price</span>
           </div>
         </div>
 
@@ -165,7 +165,7 @@ function ReelCard({
           {series.length > 1 ? (
             <canvas ref={canvasRef} className="h-full w-full" />
           ) : (
-            <div className="flex h-full items-center justify-center font-mono text-[10px] uppercase tracking-[0.16em] text-white/30">reading the tape…</div>
+            <div className="flex h-full items-center justify-center font-mono text-[10px] uppercase tracking-[0.16em] text-white/30">loading the chart…</div>
           )}
         </div>
 

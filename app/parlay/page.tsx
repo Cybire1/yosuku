@@ -28,7 +28,7 @@ export default function ParlayPage() {
           </h1>
           <p className="page-title-jp">連勝 — the close streak</p>
           <p className="page-subtitle mt-5">
-            Stack two or three BTC bells into a single ticket. The odds multiply, so a small
+            Stack two or three BTC rounds into a single ticket. The odds multiply, so a small
             stake chases a big payout — but every leg has to land. The instant one leg settles
             against you, the ticket is dead and your stake is the most you can lose.
           </p>

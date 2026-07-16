@@ -290,7 +290,7 @@ export default function PortfolioPage() {
             <div className="flex items-center gap-3 pt-2">
               <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/40">Previous venue</span>
               <div className="h-px flex-1 bg-white/10" />
-              <span className="font-mono text-[10px] text-white/30">original DeepBook Predict · balances &amp; positions below</span>
+              <span className="font-mono text-[10px] text-white/30">your earlier bets &amp; balances below</span>
             </div>
 
             {/* Ledger Plate — stats overview */}
@@ -325,7 +325,7 @@ export default function PortfolioPage() {
                     >
                       {sweepingManager
                         ? 'Moving…'
-                        : <>Move {(managerBalance / DUSDC_MULTIPLIER).toFixed(2)} legacy DUSDC to Trading <span className="text-base leading-none">→</span></>}
+                        : <>Move {(managerBalance / DUSDC_MULTIPLIER).toFixed(2)} DUSDC to Trading <span className="text-base leading-none">→</span></>}
                     </button>
                   )}
                 </div>
@@ -395,7 +395,7 @@ export default function PortfolioPage() {
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                     <div>
                       <span className="font-mono text-[8px] tracking-[0.14em] uppercase" style={{ color: '#6B6353' }}>
-                        TradingVault live
+                        Trading balance
                       </span>
                       <p className="font-mono text-[10px] mt-1 max-w-2xl" style={{ color: '#6B6353' }}>
                         One balance for every bet. Withdraw to your wallet anytime.
@@ -439,7 +439,7 @@ export default function PortfolioPage() {
                     </div>
                   </div>
                   {tradingVaultLoading && (
-                    <p className="font-mono text-[10px] mt-3" style={{ color: '#6B6353' }}>Reading TradingVault…</p>
+                    <p className="font-mono text-[10px] mt-3" style={{ color: '#6B6353' }}>Loading your balance…</p>
                   )}
                 </div>
               )}

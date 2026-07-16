@@ -593,7 +593,7 @@ export default function Ticket624Drawer({
               }
             />
             <p className="font-mono text-[9.5px] leading-relaxed text-white/30 mt-4">
-              Oracle-settled at close. Your payout lands in YOUR trading account — claim it from Portfolio once the market settles.
+              Settles on its own when time's up. Your winnings land in your balance — claim them from Portfolio once it settles.
             </p>
           </div>
         ) : (
@@ -847,9 +847,9 @@ export default function Ticket624Drawer({
                   : quoteErr
                   ? `Quote failed: ${friendlyMintAbort(quoteErr)}`
                   : showLive
-                    ? 'Live venue quote'
+                    ? 'Live market odds'
                     : showEstimate
-                      ? (quoting ? 'Getting live quote…' : 'Estimated until wallet quote')
+                      ? (quoting ? 'Getting live quote…' : 'Estimated until you connect')
                       : 'Enter an amount to quote'}
               </span>
               {showLive && <span className="shrink-0 text-white/55">{(probUsed * 100).toFixed(0)}% chance</span>}
@@ -864,7 +864,7 @@ export default function Ticket624Drawer({
             {!address && (
               <div className="border border-white/[0.08] bg-white/[0.02] p-4 mb-4">
                 <p className="text-[12.5px] text-gray-400 leading-snug mb-3">
-                  Your bets settle into an on-chain trading account only your wallet can withdraw from. Connect to set it up.
+                  Your bets and winnings sit in a balance only your wallet can cash out. Connect to set it up.
                 </p>
                 <ConnectButton />
               </div>
@@ -936,7 +936,7 @@ export default function Ticket624Drawer({
             </button>
 
             <p className="font-mono text-[8.5px] leading-relaxed text-white/25 mt-2.5">
-              Gas-free · settles on the oracle price.
+              Gas-free · settles on its own, right on the price.
             </p>
           </div>
         )}

@@ -383,10 +383,10 @@ export default function StrategiesPage() {
             await recordAgentSpec({ strategyId, agent, spec: draftSpec, creator: address });
             toast('Agent listed on Sui. It starts trading once the desk picks it up.', 'success');
           } catch {
-            toast('Agent listed on Sui. Sealed-hardware execution activates once the keeper picks up its spec.', 'success');
+            toast('Agent listed on Sui. It starts trading automatically once the desk picks it up.', 'success');
           }
         } else {
-          toast('Agent listed on Sui — indexing. It will appear in the catalogue shortly.', 'success');
+          toast('Agent listed on Sui. It will appear in the catalogue shortly.', 'success');
         }
       } else {
         toast('Strategy published — users can now copy it.', 'success');
@@ -517,7 +517,7 @@ export default function StrategiesPage() {
                           <span className="inline-flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.18em] text-vermilion border border-vermilion/40 px-2 py-1">◈ Agent memory</span>
                         )}
                         {card.hasCapsule && (
-                          <span className="inline-flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.18em] text-white/40 border border-white/15 px-2 py-1">▤ Walrus playbook</span>
+                          <span className="inline-flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.18em] text-white/40 border border-white/15 px-2 py-1">▤ Saved playbook</span>
                         )}
                       </div>
 
@@ -788,7 +788,7 @@ export default function StrategiesPage() {
                       onClick={listStrategy} disabled={listing}
                       className="w-full py-3 rounded-full text-sm font-semibold bg-vermilion hover:bg-vermilion-d text-white transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                     >
-                      {listing ? 'launching…' : form.hosting === 'attested' ? 'Launch enclave agent' : 'Publish strategy'}
+                      {listing ? 'launching…' : form.hosting === 'attested' ? 'Launch your agent' : 'Publish strategy'}
                     </button>
                     <p className="font-mono text-[10px] leading-relaxed text-gray-600">
                       Limits are enforced on Sui. The agent trades only inside them and can never withdraw a copier&apos;s funds.
@@ -1165,13 +1165,13 @@ function CopyDrawer(props: {
           <div className="border border-vermilion/30 px-4 py-3 mb-4">
             <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-vermilion mb-1.5">◈ Agent memory</p>
             <p className="text-[12px] text-white/70 leading-snug">
-              This agent keeps its own trading memory on Walrus — open, verifiable, and (with a pass) readable. It guides the agent&apos;s decisions but can never touch your funds.
+              This agent keeps its own trading memory — open, verifiable, and (with a pass) readable. It guides the agent&apos;s decisions but can never touch your funds.
             </p>
             <div className="flex flex-wrap gap-3 mt-2">
               {card.hasMemory && (
                 <a href={SUISCAN_ACC(card.memoryAccount)} target="_blank" rel="noreferrer" className="font-mono text-[10px] text-white/40 hover:text-white transition-colors">verify memory ↗</a>
               )}
-              {card.hasCapsule && <span className="font-mono text-[10px] text-white/40">▤ Walrus playbook</span>}
+              {card.hasCapsule && <span className="font-mono text-[10px] text-white/40">▤ Saved playbook</span>}
             </div>
           </div>
         )}

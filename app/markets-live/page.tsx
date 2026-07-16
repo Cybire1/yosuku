@@ -450,31 +450,30 @@ export default function MarketsLivePage() {
 
         {/* trust dateline */}
         <div className="font-mono text-[10px] md:text-[11px] uppercase tracking-[0.22em] text-white/40 mt-4 mb-10">
-          DeepBook Predict (6-24) · native leverage · oracle-settled · testnet DUSDC
+          Test money, live Bitcoin prices — every bet settles on its own the moment time's up
         </div>
 
         <div className="grid lg:grid-cols-[1fr_22rem] gap-10 items-start">
           {/* ══ left rail: the flow ══ */}
           <div className="space-y-12 min-w-0">
             {/* 01 — account */}
-            <Step n="01" title="Account" hint="one on-chain trading account, owned by your wallet">
+            <Step n="01" title="Account" hint="your own betting balance — only you can cash out">
               {!address ? (
                 <PanelCard>
                   <p className="text-[13px] text-gray-400 leading-snug mb-4 max-w-md">
-                    Your bets settle into an on-chain trading account only your wallet can withdraw from.
+                    Your bets and winnings sit in a balance only your wallet can cash out.
                     Connect to set it up.
                   </p>
                   <ConnectButton />
                 </PanelCard>
               ) : !wrapperChecked ? (
-                <div className="font-mono text-[11px] uppercase tracking-[0.2em] text-white/40 py-6">reading the chain…</div>
+                <div className="font-mono text-[11px] uppercase tracking-[0.2em] text-white/40 py-6">checking your account…</div>
               ) : !wrapperId ? (
                 <PanelCard>
                   <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-vermilion mb-2">One-time setup</div>
                   <h3 className="font-display font-[800] text-xl text-white mb-2">Set up your trading account</h3>
                   <p className="text-[13px] text-gray-400 leading-snug mb-4 max-w-md">
-                    Creates your account on the new DeepBook Predict — a shared object derived from your
-                    address. Deposits, payouts and withdrawals all move through it; only you can withdraw.
+                    Sets up a balance made just for you. Your bets, winnings and withdrawals all flow through it — and only you can ever cash out.
                   </p>
                   <button
                     onClick={createAccount}
@@ -545,7 +544,7 @@ export default function MarketsLivePage() {
             </Step>
 
             {/* 02 — market: cadence tier bar (primary control) + the tier's soonest markets */}
-            <Step n="02" title="Market" hint="pick your cadence — each market settles at its expiry, on the oracle print">
+            <Step n="02" title="Market" hint="pick how fast — each one settles the moment its time is up">
               {/* tier bar */}
               <div role="tablist" aria-label="Market cadence" className="grid grid-cols-3 border border-white/[0.08] bg-white/[0.02] mb-px">
                 {TIERS.map((t) => {
@@ -598,8 +597,8 @@ export default function MarketsLivePage() {
                   </div>
                   <div className="font-mono text-[10px] text-white/30 mt-2 max-w-md mx-auto leading-relaxed normal-case">
                     {tier === '1h' && nextHourMins != null
-                      ? `The hourly market settles at :00 — ${nextHourMins}m away. The venue lists it closer to the hour; it will appear here.`
-                      : 'Markets roll continuously on this venue — the next one appears here within minutes.'}
+                      ? `The hourly market settles at :00 — ${nextHourMins}m away. It opens closer to the hour and will show up here.`
+                      : 'New markets open continuously — the next one appears here within minutes.'}
                   </div>
                 </div>
               ) : (
@@ -626,7 +625,7 @@ export default function MarketsLivePage() {
                         </div>
                         <div className="font-mono text-[9px] uppercase tracking-[0.18em] text-white/40 mt-1.5">
                           {closing
-                            ? 'at the oracle — watch the print'
+                            ? 'settling now — watch the price'
                             : m.cadence === '1h' && minsAway != null
                               ? `settles at :00 — ${minsAway}m away`
                               : 'until it settles'}
@@ -647,7 +646,7 @@ export default function MarketsLivePage() {
             </Step>
 
             {/* 03 — the call */}
-            <Step n="03" title="Your call" hint="a range digital with a $20 cushion around the live price">
+            <Step n="03" title="Your call" hint="up or down, with a $20 cushion around the current price">
               <div className="space-y-6">
                 {/* direction */}
                 <div className="grid grid-cols-2 gap-3 max-w-xl">
@@ -702,7 +701,7 @@ export default function MarketsLivePage() {
 
                 {/* leverage */}
                 <div className="max-w-xl">
-                  <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400 mb-1.5">Leverage <span className="text-gray-600 normal-case tracking-normal">— native knockout</span></div>
+                  <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400 mb-1.5">Leverage <span className="text-gray-600 normal-case tracking-normal">— multiply your bet</span></div>
                   <div className="flex gap-1.5 max-w-[16rem]">
                     {[1, 2, 3].map((v) => (
                       <button key={v} onClick={() => setLev(v)}
@@ -712,7 +711,7 @@ export default function MarketsLivePage() {
                     ))}
                   </div>
                   <p className="font-mono text-[10px] text-white/40 leading-relaxed mt-2 max-w-md">
-                    Leverage finances part of your entry; a win pays quantity minus the financed floor; it can knock out.
+                    Leverage puts up part of your bet and borrows the rest, so a win pays more — but the position can close out early if the price turns against you.
                   </p>
                 </div>
               </div>
@@ -758,7 +757,7 @@ export default function MarketsLivePage() {
                       {ghost
                         ? `Example at a ${EX_STAKE} test USDC bet — type your own amount above.`
                         : live
-                          ? 'Live venue price, refreshed every 12s. You never pay more than you bet — if the price moves while you sign, it safely rejects instead.'
+                          ? 'Live market price, refreshed every 12s. You never pay more than you bet — if the price moves while you sign, it safely rejects instead.'
                           : quoteErr
                             ? `Quote failed: ${friendlyMintAbort(quoteErr)}`
                             : address

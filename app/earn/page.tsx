@@ -163,7 +163,7 @@ export default function EarnPage() {
                       <div className="font-display text-5xl font-extrabold leading-none tracking-tight">
                         {sharePrice != null ? sharePrice.toFixed(4) : '—'}
                       </div>
-                      <div className="mt-2.5 font-mono text-[11px] uppercase tracking-[0.16em] text-gray-500">DUSDC / share</div>
+                      <div className="mt-2.5 font-mono text-[11px] uppercase tracking-[0.16em] text-gray-500">Value per share</div>
                     </div>
                   </div>
                   <div className="mt-8 grid grid-cols-2 gap-5">
@@ -178,7 +178,7 @@ export default function EarnPage() {
                   </div>
                 </>
               ) : (
-                <p className="font-mono text-xs text-gray-600 py-3">syncing vault from chain…</p>
+                <p className="font-mono text-xs text-gray-600 py-3">loading the vault…</p>
               )}
             </div>
           </div>
@@ -226,11 +226,11 @@ export default function EarnPage() {
                   {!address ? (
                     <p className="font-mono text-xs text-gray-500 py-10 text-center">Connect a wallet to see it.</p>
                   ) : plpBalance <= 0 ? (
-                    <p className="font-mono text-xs text-gray-500 py-10 text-center">No PLP yet. Supply to start earning.</p>
+                    <p className="font-mono text-xs text-gray-500 py-10 text-center">Nothing here yet. Add funds to start earning.</p>
                   ) : (
                     <>
                       <div className="font-display text-4xl font-extrabold tracking-tight">{fmt(myValue)} <span className="text-base text-gray-500 font-mono font-normal">DUSDC</span></div>
-                      <div className="font-mono text-[11px] text-gray-500 mt-1 mb-5">{fmt(myPlp)} PLP · at {sharePrice != null ? sharePrice.toFixed(4) : '—'} / share</div>
+                      <div className="font-mono text-[11px] text-gray-500 mt-1 mb-5">{fmt(myPlp)} shares · at {sharePrice != null ? sharePrice.toFixed(4) : '—'} / share</div>
                       <button onClick={doWithdrawPlp} disabled={busy === 'plp-withdraw' || plpCoins.length === 0} className="w-full border border-white/15 rounded-full py-3 font-mono text-xs uppercase tracking-wider text-vermilion hover:text-white hover:border-white/30 transition-colors disabled:opacity-50">
                         {busy === 'plp-withdraw' ? 'Withdrawing…' : 'Withdraw all'}
                       </button>
