@@ -12,6 +12,7 @@ import {
   ChartNoAxesCombined,
   ChevronDown,
   Coins,
+  MessageSquare,
   MoreHorizontal,
   Sparkles,
   Trophy,
@@ -44,6 +45,7 @@ const PRIMARY_NAV: NavLink[] = [
 ];
 
 const SECONDARY_NAV: NavLink[] = [
+  { name: 'Sensei', href: '/sensei', icon: MessageSquare },
   { name: 'X-trade', href: '/trade-from-x', icon: Twitter },
   { name: 'Parlay', href: '/parlay', icon: ChartNoAxesCombined },
   { name: 'Surface', href: '/surface', icon: Activity },
