@@ -477,7 +477,7 @@ export function drawDuel(
     const popS = p < 0.14 ? 0.62 + 0.38 * (p / 0.14) : 1;                 // subtle scale-in
     const val = Math.max(1, Math.round(Math.abs(move)));
     const label = `${above ? '+' : '−'}${val}`;                     // UP lands a gain (+ green); DOWN a loss (− red)
-    const fontPx = (5 + 16 * scale) * popS;                              // small + sheer
+    const fontPx = (4 + 12 * scale) * popS;                              // extra-small + sheer
     ctx.save();
     ctx.globalAlpha = Math.max(0, Math.min(1, a));
     ctx.font = `600 ${fontPx}px ui-monospace, "JetBrains Mono", monospace`;
