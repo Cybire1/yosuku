@@ -31,13 +31,14 @@ type NavLink = {
   name: string;
   href: string;
   icon?: LucideIcon;
+  beta?: boolean;
 };
 
 const PRIMARY_NAV: NavLink[] = [
   { name: 'Markets', href: '/markets' },
   { name: 'Feed', href: '/feed' },
   { name: 'Earn', href: '/earn' },
-  { name: 'Strategies', href: '/strategies' },
+  { name: 'Strategies', href: '/strategies', beta: true },
   { name: 'Leaderboard', href: '/leaderboard', icon: Trophy },
   { name: 'Portfolio', href: '/portfolio' },
 ];
@@ -217,6 +218,7 @@ export default function Header() {
                   data-cursor="hover"
                 >
                   {link.name}
+                  {link.beta && <sup className="nav-beta">beta</sup>}
                 </a>
               );
             })}
