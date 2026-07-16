@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { recallMemories, rememberFact } from '@/lib/memwal';
 
 // Sensei brain — server-side only. The DeepSeek key never reaches the browser.
 // Takes the chat so far + a live market snapshot the client gathered, returns a
@@ -19,7 +20,7 @@ export async function POST(req: Request) {
     );
   }
 
-  let body: { messages?: ChatMsg[]; market?: unknown };
+  let body: { messages?: ChatMsg[]; market?: unknown; userId?: string };
   try {
     body = await req.json();
   } catch {
@@ -32,6 +33,10 @@ export async function POST(req: Request) {
   if (!messages.length) return NextResponse.json({ error: 'Say something first.' }, { status: 400 });
 
   const market = body.market ?? null;
+  const userId = typeof body.userId === 'string' ? body.userId : undefined;
+  const lastUser = [...messages].reverse().find((m) => m.role === 'user')?.content ?? '';
+  // Persistent memory (MemWal) — best-effort; [] if unconfigured / anonymous / relayer paused.
+  const memories = await recallMemories(userId, lastUser);
 
   const system = [
     'You are Sensei, the trading assistant inside Yosuku — a Bitcoin prediction-market app on DeepBook Predict (Sui testnet).',
@@ -41,6 +46,7 @@ export async function POST(req: Request) {
     'This is TESTNET — test funds, not real money. Frame everything as a read/game, never as real-money financial advice.',
     'Do not use emoji. Do not invent numbers — reason only from the live market data below. If no data is present, say so plainly.',
     market ? `\nLive market snapshot (just fetched):\n${JSON.stringify(market)}` : '\nNo live market data was provided this turn.',
+    memories.length ? `\nWhat you remember about this user (use it to personalize the read; never recite it back verbatim): ${memories.map((m) => `- ${m}`).join(' ')}` : '',
   ].join(' ');
 
   try {
@@ -62,6 +68,8 @@ export async function POST(req: Request) {
     const j = await r.json();
     const reply = (j?.choices?.[0]?.message?.content ?? '').trim();
     if (!reply) return NextResponse.json({ error: 'Sensei went quiet — try again.' }, { status: 502 });
+    // best-effort: remember what this user asked about (per-user namespace; no-op if anon / relayer paused)
+    void rememberFact(userId, lastUser);
     return NextResponse.json({ reply });
   } catch {
     return NextResponse.json({ error: 'Sensei is unreachable right now — try again in a moment.' }, { status: 502 });

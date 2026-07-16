@@ -5,6 +5,7 @@
 // but the whole orb is now Sensei: tap it and an award-winning side drawer springs
 // in with the market-aware assistant (same /api/sensei brain as the /sensei page).
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useCurrentAccount } from '@mysten/dapp-kit';
 import { fetchSpot624, fetchMarkets624, inferCadence624 } from '@/lib/sui/predict624Client';
 import { BAND_USD } from '@/lib/sui/ticket624';
 
@@ -31,6 +32,7 @@ function fmt(secs: number): string {
 }
 
 export default function SenseiDock({ targetTime, now }: Props) {
+  const account = useCurrentAccount();
   const [secsLeft, setSecsLeft] = useState(0);
   const [open, setOpen] = useState(false);
   const [snapshot, setSnapshot] = useState<Snapshot>(null);
@@ -87,14 +89,14 @@ export default function SenseiDock({ targetTime, now }: Props) {
     try {
       const res = await fetch('/api/sensei', {
         method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ messages: next.map(({ role, content }) => ({ role, content })), market: snapshot }),
+        body: JSON.stringify({ messages: next.map(({ role, content }) => ({ role, content })), market: snapshot, userId: account?.address }),
       });
       const j = await res.json();
       setMsgs((m) => [...m, { role: 'assistant', content: res.ok && j.reply ? j.reply : (j.error || 'Something went wrong — try again.') }]);
     } catch {
       setMsgs((m) => [...m, { role: 'assistant', content: 'Network error — try again.' }]);
     } finally { setLoading(false); }
-  }, [msgs, snapshot, loading]);
+  }, [msgs, snapshot, loading, account?.address]);
 
   return (
     <>

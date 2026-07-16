@@ -18,6 +18,7 @@
   "dependencies": {
     "@google/genai": "^1.38.0",
     "@gsap/react": "^2.1.2",
+    "@mysten-incubation/memwal": "^0.0.7",
     "@mysten/dapp-kit": "^1.0.6",
     "@mysten/enoki": "^1.0.8",
     "@mysten/seal": "1.1.3",

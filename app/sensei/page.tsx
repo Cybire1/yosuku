@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useCurrentAccount } from '@mysten/dapp-kit';
 import Header from '@/components/Header';
 import GrainOverlay from '@/components/GrainOverlay';
 import CustomCursor from '@/components/CustomCursor';
@@ -26,6 +27,7 @@ const STARTERS = [
 ];
 
 export default function SenseiPage() {
+  const account = useCurrentAccount();
   const [snapshot, setSnapshot] = useState<Snapshot>(null);
   const [msgs, setMsgs] = useState<Msg[]>([INTRO]);
   const [input, setInput] = useState('');
@@ -68,7 +70,7 @@ export default function SenseiPage() {
       const res = await fetch('/api/sensei', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ messages: next.map(({ role, content }) => ({ role, content })), market: snapshot }),
+        body: JSON.stringify({ messages: next.map(({ role, content }) => ({ role, content })), market: snapshot, userId: account?.address }),
       });
       const j = await res.json();
       setMsgs((m) => [...m, { role: 'assistant', content: res.ok && j.reply ? j.reply : (j.error || 'Something went wrong — try again.') }]);
@@ -77,7 +79,7 @@ export default function SenseiPage() {
     } finally {
       setLoading(false);
     }
-  }, [msgs, snapshot, loading]);
+  }, [msgs, snapshot, loading, account?.address]);
 
   const nearest = snapshot?.markets[0];
 
