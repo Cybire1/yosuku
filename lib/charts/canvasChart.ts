@@ -473,10 +473,11 @@ export function drawDuel(
   const POP_LEN = 18;
   if (cyc >= CONTACT && cyc <= CONTACT + POP_LEN) {
     const p = (cyc - CONTACT) / POP_LEN;
-    const a = p < 0.14 ? p / 0.14 : Math.pow(1 - (p - 0.14) / 0.86, 1.5); // snap in, graceful out
+    const a = (p < 0.14 ? p / 0.14 : Math.pow(1 - (p - 0.14) / 0.86, 1.5)) * 0.7; // snap in, graceful out, a little sheer
     const popS = p < 0.14 ? 0.62 + 0.38 * (p / 0.14) : 1;                 // subtle scale-in
     const val = Math.max(1, Math.round(Math.abs(move)));
-    const fontPx = (6 + 20 * scale) * popS;                              // small + refined
+    const label = `${above ? '+' : '−'}${val}`;                     // UP lands a gain (+ green); DOWN a loss (− red)
+    const fontPx = (5 + 16 * scale) * popS;                              // small + sheer
     ctx.save();
     ctx.globalAlpha = Math.max(0, Math.min(1, a));
     ctx.font = `600 ${fontPx}px ui-monospace, "JetBrains Mono", monospace`;
@@ -485,7 +486,7 @@ export function drawDuel(
     ctx.shadowColor = 'rgba(4,8,7,0.7)'; ctx.shadowBlur = 3;             // soft halo, not a hard outline
     const tx = hitX + (above ? -1 : 1) * 5 * scale, ty = hitY - 6 * scale - p * 22 * scale;
     ctx.fillStyle = above ? DUEL_UP : DUEL_DOWN;
-    ctx.fillText(`+${val}`, tx, ty);
+    ctx.fillText(label, tx, ty);
     ctx.restore();
   }
 }
