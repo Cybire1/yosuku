@@ -4862,3 +4862,31 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
 [data-theme="light"] .banzuke-row .center { border-left-color: rgba(20,18,16,0.09); border-right-color: rgba(20,18,16,0.09); background: rgba(20,18,16,0.045); }
 [data-theme="light"] .bz-divider { background: rgba(20,18,16,0.05); border-top-color: rgba(20,18,16,0.09); border-bottom-color: rgba(20,18,16,0.09); }
 [data-theme="light"] .bz-portrait { border-color: rgba(20,18,16,0.14); }
+
+/* ══════════════════════════════════════════════════════════════
+   Strategies — award card + grid (de-blockified, both themes)
+   ══════════════════════════════════════════════════════════════ */
+.strat-card {
+  --gain: #34D399; --loss: #D14D57;
+  position: relative; border-radius: 18px; padding: 24px;
+  background: rgba(255,255,255,0.025);
+  border: 1px solid rgba(255,255,255,0.07);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.03), 0 12px 32px -22px rgba(0,0,0,0.85);
+  transition: transform .22s cubic-bezier(0.16,1,0.3,1), box-shadow .22s cubic-bezier(0.16,1,0.3,1), border-color .22s cubic-bezier(0.16,1,0.3,1);
+  cursor: pointer;
+}
+.strat-card:hover { transform: translateY(-3px); border-color: rgba(255,255,255,0.13); box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 24px 50px -24px rgba(0,0,0,0.95); }
+.strat-card:active { transform: translateY(-1px) scale(0.995); }
+.strat-card:focus-visible { outline: none; border-color: var(--color-vermilion); box-shadow: 0 0 0 3px rgba(224,77,38,0.25); }
+[data-theme="light"] .strat-card {
+  --gain: #0F9D6E; --loss: #B23A2A;
+  background: #FCF8F0; border-color: rgba(20,18,16,0.08);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.7), 0 16px 36px -24px rgba(70,46,20,0.30);
+}
+[data-theme="light"] .strat-card:hover { border-color: rgba(20,18,16,0.16); box-shadow: inset 0 1px 0 rgba(255,255,255,0.8), 0 24px 50px -26px rgba(70,46,20,0.36); }
+
+.strat-sigil { position: relative; border-radius: 13px; overflow: hidden; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.14); }
+[data-theme="light"] .strat-sigil { box-shadow: inset 0 0 0 1px rgba(20,18,16,0.12); }
+.strat-sigil .glyph { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--font-jp); color: rgba(255,255,255,0.9); text-shadow: 0 1px 4px rgba(0,0,0,0.5); }
+
+.strat-mem { background: rgba(224,77,38,0.12); color: var(--color-vermilion); }

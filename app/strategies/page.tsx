@@ -87,26 +87,16 @@ function GeneratedAvatar({ seed, accent }: { seed: string; accent: string }) {
   );
 }
 
-// A stock persona photo per agent (deterministic by seed) so each strategy reads as a trader,
-// not a gradient blob. Falls back to the seeded gradient if the image can't load.
+// Per-agent SIGIL — a seeded ink field with the agent's deterministic kanji overlaid. Unique per
+// on-chain id (no photo pool to collide, no fake faces), on-brand, and identical everywhere the
+// agent appears (card / drawer / trade rows) so the mark IS its identity.
 function AgentPortrait({ seed, name, size = 'card', accent = '#E04D26' }: { seed: string; name: string; size?: 'small' | 'card' | 'drawer'; accent?: string }) {
-  const [failed, setFailed] = useState(false);
-  const dimensions = size === 'small' ? 'h-8 w-8' : 'h-16 w-16';
-  const px = size === 'small' ? 96 : 160;
-  const src = `https://i.pravatar.cc/${px}?u=${encodeURIComponent(seed)}`;
+  const dim = size === 'small' ? 'h-9 w-9' : 'h-14 w-14';
+  const glyph = glyphFromAddress(seed);
   return (
-    <div
-      aria-label={`${name} avatar`}
-      className={`relative shrink-0 overflow-hidden rounded-xl border ${dimensions}`}
-      style={{ borderColor: `${accent}40` }}
-    >
-      {failed ? (
-        <GeneratedAvatar seed={seed} accent={accent} />
-      ) : (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={src} alt="" className="h-full w-full object-cover" loading="lazy" referrerPolicy="no-referrer" onError={() => setFailed(true)} />
-      )}
-      <span className="absolute bottom-1 right-1 h-1.5 w-1.5 rounded-full border border-black/70" style={{ background: accent, boxShadow: `0 0 8px ${accent}cc` }} />
+    <div aria-label={`${name} — agent mark`} className={`strat-sigil shrink-0 ${dim}`}>
+      <GeneratedAvatar seed={seed} accent={accent} />
+      <span className="glyph" style={{ fontSize: size === 'small' ? '15px' : '22px' }}>{glyph}</span>
     </div>
   );
 }
@@ -489,86 +479,61 @@ export default function StrategiesPage() {
                 </p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-px bg-white/[0.06] border border-white/[0.06]">
-                {visible.map((card, i) => {
-                  const tier = tierOf(card);
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-5">
+                {visible.map((card) => {
                   const sub = subscriptionByStrategy.get(card.id);
-                  const folio = String(i + 1).padStart(2, '0');
                   const agentName = codenameFromAddress(card.id);
                   const accent = accentForAgent(card.agent || card.id);
+                  const settled = card.realizedTrades > 0;
+                  const pnl = card.realizedPnl ?? 0;
+                  const onOpen = () => { if (sub) openDrawer(card.id); else scrollToDesk({ preventDefault() {} }); };
                   return (
                     <div
                       key={card.id}
                       id={`strategy-${card.id}`}
-                      className="group relative bg-bg p-5 flex flex-col transition-colors duration-200 hover:bg-white/[0.02]"
+                      role="button" tabIndex={0}
+                      onClick={onOpen}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(); } }}
+                      className="strat-card group flex flex-col"
                     >
-                      <div aria-hidden className="absolute top-0 left-0 right-0 h-[2px]" style={{ background: accent, opacity: 0.85 }} />
-                      <Crosshairs />
-
-                      {/* Strategy identity is seeded from the strategy object, not the shared executor. */}
-                      <div className="flex items-start gap-3">
+                      {/* who: sigil + name + instinct, with leverage as a quiet risk chip */}
+                      <div className="flex items-start gap-3.5">
                         <AgentPortrait seed={card.id} name={agentName} accent={accent} />
-                        <div className="min-w-0 flex-1 pt-1">
-                          <h3 className="font-display font-[800] text-xl text-white truncate tracking-tight leading-[1.05]">{agentName}</h3>
+                        <div className="min-w-0 flex-1 pt-0.5">
+                          <h3 className="font-display font-[800] text-[19px] text-white leading-tight tracking-tight truncate">{agentName}</h3>
+                          <p className="mt-1 font-mono text-[10.5px] text-white/45">follows the BTC trend · up or down</p>
                         </div>
-                        {/* leverage — pinned to the right of the header for balance */}
-                        <div className="shrink-0 text-right pt-0.5">
-                          <div className="font-display font-[800] text-3xl text-white leading-none tabular-nums">{card.maxLeverage}<span style={{ color: accent }}>×</span></div>
-                          <div className="font-mono text-[9px] uppercase tracking-[0.2em] text-white/40 mt-1">Most leverage</div>
-                        </div>
+                        <span className="shrink-0 mt-0.5 font-mono text-[11px] text-white/70 border border-white/12 rounded-full px-2.5 py-1 whitespace-nowrap">{card.maxLeverage}<span className="text-vermilion">×</span> <span className="text-white/40">max</span></span>
                       </div>
 
-                      {/* status + filed stamps — honest 'archived' + any memory/playbook */}
-                      <div className="flex flex-wrap items-center gap-1.5 mt-3">
-                        <span className="inline-flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-[0.18em] text-white/45 border border-white/12 px-2 py-1">
-                          <span className="h-1 w-1 rounded-full bg-white/40" /> Archived
-                        </span>
-                        {card.hasMemory && (
-                          <span className="inline-flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.18em] text-vermilion border border-vermilion/40 px-2 py-1">◈ Agent memory</span>
-                        )}
-                        {card.hasCapsule && (
-                          <span className="inline-flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.18em] text-white/40 border border-white/15 px-2 py-1">▤ Saved playbook</span>
-                        )}
-                      </div>
-
-                      {/* ruled stat table */}
-                      <div className="grid grid-cols-3 border-y border-white/[0.08] mt-5">
-                        <LedgerStat label="Most per trade" value={`${fmtDusdc(card.maxMargin)}`} />
-                        <LedgerStat label="Fee" value={card.subFee === 0 ? 'Free' : fmtDusdc(card.subFee)} divide />
-                        <LedgerStat label="Copiers" value={card.subscribers > 0 ? String(card.subscribers) : '—'} divide />
-                      </div>
-
-                      {/* record line — only when there are copy-trades (else no phantom gap) */}
-                      {card.copyTrades > 0 && (
-                        <div className="font-mono text-[10px] uppercase tracking-[0.18em] py-4 mb-1">
-                          <span className="inline-flex items-center gap-2">
-                            <span className="text-white/60 tabular-nums">{card.copyTrades} copy-trades</span>
-                            {card.realizedTrades > 0 && (
-                              <>
-                                <span className="text-white/20">·</span>
-                                <span className="text-white tabular-nums">{card.realizedPnl >= 0 ? '▲' : '▼'} {card.realizedPnl >= 0 ? '+' : ''}{fmtDusdc(card.realizedPnl)}</span>
-                              </>
-                            )}
-                          </span>
-                        </div>
-                      )}
-
-                      {/* CTA */}
-                      <div className="mt-auto">
-                        {sub ? (
-                          // Existing subscribers keep an entry point to view / withdraw their position.
-                          <button onClick={() => openDrawer(card.id)}
-                            className="w-full py-3 font-mono text-[11px] uppercase tracking-[0.14em] font-semibold border border-white/20 text-white hover:border-white/40 hover:bg-white/[0.03] transition-colors inline-flex items-center justify-center gap-2">
-                            <span className="w-1.5 h-1.5 rounded-full bg-vermilion" /> Your position — manage
-                          </button>
+                      {/* the one bold move — real net P&L for settled agents, honest 'new' otherwise */}
+                      <div className="mt-6 min-h-[42px]">
+                        {settled ? (
+                          <div className="flex items-baseline gap-2 flex-wrap">
+                            <span className="font-display font-[800] text-[30px] leading-none tabular-nums" style={{ color: pnl >= 0 ? 'var(--gain)' : 'var(--loss)' }}>
+                              {pnl >= 0 ? '+' : '−'}{fmtDusdc(Math.abs(pnl))}
+                            </span>
+                            <span className="font-mono text-[10px] text-white/40 uppercase tracking-[0.12em]">DUSDC net · {card.realizedTrades} settled</span>
+                          </div>
                         ) : (
-                          // Read-only archive: the old keeper only fans one strategy, so a new "Copy"
-                          // here would take a fee and never fill. Send new copiers to the Live Desk.
-                          <a href="#live-desk" onClick={scrollToDesk}
-                            className="group/cta w-full py-3 font-mono text-[11px] uppercase tracking-[0.14em] font-semibold border border-white/12 text-white/55 hover:text-white hover:border-white/30 transition-colors inline-flex items-center justify-center gap-2">
-                            Copy on the desk <span className="transition-transform group-hover/cta:-translate-y-0.5">↑</span>
-                          </a>
+                          <div className="font-mono text-[11px] text-white/40 uppercase tracking-[0.14em] pt-2.5">New · no track record yet</div>
                         )}
+                      </div>
+
+                      {/* status — archived a whisper, memory a quiet glow */}
+                      <div className="mt-4 flex flex-wrap items-center gap-2">
+                        <span className="inline-flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-[0.18em] text-white/35"><span className="h-1 w-1 rounded-full bg-white/30" /> archived</span>
+                        {card.hasMemory && <span className="strat-mem inline-flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-[0.16em] rounded-full px-2.5 py-1">◈ agent memory</span>}
+                        {card.hasCapsule && <span className="inline-flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-[0.16em] text-white/35">▤ saved playbook</span>}
+                      </div>
+
+                      {/* foot: quiet spec line (no table) + borderless CTA */}
+                      <div className="mt-auto pt-6 flex items-center justify-between gap-3">
+                        <span className="font-mono text-[10px] text-white/40 truncate">max {fmtDusdc(card.maxMargin)} · {card.subFee === 0 ? 'free' : `${fmtDusdc(card.subFee)} fee`}{card.subscribers > 0 ? ` · ${card.subscribers} copiers` : ''}</span>
+                        <span className={`shrink-0 font-mono text-[11px] uppercase tracking-[0.12em] inline-flex items-center gap-1.5 transition-colors ${sub ? 'text-vermilion' : 'text-white/55 group-hover:text-white'}`}>
+                          {sub ? <><span className="w-1.5 h-1.5 rounded-full bg-vermilion" /> your position</> : 'copy on the desk'}
+                          <span className="transition-transform duration-200 group-hover:translate-x-0.5">→</span>
+                        </span>
                       </div>
                     </div>
                   );
