@@ -4681,3 +4681,83 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
 [data-theme="light"] .wq-card:hover { box-shadow: 0 20px 44px -24px rgba(224,77,38,0.32); }
 [data-theme="light"] .wq-card .wq-q, [data-theme="light"] .wq-clock { color: #141210; }
 [data-theme="light"] .wq-oddsbar { background: rgba(251,113,133,0.26); }
+
+/* ══════════════════════════════════════════════════════════════
+   X-trade — yosuku.xyz/trade-from-x  (award redesign)
+   Un-drainable custody rail + focus-follows-step spine.
+   ══════════════════════════════════════════════════════════════ */
+.xt {
+  --xt-verm: #E04D26;
+  --xt-mint: #34D399;
+  --xt-ink: #f3f1ee;
+  --e-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --e-emph: cubic-bezier(0.2, 0, 0, 1);
+  --e-draw: cubic-bezier(0.65, 0, 0.35, 1);
+  position: relative;
+  isolation: isolate;
+}
+.xt-grain {
+  position: fixed; inset: 0; pointer-events: none; z-index: 40;
+  opacity: 0.05; mix-blend-mode: soft-light;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+.xt-kanji {
+  position: absolute; z-index: 0; pointer-events: none; user-select: none;
+  writing-mode: vertical-rl; font-family: var(--font-jp); font-weight: 900;
+  line-height: 0.86; color: transparent;
+  -webkit-text-stroke: 1px rgba(224, 77, 38, 0.10);
+}
+
+/* boot reveals */
+@keyframes xt-up { from { opacity: 0; transform: translateY(11px); } to { opacity: 1; transform: none; } }
+.xt-boot { opacity: 0; animation: xt-up 0.62s var(--e-out) both; }
+@keyframes xt-flare { 0% { color: #fff; } 100% { color: var(--xt-verm); } }
+.xt-flare { animation: xt-flare 0.7s var(--e-out) 0.5s both; }
+.xt-ul { transform-origin: left; transform: scaleX(0); animation: xt-draw-ul 0.55s var(--e-draw) 0.95s both; }
+@keyframes xt-draw-ul { to { transform: scaleX(1); } }
+
+/* spine + nodes */
+.xt-spine-fill { transform-origin: top; transition: transform 0.6s var(--e-emph); }
+@keyframes xt-pulse { 0% { box-shadow: 0 0 0 0 rgba(224,77,38,0.30); } 100% { box-shadow: 0 0 0 9px rgba(224,77,38,0); } }
+.xt-node-active { animation: xt-pulse 1.9s var(--e-out) infinite; }
+.xt-check path { stroke-dasharray: 24; stroke-dashoffset: 24; animation: xt-draw 0.42s var(--e-draw) 0.05s both; }
+@keyframes xt-draw { to { stroke-dashoffset: 0; } }
+
+/* custody rail */
+.xt-flow  { stroke-dasharray: 2.5 6; animation: xt-flow 1.05s linear infinite; }
+.xt-flowm { stroke-dasharray: 2.5 6; animation: xt-flow 1.25s linear infinite; }
+@keyframes xt-flow { to { stroke-dashoffset: -17; } }
+.xt-seal { transform-origin: center; animation: xt-shake 6s var(--e-out) infinite; }
+@keyframes xt-shake {
+  0%,36%,48%,100% { transform: translateX(0); }
+  39% { transform: translateX(-2.5px); } 42% { transform: translateX(2.5px); } 45% { transform: translateX(-1.5px); }
+}
+.xt-node-draw { stroke-dasharray: 300; stroke-dashoffset: 300; animation: xt-draw 0.9s var(--e-draw) 0.7s both; }
+
+/* copy-code tactile */
+.xt-copyline { transform-origin: left; transform: scaleX(0); }
+.xt-copyline.on { animation: xt-draw-ul 0.24s var(--e-out) both; }
+.xt-bloom { animation: xt-bloom 0.6s var(--e-emph) both; }
+@keyframes xt-bloom { 0% { box-shadow: 0 0 0 0 rgba(52,211,153,0); } 45% { box-shadow: 0 0 0 7px rgba(52,211,153,0.28); } 100% { box-shadow: 0 0 0 0 rgba(52,211,153,0); } }
+
+/* magnetic-ish CTA lift (transform via inline var) */
+.xt-cta { transition: transform 0.18s var(--e-out), filter 0.18s var(--e-out); }
+.xt-cta:hover { filter: brightness(1.07); }
+.xt-cta:active { transform: translateY(1px) scale(0.99); }
+
+/* focus ring that clears both the canvas and the darker cards */
+.xt :focus-visible { outline: none; box-shadow: 0 0 0 1px #08080b, 0 0 0 3px var(--xt-mint); border-radius: 8px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .xt-boot { opacity: 1; animation: none; }
+  .xt-flare { animation: none; color: var(--xt-verm); }
+  .xt-ul { transform: scaleX(1); animation: none; }
+  .xt-node-active { animation: none; }
+  .xt-check path { stroke-dashoffset: 0; animation: none; }
+  .xt-flow, .xt-flowm, .xt-seal, .xt-node-draw { animation: none; stroke-dashoffset: 0; }
+}
+
+/* X-trade payoff word — fade-up + white→vermilion flare in ONE animation (no shorthand clash) */
+@keyframes xt-payoff { from { opacity: 0; transform: translateY(11px); color: #fff; } to { opacity: 1; transform: none; color: var(--xt-verm); } }
+.xt-payoff { opacity: 0; animation: xt-payoff 0.72s var(--e-out) 0.3s both; }
+@media (prefers-reduced-motion: reduce) { .xt-payoff { opacity: 1; animation: none; color: var(--xt-verm); } }
