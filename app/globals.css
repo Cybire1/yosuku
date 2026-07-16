@@ -4664,17 +4664,3 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
 
 [data-theme="light"] .wq-card { background: #fff; border-color: rgba(20,18,16,0.1); }
 [data-theme="light"] .wq-card .wq-q, [data-theme="light"] .wq-clock { color: #141210; }
-
-/* Chart ↔ Words view toggle (word market lives under Markets) */
-.mkt-viewtoggle {
-  display: inline-flex; gap: 3px; padding: 3px; margin: 10px 0 4px;
-  border: 1px solid rgba(255,255,255,0.1); border-radius: 999px; background: rgba(255,255,255,0.02);
-}
-.vt-pill {
-  font-family: var(--font-mono); font-size: 12px; font-weight: 600; letter-spacing: 0.06em;
-  text-transform: uppercase; color: var(--gray-500); padding: 6px 16px; border-radius: 999px;
-  cursor: pointer; text-decoration: none; transition: color 160ms var(--ease), background 160ms var(--ease);
-}
-.vt-pill:hover { color: var(--white); }
-.vt-pill.active { color: var(--white); background: var(--vermilion); }
-[data-theme="light"] .vt-pill.active { color: #FBF7EE; }

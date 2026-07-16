@@ -27,6 +27,7 @@ import GrainOverlay from '@/components/GrainOverlay';
 import MarketCard from '@/components/MarketCard';
 import MarketRoom from '@/components/MarketRoom';
 import SectionHeader from '@/components/SectionHeader';
+import WordMarketBoard from '@/components/WordMarketBoard';
 import TheBell from '@/components/TheBell';
 import Tutorial from '@/components/Tutorial';
 import Ticket624Drawer from '@/components/Ticket624Drawer';
@@ -570,12 +571,6 @@ export default function MarketsPage() {
             <span style={{ color: 'var(--white)' }}>Markets</span>
           </div>
 
-          {/* Chart ↔ Words — the word market lives under Markets, not as its own nav item */}
-          <div className="mkt-viewtoggle" role="tablist" aria-label="Market view">
-            <span className="vt-pill active" role="tab" aria-selected="true">Chart</span>
-            <a href="/words" className="vt-pill" role="tab" data-cursor="hover">Words</a>
-          </div>
-
           <div className="hero-grid hero-grid-mini lg:![grid-template-columns:minmax(0,1fr)_400px] lg:!items-start">
             {/* Hero chart — the soonest live market */}
             <div className="hero-chart">
@@ -717,6 +712,12 @@ export default function MarketsPage() {
               </div>
             </section>
           )}
+
+          {/* Word markets — the same live markets, said in plain language */}
+          <section className="markets-section">
+            <SectionHeader number="02" title="Say it in words" jp="言葉" desc="The same live markets, as plain-language calls with a scheduled close." />
+            <WordMarketBoard />
+          </section>
 
         </div>
       </main>
