@@ -20,7 +20,7 @@ export async function POST(req: Request) {
     );
   }
 
-  let body: { messages?: ChatMsg[]; market?: unknown; userId?: string };
+  let body: { messages?: ChatMsg[]; market?: unknown; userId?: string; restless?: boolean };
   try {
     body = await req.json();
   } catch {
@@ -34,6 +34,7 @@ export async function POST(req: Request) {
 
   const market = body.market ?? null;
   const userId = typeof body.userId === 'string' ? body.userId : undefined;
+  const restless = body.restless === true; // client flags rapid-fire asking — a tilt cue
   const lastUser = [...messages].reverse().find((m) => m.role === 'user')?.content ?? '';
   // Persistent memory (MemWal) — best-effort; [] if unconfigured / anonymous / relayer paused.
   const memories = await recallMemories(userId, lastUser);
@@ -45,6 +46,8 @@ export async function POST(req: Request) {
     'You may suggest a side and the reasoning, call out when it is a genuine coin-flip, and always name the risk. Never guarantee an outcome.',
     'This is TESTNET — test funds, not real money. Frame everything as a read/game, never as real-money financial advice.',
     'Do not use emoji. Do not invent numbers — reason only from the live market data below. If no data is present, say so plainly.',
+    'THE BRAKE (your most important job): you are the ONE voice in this app allowed to say "don\'t take this one." If the user is chasing losses, rapid-firing bets, sounds frustrated or desperate ("need to win it back", "again", "one more"), or this conversation or their remembered history shows a recent losing streak, SLOW THEM DOWN: name it plainly and kindly, offer to sit the next round out together, and NEVER encourage chasing or "making it back." Coaching them down beats another bet — that is the point of you.',
+    restless ? 'SIGNAL: this user is asking rapidly in a short window — a tilt cue. Gently check their pace before you give the read.' : '',
     market ? `\nLive market snapshot (just fetched):\n${JSON.stringify(market)}` : '\nNo live market data was provided this turn.',
     memories.length ? `\nWhat you remember about this user (use it to personalize the read; never recite it back verbatim): ${memories.map((m) => `- ${m}`).join(' ')}` : '',
   ].join(' ');

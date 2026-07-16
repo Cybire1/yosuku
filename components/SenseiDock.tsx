@@ -40,6 +40,7 @@ export default function SenseiDock({ targetTime, now }: Props) {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const sendTimes = useRef<number[]>([]);
 
   // ── countdown (drives the draining ring) ──
   useEffect(() => {
@@ -84,12 +85,15 @@ export default function SenseiDock({ targetTime, now }: Props) {
   const send = useCallback(async (text: string) => {
     const t = text.trim();
     if (!t || loading) return;
+    const nowMs = Date.now();
+    sendTimes.current = [...sendTimes.current, nowMs].filter((x) => nowMs - x < 180_000);
+    const restless = sendTimes.current.length >= 4; // 4+ asks in 3 min → tilt cue for the Brake
     const next: Msg[] = [...msgs, { role: 'user', content: t }];
     setMsgs(next); setInput(''); setLoading(true);
     try {
       const res = await fetch('/api/sensei', {
         method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ messages: next.map(({ role, content }) => ({ role, content })), market: snapshot, userId: account?.address }),
+        body: JSON.stringify({ messages: next.map(({ role, content }) => ({ role, content })), market: snapshot, userId: account?.address, restless }),
       });
       const j = await res.json();
       setMsgs((m) => [...m, { role: 'assistant', content: res.ok && j.reply ? j.reply : (j.error || 'Something went wrong — try again.') }]);
