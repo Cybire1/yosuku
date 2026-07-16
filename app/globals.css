@@ -192,6 +192,11 @@ body.urgent::before {
 .nav-link:hover { color: var(--white); letter-spacing: 0.04em; }
 .nav-link:hover::after { transform: scaleX(1); }
 .nav-link.active { color: var(--white); }
+.nav-beta {
+  font-family: var(--font-mono); font-size: 7.5px; font-weight: 600;
+  letter-spacing: 0.06em; text-transform: uppercase; color: var(--vermilion);
+  margin-left: 3px; vertical-align: super; top: -0.1em; opacity: 0.95;
+}
 .nav-link.active::after { transform: scaleX(1); }
 
 .nav-more { position: relative; display: flex; align-items: center; }
@@ -4665,16 +4670,42 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
 .wq-yeslead b { color: #34D399; font-weight: 700; }
 .wq-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: auto; }
 .wq-btn {
+  position: relative; overflow: hidden;
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
   padding: 13px 16px; border-radius: 13px; cursor: pointer; border: 1px solid transparent;
-  font-family: var(--font-display); transition: all 160ms var(--ease);
+  font-family: var(--font-display); will-change: transform;
+  transition: transform 240ms cubic-bezier(.34,1.56,.64,1), box-shadow 220ms var(--ease),
+              background 200ms var(--ease), border-color 200ms var(--ease);
 }
-.wq-btn .wq-side { font-weight: 700; font-size: 15px; }
-.wq-btn .wq-cents { font-family: var(--font-mono); font-weight: 600; font-size: 14px; opacity: 0.9; }
+/* a soft gloss sweeps across once on hover — the "alive" cue */
+.wq-btn::before {
+  content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background: linear-gradient(105deg, transparent 32%, rgba(255,255,255,0.55) 50%, transparent 68%);
+  transform: translateX(-130%); opacity: 0;
+  transition: transform 640ms var(--ease), opacity 260ms var(--ease);
+}
+.wq-btn:hover::before { transform: translateX(130%); opacity: 0.6; }
+.wq-btn:hover { transform: translateY(-2px); }
+.wq-btn:active { transform: translateY(0) scale(0.972); transition-duration: 90ms; }
+.wq-btn:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+.wq-btn .wq-side { font-weight: 700; font-size: 15px; transition: transform 220ms var(--ease); }
+.wq-btn .wq-cents {
+  font-family: var(--font-mono); font-weight: 600; font-size: 14px; opacity: 0.9;
+  transition: transform 220ms var(--ease), opacity 200ms var(--ease);
+}
+.wq-btn:hover .wq-side { transform: translateX(2px); }
+.wq-btn:hover .wq-cents { transform: scale(1.09); opacity: 1; }
 .wq-btn.yes { background: linear-gradient(180deg, rgba(52,211,153,0.15), rgba(52,211,153,0.05)); border-color: rgba(52,211,153,0.4); color: #34D399; }
-.wq-btn.yes:hover { background: rgba(52,211,153,0.22); border-color: rgba(52,211,153,0.7); }
+.wq-btn.yes:hover { background: rgba(52,211,153,0.24); border-color: rgba(52,211,153,0.78);
+  box-shadow: 0 10px 24px -12px rgba(52,211,153,0.6), inset 0 0 0 1px rgba(52,211,153,0.12); }
 .wq-btn.no { background: linear-gradient(180deg, rgba(251,113,133,0.13), rgba(251,113,133,0.05)); border-color: rgba(251,113,133,0.36); color: #FB7185; }
-.wq-btn.no:hover { background: rgba(251,113,133,0.2); border-color: rgba(251,113,133,0.62); }
+.wq-btn.no:hover { background: rgba(251,113,133,0.22); border-color: rgba(251,113,133,0.7);
+  box-shadow: 0 10px 24px -12px rgba(251,113,133,0.55), inset 0 0 0 1px rgba(251,113,133,0.12); }
+@media (prefers-reduced-motion: reduce) {
+  .wq-btn, .wq-btn::before, .wq-btn .wq-side, .wq-btn .wq-cents { transition-duration: 1ms; }
+  .wq-btn:hover { transform: none; }
+  .wq-btn:hover::before { opacity: 0; }
+}
 .words-foot { margin-top: 44px; font-family: var(--font-mono); font-size: 11.5px; color: var(--gray-600); line-height: 1.6; max-width: 70ch; }
 
 [data-theme="light"] .wq-card { background: linear-gradient(180deg,#ffffff,#faf5ec); border-color: rgba(20,18,16,0.1); box-shadow: 0 1px 3px rgba(20,18,16,0.05); }
@@ -4809,3 +4840,25 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
 .earn-ghost:hover { border-color: rgba(255,255,255,0.30); }
 [data-theme="light"] .earn-ghost { border-color: rgba(20,18,16,0.2); }
 [data-theme="light"] .earn-ghost:hover { border-color: rgba(224,77,38,0.5); }
+
+/* ══════════════════════════════════════════════════════════════
+   Leaderboard — light-mode surfaces (podium 2nd/3rd + banzuke field
+   were dark-only: white-opacity borders + rgba(0,0,0,·) chips/bands
+   went invisible or muddy on cream).
+   ══════════════════════════════════════════════════════════════ */
+[data-theme="light"] .podium-spot { border-color: rgba(20,18,16,0.12); background: rgba(255,255,255,0.5); box-shadow: 0 18px 40px -30px rgba(20,18,16,0.16); }
+[data-theme="light"] .podium-spot:hover { border-color: rgba(20,18,16,0.28); }
+[data-theme="light"] .podium-rank { color: rgba(20,18,16,0.06); }
+[data-theme="light"] .podium-stats { border-top-color: rgba(20,18,16,0.10); }
+[data-theme="light"] .podium-stats .item { border-right-color: rgba(20,18,16,0.08); }
+[data-theme="light"] .podium-portrait { border-color: rgba(20,18,16,0.14); }
+
+[data-theme="light"] .banzuke-wrap { border-color: rgba(20,18,16,0.09); background: repeating-linear-gradient(0deg, transparent 0 39px, rgba(20,18,16,0.022) 39px 40px); }
+[data-theme="light"] .banzuke-strip { background: rgba(20,18,16,0.02); border-bottom-color: rgba(20,18,16,0.09); }
+[data-theme="light"] .banzuke-cols-head { border-bottom-color: rgba(20,18,16,0.10); }
+[data-theme="light"] .banzuke-cols-head .center { border-left-color: rgba(20,18,16,0.09); border-right-color: rgba(20,18,16,0.09); }
+[data-theme="light"] .banzuke-row { border-bottom-color: rgba(20,18,16,0.06); }
+[data-theme="light"] .banzuke-row:hover { background: rgba(20,18,16,0.03); }
+[data-theme="light"] .banzuke-row .center { border-left-color: rgba(20,18,16,0.09); border-right-color: rgba(20,18,16,0.09); background: rgba(20,18,16,0.045); }
+[data-theme="light"] .bz-divider { background: rgba(20,18,16,0.05); border-top-color: rgba(20,18,16,0.09); border-bottom-color: rgba(20,18,16,0.09); }
+[data-theme="light"] .bz-portrait { border-color: rgba(20,18,16,0.14); }
