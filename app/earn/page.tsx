@@ -148,8 +148,8 @@ export default function EarnPage() {
           <div className="hero-grid">
             <div className="hero-left">
               <h1 className="page-title">
-                Earn real<br />
-                <span className="accent">yield</span>.
+                Earn the<br />
+                <span className="accent">spread</span>.
               </h1>
             </div>
 
@@ -165,10 +165,6 @@ export default function EarnPage() {
                       </div>
                       <div className="mt-2.5 font-mono text-[11px] uppercase tracking-[0.16em] text-gray-500">DUSDC / share</div>
                     </div>
-                    <span className="mt-1 flex shrink-0 items-center gap-1.5 font-mono text-[9px] uppercase tracking-[0.2em] text-gray-600">
-                      <span className="h-1.5 w-1.5 rounded-full bg-vermilion" style={{ boxShadow: '0 0 8px var(--vermilion)' }} />
-                      on-chain
-                    </span>
                   </div>
                   <div className="mt-8 grid grid-cols-2 gap-5">
                     <div>
@@ -217,7 +213,7 @@ export default function EarnPage() {
                           <button key={a} onClick={() => setPlpAmount(a)} className={`rounded-lg py-2 font-mono text-xs border transition-all ${plpAmount === a ? 'bg-vermilion/15 border-vermilion/50 text-white' : 'border-white/10 text-gray-500 hover:text-gray-300'}`}>{a}</button>
                         ))}
                       </div>
-                      <button onClick={doDepositPlp} disabled={busy === 'plp-deposit'} className="w-full bg-vermilion text-white font-semibold rounded-full py-3.5 hover:bg-vermilion-d active:scale-[0.98] transition-all disabled:opacity-60">
+                      <button onClick={doDepositPlp} disabled={busy === 'plp-deposit'} className="block w-full sm:w-auto sm:mx-auto sm:px-16 bg-vermilion text-white font-semibold rounded-full py-3.5 hover:bg-vermilion-d active:scale-[0.98] transition-all disabled:opacity-60">
                         {busy === 'plp-deposit' ? 'Supplying…' : 'Supply DUSDC'}
                       </button>
                     </>

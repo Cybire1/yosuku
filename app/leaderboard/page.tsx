@@ -39,7 +39,7 @@ export default function LeaderboardPage() {
 
   const rankings = leaderboard?.rankings ?? [];
   const meta = leaderboard?.meta ?? {
-    period: '24h' as const,
+    period: '7d' as const,
     windowStartMs: 0,
     windowEndMs: 0,
     rankedTraders: 0,
@@ -151,14 +151,14 @@ export default function LeaderboardPage() {
                 {lbLoading
                   ? 'Reading on-chain trade data…'
                   : meta.rankedTraders > 0
-                    ? `${meta.rankedTraders.toLocaleString()} traders closed positions in the last 24 hours.`
-                    : 'No positions have closed in the last 24 hours yet — the board fills as traders redeem settled bets.'}
-                {' '}Ranks use realized P&amp;L: redemption payout minus FIFO-matched entry cost.
+                    ? `${meta.rankedTraders.toLocaleString()} traders closed positions in the last 7 days.`
+                    : 'No positions have closed in the last 7 days yet — the board fills as traders redeem settled bets.'}
+                {' '}Ranks use realized P&amp;L: redemption payout minus entry cost.
               </p>
             </div>
             <div className="lb-meta-col">
               <div>
-                <div>Ranked traders · 24H</div>
+                <div>Ranked traders · 7D</div>
                 <div className="big">{meta.rankedTraders > 0 ? meta.rankedTraders.toLocaleString() : '\u2014'}</div>
               </div>
               <div>
@@ -170,17 +170,17 @@ export default function LeaderboardPage() {
                 <div className="big">{sealStr}</div>
               </div>
               <div className="stamp">
-                24H BOARD
+                7D BOARD
                 <div style={{ marginTop: 4, fontSize: '8px' }}>ROLLING</div>
               </div>
             </div>
           </div>
 
-          {/* One honest scope: BTC positions closed in the rolling 24-hour window. */}
+          {/* One honest scope: BTC positions closed in the rolling 7-day window. */}
           <div className="lb-filter-bar">
             <div className="asset-tabs">
               <span className="asset-tab active"><span className="glyph">₿</span> BTC</span>
-              <span className="asset-tab">Last 24 hours</span>
+              <span className="asset-tab">Last 7 days</span>
             </div>
             <div className="lb-filter-meta">
               {meta.complete ? `${meta.closedCalls.toLocaleString()} realized calls · complete window` : 'indexing recent closes'}
@@ -205,7 +205,7 @@ export default function LeaderboardPage() {
               <div style={{ fontSize: '30px', marginBottom: '14px', opacity: 0.5 }}>◷</div>
               No realized calls in this window yet.<br />
               <span style={{ color: 'var(--gray-600)' }}>
-                The board ranks traders by realized P&amp;L, so names appear once settled positions are redeemed. Check back after the next few bells settle.
+                The board ranks traders by realized P&amp;L, so names appear once settled positions are redeemed. Check back after the next few rounds settle.
               </span>
             </div>
           )}
@@ -216,7 +216,7 @@ export default function LeaderboardPage() {
               <SectionHeader
                 number="01"
                 title="The podium"
-                desc="Top three traders by realized P&L over the last 24 hours."
+                desc="Top three traders by realized P&L over the last 7 days."
                 meta="live · refreshes automatically"
               />
 
@@ -247,13 +247,13 @@ export default function LeaderboardPage() {
                 number="02"
                 title="The field"
                 desc="Ranks four onward, ordered by net realized P&L."
-                meta="rolling 24H"
+                meta="rolling 7D"
               />
 
               <div className="banzuke-wrap">
                 <div className="banzuke-strip">
                   <span>RANKS 04-50</span>
-                  <span className="center">24H · REALIZED P&amp;L</span>
+                  <span className="center">7D · REALIZED P&amp;L</span>
                   <span>ON-CHAIN CLOSES</span>
                 </div>
                 <div className="banzuke-cols-head">
@@ -324,7 +324,7 @@ export default function LeaderboardPage() {
                     <div className="you-portrait">{glyphFromAddress(address)}</div>
                     <div className="you-text">
                       <span className="name">You · {formatAddress(address)}</span>
-                      <span className="meta">{userRankData ? `top ${Math.round((userRankData.rank / Math.max(1, meta.rankedTraders)) * 100)}%` : 'no realized calls in the last 24H'}</span>
+                      <span className="meta">{userRankData ? `top ${Math.round((userRankData.rank / Math.max(1, meta.rankedTraders)) * 100)}%` : 'no realized calls in the last 7D'}</span>
                     </div>
                   </div>
                   <div className="you-stats">

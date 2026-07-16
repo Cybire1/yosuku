@@ -548,15 +548,6 @@ export default function MarketsPage() {
     return () => window.cancelAnimationFrame(raf);
   }, [liveSeries, heroStrike]);
 
-  // fade the scroll cue once scrolling starts
-  const [scrolled, setScrolled] = useState(false);
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 60);
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
-
-
   const nextExpiry = markets[0]?.expiry;
 
   return (
@@ -577,6 +568,12 @@ export default function MarketsPage() {
             <a href="/" data-cursor="hover">Home</a>
             <span className="sep">/</span>
             <span style={{ color: 'var(--white)' }}>Markets</span>
+          </div>
+
+          {/* Chart ↔ Words — the word market lives under Markets, not as its own nav item */}
+          <div className="mkt-viewtoggle" role="tablist" aria-label="Market view">
+            <span className="vt-pill active" role="tab" aria-selected="true">Chart</span>
+            <a href="/words" className="vt-pill" role="tab" data-cursor="hover">Words</a>
           </div>
 
           <div className="hero-grid hero-grid-mini lg:![grid-template-columns:minmax(0,1fr)_400px] lg:!items-start">
@@ -607,14 +604,18 @@ export default function MarketsPage() {
                     </div>
                   )}
                 </div>
-                {heroMarket && (
-                  <div className="text-right shrink-0">
-                    <span className="font-mono text-[9px] tracking-[0.16em] uppercase text-gray-600 block mb-1">Settles in</span>
-                    <span className="font-mono text-2xl sm:text-3xl font-semibold text-white tabular-nums">
-                      {heroMsLeft != null ? fmtCountdown(heroMsLeft) : '—'}
-                    </span>
-                  </div>
-                )}
+                {heroMarket && (() => {
+                  // under a minute to settle → flip the clock to vermilion (urgent)
+                  const heroUrgent = heroMsLeft != null && heroMsLeft < 60_000;
+                  return (
+                    <div className="text-right shrink-0">
+                      <span className={`font-mono text-[9px] tracking-[0.16em] uppercase block mb-1 ${heroUrgent ? 'text-vermilion/70' : 'text-gray-600'}`}>Settles in</span>
+                      <span className={`font-mono text-2xl sm:text-3xl font-semibold tabular-nums ${heroUrgent ? 'text-vermilion' : 'text-white'}`}>
+                        {heroMsLeft != null ? fmtCountdown(heroMsLeft) : '—'}
+                      </span>
+                    </div>
+                  );
+                })()}
               </div>
               <div className="hero-chart-canvas">
                 <canvas ref={heroCanvasRef} />
@@ -667,15 +668,6 @@ export default function MarketsPage() {
             />
           </div>
         </div>
-        <button
-          type="button"
-          className={`scroll-cue${scrolled ? ' gone' : ''}`}
-          aria-label="Scroll to markets"
-          onClick={() => window.scrollTo({ top: window.innerHeight * 0.78, behavior: 'smooth' })}
-        >
-          <span className="scroll-cue-label">Markets below</span>
-          <span className="scroll-cue-track"><span className="scroll-cue-dot" /></span>
-        </button>
       </section>
 
       {/* Main content */}

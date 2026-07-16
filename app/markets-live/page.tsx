@@ -205,6 +205,23 @@ export default function MarketsLivePage() {
     return () => clearInterval(id);
   }, [loadMarkets]);
 
+  // deep-link from /words: ?m=<marketId>&dir=<up|down> preselects the market + side
+  const preselectDone = useRef(false);
+  useEffect(() => {
+    if (preselectDone.current || markets.length === 0 || typeof window === 'undefined') return;
+    const p = new URLSearchParams(window.location.search);
+    const m = p.get('m');
+    if (!m) { preselectDone.current = true; return; }
+    const mk = markets.find((x) => x.id === m);
+    if (!mk) return; // wait for the next poll to land the market
+    preselectDone.current = true;
+    tierAutoPicked.current = true;
+    setTier(mk.cadence);
+    setSelectedId(mk.id);
+    const d = p.get('dir');
+    if (d === 'up' || d === 'down') setDir(d);
+  }, [markets]);
+
   // spot: load now, poll 5s
   useEffect(() => {
     loadSpot();

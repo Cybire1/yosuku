@@ -334,6 +334,7 @@ body.urgent::before {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   border: 0; cursor: pointer;
   font-family: var(--font-body); font-size: 13px; font-weight: 600; letter-spacing: 0.02em;
+  line-height: 1; /* body inherits 1.6 → asymmetric line box floats the label high in the pill */
   border-radius: 999px; padding: 11px 22px;
   transition: transform 180ms var(--ease), box-shadow 220ms var(--ease), background 220ms var(--ease), color 220ms var(--ease), border-color 220ms var(--ease);
 }
@@ -358,7 +359,7 @@ body.urgent::before {
 /* ───────── Bell — sticky round timer ───────── */
 .bell {
   position: fixed;
-  bottom: 28px; right: 28px;
+  bottom: 48px; right: 28px;
   z-index: 700;
   width: 92px; height: 92px;
   border-radius: 50%;
@@ -385,6 +386,16 @@ body.urgent::before {
 .bell-time { font-family: var(--font-mono); font-size: 14px; font-weight: 600; color: var(--white); letter-spacing: -0.02em; }
 .bell-jp { font-family: var(--font-jp); font-size: 9px; color: var(--gray-600); }
 .bell.urgent .bell-time { color: var(--vermilion); }
+
+/* SettleClock — the branded settlement ring. Under a minute it breathes a soft vermilion
+   glow so the closing moment is felt, not just read. */
+.settle-clock .sc-track { stroke: rgba(255,255,255,0.13); }
+[data-theme="light"] .settle-clock .sc-track { stroke: rgba(20,18,16,0.16); }
+.settle-clock--urgent { animation: settleClockPulse 1.7s var(--ease) infinite; }
+@keyframes settleClockPulse {
+  0%, 100% { filter: drop-shadow(0 0 0 rgba(224,77,38,0)); }
+  50%      { filter: drop-shadow(0 0 11px rgba(224,77,38,0.38)); }
+}
 
 /* Collapsed pill — while the card list is in view the orb shrinks to a slim,
    edge-docked countdown so it never covers a card's UP/DOWN / Room controls.
@@ -1000,9 +1011,17 @@ body.urgent::before {
 .tape-label .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--vermilion); animation: pulseDot 1.4s var(--ease) infinite; }
 
 /* ───────── Section header — torii style ───────── */
-.markets-section { padding: 28px 0 0; }
-/* markets hero sits closer to the Live-now grid — the big cream gap read as empty */
-.markets-hero { padding-bottom: 20px; }
+.markets-section { padding: 44px 0 0; }
+/* markets hero sits a comfortable step above the Live-now grid — the scroll cue
+   that used to fill this gap is gone, so the section carries the spacing itself */
+.markets-hero { padding-bottom: 16px; }
+/* On the markets page the section headline runs smaller + tighter than the
+   default (30px) — "Live now" was reading oversized above the card grid. */
+.markets-section .section-title-2 { font-size: 24px; }
+/* torii mark + 01 sit on the SAME line as the title and the cadence chips
+   (the default flex-end floats the tall index column above the row) */
+.markets-section .section-head { margin-bottom: 22px; padding-bottom: 13px; align-items: center; }
+.markets-section .section-index { flex-direction: row; align-items: center; gap: 9px; padding-bottom: 0; }
 .section-head {
   display: flex; align-items: flex-end; justify-content: space-between;
   gap: 24px;
@@ -4575,3 +4594,87 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
 @media (max-width: 720px) {
   .feed-snap, .feed-chrome { top: 66px; } /* slim mobile marquee (20) + header (46) */
 }
+
+/* ───────── Word markets (/words) ───────── */
+.words-wrap { padding: 120px 0 96px; min-height: 100vh; }
+@media (max-width: 720px) { .words-wrap { padding: 92px 0 120px; } }
+.words-hero { padding: 8px 0 40px; }
+.words-eyebrow {
+  font-family: var(--font-mono); font-size: 11px; font-weight: 600;
+  letter-spacing: 0.22em; text-transform: uppercase; color: var(--gray-500);
+  display: flex; align-items: center; gap: 10px;
+}
+.words-title {
+  font-family: var(--font-display); font-weight: 800;
+  font-size: clamp(2.4rem, 5.4vw, 4.4rem); line-height: 0.98; letter-spacing: -0.04em;
+  color: var(--white); margin: 16px 0 18px;
+}
+.words-title .accent { color: var(--vermilion); font-style: italic; font-family: 'Noto Serif JP', Georgia, serif; font-weight: 700; }
+.words-sub { color: var(--gray-400); font-size: 16px; max-width: 60ch; line-height: 1.6; }
+.words-spot {
+  font-family: var(--font-mono); font-size: 13px; color: var(--white);
+  border: 1px solid rgba(255,255,255,0.12); border-radius: 999px; padding: 3px 10px; margin-left: 6px; white-space: nowrap;
+}
+.words-empty { padding: 80px 0; text-align: center; font-family: var(--font-mono); font-size: 13px; color: var(--gray-500); }
+
+.words-section { margin-top: 40px; }
+.words-sechead {
+  display: flex; align-items: baseline; gap: 14px; padding-bottom: 14px; margin-bottom: 20px;
+  border-bottom: 1px solid rgba(255,255,255,0.08); position: relative;
+}
+.words-sechead::after { content: ''; position: absolute; left: 0; bottom: -1px; width: 40px; height: 2px; background: var(--vermilion); }
+.words-sec-jp { font-family: 'Noto Serif JP', serif; font-size: 15px; color: var(--gray-600); }
+.words-sec-label { font-family: var(--font-display); font-weight: 700; font-size: 22px; letter-spacing: -0.02em; color: var(--white); }
+.words-sec-count { font-family: var(--font-mono); font-size: 12px; color: var(--gray-500); }
+
+.words-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; }
+.wq-card {
+  position: relative; display: flex; flex-direction: column;
+  border: 1px solid rgba(255,255,255,0.1); border-radius: 18px; padding: 20px 20px 16px;
+  background: radial-gradient(120% 90% at 50% -20%, #16110d 0%, #0d0b09 60%, #0a0807 100%);
+  transition: border-color 200ms var(--ease), transform 200ms var(--ease);
+}
+.wq-card:hover { border-color: rgba(255,255,255,0.22); transform: translateY(-2px); }
+.wq-top { display: flex; align-items: center; gap: 9px; }
+.wq-chip {
+  display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%;
+  border: 1px solid rgba(224,77,38,0.45); color: var(--vermilion); font-family: var(--font-mono); font-size: 13px;
+}
+.wq-meta { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--gray-500); }
+.wq-clock { margin-left: auto; font-family: var(--font-mono); font-size: 13px; font-weight: 600; color: var(--white); font-variant-numeric: tabular-nums; }
+.wq-clock.urgent { color: var(--vermilion); }
+.wq-q {
+  font-family: var(--font-display); font-weight: 700; font-size: 21px; line-height: 1.24;
+  letter-spacing: -0.02em; color: var(--white); margin: 16px 0 8px; min-height: 2.4em; text-wrap: balance;
+}
+.wq-close { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--gray-600); margin-bottom: 16px; }
+.wq-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: auto; }
+.wq-btn {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 12px 15px; border-radius: 12px; cursor: pointer; border: 1px solid transparent;
+  font-family: var(--font-display); transition: all 160ms var(--ease);
+}
+.wq-btn .wq-side { font-weight: 700; font-size: 15px; }
+.wq-btn .wq-cents { font-family: var(--font-mono); font-weight: 600; font-size: 14px; opacity: 0.85; }
+.wq-btn.yes { background: rgba(52,211,153,0.1); border-color: rgba(52,211,153,0.35); color: #34D399; }
+.wq-btn.yes:hover { background: rgba(52,211,153,0.18); border-color: rgba(52,211,153,0.6); }
+.wq-btn.no { background: rgba(251,113,133,0.09); border-color: rgba(251,113,133,0.32); color: #FB7185; }
+.wq-btn.no:hover { background: rgba(251,113,133,0.16); border-color: rgba(251,113,133,0.55); }
+.words-foot { margin-top: 44px; font-family: var(--font-mono); font-size: 11.5px; color: var(--gray-600); line-height: 1.6; max-width: 70ch; }
+
+[data-theme="light"] .wq-card { background: #fff; border-color: rgba(20,18,16,0.1); }
+[data-theme="light"] .wq-card .wq-q, [data-theme="light"] .wq-clock { color: #141210; }
+
+/* Chart ↔ Words view toggle (word market lives under Markets) */
+.mkt-viewtoggle {
+  display: inline-flex; gap: 3px; padding: 3px; margin: 10px 0 4px;
+  border: 1px solid rgba(255,255,255,0.1); border-radius: 999px; background: rgba(255,255,255,0.02);
+}
+.vt-pill {
+  font-family: var(--font-mono); font-size: 12px; font-weight: 600; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--gray-500); padding: 6px 16px; border-radius: 999px;
+  cursor: pointer; text-decoration: none; transition: color 160ms var(--ease), background 160ms var(--ease);
+}
+.vt-pill:hover { color: var(--white); }
+.vt-pill.active { color: var(--white); background: var(--vermilion); }
+[data-theme="light"] .vt-pill.active { color: #FBF7EE; }

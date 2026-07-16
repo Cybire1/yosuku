@@ -1,7 +1,14 @@
 import type { NextConfig } from "next";
+import path from "path";
+import { fileURLToPath } from "url";
+
+// Pin Turbopack's workspace root to THIS directory. A stray package.json in a
+// parent dir (~/package.json) otherwise makes Turbopack infer the wrong root and
+// fail to resolve `tailwindcss` from globals.css (CssSyntaxError at dev start).
+const projectRoot = path.dirname(fileURLToPath(import.meta.url));
 
 const nextConfig: NextConfig = {
-  turbopack: {},
+  turbopack: { root: projectRoot },
   // Keep the @yosuku/deepbook-predict SDK (and its Node-only Buffer usage) in the server
   // runtime only — it powers the /api/yosuku/* devInspect routes, never the client bundle.
   serverExternalPackages: ['@yosuku/deepbook-predict'],
