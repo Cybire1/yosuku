@@ -1,11 +1,13 @@
-import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
+import { NextRequest, NextResponse } from 'next/server';
 import { genVerifier, codeChallenge, genState } from '@/lib/claimOAuth';
 
 export const dynamic = 'force-dynamic';
 
-// Kick off "Sign in with X": PKCE + state stashed in short-lived httpOnly cookies, then redirect to X.
-export async function GET() {
+// Kick off "Sign in with X" / "Connect X": PKCE + state in short-lived httpOnly cookies, then
+// redirect to X. Optional ?return=/path controls where the callback lands (default /claim).
+export async function GET(req: NextRequest) {
+  const ret = req.nextUrl.searchParams.get('return');
+  const safeRet = ret && ret.startsWith('/') && !ret.startsWith('//') ? ret : '';
   const clientId = process.env.TWITTER_CLIENT_ID;
   const redirect = process.env.CLAIM_X_REDIRECT || 'https://yosuku.xyz/api/claim/x/callback';
   if (!clientId) return NextResponse.json({ error: 'Sign in with X is not configured yet.' }, { status: 500 });
@@ -25,5 +27,6 @@ export async function GET() {
   const opts = { httpOnly: true, secure: true, sameSite: 'lax' as const, path: '/', maxAge: 600 };
   res.cookies.set('x_v', verifier, opts);
   res.cookies.set('x_s', state, opts);
+  if (safeRet) res.cookies.set('x_ret', safeRet, opts);
   return res;
 }

@@ -7,10 +7,11 @@ export const dynamic = 'force-dynamic';
 // X redirects here with ?code&state. Exchange for a token, read the handle+id, stash a signed
 // session, and bounce back to /claim?x=1 where the page reveals what's waiting.
 export async function GET(req: NextRequest) {
-  const home = process.env.CLAIM_HOME || 'https://yosuku.xyz/claim';
+  const jar = await cookies();
+  const ret = jar.get('x_ret')?.value;
+  const home = ret && ret.startsWith('/') && !ret.startsWith('//') ? `${new URL(req.url).origin}${ret}` : (process.env.CLAIM_HOME || 'https://yosuku.xyz/claim');
   const code = req.nextUrl.searchParams.get('code');
   const state = req.nextUrl.searchParams.get('state');
-  const jar = await cookies();
   const verifier = jar.get('x_v')?.value;
   const savedState = jar.get('x_s')?.value;
   if (!code || !state || !verifier || state !== savedState) return NextResponse.redirect(`${home}?x=err`);
@@ -41,6 +42,7 @@ export async function GET(req: NextRequest) {
     });
     res.cookies.delete('x_v');
     res.cookies.delete('x_s');
+    res.cookies.delete('x_ret');
     return res;
   } catch {
     return NextResponse.redirect(`${home}?x=err`);

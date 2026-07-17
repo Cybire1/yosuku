@@ -13,6 +13,7 @@ import {
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import Portfolio624Section from '@/components/Portfolio624Section';
+import XWalletCard from '@/components/XWalletCard';
 import Marquee from '@/components/Marquee';
 import GrainOverlay from '@/components/GrainOverlay';
 import CustomCursor from '@/components/CustomCursor';
@@ -256,7 +257,12 @@ export default function PortfolioPage() {
         <h1 className="font-display font-[800] text-4xl text-white tracking-tight mb-2">
           Portfolio
         </h1>
-        <p className="font-jp text-gray-500 text-sm mb-10">ポートフォリオ</p>
+        <p className="font-jp text-gray-500 text-sm mb-8">ポートフォリオ</p>
+
+        {/* Trade-from-X account — shows whether or not a Sui wallet is connected */}
+        <div className="mb-10">
+          <XWalletCard />
+        </div>
 
         {!mounted ? (
           <div className="text-center py-20">

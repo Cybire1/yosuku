@@ -49,8 +49,6 @@ const SECONDARY_NAV: NavLink[] = [
   { name: 'X-trade', href: '/trade-from-x', icon: Twitter },
   { name: 'Parlay', href: '/parlay', icon: ChartNoAxesCombined },
   { name: 'Surface', href: '/surface', icon: Activity },
-  { name: 'Agents', href: '/agents', icon: Bot },
-  { name: 'Waitlist', href: '/waitlist', icon: Sparkles },
   { name: 'Docs', href: '/docs', icon: BookOpen },
 ];
 
