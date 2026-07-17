@@ -1,38 +1,35 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useCurrentAccount } from '@mysten/dapp-kit';
 import { ArrowRight, Layers, Wallet, X } from 'lucide-react';
-import { useSmartSubmit } from '@/lib/sui/useSmartSubmit';
-import { useDUSDCBalance, useTradingVaultBalance } from '@/lib/sui/hooks';
-import { depositTradingBalanceTx, withdrawTradingBalanceTx } from '@/lib/sui/tradingVaultClient';
+import { useAccount624 } from '@/lib/sui/ticket624';
+import { buildWithdrawTx, fetchAccountBalanceMicro624 } from '@/lib/sui/predict624Client';
 import { DUSDC_MULTIPLIER } from '@/lib/sui/constants';
 
 /**
- * Move funds between the user's wallet and their Trading Balance, in one modern sheet.
+ * Move funds between the user's wallet and their trading account, in one sheet.
  *
- * - Deposit  = wallet DUSDC  → Trading Balance (one prefunded account for fast bets)
- * - Withdraw = Trading Balance → wallet DUSDC
+ * - Deposit  = wallet DUSDC   → trading account (prefund for fast bets)
+ * - Withdraw = trading account → wallet DUSDC
  *
- * Both run through useSmartSubmit, so gas is sponsored when the station is up and falls
- * back to the wallet otherwise. Mounted only while open (the parent gates it) so the
- * balance polls don't run in the background.
+ * This is the LIVE 6-24 DeepBook Predict account (the one base bets run from),
+ * not the legacy 4-16 vault. Both directions run through the account's sponsored
+ * submit, so gas is on us. The account itself is opened by placing a first bet;
+ * until then there is nothing to move, so deposit is gated on it existing.
  */
 export default function TradingBalanceModal({ onClose }: { onClose: () => void }) {
-  const account = useCurrentAccount();
-  const address = account?.address ?? null;
-  const { submit } = useSmartSubmit();
-  const { balance: walletMicro, coins: walletCoins, refresh: refreshWallet } = useDUSDCBalance();
-  const { balance: vault, refresh: refreshVault, configured } = useTradingVaultBalance();
+  const acct = useAccount624();
+  const address = acct.address;
 
   const [tab, setTab] = useState<'deposit' | 'withdraw'>('deposit');
   const [amount, setAmount] = useState('');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
 
-  const walletDusdc = walletMicro / DUSDC_MULTIPLIER;
-  const tradingDusdc = vault.available / DUSDC_MULTIPLIER;
+  const walletDusdc = acct.walletMicro / DUSDC_MULTIPLIER;
+  const tradingDusdc = acct.acctBalance;
   const max = tab === 'deposit' ? walletDusdc : tradingDusdc;
+  const noAccount = acct.wrapperChecked && !acct.wrapperId;
 
   const amountMicro = useMemo(() => {
     const n = Number(amount);
@@ -40,10 +37,10 @@ export default function TradingBalanceModal({ onClose }: { onClose: () => void }
     return BigInt(Math.floor(n * DUSDC_MULTIPLIER));
   }, [amount]);
 
-  const maxMicro = tab === 'deposit' ? BigInt(Math.floor(walletDusdc * DUSDC_MULTIPLIER)) : BigInt(vault.available);
+  const maxMicro = BigInt(Math.floor(max * DUSDC_MULTIPLIER));
   const overMax = amountMicro > maxMicro;
-  const canSubmit = !!address && configured && !busy && amountMicro > BigInt(0) && !overMax
-    && (tab === 'deposit' ? walletCoins.length > 0 : true);
+  const canSubmit = !!address && !busy && amountMicro > BigInt(0) && !overMax
+    && (tab === 'deposit' ? !!acct.wrapperId && acct.dusdcCoins.length > 0 : !!acct.wrapperId);
 
   // Esc to close + lock body scroll while open.
   useEffect(() => {
@@ -58,27 +55,33 @@ export default function TradingBalanceModal({ onClose }: { onClose: () => void }
   useEffect(() => { setMsg(null); }, [tab]);
 
   async function run() {
-    if (!canSubmit || !address) return;
+    if (!canSubmit || !address || !acct.wrapperId) return;
     setBusy(true); setMsg(null);
     try {
       if (tab === 'deposit') {
-        await submit(() => depositTradingBalanceTx({
-          coinIds: walletCoins.map((c) => c.coinObjectId),
-          amount: amountMicro,
-        }));
+        await acct.deposit(amountMicro);
       } else {
-        await submit(() => withdrawTradingBalanceTx({ amount: amountMicro, owner: address }));
+        // Withdraw the EXACT current integer balance when maxed out (never the
+        // polled float, which can overshoot and abort EBalanceTooLow); an entered
+        // partial passes through capped. The contract allows draining to exactly
+        // the stored value, so an exact amount always clears.
+        const exact = await fetchAccountBalanceMicro624(acct.wrapperId);
+        const amt = amountMicro >= exact ? exact : amountMicro;
+        if (amt <= BigInt(0)) throw new Error('Nothing to withdraw.');
+        await acct.submitTx(() => buildWithdrawTx({ wrapperId: acct.wrapperId!, amountMicro: amt, recipient: address }));
       }
-      refreshWallet(); refreshVault();
-      setMsg({ kind: 'ok', text: tab === 'deposit' ? 'Moved to your Trading Balance — ready to bet.' : 'Withdrawn to your wallet.' });
+      acct.refreshWallet(); acct.refreshAcctBalance();
+      setMsg({ kind: 'ok', text: tab === 'deposit' ? 'Moved to your trading account — ready to bet.' : 'Withdrawn to your wallet.' });
       setAmount('');
     } catch (e) {
       const raw = e instanceof Error ? e.message : String(e);
       const friendly = /reject|user\s*reject/i.test(raw)
         ? 'You declined the signature.'
-        : /insufficient/i.test(raw)
-          ? 'Not enough balance for that amount.'
-          : 'That transfer didn’t go through. Try again in a moment.';
+        : /EBalanceTooLow|::account::withdraw/i.test(raw)
+          ? 'Your balance just moved — reopen and try again.'
+          : /insufficient/i.test(raw)
+            ? 'Not enough balance for that amount.'
+            : 'That transfer didn’t go through. Try again in a moment.';
       setMsg({ kind: 'err', text: friendly });
     } finally {
       setBusy(false);
@@ -165,7 +168,8 @@ export default function TradingBalanceModal({ onClose }: { onClose: () => void }
           </div>
         </div>
 
-        {overMax && <p className="mt-2 text-[11px] text-rose-400">That’s more than your {tab === 'deposit' ? 'wallet' : 'Trading'} balance.</p>}
+        {overMax && <p className="mt-2 text-[11px] text-rose-400">That’s more than your {tab === 'deposit' ? 'wallet' : 'trading'} balance.</p>}
+        {noAccount && <p className="mt-2 text-[11px] text-gray-400">Place your first bet to open your trading account, then you can move funds here.</p>}
 
         <button
           onClick={run}
@@ -183,7 +187,7 @@ export default function TradingBalanceModal({ onClose }: { onClose: () => void }
               : overMax
                 ? 'Amount exceeds balance'
                 : tab === 'deposit'
-                  ? 'Move to Trading Balance →'
+                  ? 'Move to trading account →'
                   : 'Withdraw to Wallet →'}
         </button>
 

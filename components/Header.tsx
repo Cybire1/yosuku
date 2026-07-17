@@ -27,7 +27,8 @@ import YosukuMark from './YosukuMark';
 import ThemeToggle from './ThemeToggle';
 import TradingBalanceModal from './TradingBalanceModal';
 import { useToast } from './Toast';
-import { useDUSDCBalance, useTradingVaultBalance } from '@/lib/sui/hooks';
+import { useDUSDCBalance } from '@/lib/sui/hooks';
+import { useAccount624 } from '@/lib/sui/ticket624';
 
 type NavLink = {
   name: string;
@@ -75,7 +76,10 @@ export default function Header() {
   const [showFunds, setShowFunds] = useState(false);
   const [showBalance, setShowBalance] = useState(false);
   const { balance: dusdcRaw, loading: dusdcLoading, refresh: refreshDusdc } = useDUSDCBalance();
-  const { balance: tradingVaultBalance, refresh: refreshTrading } = useTradingVaultBalance();
+  // The trading balance the header shows is the LIVE 6-24 DeepBook Predict account
+  // (the one base bets actually run from) — not the legacy 4-16 vault, which only
+  // still backs the leverage/private/cash-out surfaces.
+  const { acctBalance: acct624Balance, refreshAcctBalance: refreshTrading } = useAccount624();
   const autoFundingRef = useRef(false);   // in-flight guard (avoid concurrent drips)
   const lowEpisodeRef = useRef(false);    // already auto-funded for the current low episode
   const moreMenuRef = useRef<HTMLDivElement>(null);
@@ -271,7 +275,7 @@ export default function Header() {
                     On phones the icon + number carry it; the unit label costs too much width. */}
                 <span className="flex items-center gap-1.5">
                   <Coins className="w-3.5 h-3.5 text-gray-500" />
-                  <span className="text-white font-semibold tabular-nums">{((tradingVaultBalance.available + dusdcRaw) / 1e6).toFixed(2)}</span>
+                  <span className="text-white font-semibold tabular-nums">{(acct624Balance + dusdcRaw / 1e6).toFixed(2)}</span>
                   <span className="hidden sm:inline text-gray-500">DUSDC</span>
                 </span>
                 <span className="text-vermilion font-bold ml-0.5 text-[15px] leading-none">+</span>
@@ -300,8 +304,8 @@ export default function Header() {
                       <div className="absolute right-0 top-full mt-2 z-50 border border-white/10 rounded bg-bg backdrop-blur-md min-w-[160px] py-1" role="menu">
                         <div className="px-4 py-3 border-b border-white/[0.06]">
                           <div className="flex items-center justify-between gap-4 font-mono text-[11px]">
-                            <span className="text-gray-500">Trading</span>
-                            <span className="text-white tabular-nums">{(tradingVaultBalance.available / 1e6).toFixed(2)}</span>
+                            <span className="text-gray-500">Trading account</span>
+                            <span className="text-white tabular-nums">{acct624Balance.toFixed(2)}</span>
                           </div>
                           <div className="flex items-center justify-between gap-4 font-mono text-[11px] mt-1">
                             <span className="text-gray-500">Wallet</span>
