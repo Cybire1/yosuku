@@ -4453,7 +4453,7 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
   /* Hero: tighter mobile layout */
   .hero { padding: 110px 20px 32px; gap: 24px; }
   .hero .hero-right { display: none; }
-  .hero-title { font-size: clamp(2.4rem, 12vw, 3.6rem); margin-bottom: 20px; }
+  .hero-title { font-size: clamp(2.4rem, 12vw, 3.6rem); margin-bottom: 36px; }
   .hero-sub { font-size: 15px; }
   .hero-cta-row { flex-wrap: wrap; gap: 12px; }
   .hero-pillrow { gap: 8px; flex-wrap: wrap; }

@@ -336,7 +336,6 @@ export default function SenseiDock({ targetTime, now }: Props) {
           <input value={input} onChange={(e) => setInput(e.target.value)} placeholder="Ask Sensei about the market…" />
           <button type="submit" disabled={loading || !input.trim()} data-cursor="hover">Ask</button>
         </form>
-        <p className="sensei-drawer-foot">Reads the live market, gives you a call, and lets you act on it, gasless. You place every trade; Sensei never trades on its own. Testnet, test funds only.</p>
       </aside>
     </>
   );
