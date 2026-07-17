@@ -105,6 +105,7 @@ const SPEC_ROWS: SpecRow[] = [
 const FOOTER_COLS: { title: string; links: { label: string; href: string; ext?: boolean }[] }[] = [
   { title: 'Product', links: [
     { label: 'Markets', href: '/markets' },
+    { label: 'Sensei', href: '/sensei' },
     { label: 'Reels', href: '/reels' },
     { label: 'Portfolio', href: '/portfolio' },
     { label: 'Leaderboard', href: '/leaderboard' },

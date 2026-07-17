@@ -143,10 +143,10 @@ export default function ClaimWinnings({
               disabled={loading}
               className="mt-4 w-full py-3.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-bold uppercase tracking-widest text-sm transition-all shadow-[0_0_30px_rgba(52,211,153,0.18)] disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
-              {loading ? (<><Loader2 className="w-4 h-4 animate-spin" /> Claiming…</>) : 'Claim winnings'}
+              {loading ? (<><Loader2 className="w-4 h-4 animate-spin" /> Collecting…</>) : 'Collect it now'}
             </button>
             <p className="text-[10px] text-gray-500 text-center mt-2">
-              Gas-free — the claim pays for itself.
+              Winners are paid out automatically — this just collects it now. Gas-free.
             </p>
           </>
         )}

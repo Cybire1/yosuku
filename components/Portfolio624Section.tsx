@@ -83,6 +83,13 @@ function bandLabel(lowerTick: number, higherTick: number): string {
   return `${fmtUsd0(tickToUsd(lowerTick))}–${fmtUsd0(tickToUsd(higherTick))}`;
 }
 
+/** A settled position is a win when the oracle's close price landed inside its band. */
+function isWonPos(pos: Position624, st?: MarketState624 | null): boolean {
+  if (!st?.settled) return false;
+  const u = st.settlementUsd;
+  return u != null && u * 100 >= pos.lowerTick && u * 100 < pos.higherTick;
+}
+
 // ─── component ───
 
 export default function Portfolio624Section() {
@@ -266,7 +273,7 @@ export default function Portfolio624Section() {
       const friendly = /not.?settled|assert_settled|ENotSettled/i.test(raw)
         ? 'This round hasn’t settled yet — try again at close.'
         : /order|position.*not.*found|EOrderNotFound|already/i.test(raw)
-          ? 'Nothing to claim here — this position was already redeemed.'
+          ? 'Already paid out — the auto-payout got here first.'
           : `Claim failed: ${raw.slice(0, 140)}`;
       toast(friendly, 'error');
     } finally { setBusy(null); }
@@ -287,7 +294,9 @@ export default function Portfolio624Section() {
     } finally { setBusy(null); }
   }
 
-  const claimable = positions.filter((p) => mktStates[p.marketId]?.settled).length;
+  // settled wins the permissionless keeper is auto-collecting (verified live: it
+  // redeem_settled's every winner ~every 2 min). Not "claimable chores" — money on its way.
+  const autoPaying = positions.filter((p) => isWonPos(p, mktStates[p.marketId])).length;
   const hasDesk = deskLedger > 0 || deskSub != null || deskRows.length > 0;
 
   return (
@@ -345,8 +354,8 @@ export default function Portfolio624Section() {
                 <div className="font-mono text-lg text-white tabular-nums">{positions.length}</div>
               </div>
               <div className="px-4 py-3.5 border-l border-white/[0.06]">
-                <div className="font-mono text-[9px] uppercase tracking-[0.18em] text-white/40 mb-1">Claimable</div>
-                <div className={`font-mono text-lg tabular-nums ${claimable > 0 ? 'text-vermilion' : 'text-white'}`}>{claimable}</div>
+                <div className="font-mono text-[9px] uppercase tracking-[0.18em] text-white/40 mb-1">Auto-paying</div>
+                <div className={`font-mono text-lg tabular-nums ${autoPaying > 0 ? 'text-profit' : 'text-white'}`}>{autoPaying}</div>
               </div>
               <div className="px-4 py-3.5 border-l border-white/[0.06] hidden sm:block">
                 <div className="font-mono text-[9px] uppercase tracking-[0.18em] text-white/40 mb-1">Account</div>
@@ -374,11 +383,11 @@ export default function Portfolio624Section() {
                     const st = mktStates[pos.marketId];
                     const expired = st ? now > 0 && now >= st.expiry : false;
                     const settled = !!st?.settled;
-                    const settleUsd = st?.settlementUsd ?? null;
-                    const won = settled && settleUsd != null && settleUsd * 100 >= pos.lowerTick && settleUsd * 100 < pos.higherTick;
+                    const won = isWonPos(pos, st);
                     const levX = pos.leverage1e9 / FLOAT_SCALING_624;
                     const claiming = busy === `claim:${pos.orderId}`;
-                    const status = settled ? (won ? 'Settled · in range' : 'Settled · out of range') : expired ? 'Awaiting settle' : 'Open';
+                    const payout = fmt2(micro(pos.qtyMicro) - micro(pos.netPremiumMicro) * (levX - 1));
+                    const status = settled ? (won ? 'Won · paying out' : 'Settled · no payout') : expired ? 'Awaiting settle' : 'Open';
                     return (
                       <div key={`${pos.marketId}:${pos.orderId}`} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3 hover:bg-white/[0.02] transition-colors">
                         <span className={`font-mono text-[10px] uppercase tracking-[0.18em] w-40 shrink-0 ${settled ? 'text-white' : 'text-white/50'}`}>
@@ -392,13 +401,29 @@ export default function Portfolio624Section() {
                         <span className="font-mono text-[11px] text-white/70 tabular-nums">{fmt2(micro(pos.qtyMicro))} DUSDC</span>
                         <span className="font-mono text-[11px] text-white/40 tabular-nums w-8 text-right">{Number.isInteger(levX) ? levX : levX.toFixed(1)}×</span>
                         {settled ? (
-                          <button
-                            onClick={() => claim(pos)}
-                            disabled={claiming}
-                            className={`shrink-0 px-4 py-1.5 font-mono text-[11px] uppercase tracking-[0.1em] font-semibold transition-colors disabled:opacity-60 ${won ? 'bg-vermilion text-white hover:bg-vermilion-d' : 'border border-white/15 text-white/60 hover:border-white/30 hover:text-white'}`}
-                          >
-                            {claiming ? 'Claiming…' : won ? `Claim ≈ ${fmt2(micro(pos.qtyMicro) - micro(pos.netPremiumMicro) * (levX - 1))}` : 'Close · no payout'}
-                          </button>
+                          won ? (
+                            // Winners are auto-collected by the keeper — show the payout as on-its-way,
+                            // with a quiet manual "collect now" for the impatient (or if the keeper lags).
+                            <span className="shrink-0 flex items-center gap-2.5">
+                              <span className="font-mono text-[11px] text-profit tabular-nums">won ≈ {payout}</span>
+                              <button
+                                onClick={() => claim(pos)}
+                                disabled={claiming}
+                                title="Winners are paid out automatically — this just collects it instantly"
+                                className="font-mono text-[10px] uppercase tracking-[0.12em] text-white/40 hover:text-vermilion transition-colors disabled:opacity-60"
+                              >
+                                {claiming ? 'collecting…' : 'collect now'}
+                              </button>
+                            </span>
+                          ) : (
+                            <button
+                              onClick={() => claim(pos)}
+                              disabled={claiming}
+                              className="shrink-0 px-4 py-1.5 font-mono text-[11px] uppercase tracking-[0.1em] font-semibold border border-white/15 text-white/60 hover:border-white/30 hover:text-white transition-colors disabled:opacity-60"
+                            >
+                              {claiming ? 'clearing…' : 'Close · no payout'}
+                            </button>
+                          )
                         ) : (
                           <span className="font-mono text-[10px] text-white/30 w-24 text-right">{ago(pos.openedAtMs, now || pos.openedAtMs)}</span>
                         )}
@@ -441,7 +466,7 @@ export default function Portfolio624Section() {
             {/* footer line — honest, exact */}
             <div className="flex flex-wrap items-center justify-between gap-2 px-5 py-2.5 border-t border-white/[0.06]">
               <span className="font-mono text-[9.5px] text-white/30">
-                Oracle-settled on testnet · payouts land in YOUR trading account only · balances read on-chain
+                Winners are paid out automatically — no need to claim. Settled on-chain at close · payouts land in your trading account · testnet.
               </span>
               <a href="/beta" className="font-mono text-[10px] uppercase tracking-[0.14em] text-vermilion hover:text-white transition-colors" data-cursor="hover">
                 Trade on the new venue →
