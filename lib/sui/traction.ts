@@ -72,7 +72,10 @@ type EventNode = {
 };
 
 type EventsResponse = {
-  events: { nodes: EventNode[] };
+  events: {
+    nodes: EventNode[];
+    pageInfo?: { hasPreviousPage: boolean; startCursor: string | null };
+  };
 };
 
 type GqlResult<T> = {
@@ -87,8 +90,9 @@ const SPON_Q = `query Spon($a: SuiAddress!, $before: String) {
   }
 }`;
 
-const WL_Q = `query Wl($t: String!) {
-  events(last: 50, filter: { type: $t }) {
+const WL_Q = `query Wl($t: String!, $before: String) {
+  events(last: 50, before: $before, filter: { type: $t }) {
+    pageInfo { hasPreviousPage startCursor }
     nodes { timestamp sender { address } contents { json } transaction { digest } }
   }
 }`;
@@ -104,12 +108,18 @@ const dayKey = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 export async function fetchTraction(): Promise<TractionStats> {
   const recent: Interaction[] = [];
 
-  // ── 1. Adoption: Onara-sponsored real users (paginate; cap at 6 pages = 300 tx) ──
+  // ── 1. Adoption: Onara-sponsored real users (paginate the FULL history) ──
+  // NOTE: this MUST walk every sponsored tx, not a recent window. A 6-page (300 tx)
+  // cap made this a rolling window: once Onara passed ~300 total txs the earliest
+  // onboarded wallets fell out of view, so the "cumulative wallets onboarded" count
+  // froze and under-reported (showed 78 while the chain held 88). 40 pages = 2000 tx
+  // is a safety ceiling well above today's ~8 pages; the loop stops at the true end.
+  const MAX_PAGES = 40;
   const firstSeen = new Map<string, number>(); // external user → earliest sponsored ts
   let sponsoredActions = 0;
   let before: string | null = null;
   try {
-    for (let page = 0; page < 6; page++) {
+    for (let page = 0; page < MAX_PAGES; page++) {
       const result: GqlResult<SponsoredTxResponse> = await gql.query({
         query: SPON_Q,
         variables: { a: ONARA, before },
@@ -142,18 +152,23 @@ export async function fetchTraction(): Promise<TractionStats> {
   // ── 2. Adoption: on-chain waitlist signups (external) ──
   const wlWallets = new Set<string>();
   try {
-    const result: GqlResult<EventsResponse> = await gql.query({
-      query: WL_Q,
-      variables: { t: `${WAITLIST_PKG}::waitlist::Joined` },
-    });
-    const { data, errors } = result;
-    if (!errors?.length && data) {
+    let wlBefore: string | null = null;
+    for (let page = 0; page < MAX_PAGES; page++) {
+      const result: GqlResult<EventsResponse> = await gql.query({
+        query: WL_Q,
+        variables: { t: `${WAITLIST_PKG}::waitlist::Joined`, before: wlBefore },
+      });
+      const { data, errors } = result;
+      if (errors?.length || !data) break;
       for (const n of data.events.nodes) {
         const who = String((n.contents?.json?.who as string) ?? n.sender.address);
         if (isInternal(who)) continue;
         wlWallets.add(who);
         recent.push({ kind: 'waitlist', user: who, amount: 0, digest: n.transaction?.digest ?? null, ts: n.timestamp ? Date.parse(n.timestamp) : 0 });
       }
+      const pi = data.events.pageInfo;
+      if (!pi?.hasPreviousPage || !pi.startCursor) break;
+      wlBefore = pi.startCursor;
     }
   } catch { /* skip */ }
 
