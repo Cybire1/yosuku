@@ -1,202 +1,187 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { motion } from 'framer-motion';
-import { ArrowLeft, Check, Loader2, ShieldCheck, Twitter, KeyRound, Wallet, ExternalLink } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, useCallback, useRef, Suspense } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { useCurrentAccount, useSuiClient, useSignPersonalMessage, ConnectButton } from '@mysten/dapp-kit';
-import Header from '@/components/Header';
 import {
   fetchClaimAccount, unsealAccountKey, recoverFundsToWallet, type ClaimAccount,
 } from '@/lib/sui/claim';
 
-const BOT = 'yosuku0';
+// Theme-aware tokens (follow the site's dark/light toggle via data-theme on <html>).
+const BG = 'var(--bg)';               // #050505 dark · #F4EEE3 cream light
+const FG = 'var(--white)';            // foreground — flips to ink on light
+const MUTE = 'var(--gray-400)';
+const VERM = 'var(--vermilion)';
+const GREEN = 'var(--profit)';
+const LIGHT = '#FBF7EE';              // fixed light label (for vermilion / inverted fills)
+const HAIR = 'color-mix(in srgb, var(--white) 12%, transparent)';
+
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
-const GRAIN = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")";
+type XIdentity = { handle: string; authorId: string; account: ClaimAccount | null };
 
-type Step = 'connect' | 'prove' | 'recover' | 'done';
-
-export default function ClaimPage() {
+function ClaimInner() {
+  const params = useSearchParams();
   const router = useRouter();
   const account = useCurrentAccount();
   const wallet = account?.address ?? null;
   const suiClient = useSuiClient();
   const { mutateAsync: signPersonalMessage } = useSignPersonalMessage();
 
+  const [me, setMe] = useState<XIdentity | null>(null);
   const [acct, setAcct] = useState<ClaimAccount | null>(null);
-  const [polling, setPolling] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [binding, setBinding] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [result, setResult] = useState<{ amount: number; digest: string } | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const step: Step = !wallet ? 'connect' : result ? 'done' : acct?.owner && acct.owner === wallet ? 'recover' : 'prove';
+  // After the X OAuth round-trip we land back with ?x=1 — read who signed in + what they have waiting.
+  useEffect(() => {
+    if (params.get('x') !== '1') return;
+    (async () => {
+      try {
+        const r = await fetch('/api/claim/x/me', { cache: 'no-store' });
+        if (r.ok) { const j = await r.json(); if (j.handle) { setMe(j); setAcct(j.account ?? null); } }
+      } catch { /* stay signed out */ }
+    })();
+  }, [params]);
 
-  // Poll the relay for this wallet's claimable account (appears once the proof tweet is seen + bound).
-  const check = useCallback(async () => {
-    if (!wallet) return;
+  // Once both X + wallet are present, ask the relay to bind (set_owner) so the funds unlock to this wallet.
+  const bind = useCallback(async () => {
+    if (!me || !wallet) return;
+    setBinding(true); setErr(null);
     try {
-      const a = await fetchClaimAccount(wallet);
-      if (a) setAcct(a);
-    } catch { /* keep polling */ }
-  }, [wallet]);
+      await fetch('/api/claim/bind', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ wallet }) });
+    } catch { /* the poll still catches it if it went through */ }
+    const check = async () => {
+      try { const a = await fetchClaimAccount(wallet); if (a && a.owner === wallet) { setAcct(a); setBinding(false); if (pollRef.current) clearInterval(pollRef.current); } }
+      catch { /* keep polling */ }
+    };
+    check();
+    pollRef.current = setInterval(check, 3000);
+  }, [me, wallet]);
 
   useEffect(() => {
-    if (!wallet || result) { setPolling(false); return; }
-    check();
-    setPolling(true);
-    pollRef.current = setInterval(check, 5000);
+    if (me && wallet && !(acct?.owner === wallet)) bind();
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, [wallet, result, check]);
+  }, [me, wallet, acct?.owner, bind]);
 
-  const tweetText = wallet ? `@${BOT} claim ${wallet}` : '';
-  const tweetHref = `https://x.com/intent/tweet?text=${encodeURIComponent(tweetText)}`;
-
-  async function recover() {
+  async function claim() {
     if (!acct || !wallet) return;
     setBusy(true); setErr(null);
     try {
-      const key = await unsealAccountKey({
-        suiClient, walletAddress: wallet, sealIdHex: acct.sealId, blobId: acct.blobId, signPersonalMessage,
-      });
+      const key = await unsealAccountKey({ suiClient, walletAddress: wallet, sealIdHex: acct.sealId, blobId: acct.blobId, signPersonalMessage });
       const amountMist = BigInt(Math.round(acct.balanceDusdc * 1e6));
-      if (amountMist <= BigInt(0)) throw new Error('This account has no recoverable balance.');
+      if (amountMist <= BigInt(0)) throw new Error('This account has no balance to claim right now.');
       const { digest } = await recoverFundsToWallet({ suiClient, accountKeyBech32: key, toAddress: wallet, amountMist });
       setResult({ amount: acct.balanceDusdc, digest });
     } catch (e: any) {
-      setErr(e?.message || 'Recovery failed. Make sure your wallet is the one bound to your handle.');
-    } finally {
-      setBusy(false);
-    }
+      setErr(e?.message || 'Something went wrong. Make sure this is the wallet you connected.');
+    } finally { setBusy(false); }
   }
 
+  const amount = acct?.balanceDusdc ?? me?.account?.balanceDusdc ?? null;
+  const ready = !!(acct?.owner === wallet);
+  const stage: 'in' | 'wallet' | 'ready' | 'done' = result ? 'done' : ready ? 'ready' : me ? 'wallet' : 'in';
+
   return (
-    <div className="min-h-screen bg-[#070708] text-white" style={{ fontFamily: 'var(--font-sora)' }}>
-      <Header />
-      <div className="pointer-events-none fixed inset-0 z-0 opacity-[0.04]" style={{ backgroundImage: GRAIN }} />
-      <main className="relative z-10 mx-auto max-w-2xl px-5 pb-28 pt-10">
-        <button onClick={() => router.push('/')} className="mb-8 inline-flex items-center gap-2 text-sm text-white/50 transition hover:text-white">
-          <ArrowLeft className="h-4 w-4" /> Back
+    <div style={{ minHeight: '100vh', background: BG, color: FG, fontFamily: 'var(--font-sora), ui-sans-serif, system-ui' }}>
+      <div style={{ position: 'fixed', top: 0, left: 0, width: 5, height: '100%', background: VERM, zIndex: 20 }} />
+      <main style={{ maxWidth: 560, margin: '0 auto', padding: 'clamp(40px, 9vw, 64px) clamp(20px, 6vw, 28px) 120px' }}>
+        <button onClick={() => router.push('/')} style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'none', border: 0, cursor: 'pointer', color: FG, marginBottom: 'clamp(36px, 9vw, 56px)' }}>
+          <Celebrant />
+          <span style={{ fontWeight: 800, letterSpacing: '0.12em', fontSize: 18 }}>YOSUKU</span>
+          <span style={{ color: VERM, letterSpacing: '0.2em', fontSize: 12 }}>予測</span>
         </button>
 
-        {/* hero */}
-        <div className="mb-3 font-mono text-xs tracking-[0.35em] text-[#E04D26]">TWEET-TO-BET · CLAIM</div>
-        <h1 className="text-4xl font-extrabold leading-[1.05] tracking-tight sm:text-5xl">
-          Claim your account.
-        </h1>
-        <p className="mt-4 max-w-lg text-[15px] leading-relaxed text-white/55">
-          We funded you from a tweet and sealed the key — only you can open it. Prove your X handle, and
-          we'll release the funds to <span className="text-white/80">your</span> wallet. The relay can't:
-          it threw the key away on purpose.
-        </p>
-
-        {/* stepper */}
-        <div className="mt-8 flex items-center gap-2 font-mono text-[11px] uppercase tracking-wider text-white/40">
-          {(['connect', 'prove', 'recover'] as Step[]).map((s, i) => {
-            const order: Step[] = ['connect', 'prove', 'recover', 'done'];
-            const active = order.indexOf(step) >= order.indexOf(s);
-            return (
-              <div key={s} className="flex items-center gap-2">
-                <span className={active ? 'text-[#34D399]' : ''}>{i + 1}. {s}</span>
-                {i < 2 && <span className="text-white/20">→</span>}
-              </div>
-            );
-          })}
+        <div style={{ marginBottom: 40 }}>
+          <div style={{ fontSize: 13, letterSpacing: '0.22em', color: VERM, fontWeight: 600, marginBottom: 16 }}>YOUR WINNINGS</div>
+          {amount != null && amount > 0 ? (
+            <>
+              <h1 style={{ fontSize: 'clamp(46px, 15vw, 64px)', fontWeight: 800, letterSpacing: '-0.03em', lineHeight: 1, margin: 0, display: 'flex', alignItems: 'baseline', flexWrap: 'wrap', gap: 12 }}>
+                <span>${amount.toFixed(2)}</span><span style={{ fontSize: 'clamp(22px, 7vw, 30px)', color: MUTE, fontWeight: 700 }}>waiting</span>
+              </h1>
+              <p style={{ fontSize: 17, color: MUTE, marginTop: 16, maxWidth: 420, lineHeight: 1.5 }}>
+                {me ? `It’s yours, ${me.handle}. Send it to any wallet in two taps.` : 'It’s yours. Let’s get it to your wallet in two taps.'}
+              </p>
+            </>
+          ) : (
+            <>
+              <h1 style={{ fontSize: 'clamp(40px, 13vw, 52px)', fontWeight: 800, letterSpacing: '-0.03em', lineHeight: 1.05, margin: 0 }}>
+                Claim your<br />winnings.
+              </h1>
+              <p style={{ fontSize: 17, color: MUTE, marginTop: 16, maxWidth: 420, lineHeight: 1.5 }}>
+                You bet from a tweet, so we made you an account and staked it. Prove it’s you, pick a wallet, and it’s yours.
+              </p>
+            </>
+          )}
         </div>
 
-        <div className="mt-6 space-y-4">
-          {/* STEP 1 — connect */}
-          <Card active={step === 'connect'} done={step !== 'connect'} icon={<Wallet className="h-4 w-4" />} title="Connect the wallet you want your funds in">
-            {!wallet ? (
-              <div className="mt-3"><ConnectButton /></div>
-            ) : (
-              <div className="mt-2 font-mono text-sm text-[#34D399]">{short(wallet)} connected</div>
-            )}
-          </Card>
-
-          {/* STEP 2 — prove handle */}
-          {wallet && step !== 'done' && (
-            <Card active={step === 'prove'} done={step === 'recover'} icon={<Twitter className="h-4 w-4" />} title="Prove your X handle">
-              {step === 'recover' ? (
-                <div className="mt-2 font-mono text-sm text-[#34D399]">handle verified · bound to {short(wallet)}</div>
-              ) : (
-                <>
-                  <p className="mt-2 text-sm text-white/55">
-                    Post this from the X account that placed the bet. We watch for it and bind the account to your wallet.
-                  </p>
-                  <div className="mt-3 rounded-lg border border-white/10 bg-black/40 p-3 font-mono text-sm text-white/85">
-                    {tweetText}
-                  </div>
-                  <div className="mt-3 flex items-center gap-3">
-                    <a href={tweetHref} target="_blank" rel="noreferrer"
-                      className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-semibold text-black transition hover:bg-white/90">
-                      Post on X <ExternalLink className="h-3.5 w-3.5" />
-                    </a>
-                    {polling && (
-                      <span className="inline-flex items-center gap-2 text-xs text-white/45">
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" /> watching for your tweet…
-                      </span>
-                    )}
-                  </div>
-                </>
-              )}
-            </Card>
+        <Step index={1} label="Prove it’s you" done={!!me}>
+          {me ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: GREEN, fontWeight: 600 }}><Dot /> signed in as @{me.handle}</div>
+          ) : (
+            <a href="/api/claim/x/start"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 10, background: FG, color: BG, borderRadius: 999, padding: '13px 22px', fontSize: 15, fontWeight: 700, textDecoration: 'none' }}>
+              <XGlyph /> Sign in with X
+            </a>
           )}
+        </Step>
 
-          {/* STEP 3 — recover */}
-          {step === 'recover' && (
-            <Card active icon={<KeyRound className="h-4 w-4" />} title="Recover your funds">
-              <p className="mt-2 text-sm text-white/55">
-                Your wallet signs once to unseal the key (in your browser), then we sweep the balance to you.
-              </p>
-              <div className="mt-3 flex items-baseline gap-2">
-                <span className="font-mono text-2xl font-bold text-white">{acct!.balanceDusdc.toFixed(2)}</span>
-                <span className="text-sm text-white/50">DUSDC recoverable</span>
-              </div>
-              <button onClick={recover} disabled={busy}
-                className="mt-4 inline-flex items-center gap-2 rounded-full bg-[#E04D26] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#B83A1B] disabled:opacity-60">
-                {busy ? <><Loader2 className="h-4 w-4 animate-spin" /> unsealing…</> : <><ShieldCheck className="h-4 w-4" /> Recover {acct!.balanceDusdc.toFixed(2)} DUSDC</>}
+        <Step index={2} label="Where should we send it?" done={!!wallet} dim={!me}>
+          {wallet ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: GREEN, fontWeight: 600, minWidth: 0 }}>
+              <Dot /> <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{short(wallet)} connected{binding && <span style={{ color: MUTE, fontWeight: 500, marginLeft: 8 }}>· linking…</span>}</span>
+            </div>
+          ) : (
+            <div style={{ opacity: me ? 1 : 0.4, pointerEvents: me ? 'auto' : 'none' }}><ConnectButton /></div>
+          )}
+        </Step>
+
+        <AnimatePresence>
+          {stage === 'ready' && (
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} style={{ marginTop: 12 }}>
+              <button onClick={claim} disabled={busy} className="bg-vermilion"
+                style={{ width: '100%', background: VERM, color: LIGHT, border: 0, borderRadius: 16, padding: 20, fontSize: 'clamp(16px, 4.6vw, 19px)', fontWeight: 800, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.7 : 1, letterSpacing: '-0.01em' }}>
+                {busy ? 'Sending to your wallet…' : `Claim $${acct!.balanceDusdc.toFixed(2)} to ${short(wallet!)}`}
               </button>
-              {err && <p className="mt-3 text-sm text-[#FB7185]">{err}</p>}
-            </Card>
-          )}
-
-          {/* DONE */}
-          {step === 'done' && result && (
-            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-              className="rounded-xl border border-[#34D399]/30 bg-[#34D399]/[0.06] p-6">
-              <div className="flex items-center gap-2 text-[#34D399]"><Check className="h-5 w-5" /><span className="font-semibold">Claimed.</span></div>
-              <p className="mt-2 text-sm text-white/70">
-                {result.amount.toFixed(2)} DUSDC recovered to {short(wallet!)}. It was always yours — now you hold the keys.
-              </p>
-              <a href={`https://suiscan.xyz/testnet/tx/${result.digest}`} target="_blank" rel="noreferrer"
-                className="mt-3 inline-flex items-center gap-1.5 font-mono text-xs text-white/50 hover:text-white">
-                {short(result.digest)} <ExternalLink className="h-3 w-3" />
-              </a>
+              {err && <p style={{ color: 'var(--loss)', fontSize: 14, marginTop: 12 }}>{err}</p>}
             </motion.div>
           )}
-        </div>
+          {stage === 'done' && result && (
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+              style={{ marginTop: 12, background: 'color-mix(in srgb, var(--profit) 10%, transparent)', border: `1px solid color-mix(in srgb, var(--profit) 45%, transparent)`, borderRadius: 16, padding: 24 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: GREEN, fontWeight: 800, fontSize: 18 }}><Dot /> It’s yours.</div>
+              <p style={{ color: FG, marginTop: 8, fontSize: 15 }}>${result.amount.toFixed(2)} landed in {short(wallet!)}. Nobody could ever take it, and now it’s in your hands.</p>
+              <a href={`https://suiscan.xyz/testnet/tx/${result.digest}`} target="_blank" rel="noreferrer" style={{ color: MUTE, fontSize: 12, marginTop: 10, display: 'inline-block' }}>receipt · {short(result.digest)}</a>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-        <p className="mt-10 text-center font-mono text-[11px] leading-relaxed text-white/30">
-          The relay never held a usable key. Unsealing is gated on-chain by the wallet you bind — proof, not promise.
+        <p style={{ marginTop: 56, fontSize: 13, color: MUTE, lineHeight: 1.6, maxWidth: 440 }}>
+          We made you an account and locked it to you. Only you can open it, not even us. Signing in with X just proves it’s the same you that placed the bet.
         </p>
       </main>
     </div>
   );
 }
 
-function Card({ active, done, icon, title, children }: {
-  active: boolean; done?: boolean; icon: React.ReactNode; title: string; children: React.ReactNode;
-}) {
+export default function ClaimPage() {
+  return <Suspense fallback={<div style={{ minHeight: '100vh', background: BG }} />}><ClaimInner /></Suspense>;
+}
+
+function Step({ index, label, done, dim, children }: { index: number; label: string; done?: boolean; dim?: boolean; children: React.ReactNode }) {
   return (
-    <div className={`rounded-xl border p-5 transition ${active ? 'border-white/20 bg-white/[0.03]' : done ? 'border-white/10 bg-transparent' : 'border-white/10 bg-transparent opacity-60'}`}>
-      <div className="flex items-center gap-2.5">
-        <span className={`flex h-7 w-7 items-center justify-center rounded-full border ${done ? 'border-[#34D399]/40 text-[#34D399]' : 'border-white/15 text-white/60'}`}>
-          {done ? <Check className="h-4 w-4" /> : icon}
-        </span>
-        <h2 className="text-[15px] font-semibold text-white/90">{title}</h2>
-      </div>
-      {children}
+    <div style={{ display: 'flex', gap: 16, padding: '22px 0', borderTop: `1px solid ${HAIR}`, opacity: dim ? 0.5 : 1, transition: 'opacity .2s' }}>
+      <div style={{ flexShrink: 0, width: 30, height: 30, borderRadius: 999, border: `1.5px solid ${done ? GREEN : HAIR}`, color: done ? GREEN : MUTE, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700 }}>{done ? '✓' : index}</div>
+      <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 16, fontWeight: 700, marginBottom: 12 }}>{label}</div>{children}</div>
     </div>
   );
 }
+
+const Dot = () => <span style={{ width: 8, height: 8, borderRadius: 4, background: GREEN, display: 'inline-block', flexShrink: 0 }} />;
+const XGlyph = () => (<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M18.9 1.2h3.7l-8 9.1 9.4 12.5h-7.4l-5.8-7.6-6.6 7.6H.5l8.5-9.8L0 1.2h7.6l5.2 6.9 6.1-6.9Zm-1.3 19.4h2L6.5 3.3H4.4l13.2 17.3Z" /></svg>);
+const Celebrant = () => (
+  <svg width="22" height="26" viewBox="0 0 266 322" fill="none"><path d="M133 96c-18 0-30-16-30-34 0-17 13-31 30-31s30 14 30 31c0 18-12 34-30 34Z" fill="var(--white)" /><path d="M133 120c8 0 15 6 15 30v150c0 12-7 20-15 20s-15-8-15-20V150c0-24 7-30 15-30Z" fill="var(--white)" /><path d="M120 140 40 70M146 140l80-70" stroke="var(--white)" strokeWidth="26" strokeLinecap="round" /><circle cx="133" cy="300" r="16" fill="var(--vermilion)" /></svg>
+);
