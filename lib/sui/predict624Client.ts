@@ -753,27 +753,38 @@ async function jsonRpc<T>(method: string, params: unknown[]): Promise<T | null> 
  * LP fills lag until the next account-touching call sweeps the accumulator).
  * Returns 0 on any read failure (missing wrapper, empty bag, RPC hiccup).
  */
-export async function fetchAccountBalance624(wrapperId: string): Promise<number> {
+export async function fetchAccountBalanceMicro624(wrapperId: string): Promise<bigint> {
   const obj = await jsonRpc<{ data?: { content?: { fields?: Record<string, any> } } }>('sui_getObject', [
     wrapperId,
     { showContent: true },
   ]);
   const bagId = obj?.data?.content?.fields?.account?.fields?.balances?.fields?.id?.id;
-  if (!bagId) return 0;
-  const dfs = await jsonRpc<{ data?: Array<Record<string, any>> }>('suix_getDynamicFields', [bagId, null, 20]);
+  if (!bagId) return BigInt(0);
+  const dfs = await jsonRpc<{ data?: Array<Record<string, any>> }>('suix_getDynamicFields', [bagId, null, 50]);
   const rows = dfs?.data ?? [];
-  const hit =
-    rows.find(
-      (f) =>
-        String(f.name?.type ?? '').includes('CoinKey') &&
-        String(f.objectType ?? f.name?.type ?? '').toLowerCase().includes('dusdc'),
-    ) ?? rows[0];
-  if (!hit) return 0;
+  // STRICT: match only the DUSDC CoinKey. Never fall back to rows[0] — the bag can
+  // also hold PLP/DEEP balances, and a wrong-coin figure passed to
+  // withdraw_funds<DUSDC> would overshoot and abort with EBalanceTooLow.
+  const hit = rows.find(
+    (f) =>
+      String(f.name?.type ?? '').includes('CoinKey') &&
+      String(f.objectType ?? f.name?.type ?? '').toLowerCase().includes('dusdc'),
+  );
+  if (!hit) return BigInt(0);
   const v = await jsonRpc<{ data?: { content?: { fields?: { value?: string | number } } } }>('sui_getObject', [
     hit.objectId,
     { showContent: true },
   ]);
-  return Number(v?.data?.content?.fields?.value ?? 0) / DUSDC_MULTIPLIER;
+  try {
+    return BigInt(v?.data?.content?.fields?.value ?? 0);
+  } catch {
+    return BigInt(0);
+  }
+}
+
+/** Display number (DUSDC) derived from the exact integer reader above. */
+export async function fetchAccountBalance624(wrapperId: string): Promise<number> {
+  return Number(await fetchAccountBalanceMicro624(wrapperId)) / DUSDC_MULTIPLIER;
 }
 
 // ─── per-account order/position feeds (live beta indexer — routes VERIFIED 2026-07-03) ───

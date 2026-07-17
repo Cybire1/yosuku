@@ -32,6 +32,7 @@ import {
   findWrapperId624,
   fetchInnerAccountId624,
   fetchAccountBalance624,
+  fetchAccountBalanceMicro624,
   fetchOpenPositions624,
   fetchAccountOrders624,
   fetchMarketState624,
@@ -282,15 +283,29 @@ export default function Portfolio624Section() {
   // B3: the money's way OUT — trading account → wallet, right where the balance shows.
   async function withdrawToWallet() {
     if (!wrapperId || !address || busy) return;
-    const amountMicro = BigInt(Math.floor(acctBalance * DUSDC_MULTIPLIER));
-    if (amountMicro <= BigInt(0)) return;
     setBusy('withdraw');
     try {
+      // Withdraw the EXACT current on-chain DUSDC balance, re-read at click time as
+      // an integer (never the polled float, which can be stale/high). withdraw_funds
+      // only checks stored >= amount and allows draining to exactly the stored value,
+      // so an exact-integer amount clears regardless of open/settled positions.
+      const amountMicro = await fetchAccountBalanceMicro624(wrapperId);
+      if (amountMicro <= BigInt(0)) {
+        toast('Nothing to withdraw right now.', 'error');
+        return;
+      }
       await submitTx(() => buildWithdrawTx({ wrapperId, amountMicro, recipient: address }));
-      toast(`${fmt2(acctBalance)} DUSDC returned to your wallet`, 'success');
+      toast(`${fmt2(micro(amountMicro))} DUSDC returned to your wallet`, 'success');
       refreshBalance();
     } catch (e) {
-      toast(`Withdraw failed: ${String(e instanceof Error ? e.message : e).slice(0, 140)}`, 'error');
+      // Translate the known abort instead of dumping a raw Move error (matches claim()).
+      const raw = String(e instanceof Error ? e.message : e);
+      const friendly = /EBalanceTooLow|::account::withdraw|MoveAbort[^)]*\b1\)/i.test(raw)
+        ? 'Your balance just moved — reopen and try again; the amount refreshes to what’s actually there.'
+        : /InsufficientGas|no valid gas|sponsor|budget/i.test(raw)
+          ? 'The gas sponsor is busy — try again in a moment.'
+          : `Withdraw failed: ${raw.slice(0, 120)}`;
+      toast(friendly, 'error');
     } finally { setBusy(null); }
   }
 
