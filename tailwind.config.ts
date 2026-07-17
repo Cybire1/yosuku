@@ -1,3 +1,4 @@
+// Tailwind config: content globs the JIT scans for class names, plus theme extensions.
 import type { Config } from "tailwindcss";
 
 const config: Config = {
