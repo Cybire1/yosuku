@@ -240,7 +240,7 @@ export default function ParlayBuilder() {
       setStep('success');
       refreshBalance();
       toast(
-        `Parlay placed — ${legs.length} legs, ${stakeDisplay.toFixed(2)} → ${payoutDisplay.toFixed(0)} DUSDC if every leg lands.`,
+        `Parlay placed. ${legs.length} legs, ${stakeDisplay.toFixed(2)} to ${payoutDisplay.toFixed(0)} DUSDC if every leg lands.`,
         'success',
       );
       setTimeout(() => { setStep('idle'); setLegs([]); }, 3500);
@@ -259,7 +259,7 @@ export default function ParlayBuilder() {
       <div className="rounded-2xl border border-white/[0.08] bg-neutral-900/60 p-8 text-center">
         <Wallet className="w-8 h-8 text-gray-600 mx-auto mb-3" />
         <p className="text-sm text-gray-400 mb-1">Connect your wallet to build a parlay</p>
-        <p className="text-xs text-gray-600 mb-4">Any Sui wallet — test funds are free</p>
+        <p className="text-xs text-gray-600 mb-4">Any Sui wallet. Test funds are free</p>
         <div className="flex justify-center"><ConnectButton /></div>
       </div>
     );
@@ -292,7 +292,7 @@ export default function ParlayBuilder() {
             <div className="py-10 text-center">
               <p className="text-sm text-gray-400 mb-1">No legs yet</p>
               <p className="text-xs text-gray-600 mb-4 max-w-[34ch] mx-auto leading-relaxed">
-                Stack 2–3 BTC bells. The parlay pays out only if every leg lands — small stake, multiplied payout.
+                Stack 2 or 3 BTC rounds. The parlay pays out only if every leg lands: small stake, multiplied payout.
               </p>
               <button
                 onClick={() => addLeg()}
@@ -363,7 +363,7 @@ export default function ParlayBuilder() {
                       <Loader2 className="w-9 h-9 animate-spin mx-auto text-vermilion/60" />
                     ) : quote ? (
                       `${quote.multiplier.toFixed(quote.multiplier >= 10 ? 0 : 1)}×`
-                    ) : '—'}
+                    ) : '···'}
                   </div>
                   {quote && !quoteLoading && (
                     <div className="font-mono text-[10px] text-gray-500 mt-2">
@@ -377,7 +377,7 @@ export default function ParlayBuilder() {
                   <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-400/[0.06] border border-amber-400/15">
                     <AlertCircle className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
                     <span className="text-[11px] text-amber-400/90 leading-snug">
-                      Legs share a BTC market — odds adjusted for correlation.
+                      Legs share a BTC market, so odds are adjusted for correlation.
                     </span>
                   </div>
                 )}
@@ -417,10 +417,10 @@ export default function ParlayBuilder() {
 
                   <div className="space-y-1.5 pt-1">
                     <Row label="You pay" emphasize>
-                      {quoteLoading ? '…' : quote ? `${stakeDisplay.toFixed(2)} DUSDC` : '—'}
+                      {quoteLoading ? '…' : quote ? `${stakeDisplay.toFixed(2)} DUSDC` : '···'}
                     </Row>
                     <Row label="You win" accent>
-                      {quoteLoading ? '…' : quote ? `${payoutDisplay.toFixed(2)} DUSDC` : '—'}
+                      {quoteLoading ? '…' : quote ? `${payoutDisplay.toFixed(2)} DUSDC` : '···'}
                     </Row>
                     <div className="flex justify-end -mt-0.5">
                       <span className="font-mono text-[10px] text-gray-600">
@@ -441,7 +441,7 @@ export default function ParlayBuilder() {
                             <span className={leg.isUp ? 'text-emerald-400/80' : 'text-rose-400/80'}>
                               {leg.isUp ? 'UP' : 'DOWN'}
                             </span>{' '}
-                            {leg.strike ? fmtUsd(leg.strike / FLOAT_SCALING) : '—'}
+                            {leg.strike ? fmtUsd(leg.strike / FLOAT_SCALING) : '···'}
                             {o && <span className="text-gray-700"> · {formatCountdown(getTimeRemaining(o.expiry))}</span>}
                           </span>
                           <span className="font-mono text-gray-400">{(quote.legProbs[i] * 100).toFixed(0)}%</span>
@@ -456,7 +456,7 @@ export default function ParlayBuilder() {
                     onClick={() => setQuoteRetry((k) => k + 1)}
                     className="w-full text-center text-[11px] text-rose-400/90 underline underline-offset-2 hover:text-rose-300"
                   >
-                    A leg can&apos;t be priced (market inactive or settled) — retry
+                    A leg can&apos;t be priced (market inactive or settled). Retry
                   </button>
                 )}
 
@@ -484,13 +484,13 @@ export default function ParlayBuilder() {
                   ) : !hasEnough ? (
                     'Insufficient DUSDC'
                   ) : quote ? (
-                    `Place — ${stakeDisplay.toFixed(2)} DUSDC`
+                    `Place · ${stakeDisplay.toFixed(2)} DUSDC`
                   ) : 'Build your parlay'}
                 </button>
 
                 {/* no manager / no AccountSetup needed — parlay escrows directly */}
                 <p className="text-[10px] text-gray-600 text-center leading-relaxed">
-                  The full payout is set aside up front. No account setup — your stake leaves your wallet, and the rest is covered for you.
+                  The full payout is set aside up front. No account setup. Your stake leaves your wallet, and the rest is covered for you.
                 </p>
 
                 <AnimatePresence>
@@ -539,7 +539,7 @@ export default function ParlayBuilder() {
           <div className="mt-3 flex items-start gap-2 px-1">
             <Trophy className="w-3.5 h-3.5 text-gray-600 flex-shrink-0 mt-0.5" />
             <p className="text-[10px] text-gray-600 leading-relaxed">
-              Every leg must settle in the money. The instant one leg settles against you, the ticket is dead — your stake is the most you can lose.
+              Every leg must settle in the money. The instant one leg settles against you, the ticket is dead, and your stake is the most you can lose.
             </p>
           </div>
         )}
@@ -641,7 +641,7 @@ function LegRow({
                 <span className="text-white font-mono truncate">
                   {oracle
                     ? <>BTC market · <Countdown expiryMs={oracle.expiry} className="text-[11px]" /></>
-                    : 'market settled — pick another'}
+                    : 'market settled, pick another'}
                 </span>
                 <ChevronDown className={`w-3 h-3 text-gray-500 flex-shrink-0 transition-transform ${showBells ? 'rotate-180' : ''}`} />
               </button>

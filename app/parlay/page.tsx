@@ -26,12 +26,7 @@ export default function ParlayPage() {
           <h1 className="page-title">
             Parlay<span className="accent">.</span>
           </h1>
-          <p className="page-title-jp">連勝 — the close streak</p>
-          <p className="page-subtitle mt-5">
-            Stack two or three BTC rounds into a single ticket. The odds multiply, so a small
-            stake chases a big payout — but every leg has to land. The instant one leg settles
-            against you, the ticket is dead and your stake is the most you can lose.
-          </p>
+          <p className="page-title-jp">連勝 · the close streak</p>
         </div>
 
         {/* Builder */}
@@ -53,7 +48,7 @@ export default function ParlayPage() {
             number="02"
             title="Your tickets"
             jp="あなたの馬券"
-            desc="Each leg ticks green as it settles — claim the instant the streak lands."
+            desc="Each leg ticks green as it settles. Claim the instant the streak lands."
           />
           <div className="mt-6">
             <ParlaySlip />
@@ -72,12 +67,12 @@ export default function ParlayPage() {
               {
                 n: '①',
                 t: 'Odds multiply',
-                d: 'Each leg has a win chance under 100%. Combine them and the chances multiply down — so the payout multiplies up. Two coin-flips already pay roughly 4×.',
+                d: 'Each leg has a win chance under 100%. Combine them and the chances multiply down, so the payout multiplies up. Two coin flips already pay roughly 4×.',
               },
               {
                 n: '②',
                 t: 'All-or-nothing',
-                d: 'The ticket only pays if every single leg settles in the money. One miss and the whole stake is lost — that is the price of the multiplied payout.',
+                d: 'The ticket only pays if every single leg settles in the money. One miss and the whole stake is lost. That is the price of the multiplied payout.',
               },
               {
                 n: '③',

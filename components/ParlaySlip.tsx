@@ -124,7 +124,7 @@ function ParlayCard({ p, now, onClaimed }: { p: MyParlay; now: number; onClaimed
       )}
       {lost && (
         <p className="mt-3 text-[12px] text-gray-500 text-center">
-          One leg settled against you — the ticket is dead, stake lost.
+          One leg settled against you. The ticket is dead, stake lost.
         </p>
       )}
     </motion.div>
@@ -151,7 +151,7 @@ export default function ParlaySlip() {
     return (
       <div className="rounded-2xl border border-dashed border-white/[0.08] bg-neutral-900/20 p-8 text-center">
         <p className="font-mono text-[11px] tracking-wider uppercase text-gray-600">
-          {address ? 'No open tickets yet — build a streak above' : 'Connect to see your tickets'}
+          {address ? 'No open tickets yet. Build a streak above' : 'Connect to see your tickets'}
         </p>
       </div>
     );
