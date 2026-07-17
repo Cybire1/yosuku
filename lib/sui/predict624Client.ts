@@ -27,7 +27,7 @@
 // Proven-on-chain reference flows: suioverflow/x-relay/spike-624.mjs (owner path),
 // spike-624b.mjs (delegated vault path), predict624.mjs (the node twin of this file).
 
-import { Transaction } from '@mysten/sui/transactions';
+import { Transaction, type TransactionObjectArgument } from '@mysten/sui/transactions';
 import { gql, grpc } from './modernClients';
 import { DUSDC_TYPE, CLOCK_ID, DUSDC_MULTIPLIER } from './constants';
 
@@ -49,6 +49,11 @@ export const PREDICT624 = {
   accountPackage: '0xb9389eac8d59170ffd1427c1a66e5c8306263464fcc6615e825c1f5b3e15da3b',
   /** predict::protocol_config::ProtocolConfig (shared). */
   protocolConfig: '0x2325224629b4bd96d1f1d7ee937e07f8a06f861018a130bbb26db09cb0394cb6',
+  /** Yosuku's native BuilderCode (predict::builder_code, owner = treasury 0xaa50…),
+   *  created on-chain 2026-07-17 (tx HR2FoJ1z). Attached to the accounts we mint for so
+   *  their trades ride DeepBook Predict's OWN builder-fee rail. Pays 0 until the protocol
+   *  enables builder fees: wired now so revenue is a config flip, never a migration. */
+  builderCode: '0x3d02c41f853b6a62510a517b149ed44a1322476974e309c42d0c4ff99c0abb6a',
   /** account::account_registry::AccountRegistry (shared) — wrapper derivation root. */
   accountRegistry: '0x3c54d5b8b6bca376fc289121838ad02f8a5b3843242b9ad7e8f8245720e685a2',
   /** propbook::registry::OracleRegistry (shared). */
@@ -252,16 +257,41 @@ export async function fetchSpot624(): Promise<number> {
  * One-time: create the sender's canonical derived AccountWrapper and share it.
  * Aborts on-chain if the wrapper already exists (use findWrapperId624 first).
  */
+/** Attach Yosuku's native BuilderCode to a wrapper so this account's trades attribute
+ *  builder fees to our treasury on DeepBook Predict's OWN rail (not a private wrapper).
+ *  `wrapper` may be an object id (existing account) or a PTB-local result (a fresh
+ *  account, before it is shared). Consumes a fresh owner Auth, so the account owner must
+ *  be the tx sender. Pays 0 until the protocol enables the rail: wired now so revenue is
+ *  a config flip, not a migration. */
+function appendSetBuilderCode(tx: Transaction, wrapper: TransactionObjectArgument | string): void {
+  const w = typeof wrapper === 'string' ? tx.object(wrapper) : wrapper;
+  const auth = tx.moveCall({ target: `${PREDICT624.accountPackage}::account::generate_auth`, arguments: [] });
+  tx.moveCall({
+    target: `${PREDICT624.predictPackage}::predict_account::set_builder_code`,
+    arguments: [w, auth, tx.object(PREDICT624.builderCode)],
+  });
+}
+
 export function buildCreateAccountTx(): Transaction {
   const tx = new Transaction();
   const wrapper = tx.moveCall({
     target: `${PREDICT624.accountPackage}::account_registry::new`,
     arguments: [tx.object(PREDICT624.accountRegistry)],
   });
+  // ride DeepBook Predict's native builder rail — attach while the account is fresh (one signature)
+  appendSetBuilderCode(tx, wrapper);
   tx.moveCall({
     target: `${PREDICT624.accountPackage}::account::share`,
     arguments: [wrapper],
   });
+  return tx;
+}
+
+/** Attach Yosuku's BuilderCode to an EXISTING account (owner-signed). For accounts
+ *  created before the rail was wired, or to re-attach. Idempotent for our own code. */
+export function buildSetBuilderCodeTx(wrapperId: string): Transaction {
+  const tx = new Transaction();
+  appendSetBuilderCode(tx, wrapperId);
   return tx;
 }
 
