@@ -249,7 +249,7 @@ body.urgent::before {
 @media (prefers-reduced-motion: reduce) { .sensei-dock { animation: none; } }
 
 /* ── the Sensei drawer ── */
-.sensei-drawer-scrim { position: fixed; inset: 0; z-index: 950; background: rgba(6,5,4,0.5); backdrop-filter: blur(3px); opacity: 0; pointer-events: none; transition: opacity 300ms var(--ease); }
+.sensei-drawer-scrim { position: fixed; inset: 0; z-index: 950; background: rgba(6,5,4,0.5); opacity: 0; pointer-events: none; transition: opacity 300ms var(--ease); }
 .sensei-drawer-scrim.show { opacity: 1; pointer-events: auto; }
 .sensei-drawer {
   position: fixed; top: 0; right: 0; bottom: 0; z-index: 960; width: min(400px, 92vw);
