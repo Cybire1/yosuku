@@ -8,6 +8,7 @@ import { useState, useEffect, useRef, useCallback, useMemo, type CSSProperties }
 import { useCurrentAccount } from '@mysten/dapp-kit';
 import { fetchSpot624, fetchMarkets624, fetchPythHistory624, inferCadence624 } from '@/lib/sui/predict624Client';
 import { BAND_USD } from '@/lib/sui/ticket624';
+import SenseiTradeCards from './SenseiTradeCards';
 
 type Props = { targetTime?: number; now?: number };
 type Msg = { role: 'user' | 'assistant'; content: string };
@@ -20,7 +21,7 @@ const R = 30, TAU = 2 * Math.PI * R;
 const INTRO: Msg = {
   role: 'assistant',
   content:
-    "I'm Sensei. I read the live Bitcoin market with you and give you a straight call. UP, DOWN, or sit it out. Ask me, or tap a starter. (Testnet. A read, not real-money advice, and I don't place trades yet.)",
+    "I'm Sensei. I read the live Bitcoin market with you and give you a straight call. UP, DOWN, or sit it out. Then act on it right here: tap a market below to trade, gas-free. (Testnet. Test funds only. I read and recommend, you place the trade.)",
 };
 const STARTERS = ['Read the current market', 'Up or down on the next close?', 'Is this a coin-flip?'];
 // Cute one-liners the dock pops to invite a tap (short, plain, no jargon).
@@ -320,6 +321,9 @@ export default function SenseiDock({ targetTime, now }: Props) {
           )}
         </div>
 
+        {/* control center: act on the read right here */}
+        <SenseiTradeCards active={open} />
+
         {msgs.length === 1 && (
           <div className="sensei-drawer-starters">
             {STARTERS.map((s) => (
@@ -332,7 +336,7 @@ export default function SenseiDock({ targetTime, now }: Props) {
           <input value={input} onChange={(e) => setInput(e.target.value)} placeholder="Ask Sensei about the market…" />
           <button type="submit" disabled={loading || !input.trim()} data-cursor="hover">Ask</button>
         </form>
-        <p className="sensei-drawer-foot">Reads the live market and gives you a call. Testnet, a read, not real-money advice. Doesn’t place trades yet.</p>
+        <p className="sensei-drawer-foot">Reads the live market, gives you a call, and lets you act on it, gasless. You place every trade; Sensei never trades on its own. Testnet, test funds only.</p>
       </aside>
     </>
   );
