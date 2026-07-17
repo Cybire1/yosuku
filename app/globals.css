@@ -3094,9 +3094,13 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
   color: var(--gray-600); letter-spacing: 0.3em;
   z-index: 3; pointer-events: none;
 }
-.feature-pin { position: relative; height: 80vh; overflow: hidden; }
+/* The pin STICKS to the viewport and stays in view while the runway spacers below
+   scroll past — that scroll drives the act crossfade. (Previously it was position:
+   relative with overflow:hidden, so it never pinned: the content scrolled away and
+   the empty runway filled the screen.) */
+.feature-pin { position: sticky; top: 0; height: 100vh; overflow: hidden; }
 .feature-stage {
-  position: sticky; top: 0; height: 80vh;
+  position: relative; height: 100%;
   display: flex; align-items: center; justify-content: center;
 }
 .features-track { position: relative; }

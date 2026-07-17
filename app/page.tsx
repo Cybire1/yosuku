@@ -412,7 +412,8 @@ export default function HomePage() {
       const rect = section.getBoundingClientRect();
       const sectionH = section.offsetHeight;
       const scrolled = -rect.top;
-      const progress = clamp(scrolled / (sectionH - window.innerHeight), 0, 1);
+      const denom = sectionH - window.innerHeight;
+      const progress = denom > 0 ? clamp(scrolled / denom, 0, 1) : 0;
       setFeatureProgress(progress);
       const idx = Math.min(FEATURES.length - 1, Math.floor(progress * FEATURES.length));
       setActiveFeature(idx);
@@ -779,10 +780,11 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Spacers for scroll-driven animation */}
-        <div className="features-spacer" style={{ height: '15vh' }} />
-        <div className="features-spacer" style={{ height: '15vh' }} />
-        <div className="features-spacer" style={{ height: '15vh' }} />
+        {/* Runway: the sticky pin above stays in view while these scroll past, which
+            drives the act crossfade (~40vh of scroll per act). Hidden on mobile. */}
+        <div className="features-spacer" style={{ height: '65vh' }} />
+        <div className="features-spacer" style={{ height: '65vh' }} />
+        <div className="features-spacer" style={{ height: '65vh' }} />
 
         {/* Progress dots */}
         <div className="feature-progress">
