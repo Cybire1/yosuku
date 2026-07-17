@@ -321,8 +321,10 @@ export default function SenseiDock({ targetTime, now }: Props) {
           )}
         </div>
 
-        {/* control center: act on the read right here */}
-        <SenseiTradeCards active={open} />
+        {/* control center: the trade cards appear only once Sensei has actually
+            given a read (any reply past the intro) or you asked to trade — not
+            pinned open by default. Action follows the recommendation. */}
+        {msgs.some((m, i) => i > 0 && m.role === 'assistant') && <SenseiTradeCards active={open} />}
 
         {msgs.length === 1 && (
           <div className="sensei-drawer-starters">
