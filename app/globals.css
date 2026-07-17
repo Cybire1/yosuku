@@ -205,48 +205,66 @@ body.urgent::before {
 @keyframes senseiDot { 0%, 100% { transform: translateY(0); opacity: 0.4; } 50% { transform: translateY(-4px); opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .sensei-dots i { animation: none; } }
 
-/* ── SenseiDock: the floating countdown orb that opens the assistant drawer ── */
+/* ── SenseiDock: a compact 先 mark that expands on hover, with a cute question teaser ── */
+.sensei-dock-wrap { position: fixed; right: 22px; bottom: 22px; z-index: 900; display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
 .sensei-dock {
-  position: fixed; right: 22px; bottom: 22px; z-index: 900;
-  display: inline-flex; align-items: center; gap: 11px;
-  padding: 8px 15px 8px 8px; border: 0; cursor: pointer; border-radius: 999px;
+  position: relative; display: inline-flex; align-items: center; gap: 0;
+  padding: 7px; border: 0; cursor: pointer; border-radius: 999px;
   background: rgba(23,19,16,0.93); backdrop-filter: blur(10px);
-  box-shadow: 0 18px 44px -16px rgba(0,0,0,0.6), inset 0 0 0 1px rgba(224,77,38,0.22);
-  transition: transform 260ms cubic-bezier(.34,1.56,.64,1), box-shadow 220ms var(--ease), opacity 220ms var(--ease);
-  animation: senseiDockBreathe 3.6s ease-in-out infinite;
+  box-shadow: 0 16px 40px -16px rgba(0,0,0,0.6), inset 0 0 0 1px rgba(224,77,38,0.22);
+  transition: gap 300ms var(--ease), padding 300ms var(--ease), transform 260ms cubic-bezier(.34,1.56,.64,1), box-shadow 220ms var(--ease), opacity 220ms var(--ease);
 }
-[data-theme="light"] .sensei-dock { background: rgba(255,255,255,0.95); box-shadow: 0 18px 44px -16px rgba(40,18,6,0.26), inset 0 0 0 1px rgba(224,77,38,0.22); }
-@keyframes senseiDockBreathe {
-  0%, 100% { box-shadow: 0 18px 44px -16px rgba(0,0,0,0.6), inset 0 0 0 1px rgba(224,77,38,0.22), 0 0 0 0 rgba(224,77,38,0); }
-  50% { box-shadow: 0 18px 44px -16px rgba(0,0,0,0.6), inset 0 0 0 1px rgba(224,77,38,0.42), 0 0 22px -3px rgba(224,77,38,0.34); }
-}
-.sensei-dock:hover { transform: translateY(-3px); }
-.sensei-dock:active { transform: translateY(0) scale(0.98); }
-.sensei-dock.is-open { transform: scale(0.94); opacity: 0.5; }
+[data-theme="light"] .sensei-dock { background: rgba(255,255,255,0.95); box-shadow: 0 16px 40px -16px rgba(40,18,6,0.26), inset 0 0 0 1px rgba(224,77,38,0.22); }
+.sensei-dock:hover { transform: translateY(-3px); gap: 11px; padding: 7px 7px 7px 18px; }
+.sensei-dock:focus-visible { gap: 11px; padding: 7px 7px 7px 18px; outline: none; }
+.sensei-dock:active { transform: translateY(0) scale(0.97); }
+.sensei-dock.is-open { transform: scale(0.9); opacity: 0.45; }
+
 .sensei-dock-avatar { position: relative; width: 46px; height: 46px; flex: none; display: grid; place-items: center; }
 .sensei-dock-ring { position: absolute; inset: 0; width: 46px; height: 46px; transform: rotate(-90deg); }
 .sensei-dock-ring .sd-track { fill: none; stroke: rgba(255,255,255,0.12); stroke-width: 4; }
 [data-theme="light"] .sensei-dock-ring .sd-track { stroke: rgba(20,18,16,0.12); }
 .sensei-dock-ring .sd-fill { fill: none; stroke: var(--vermilion); stroke-width: 4; stroke-linecap: round; transition: stroke-dashoffset 900ms linear; filter: drop-shadow(0 0 4px rgba(224,77,38,0.55)); }
-.sd-avatar-glyph { position: relative; font-family: 'Noto Serif JP', var(--font-display); font-weight: 700; font-size: 18px; color: var(--white); line-height: 1; }
+.sd-avatar-glyph { position: relative; z-index: 1; font-family: 'Noto Serif JP', var(--font-display); font-weight: 700; font-size: 18px; color: var(--white); line-height: 1; }
 [data-theme="light"] .sd-avatar-glyph { color: #1A1613; }
-.sensei-dock-copy { display: flex; flex-direction: column; align-items: flex-start; text-align: left; line-height: 1.15; }
+
+/* soft, almost-imperceptible idle pulse ring on the mark (replaces the wide glow) */
+.sensei-dock-pulse { position: absolute; inset: -1px; border-radius: 50%; border: 1px solid var(--vermilion); opacity: 0; pointer-events: none; animation: senseiIdlePulse 3.4s ease-out infinite; }
+@keyframes senseiIdlePulse { 0% { opacity: 0.3; transform: scale(0.95); } 70%, 100% { opacity: 0; transform: scale(1.2); } }
+.sensei-dock.urgent .sensei-dock-pulse { animation-duration: 1.4s; }
+
+/* label collapsed by default, revealed to the LEFT of the mark on hover/focus */
+.sensei-dock-copy { max-width: 0; overflow: hidden; white-space: nowrap; opacity: 0; display: flex; align-items: center; transition: max-width 320ms var(--ease), opacity 240ms var(--ease); }
+.sensei-dock:hover .sensei-dock-copy, .sensei-dock:focus-visible .sensei-dock-copy { max-width: 108px; opacity: 1; }
 .sensei-dock-copy .sd-name { font-family: var(--font-display); font-weight: 800; font-size: 14px; letter-spacing: -0.01em; color: var(--white); }
 .sensei-dock-copy .sd-name b { color: var(--vermilion); font-weight: 800; }
 [data-theme="light"] .sensei-dock-copy .sd-name { color: #1A1613; }
-.sensei-dock-copy .sd-sub { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.02em; color: var(--gray-500); font-variant-numeric: tabular-nums; margin-top: 1px; }
-.sd-arrow { font-family: var(--font-display); font-size: 15px; color: var(--vermilion); margin-left: 1px; transition: transform 240ms var(--ease); }
-.sensei-dock:hover .sd-arrow { transform: translateX(3px); }
-.sensei-dock-pulse { position: absolute; inset: 0; border-radius: 999px; border: 1px solid var(--vermilion); opacity: 0; pointer-events: none; }
-.sensei-dock.urgent { animation: none; }
-.sensei-dock.urgent .sensei-dock-pulse { animation: senseiDockPulse 1.5s var(--ease) infinite; }
-.sensei-dock.urgent .sensei-dock-copy .sd-sub { color: var(--vermilion); }
-@keyframes senseiDockPulse { 0% { opacity: 0.5; transform: scale(1); } 100% { opacity: 0; transform: scale(1.05); } }
-@media (max-width: 768px) {
-  .sensei-dock { bottom: 90px; right: 16px; padding: 7px; gap: 0; }
-  .sensei-dock .sensei-dock-copy, .sensei-dock .sd-arrow { display: none; }
+
+/* cute proactive teaser bubble — springs in above the mark, tail pointing down to it */
+.sensei-teaser {
+  position: relative; margin-right: 5px; border: 0; cursor: pointer;
+  border-radius: 15px 15px 4px 15px; padding: 9px 14px;
+  font-family: var(--font-display); font-weight: 600; font-size: 13px; white-space: nowrap;
+  color: #fff; background: var(--vermilion);
+  box-shadow: 0 12px 28px -10px rgba(224,77,38,0.7);
+  transform-origin: bottom right;
+  animation: senseiTeaserPop 440ms cubic-bezier(.34,1.56,.64,1) both;
 }
-@media (prefers-reduced-motion: reduce) { .sensei-dock { animation: none; } }
+.sensei-teaser::after { content: ''; position: absolute; right: 15px; bottom: -4px; width: 9px; height: 9px; background: var(--vermilion); border-radius: 0 0 3px 0; transform: rotate(45deg); }
+@keyframes senseiTeaserPop {
+  0% { opacity: 0; transform: scale(0.55) translateY(8px); }
+  60% { opacity: 1; transform: scale(1.05) translateY(0); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@media (max-width: 768px) {
+  .sensei-dock-wrap { bottom: 90px; right: 16px; }
+  .sensei-dock:hover, .sensei-dock:focus-visible { padding: 7px; gap: 0; }
+  .sensei-dock:hover .sensei-dock-copy, .sensei-dock:focus-visible .sensei-dock-copy { max-width: 0; opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sensei-dock-pulse, .sensei-teaser { animation: none; }
+}
 
 /* ── the Sensei drawer ── */
 .sensei-drawer-scrim { position: fixed; inset: 0; z-index: 950; background: rgba(6,5,4,0.5); opacity: 0; pointer-events: none; transition: opacity 300ms var(--ease); }

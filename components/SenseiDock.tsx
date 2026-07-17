@@ -23,6 +23,8 @@ const INTRO: Msg = {
     "I'm Sensei. I read the live Bitcoin market with you and give you a straight call. UP, DOWN, or sit it out. Ask me, or tap a starter. (Testnet. A read, not real-money advice, and I don't place trades yet.)",
 };
 const STARTERS = ['Read the current market', 'Up or down on the next close?', 'Is this a coin-flip?'];
+// Cute one-liners the dock pops to invite a tap (short, plain, no jargon).
+const TEASERS = ['Up or down?', 'Coin-flip?', 'Want a read?', 'Which way?'];
 
 function fmt(secs: number): string {
   const s = Math.max(0, secs);
@@ -112,6 +114,7 @@ export default function SenseiDock({ targetTime, now }: Props) {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [typingIdx, setTypingIdx] = useState(-1);
+  const [teaserIdx, setTeaserIdx] = useState(-1); // -1 = hidden; pops a rotating question
   const scrollRef = useRef<HTMLDivElement>(null);
   const sendTimes = useRef<number[]>([]);
 
@@ -163,6 +166,27 @@ export default function SenseiDock({ targetTime, now }: Props) {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  // Cute proactive teaser: pops a short rotating question a few times to invite a tap,
+  // then rests. Hidden while the drawer is open or under reduced-motion.
+  useEffect(() => {
+    if (open || REDUCE_MOTION) { setTeaserIdx(-1); return; }
+    let i = 0, alive = true;
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    const cycle = (delay: number) => {
+      timers.push(setTimeout(() => {
+        if (!alive) return;
+        setTeaserIdx(i % TEASERS.length);
+        timers.push(setTimeout(() => {
+          if (!alive) return;
+          setTeaserIdx(-1); i += 1;
+          if (i < 3) cycle(4500);
+        }, 4800));
+      }, delay));
+    };
+    cycle(3500);
+    return () => { alive = false; timers.forEach(clearTimeout); };
+  }, [open]);
+
   const send = useCallback(async (text: string) => {
     const t = text.trim();
     if (!t || loading) return;
@@ -187,28 +211,38 @@ export default function SenseiDock({ targetTime, now }: Props) {
 
   return (
     <>
-      {/* ── the dock: a draining countdown ring that IS Sensei ── */}
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        aria-label="Open Sensei AI, your trading assistant"
-        data-cursor="hover"
-        className={`sensei-dock ${urgent ? 'urgent' : ''} ${open ? 'is-open' : ''}`}
-      >
-        <span className="sensei-dock-avatar">
-          <svg viewBox="0 0 72 72" className="sensei-dock-ring" aria-hidden>
-            <circle cx="36" cy="36" r={R} className="sd-track" />
-            <circle cx="36" cy="36" r={R} className="sd-fill" style={{ strokeDasharray: TAU, strokeDashoffset: TAU * (1 - frac) }} />
-          </svg>
-          <span className="sd-avatar-glyph">先</span>
-        </span>
-        <span className="sensei-dock-copy">
-          <span className="sd-name">Sensei <b>AI</b></span>
-          <span className="sd-sub">{targetTime ? `Read this round · ${fmt(secsLeft)}` : 'Ask the market'}</span>
-        </span>
-        <span className="sd-arrow" aria-hidden>→</span>
-        <span className="sensei-dock-pulse" aria-hidden />
-      </button>
+      {/* ── the dock: a compact 先 mark that expands on hover, plus a cute question teaser ── */}
+      <div className="sensei-dock-wrap">
+        {teaserIdx >= 0 && !open && (
+          <button
+            key={teaserIdx}
+            type="button"
+            className="sensei-teaser"
+            onClick={() => setOpen(true)}
+            aria-label={`Ask Sensei: ${TEASERS[teaserIdx]}`}
+            data-cursor="hover"
+          >
+            {TEASERS[teaserIdx]}
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          aria-label="Open Sensei AI, your trading assistant"
+          data-cursor="hover"
+          className={`sensei-dock ${urgent ? 'urgent' : ''} ${open ? 'is-open' : ''}`}
+        >
+          <span className="sensei-dock-copy"><span className="sd-name">Sensei <b>AI</b></span></span>
+          <span className="sensei-dock-avatar">
+            <svg viewBox="0 0 72 72" className="sensei-dock-ring" aria-hidden>
+              <circle cx="36" cy="36" r={R} className="sd-track" />
+              <circle cx="36" cy="36" r={R} className="sd-fill" style={{ strokeDasharray: TAU, strokeDashoffset: TAU * (1 - frac) }} />
+            </svg>
+            <span className="sd-avatar-glyph">先</span>
+            <span className="sensei-dock-pulse" aria-hidden />
+          </span>
+        </button>
+      </div>
 
       {/* ── the drawer ── */}
       <div className={`sensei-drawer-scrim ${open ? 'show' : ''}`} onClick={() => setOpen(false)} aria-hidden={!open} />
