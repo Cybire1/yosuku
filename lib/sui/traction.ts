@@ -97,8 +97,9 @@ const WL_Q = `query Wl($t: String!, $before: String) {
   }
 }`;
 
-const EVENTS_Q = `query Tr($t: String!, $last: Int!) {
-  events(last: $last, filter: { type: $t }) {
+const EVENTS_Q = `query Tr($t: String!, $before: String) {
+  events(last: 50, before: $before, filter: { type: $t }) {
+    pageInfo { hasPreviousPage startCursor }
     nodes { timestamp sender { address } contents { json } transaction { digest } }
   }
 }`;
@@ -181,13 +182,20 @@ export async function fetchTraction(): Promise<TractionStats> {
     { type: `${YOLEV}::underwrite::OrderFilled`, kind: 'leverage', userField: 'trader', amountField: 'notional', volume: true },
   ];
   await Promise.all(PROVEN.map(async (s) => {
-    try {
-      const result: GqlResult<EventsResponse> = await gql.query({
-        query: EVENTS_Q,
-        variables: { t: s.type, last: 50 },
-      });
-      const { data, errors } = result;
-      if (errors?.length || !data) return;
+    let before: string | null = null;
+    // paginate the FULL history per event type — a flat last:50 froze/undercounted
+    // any type past 50 (same rolling-window trap as the adoption scan above).
+    for (let page = 0; page < MAX_PAGES; page++) {
+      let data: EventsResponse | null | undefined;
+      try {
+        const result: GqlResult<EventsResponse> = await gql.query({
+          query: EVENTS_Q,
+          variables: { t: s.type, before },
+        });
+        if (result.errors?.length) break;
+        data = result.data;
+      } catch { break; }
+      if (!data) break;
       for (const n of data.events.nodes) {
         const j = n.contents?.json ?? {};
         const user = String((j[s.userField] as string) ?? n.sender.address);
@@ -198,7 +206,10 @@ export async function fetchTraction(): Promise<TractionStats> {
         if (s.volume) volume += amount;
         recent.push({ kind: s.kind, user, amount, digest: n.transaction?.digest ?? null, ts: n.timestamp ? Date.parse(n.timestamp) : 0 });
       }
-    } catch { /* skip a source */ }
+      const pi = data.events.pageInfo;
+      if (!pi?.hasPreviousPage || !pi.startCursor) break;
+      before = pi.startCursor;
+    }
   }));
 
   recent.sort((a, b) => b.ts - a.ts);
