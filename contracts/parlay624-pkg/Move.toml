@@ -1,0 +1,14 @@
+[package]
+name = "parlay624"
+edition = "2024.beta"
+version = "0.0.1"
+
+# No `[addresses]` block (new-style manifest, matching the vendored propbook):
+# the named address `parlay624` is auto-managed from the package name.
+
+[dependencies]
+# Propbook — the 6-24 venue's oracle layer. `pyth_feed::normalized_spot_at` is the
+# PUBLIC exact-stamp getter this module settles legs with: the IDENTICAL storage
+# read the venue's own `expiry_market::ensure_settled` performs. Local vendored
+# sources; Published.toml pins the live testnet linkage (0x8eb2adde…, v1).
+propbook = { local = "../vendor/deepbookv3-624/packages/propbook" }

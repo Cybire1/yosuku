@@ -1,0 +1,13 @@
+[package]
+name = "yosuku_rooms"
+edition = "2024"
+
+# Position-gated comment rooms on top of Mysten's Sui Stack Messaging + Groups.
+# Deps mirror the SDK's example_app (proven to resolve): messaging is the local
+# clone; groups is pinned to the same mainnet/v1 tag the example uses.
+[dependencies]
+sui_stack_messaging = { local = "../../sui-stack-messaging/move/packages/sui_stack_messaging" }
+sui_groups = { git = "https://github.com/MystenLabs/sui-groups.git", subdir = "move/packages/sui_groups", rev = "ea766818b90e162341e885a855718388edcc8e99" }
+
+[addresses]
+yosuku_rooms = "0x0"

@@ -1,0 +1,8 @@
+[package]
+name = "attreg"
+edition = "2024.beta"
+license = "Apache-2.0"
+authors = ["yosuku"]
+
+[addresses]
+suioverflow = "0x0"

@@ -1,0 +1,13 @@
+[package]
+name = "yolev"
+edition = "2024.beta"
+license = "Apache-2.0"
+authors = ["yosuku"]
+
+[dependencies]
+# parlay.move reads the settled OracleSVI via the public getters
+# (oracle::is_settled / oracle::settlement_price) — no mint/manager.
+deepbook_predict = { local = "../deepbook-sandbox/external/deepbook/packages/predict" }
+
+[addresses]
+yolev = "0x0"

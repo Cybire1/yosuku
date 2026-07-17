@@ -1,0 +1,31 @@
+[package]
+name = "yosuku_spike"
+edition = "2024"
+version = "0.0.1"
+
+# New-style manifest (no [addresses] block): required because `deepbook_predict`
+# is new-style and old-style manifests cannot depend on new-style packages.
+# On-chain identities come from each vendor package's Published.toml
+# (predict 0xdb3ef5a5…, account 0xb9389eac…, dusdc 0xe95040…, propbook
+# 0x8eb2adde…, block_scholes_oracle 0x8192932b…, fixed_math 0x6930d8ef…),
+# and pyth_lazer/wormhole are linked via predict's [dep-replacements.testnet].
+
+[dependencies]
+deepbook_predict = { local = "../vendor/deepbookv3-624/packages/predict" }
+account = { local = "../vendor/deepbookv3-624/packages/account" }
+dusdc = { local = "../vendor/deepbookv3-624/packages/dusdc" }
+# Same source predict itself uses (resolver unifies); needed directly because
+# vault624::crank_settle takes propbook::{OracleRegistry, PythFeed} and
+# new-style manifests only expose DIRECT dependencies' named addresses.
+propbook = { local = "../vendor/deepbookv3-624/packages/propbook" }
+# Direct declarations so the ROOT's dep-replacements bind to them (predict's own pattern).
+pyth_lazer = { git = "https://github.com/pyth-network/pyth-crosschain.git", subdir = "lazer/contracts/sui", rev = "sui-testnet" }
+wormhole = { git = "https://github.com/pyth-network/wormhole.git", subdir = "sui/wormhole", rev = "sui-testnet" }
+token = { git = "https://github.com/MystenLabs/deepbookv3.git", subdir = "packages/token", rev = "main" }
+
+# The publishable ROOT must declare the on-chain linkings for git deps that are
+# already published (mirrors predict's own Move.toml verbatim).
+[dep-replacements.testnet]
+pyth_lazer = { git = "https://github.com/pyth-network/pyth-crosschain.git", subdir = "lazer/contracts/sui", rev = "sui-testnet", published-at = "0xf5bd2141967507050a91b58de3d95e77c432cd90d1799ee46effc27430a68c21", original-id = "0xf5bd2141967507050a91b58de3d95e77c432cd90d1799ee46effc27430a68c21" }
+wormhole = { git = "https://github.com/pyth-network/wormhole.git", subdir = "sui/wormhole", rev = "sui-testnet", published-at = "0xd5afd4e456e5451f1ca1e7b3d734ce7a0a3b397811a6cb72a4bd1dfc387839f2", original-id = "0xd5afd4e456e5451f1ca1e7b3d734ce7a0a3b397811a6cb72a4bd1dfc387839f2" }
+token = { git = "https://github.com/MystenLabs/deepbookv3.git", subdir = "packages/token", rev = "main", published-at = "0x36dbef866a1d62bf7328989a10fb2f07d769f4ee587c0de4a0a256e57e0a58a8", original-id = "0x36dbef866a1d62bf7328989a10fb2f07d769f4ee587c0de4a0a256e57e0a58a8" }

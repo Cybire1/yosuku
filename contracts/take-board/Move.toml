@@ -1,0 +1,9 @@
+[package]
+name = "yosuku_takes"
+edition = "2024"
+version = "0.0.1"
+
+# Sui / MoveStdlib are auto-added by the toolchain (matched to the CLI version).
+
+[addresses]
+yosuku_takes = "0x0"
