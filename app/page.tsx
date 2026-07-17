@@ -5,6 +5,7 @@ import Link from 'next/link';
 import Header from '@/components/Header';
 import Marquee from '@/components/Marquee';
 import GrainOverlay from '@/components/GrainOverlay';
+import YosukuMark from '@/components/YosukuMark';
 
 import { useBtcPrice } from '@/lib/hooks/useBtcPrice';
 import { useOracles, useProtocolStats } from '@/lib/sui/hooks';
@@ -908,12 +909,9 @@ export default function HomePage() {
         <div className="footer-grid">
           <div className="footer-brand">
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <svg viewBox="0 0 18 18" width="18" height="18">
-                <line x1="9" y1="2" x2="9" y2="6" stroke="white" strokeWidth="1.4" />
-                <line x1="9" y1="12" x2="9" y2="16" stroke="white" strokeWidth="1.4" />
-                <rect x="6" y="6" width="6" height="6" fill="none" stroke="white" strokeWidth="1.4" />
-                <circle cx="13" cy="6" r="1.4" fill="var(--vermilion)" />
-              </svg>
+              <span className="logo-mark">
+                <YosukuMark />
+              </span>
               <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '15px', letterSpacing: '0.18em' }}>YOSUKU</span>
             </div>
             <p className="tagline">Bet on Bitcoin in seconds. Runs on Sui, pays out automatically.</p>

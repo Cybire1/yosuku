@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import AddFunds from './AddFunds';
 import CreditWelcome from './CreditWelcome';
+import YosukuMark from './YosukuMark';
 import ThemeToggle from './ThemeToggle';
 import TradingBalanceModal from './TradingBalanceModal';
 import { useToast } from './Toast';
@@ -195,12 +196,7 @@ export default function Header() {
         {/* Logo */}
         <a className="logo" href="/markets" aria-label="Yosuku markets" data-cursor="hover">
           <span className="logo-mark">
-            <svg viewBox="0 0 18 18">
-              <line x1="9" y1="2" x2="9" y2="6" stroke="white" strokeWidth="1.4" />
-              <line x1="9" y1="12" x2="9" y2="16" stroke="white" strokeWidth="1.4" />
-              <rect x="6" y="6" width="6" height="6" fill="none" stroke="white" strokeWidth="1.4" />
-              <circle cx="13" cy="6" r="1.4" className="dot" />
-            </svg>
+            <YosukuMark />
           </span>
           <span>YOSUKU</span>
         </a>

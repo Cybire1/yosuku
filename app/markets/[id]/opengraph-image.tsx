@@ -13,6 +13,19 @@ const VERMILION = '#E04D26';
 const PROFIT = '#2FA47C';
 const LOSS = '#D8556B';
 
+// the Yosuku mark (celebrant figure), as a data-URI so next/og rasterizes it cleanly
+const markSrc = (figure: string, dot: string) =>
+  `data:image/svg+xml;base64,${btoa(
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 266 322">` +
+      `<g stroke="${figure}" stroke-linecap="round" fill="none">` +
+      `<line x1="12" y1="15" x2="88" y2="94" stroke-width="24"/>` +
+      `<line x1="254" y1="15" x2="178" y2="94" stroke-width="24"/>` +
+      `<line x1="132.5" y1="13" x2="132.5" y2="86" stroke-width="14"/>` +
+      `<line x1="132.5" y1="250" x2="132.5" y2="306" stroke-width="14"/></g>` +
+      `<rect x="99" y="78" width="67" height="166" rx="16" fill="${figure}"/>` +
+      `<circle cx="132.5" cy="239" r="11" fill="${dot}"/></svg>`,
+  )}`;
+
 const API_BASE = 'https://predict-server.testnet.mystenlabs.com';
 const FLOAT_SCALING = 1_000_000_000;
 
@@ -74,7 +87,9 @@ export default async function OGImage({ params }: { params: Promise<{ id: string
 
         {/* top row: wordmark + live/settled pill */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={markSrc(INK, VERMILION)} width={30} height={36} alt="" style={{ display: 'flex' }} />
             <div style={{ fontSize: 27, fontWeight: 800, color: INK, letterSpacing: '0.16em', display: 'flex' }}>YOSUKU</div>
             <div style={{ fontSize: 16, color: VERMILION, letterSpacing: '0.22em', display: 'flex' }}>予測</div>
           </div>

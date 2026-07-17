@@ -170,7 +170,7 @@ body.urgent::before {
 }
 .logo { display: flex; align-items: center; gap: 10px; font-family: var(--font-display); font-weight: 800; font-size: 15px; letter-spacing: 0.18em; color: var(--white); }
 .logo-mark {
-  width: 18px; height: 18px;
+  width: 17px; height: 21px;
   position: relative;
   display: flex; align-items: center; justify-content: center;
 }
@@ -4345,7 +4345,7 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
   /* Slim the top bar on mobile: shorter header, tighter logo + wallet pill. */
   .header { padding: 0 14px; height: 46px; }
   .logo { font-size: 14px; font-weight: 800; letter-spacing: 0.12em; gap: 8px; }
-  .logo-mark { width: 16px; height: 16px; }
+  .logo-mark { width: 15px; height: 18px; }
   /* slimmer top tape on phones; header hangs directly under it */
   .marquee { height: 20px; font-size: 7px; letter-spacing: 0.01em; }
   .marquee-track { gap: 28px; padding-left: 28px; }
