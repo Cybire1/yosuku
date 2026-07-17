@@ -254,7 +254,7 @@ body.urgent::before {
 .sensei-drawer {
   position: fixed; top: 0; right: 0; bottom: 0; z-index: 960; width: min(400px, 92vw);
   display: flex; flex-direction: column;
-  background: #130e0b; backdrop-filter: blur(16px);
+  background: #000000; backdrop-filter: blur(16px);
   border-left: 1px solid rgba(255,255,255,0.08); box-shadow: -30px 0 70px -30px rgba(0,0,0,0.7);
   transform: translateX(104%); transition: transform 420ms cubic-bezier(.22,1,.36,1);
 }

@@ -16,7 +16,7 @@ type Snapshot = { spotUsd: number; markets: MarketLite[] } | null;
 const INTRO: Msg = {
   role: 'assistant',
   content:
-    "I'm Sensei. I read the live Bitcoin market with you and give you a straight call — UP, DOWN, or sit it out. Ask me anything, or tap a starter below. (Testnet — this is a read, not real-money advice, and I don't place trades yet.)",
+    "I'm Sensei. I read the live Bitcoin market with you and give you a straight call. UP, DOWN, or sit it out. Ask me anything, or tap a starter below. (Testnet. This is a read, not real-money advice, and I don't place trades yet.)",
 };
 
 const STARTERS = [
@@ -77,9 +77,9 @@ export default function SenseiPage() {
         body: JSON.stringify({ messages: next.map(({ role, content }) => ({ role, content })), market: snapshot, userId: account?.address, restless }),
       });
       const j = await res.json();
-      setMsgs((m) => [...m, { role: 'assistant', content: res.ok && j.reply ? j.reply : (j.error || 'Something went wrong — try again.') }]);
+      setMsgs((m) => [...m, { role: 'assistant', content: res.ok && j.reply ? j.reply : (j.error || 'Something went wrong. Try again.') }]);
     } catch {
-      setMsgs((m) => [...m, { role: 'assistant', content: 'Network error — try again in a moment.' }]);
+      setMsgs((m) => [...m, { role: 'assistant', content: 'Network error. Try again in a moment.' }]);
     } finally {
       setLoading(false);
     }
@@ -108,7 +108,7 @@ export default function SenseiPage() {
           <div className="shrink-0 text-right">
             <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-gray-500">BTC now</div>
             <div className="font-display font-[700] text-lg text-white tabular-nums">
-              {snapshot ? `$${snapshot.spotUsd.toLocaleString()}` : '—'}
+              {snapshot ? `$${snapshot.spotUsd.toLocaleString()}` : '···'}
             </div>
             {nearest && now > 0 && (
               <div className="font-mono text-[10px] text-gray-500">next close ~{nearest.minsToClose}m · {nearest.cadence}</div>
@@ -167,7 +167,7 @@ export default function SenseiPage() {
           </button>
         </form>
         <p className="font-mono text-[10px] text-gray-600 mt-3 leading-relaxed">
-          Sensei reads the live market and gives you a call. Testnet — test funds, not real money. It doesn’t place trades yet.
+          Sensei reads the live market and gives you a call. Testnet, test funds, not real money. It doesn’t place trades yet.
         </p>
       </main>
     </div>

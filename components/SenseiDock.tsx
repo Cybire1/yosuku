@@ -20,7 +20,7 @@ const R = 30, TAU = 2 * Math.PI * R;
 const INTRO: Msg = {
   role: 'assistant',
   content:
-    "I'm Sensei. I read the live Bitcoin market with you and give you a straight call — UP, DOWN, or sit it out. Ask me, or tap a starter. (Testnet — a read, not real-money advice, and I don't place trades yet.)",
+    "I'm Sensei. I read the live Bitcoin market with you and give you a straight call. UP, DOWN, or sit it out. Ask me, or tap a starter. (Testnet. A read, not real-money advice, and I don't place trades yet.)",
 };
 const STARTERS = ['Read the current market', 'Up or down on the next close?', 'Is this a coin-flip?'];
 
@@ -55,7 +55,7 @@ function Typewriter({ text, onDone, onType }: { text: string; onDone: () => void
 // Interactive follow-ups: contextual chips under Sensei's answer the user can tap.
 function chipsFor(reply: string): string[] {
   const r = reply.toLowerCase();
-  if (/sit (this|it|the next|out)|coin.?flip|don'?t (take|bet)|skip it|take a breath|pause|tilt|no bet/.test(r)) return ['Good call — skip it', 'Show me another market', 'Why sit out?'];
+  if (/sit (this|it|the next|out)|coin.?flip|don'?t (take|bet)|skip it|take a breath|pause|tilt|no bet/.test(r)) return ['Good call, skip it', 'Show me another market', 'Why sit out?'];
   if (/\bup\b/.test(r) && /\bdown\b/.test(r)) return ['Why that side?', "What's the risk?", 'What would flip it?'];
   if (/risk|thin|tight|lean|shakeout/.test(r)) return ['What would flip it?', 'How much should I risk?', 'Read the next market'];
   return ['Why?', "What's the risk?", 'Read the next market'];
@@ -177,11 +177,11 @@ export default function SenseiDock({ targetTime, now }: Props) {
         body: JSON.stringify({ messages: next.map(({ role, content }) => ({ role, content })), market: snapshot, userId: account?.address, restless }),
       });
       const j = await res.json();
-      const reply = res.ok && j.reply ? j.reply : (j.error || 'Something went wrong — try again.');
+      const reply = res.ok && j.reply ? j.reply : (j.error || 'Something went wrong. Try again.');
       setMsgs((m) => [...m, { role: 'assistant', content: reply }]);
       setTypingIdx(REDUCE_MOTION ? -1 : next.length);
     } catch {
-      setMsgs((m) => [...m, { role: 'assistant', content: 'Network error — try again.' }]);
+      setMsgs((m) => [...m, { role: 'assistant', content: 'Network error. Try again.' }]);
     } finally { setLoading(false); }
   }, [msgs, snapshot, loading, account?.address]);
 
@@ -191,7 +191,7 @@ export default function SenseiDock({ targetTime, now }: Props) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        aria-label="Open Sensei AI — your trading assistant"
+        aria-label="Open Sensei AI, your trading assistant"
         data-cursor="hover"
         className={`sensei-dock ${urgent ? 'urgent' : ''} ${open ? 'is-open' : ''}`}
       >
@@ -226,7 +226,7 @@ export default function SenseiDock({ targetTime, now }: Props) {
         {/* live market read — a pinned hairline strip that anchors every reply below it */}
         <div className={`sensei-meter sd-dir-${drift?.dir ?? 'flat'} ${urgent ? 'urgent' : ''}`}>
           <div className="sm-read">
-            <span className="sm-spot">{snapshot ? `$${snapshot.spotUsd.toLocaleString()}` : '—'}</span>
+            <span className="sm-spot">{snapshot ? `$${snapshot.spotUsd.toLocaleString()}` : '···'}</span>
             {drift && (
               <>
                 <span className="sm-tri" aria-hidden />
@@ -298,7 +298,7 @@ export default function SenseiDock({ targetTime, now }: Props) {
           <input value={input} onChange={(e) => setInput(e.target.value)} placeholder="Ask Sensei about the market…" />
           <button type="submit" disabled={loading || !input.trim()} data-cursor="hover">Ask</button>
         </form>
-        <p className="sensei-drawer-foot">Reads the live market and gives you a call. Testnet — a read, not real-money advice. Doesn’t place trades yet.</p>
+        <p className="sensei-drawer-foot">Reads the live market and gives you a call. Testnet, a read, not real-money advice. Doesn’t place trades yet.</p>
       </aside>
     </>
   );
