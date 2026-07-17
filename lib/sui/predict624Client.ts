@@ -462,6 +462,9 @@ export function buildCreateFundAndMint624(p: {
     target: `${PREDICT624.accountPackage}::account_registry::new`,
     arguments: [tx.object(PREDICT624.accountRegistry)],
   });
+  // 1b. ride DeepBook Predict's native builder rail — attach our BuilderCode while the
+  //     account is fresh (gasless: set_builder_code is allowlisted in the Onara policy)
+  appendSetBuilderCode(tx, wrapper);
   // 2. fund it from the wallet's DUSDC
   const primary = tx.object(p.coinIds[0]);
   if (p.coinIds.length > 1) tx.mergeCoins(primary, p.coinIds.slice(1).map((id) => tx.object(id)));
