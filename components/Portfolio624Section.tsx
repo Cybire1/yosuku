@@ -312,9 +312,28 @@ export default function Portfolio624Section() {
         <Crosshairs />
 
         {!checked ? (
-          <div className="font-mono text-[11px] uppercase tracking-[0.2em] text-white/40 px-5 py-8">
-            reading the new venue…
-          </div>
+          <>
+            {/* skeleton mirrors the real balance strip — structure is instant, only the numbers load in */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 border-b border-white/[0.06]">
+              {['Trading account', 'Open positions', 'Auto-paying', 'Account'].map((label, i) => (
+                <div key={label} className={`px-4 py-3.5 ${i > 0 ? 'border-l border-white/[0.06]' : ''} ${i === 3 ? 'hidden sm:block' : ''}`}>
+                  <div className="font-mono text-[9px] uppercase tracking-[0.18em] text-white/40 mb-1.5">{label}</div>
+                  <div className="h-5 w-20 rounded bg-white/[0.06] animate-pulse" />
+                </div>
+              ))}
+            </div>
+            <div className="divide-y divide-white/[0.04]">
+              {[0, 1].map((i) => (
+                <div key={i} className="px-4 py-4 flex items-center justify-between">
+                  <div className="space-y-2">
+                    <div className="h-3.5 w-40 rounded bg-white/[0.06] animate-pulse" />
+                    <div className="h-2.5 w-24 rounded bg-white/[0.04] animate-pulse" />
+                  </div>
+                  <div className="h-6 w-16 rounded bg-white/[0.05] animate-pulse" />
+                </div>
+              ))}
+            </div>
+          </>
         ) : !wrapperId ? (
           <div className="px-5 py-6">
             <p className="text-[13px] text-gray-400 leading-snug max-w-lg">
