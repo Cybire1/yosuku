@@ -88,7 +88,6 @@ export default function TradingBalanceModal({ onClose }: { onClose: () => void }
     }
   }
 
-  const openFaucet = () => { onClose(); setTimeout(() => window.dispatchEvent(new Event('yosuku:open-funds')), 60); };
   const fmt = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   return (
@@ -195,12 +194,13 @@ export default function TradingBalanceModal({ onClose }: { onClose: () => void }
           <p className={`mt-3 text-center text-[12px] ${msg.kind === 'err' ? 'text-rose-400' : 'text-emerald-400'}`}>{msg.text}</p>
         )}
 
-        <button
-          onClick={openFaucet}
-          className="mt-2.5 w-full rounded-full border border-vermilion/40 bg-vermilion/[0.07] py-2.5 text-[13px] font-semibold text-vermilion transition-colors hover:bg-vermilion/[0.14]"
+        <a
+          href="/fund"
+          onClick={onClose}
+          className="mt-2.5 block w-full text-center rounded-full border border-vermilion/40 bg-vermilion/[0.07] py-2.5 text-[13px] font-semibold text-vermilion transition-colors hover:bg-vermilion/[0.14]"
         >
-          + Get DUSDC
-        </button>
+          Fund with Naira →
+        </a>
 
         <div className="mt-3.5 border-t border-white/[0.06] pt-3 text-center">
           <span className="font-mono text-[10px] text-gray-500">Gas is on us · Sui testnet</span>
