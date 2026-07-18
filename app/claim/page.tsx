@@ -48,15 +48,36 @@ function ClaimInner() {
   }, [params]);
 
   // Once both X + wallet are present, ask the relay to bind (set_owner) so the funds unlock to this wallet.
+  // Surfaces the real reason on failure (esp. "already linked to another wallet") and bounds the poll,
+  // so a failed bind never spins on "linking…" forever with no message.
   const bind = useCallback(async () => {
     if (!me || !wallet) return;
     setBinding(true); setErr(null);
     try {
-      await fetch('/api/claim/bind', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ wallet }) });
-    } catch { /* the poll still catches it if it went through */ }
+      const r = await fetch('/api/claim/bind', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ wallet }) });
+      const j = await r.json().catch(() => ({} as { ok?: boolean; reason?: string; boundWallet?: string }));
+      if (!r.ok || j?.ok === false) {
+        setBinding(false);
+        if (j?.reason === 'already_claimed_other' && j?.boundWallet) {
+          setErr(`This account is already linked to ${short(j.boundWallet)}. Connect that wallet to claim your winnings.`);
+        } else if (j?.reason === 'sign in with X first') {
+          setErr('Your sign-in expired. Sign in with X again to claim.');
+        } else {
+          setErr(typeof j?.reason === 'string' && j.reason ? j.reason : 'Could not link this wallet. Please try again.');
+        }
+        return;
+      }
+    } catch { /* network hiccup — fall through to the bounded poll in case it landed */ }
+    let tries = 0;
     const check = async () => {
-      try { const a = await fetchClaimAccount(wallet); if (a && a.owner === wallet) { setAcct(a); setBinding(false); if (pollRef.current) clearInterval(pollRef.current); } }
+      tries += 1;
+      try { const a = await fetchClaimAccount(wallet); if (a && a.owner === wallet) { setAcct(a); setBinding(false); if (pollRef.current) clearInterval(pollRef.current); return; } }
       catch { /* keep polling */ }
+      if (tries >= 12) { // ~36s, then stop and say so
+        setBinding(false);
+        if (pollRef.current) clearInterval(pollRef.current);
+        setErr('Linking is taking longer than expected. Refresh and reconnect the same wallet to try again.');
+      }
     };
     check();
     pollRef.current = setInterval(check, 3000);
@@ -131,8 +152,11 @@ function ClaimInner() {
 
         <Step index={2} label="Where should we send it?" done={!!wallet} dim={!me}>
           {wallet ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: GREEN, fontWeight: 600, minWidth: 0 }}>
-              <Dot /> <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{short(wallet)} connected{binding && <span style={{ color: MUTE, fontWeight: 500, marginLeft: 8 }}>· linking…</span>}</span>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: GREEN, fontWeight: 600, minWidth: 0 }}>
+                <Dot /> <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{short(wallet)} connected{binding && <span style={{ color: MUTE, fontWeight: 500, marginLeft: 8 }}>· linking…</span>}</span>
+              </div>
+              {err && !ready && <p style={{ color: 'var(--loss)', fontSize: 13, marginTop: 10, fontWeight: 500, lineHeight: 1.5 }}>{err}</p>}
             </div>
           ) : (
             <div style={{ opacity: me ? 1 : 0.4, pointerEvents: me ? 'auto' : 'none' }}><ConnectButton /></div>
