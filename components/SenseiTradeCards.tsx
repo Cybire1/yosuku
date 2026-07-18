@@ -36,6 +36,9 @@ export default function SenseiTradeCards({ active, pick }: { active: boolean; pi
   const [markets, setMarkets] = useState<Market624[]>([]);
   const [spot, setSpot] = useState<number | null>(null);
   const [now, setNow] = useState(0);
+  // dismissible: a tap on the ✕ hides the cards; reopening the drawer brings them back
+  const [hidden, setHidden] = useState(false);
+  useEffect(() => { if (active) setHidden(false); }, [active]);
 
   // self-contained live data: markets + spot (poll while open) + a ticking clock
   useEffect(() => {
@@ -111,11 +114,17 @@ export default function SenseiTradeCards({ active, pick }: { active: boolean; pi
     } finally { setBusy(false); }
   }
 
-  if (spot == null || near.length === 0) return null;
+  if (hidden || spot == null || near.length === 0) return null;
 
   return (
     <div className="sensei-trade">
-      <div className="st-head"><span>Trade this</span><span className="st-sub">tap a side</span></div>
+      <div className="st-head">
+        <span>Trade this</span>
+        <span className="st-headright">
+          <span className="st-sub">tap a side</span>
+          <button className="st-hide" onClick={() => setHidden(true)} aria-label="Hide trade cards" data-cursor="hover">✕</button>
+        </span>
+      </div>
       {near.map((m) => {
         const overUsd = strike624(spot, 'up');
         const underUsd = strike624(spot, 'down');

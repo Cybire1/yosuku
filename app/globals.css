@@ -379,6 +379,10 @@ body.urgent::before {
 .st-head span:first-child { font-family: var(--font-display); font-weight: 700; font-size: 13px; color: var(--white); }
 [data-theme="light"] .st-head span:first-child { color: #171310; }
 .st-head .st-sub { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--gray-500); }
+.st-headright { display: flex; align-items: center; gap: 12px; }
+.st-hide { border: 0; background: transparent; padding: 2px 4px; font-size: 13px; line-height: 1; color: var(--gray-500); cursor: pointer; transition: color 150ms var(--ease); }
+.st-hide:hover { color: var(--white); }
+[data-theme="light"] .st-hide:hover { color: #171310; }
 .st-card { border: 1px solid rgba(255,255,255,0.08); border-radius: 13px; background: rgba(255,255,255,0.025); padding: 11px 12px; transition: border-color 200ms var(--ease), background 200ms var(--ease); }
 [data-theme="light"] .st-card { border-color: rgba(20,18,16,0.09); background: #fffdf8; }
 .st-card.armed { border-color: rgba(224,77,38,0.4); }
