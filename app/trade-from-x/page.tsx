@@ -135,7 +135,7 @@ export default function XTradePage() {
 
       {/* ── THE FLOW — focus-follows-step spine ── */}
       <section className="relative max-w-2xl mx-auto px-5 sm:px-8 pb-24">
-        <div className="font-mono text-[11px] tracking-[0.3em] text-gray-500 uppercase mb-7">— set it up · three steps</div>
+        <div className="font-mono text-[11px] tracking-[0.3em] text-gray-500 uppercase mb-7">set it up · three steps</div>
         <ol className="relative">
           {/* 1 — connect */}
           <Step n="1" title="Connect your wallet" state={step > 1 ? 'done' : 'active'} spine={{ from: 1, cur: step }}>
@@ -177,7 +177,7 @@ export default function XTradePage() {
 
         {/* ── payoff composer ── */}
         <div className={`mt-10 rounded-2xl border p-6 transition-all duration-500 ${code ? 'border-new-mint/25 bg-new-mint/[0.03]' : 'border-white/[0.07] bg-white/[0.02] opacity-55'}`}>
-          <div className="font-mono text-[11px] tracking-[0.24em] text-gray-500 uppercase mb-3">then — you&apos;re live</div>
+          <div className="font-mono text-[11px] tracking-[0.24em] text-gray-500 uppercase mb-3">then · you&apos;re live</div>
           <div className="font-display font-bold text-lg mb-3">Just tweet your bets.</div>
           <div className="rounded-xl border border-white/12 bg-black/40 px-4 py-3 font-mono text-[15px] flex items-center gap-2 min-w-0">
             <span className="text-gray-600 shrink-0">›</span>
@@ -188,7 +188,7 @@ export default function XTradePage() {
 
         {/* ── persistent trust footer ── */}
         <div className="mt-8 border-t border-white/[0.07] pt-6 flex flex-col gap-2.5">
-          <div className="flex items-center gap-2 font-mono text-[11px] text-gray-500"><Dot c={V} /> no withdraw function exists — verify:</div>
+          <div className="flex items-center gap-2 font-mono text-[11px] text-gray-500"><Dot c={V} /> no withdraw function exists · verify:</div>
           <ProofLink href="https://suiscan.xyz/testnet/tx/Cn69DaM49d5bATJLGyhokudS39F4s6j1rSPDLMhUy1Hb">position owned by the vault, not the agent</ProofLink>
           <ProofLink href="https://suiscan.xyz/testnet/tx/BmuJroQS4wgG9yvVBCDsq7xmdYVD6WyLsFPsBN8Em8rr">exit returned 0.953 to the user · agent ±0</ProofLink>
           <p className="mt-1 font-mono text-[10.5px] text-gray-600">testnet · you can lose a bet · the agent just can&apos;t take your funds.</p>
