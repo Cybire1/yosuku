@@ -70,7 +70,7 @@ export default function XTradePage() {
     try {
       const r = await fetch(`${CONNECT_URL}/code`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ address: addr }) });
       const j = await r.json();
-      if (!r.ok || !j.code) throw new Error(j.error || 'Could not get a code — try again.');
+      if (!r.ok || !j.code) throw new Error(j.error || 'Could not get a code. Try again.');
       setCode(j.code);
     } catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
     finally { setBusy(false); }
@@ -83,14 +83,24 @@ export default function XTradePage() {
   const step = !addr ? 1 : !deposited ? 2 : !code ? 3 : 4;
 
   return (
-    <main className="xt min-h-screen bg-[#08080b] text-[#f3f1ee] selection:bg-vermilion selection:text-white overflow-x-clip">
+    <main data-theme="dark" style={{ backgroundColor: '#08080b' }} className="xt min-h-screen bg-[#08080b] text-[#f3f1ee] selection:bg-vermilion selection:text-white overflow-x-clip">
       <div className="xt-grain" />
 
-      {/* header */}
+      {/* header: editorial strip, but it ROUTES — the app's primary nav lives here too */}
       <div className="sticky top-0 z-50 backdrop-blur bg-[#08080b]/70 border-b border-white/[0.06]">
-        <div className="max-w-6xl mx-auto px-5 sm:px-8 h-14 flex items-center justify-between">
-          <div className="font-display font-extrabold tracking-[0.16em] text-sm">YOSUKU <span className="text-gray-500 font-mono font-normal tracking-normal">/ X-trade</span></div>
-          <Link href="/markets" className="font-mono text-[12px] text-vermilion inline-flex items-center gap-1.5 hover:gap-2.5 transition-all">open the app <ArrowRight className="w-3.5 h-3.5" /></Link>
+        <div className="max-w-6xl mx-auto px-5 sm:px-8 h-14 flex items-center justify-between gap-4">
+          <Link href="/markets" className="font-display font-extrabold tracking-[0.16em] text-sm hover:text-vermilion transition-colors">
+            YOSUKU <span className="text-gray-500 font-mono font-normal tracking-normal">/ X-trade</span>
+          </Link>
+          <nav className="hidden md:flex items-center gap-5 font-mono text-[11px] uppercase tracking-[0.12em] text-gray-500">
+            <Link href="/markets" className="hover:text-white transition-colors">Markets</Link>
+            <Link href="/feed" className="hover:text-white transition-colors">Reels</Link>
+            <Link href="/earn" className="hover:text-white transition-colors">Earn</Link>
+            <Link href="/strategies" className="hover:text-white transition-colors">Strategies</Link>
+            <Link href="/leaderboard" className="hover:text-white transition-colors">Leaderboard</Link>
+            <Link href="/portfolio" className="hover:text-white transition-colors">Portfolio</Link>
+          </nav>
+          <Link href="/markets" className="font-mono text-[12px] text-vermilion inline-flex items-center gap-1.5 hover:gap-2.5 transition-all shrink-0">open the app <ArrowRight className="w-3.5 h-3.5" /></Link>
         </div>
       </div>
 
@@ -108,7 +118,7 @@ export default function XTradePage() {
               </span>
             </h1>
             <p className="xt-boot mt-6 text-gray-400 leading-relaxed max-w-[40ch]" style={{ animationDelay: '440ms' }}>
-              Tweet your bets at <span className="text-white">@yosukuapp</span>. A bounded agent trades <span className="text-white">your own</span> funds — and can&apos;t take them.
+              Tweet your bets at <span className="text-white">@yosukuapp</span>. A bounded agent trades <span className="text-white">your own</span> funds, and can&apos;t take them.
             </p>
             <div className="xt-boot mt-6 flex items-center gap-3 font-mono text-[11px] text-gray-500" style={{ animationDelay: '560ms' }}>
               <span className="inline-flex items-center gap-1.5"><Dot c={M} /> your keys, your funds</span>

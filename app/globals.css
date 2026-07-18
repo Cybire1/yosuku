@@ -4138,6 +4138,22 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
 [data-theme="light"] .bg-\[\#0d0d10\],
 [data-theme="light"] .bg-\[\#0e0e11\] { background-color: #FBF7EE; }
 
+/* dark islands keep their own near-black surfaces (mirrors the remap above at
+   equal specificity, later in source, so inside an island the dark bg wins;
+   in dark mode these just re-assert what Tailwind already produced) */
+[data-theme="dark"] .bg-\[\#050505\] { background-color: #050505; }
+[data-theme="dark"] .bg-\[\#070708\] { background-color: #070708; }
+[data-theme="dark"] .bg-\[\#08080a\] { background-color: #08080a; }
+[data-theme="dark"] .bg-\[\#08080b\] { background-color: #08080b; }
+[data-theme="dark"] .bg-\[\#0a0807\] { background-color: #0a0807; }
+[data-theme="dark"] .bg-\[\#0a0a0a\] { background-color: #0a0a0a; }
+[data-theme="dark"] .bg-\[\#0b0b0e\] { background-color: #0b0b0e; }
+[data-theme="dark"] .bg-\[\#0c0c0c\] { background-color: #0c0c0c; }
+[data-theme="dark"] .bg-\[\#0c0c0e\] { background-color: #0c0c0e; }
+[data-theme="dark"] .bg-\[\#0c0c0f\] { background-color: #0c0c0f; }
+[data-theme="dark"] .bg-\[\#0d0d10\] { background-color: #0d0d10; }
+[data-theme="dark"] .bg-\[\#0e0e11\] { background-color: #0e0e11; }
+
 /* ── DARK ISLANDS ──────────────────────────────────────────────────────────
    A subtree marked data-theme="dark" is a photographic dark surface (the
    Settlement Receipt, The Call card, the share-card previews) that must keep
