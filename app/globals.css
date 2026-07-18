@@ -476,6 +476,22 @@ body.urgent::before {
 }
 .nav-more-link.active svg { color: var(--vermilion); }
 
+/* Light theme: the More dropdowns are hardcoded dark, but the link text uses tokens
+   that flip DARK on cream (so it went dark-on-dark). Make the panels cream in light
+   mode so the flipped-dark text and icons read; hover gets an ink tint. */
+[data-theme="light"] .nav-more-menu,
+[data-theme="light"] .mobile-more-menu {
+  background: rgba(251,247,238,0.97);
+  border-color: rgba(20,18,16,0.10);
+  box-shadow: 0 24px 80px rgba(40,28,18,0.18);
+}
+[data-theme="light"] .nav-more-link:hover,
+[data-theme="light"] .nav-more-link.active,
+[data-theme="light"] .mobile-more-menu a:hover,
+[data-theme="light"] .mobile-more-menu a.active {
+  background: rgba(20,18,16,0.05);
+}
+
 .header-right { display: flex; align-items: center; gap: 14px; }
 
 /* Mobile menu toggle */
