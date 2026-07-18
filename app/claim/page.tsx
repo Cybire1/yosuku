@@ -127,7 +127,7 @@ function ClaimInner() {
                 <span>${amount.toFixed(2)}</span><span style={{ fontSize: 'clamp(22px, 7vw, 30px)', color: MUTE, fontWeight: 700 }}>waiting</span>
               </h1>
               <p style={{ fontSize: 17, color: MUTE, marginTop: 16, maxWidth: 420, lineHeight: 1.5 }}>
-                {me ? `It’s yours, ${me.handle}. Send it to any wallet in two taps.` : 'It’s yours. Let’s get it to your wallet in two taps.'}
+                {me ? `It’s yours, ${me.handle}. Cash it out to any wallet in two taps.` : 'It’s yours. Cash it out to any wallet in two taps.'}
               </p>
             </>
           ) : (
@@ -153,7 +153,7 @@ function ClaimInner() {
           )}
         </Step>
 
-        <Step index={2} label="Where should we send it?" done={!!wallet} dim={!me}>
+        <Step index={2} label="Where do you want to cash out?" done={!!wallet} dim={!me}>
           {wallet ? (
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: GREEN, fontWeight: 600, minWidth: 0 }}>
@@ -171,7 +171,7 @@ function ClaimInner() {
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} style={{ marginTop: 12 }}>
               <button onClick={claim} disabled={busy} className="bg-vermilion"
                 style={{ width: '100%', background: VERM, color: LIGHT, border: 0, borderRadius: 16, padding: 20, fontSize: 'clamp(16px, 4.6vw, 19px)', fontWeight: 800, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.7 : 1, letterSpacing: '-0.01em' }}>
-                {busy ? 'Sending to your wallet…' : `Claim $${acct!.balanceDusdc.toFixed(2)} to ${short(wallet!)}`}
+                {busy ? 'Cashing out…' : `Claim $${acct!.balanceDusdc.toFixed(2)} to ${short(wallet!)}`}
               </button>
               {err && <p style={{ color: 'var(--loss)', fontSize: 14, marginTop: 12 }}>{err}</p>}
             </motion.div>
@@ -246,7 +246,7 @@ function ReceiptCard({ amount, handle, done }: { amount: number | null; handle?:
           <span style={{ fontWeight: 800, fontSize: 'clamp(46px, 12vw, 60px)', letterSpacing: '-0.03em', lineHeight: 1, color: known ? cGreen : cInk }}>{known ? `$${amount!.toFixed(2)}` : '$ • •'}</span>
           <span style={{ fontSize: 20, color: cMute, fontWeight: 700 }}>{done ? 'sent' : 'waiting'}</span>
         </div>
-        <div style={{ marginTop: 12, fontSize: 14, color: cMute, fontFamily: 'var(--font-mono), ui-monospace, monospace' }}>{done ? 'paid straight to your wallet' : handle ? `held for @${handle}` : 'sign in with X to reveal'}</div>
+        <div style={{ marginTop: 12, fontSize: 14, color: cMute, fontFamily: 'var(--font-mono), ui-monospace, monospace' }}>{done ? 'paid straight to your wallet' : handle ? `waiting for @${handle}` : 'sign in with X to reveal'}</div>
 
         <div style={{ height: 1, background: 'rgba(20,18,16,0.1)', margin: '26px 0 18px' }} />
 
