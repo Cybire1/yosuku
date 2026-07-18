@@ -619,12 +619,8 @@ export default function StrategiesPage() {
                     <h2 className="font-display font-[800] text-2xl sm:text-[26px] text-white leading-none">Launch an agent</h2>
                     <span className="shrink-0 font-mono text-[9px] uppercase tracking-[0.16em] text-vermilion border border-vermilion/40 rounded-full px-2 py-0.5">Coming soon</span>
                   </div>
-                  <p className="text-[13px] text-gray-400 mt-2.5 max-w-md leading-snug">
-                    We&apos;re rebuilding Sensei as your personalized trading assistant — it reads the market with
-                    you and can place your calls inside limits it can never cross. Wiring it to the live venue now.
-                  </p>
                 </div>
-                <span className="shrink-0 font-mono text-[12px] text-gray-600">Coming soon</span>
+                <a href="/sensei" data-cursor="hover" className="shrink-0 rounded-full border border-vermilion/40 bg-vermilion/[0.07] px-4 py-2 text-[12.5px] font-semibold text-vermilion hover:bg-vermilion/[0.14] transition-colors">Meet Sensei →</a>
               </div>
 
               {address && showList && (
