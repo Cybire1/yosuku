@@ -7,7 +7,8 @@ import Footer from '@/components/Footer';
 import Marquee from '@/components/Marquee';
 import GrainOverlay from '@/components/GrainOverlay';
 import SectionHeader from '@/components/SectionHeader';
-import { useLeaderboard, useOracles } from '@/lib/sui/hooks';
+import { useLeaderboard } from '@/lib/sui/hooks';
+import { fetchMarkets624 } from '@/lib/sui/predict624Client';
 import { formatAddress } from '@/lib/leaderboardStats';
 
 // Deterministic decorative kanji from an address — a light, semi-transparent
@@ -35,7 +36,6 @@ export default function LeaderboardPage() {
   const address = account?.address ?? null;
 
   const { data: leaderboard, loading: lbLoading } = useLeaderboard();
-  const { active: liveOracles } = useOracles();
 
   const rankings = leaderboard?.rankings ?? [];
   const meta = leaderboard?.meta ?? {
@@ -99,20 +99,29 @@ export default function LeaderboardPage() {
   }, [rankings]);
 
 
-  // Next seal countdown — derived from nearest oracle expiry
+  // Next close countdown — nearest LIVE 6-24 market expiry (the venue people
+  // actually trade on; the legacy oracle list this used to read runs days out).
+  const [nearestExpiry, setNearestExpiry] = useState(0);
+  useEffect(() => {
+    let alive = true;
+    const load = async () => {
+      try {
+        const ms = await fetchMarkets624();
+        const upcoming = ms.map((m) => m.expiry).filter((e) => e > Date.now());
+        if (alive && upcoming.length > 0) setNearestExpiry(Math.min(...upcoming));
+      } catch { /* keep last-good */ }
+    };
+    load();
+    const iv = setInterval(load, 15000);
+    return () => { alive = false; clearInterval(iv); };
+  }, []);
   const [sealTime, setSealTime] = useState(0);
   useEffect(() => {
-    const tick = () => {
-      const upcoming = liveOracles.filter(o => o.expiry > Date.now());
-      if (upcoming.length > 0) {
-        const nearest = Math.min(...upcoming.map(o => o.expiry));
-        setSealTime(Math.max(0, Math.floor((nearest - Date.now()) / 1000)));
-      }
-    };
+    const tick = () => setSealTime(Math.max(0, Math.floor((nearestExpiry - Date.now()) / 1000)));
     tick();
     const iv = setInterval(tick, 1000);
     return () => clearInterval(iv);
-  }, [liveOracles]);
+  }, [nearestExpiry]);
   const sealH = Math.floor(sealTime / 3600);
   const sealM = Math.floor((sealTime % 3600) / 60);
   const sealS = sealTime % 60;
