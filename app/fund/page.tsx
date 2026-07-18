@@ -86,14 +86,17 @@ export default function FundPage() {
   const pay = useCallback(() => {
     if (!address || dusdcShown <= 0) return;
     setErr('');
-    // live Paystack test-mode popup when a key is present
+    // live Paystack test-mode popup when a key is present. The account collects Naira,
+    // so we always charge NGN (converting the USD view to its Naira equivalent). The
+    // DUSDC delivered stays what the user chose.
     if (PAYSTACK_KEY && window.PaystackPop) {
       setPhase('paying');
+      const ngn = ccy === 'USD' ? num * NGN_PER_DUSDC : num;
       const handler = window.PaystackPop.setup({
         key: PAYSTACK_KEY,
         email: `${address.slice(2, 12)}@yosuku.xyz`,
-        amount: Math.round((ccy === 'USD' ? num : num) * 100), // smallest unit (cents / kobo)
-        currency: ccy,
+        amount: Math.round(ngn * 100), // kobo
+        currency: 'NGN',
         ref: `yosuku_${Date.now()}`,
         onClose: () => setPhase('idle'),
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
