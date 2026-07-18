@@ -65,9 +65,9 @@ export default function WaitlistCard() {
         {state ? `${state.count.toLocaleString()} ${state.count === 1 ? 'wallet' : 'wallets'} in line` : 'Claim your spot'}
       </h2>
       <p className="text-gray-400 text-sm leading-relaxed mb-5 max-w-xl">
-        Free to play on testnet now. Joining signs your spot <span className="text-gray-200">on-chain (testnet today)</span> — a verifiable claim
+        Free to play on testnet now. Joining signs your spot <span className="text-gray-200">on-chain (testnet today)</span>, a verifiable claim
         (not an email) on priority access when we go live on <span className="text-gray-200">mainnet, with real money</span>. <span className="text-gray-200">Referrals move you up the line</span>; the top tier
-        are <span className="text-vermilion">Founders</span> — first access at launch + a permanent badge.
+        are <span className="text-vermilion">Founders</span>, first access at launch + a permanent badge.
         {referrer && <span className="text-gray-500"> Referred by {short(referrer)}.</span>}
       </p>
 
@@ -100,7 +100,7 @@ export default function WaitlistCard() {
               className="font-mono text-[11px] px-3 py-2 rounded-lg border border-white/10 hover:border-white/25 text-gray-300 hover:text-white transition-colors"
             >{copied ? 'copied ✓' : 'copy referral'}</button>
           </div>
-          <p className="font-mono text-[10px] text-gray-600 mt-2">each signed referral moves you up the line — climb into Founder.</p>
+          <p className="font-mono text-[10px] text-gray-600 mt-2">each signed referral moves you up the line. Climb into Founder.</p>
         </div>
       ) : (
         <button
@@ -108,7 +108,7 @@ export default function WaitlistCard() {
           disabled={busy}
           className="bg-vermilion text-white font-semibold rounded-full px-6 py-3 hover:bg-vermilion-d transition-colors disabled:opacity-60"
         >
-          {busy ? 'joining…' : sponsorReady ? 'Join the Founder list — free →' : 'Join the Founder list →'}
+          {busy ? 'joining…' : sponsorReady ? 'Join the Founder list · free →' : 'Join the Founder list →'}
         </button>
       )}
 

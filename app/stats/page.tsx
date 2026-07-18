@@ -55,7 +55,7 @@ function Stat({ label, value, sub, accent }: { label: string; value: string; sub
 function GrowthCurve({ points, height = 200 }: { points: GrowthPoint[]; height?: number }) {
   const W = 920, H = height, padX = 16, padT = 22, padB = 26;
   if (points.length === 0) {
-    return <div className="font-mono text-[11px] text-gray-600 py-16 text-center">your growth curve starts with the first gas-free signup — drive one and watch it climb.</div>;
+    return <div className="font-mono text-[11px] text-gray-600 py-16 text-center">your growth curve starts with the first gas-free signup. Drive one and watch it climb.</div>;
   }
   const max = Math.max(1, ...points.map((p) => p.cumulative));
   const xAt = (i: number) => points.length === 1 ? W / 2 : padX + (i / (points.length - 1)) * (W - 2 * padX);
@@ -128,7 +128,7 @@ export default function StatsPage() {
               </h1>
               <p className="page-title-jp">実需の証明</p>
               <p className="mt-6 max-w-md text-gray-400 leading-relaxed text-[15px]">
-                Real wallets, read straight from the chain. Yosuku <span className="text-gray-200">paid their gas</span> — so the chain itself
+                Real wallets, read straight from the chain. Yosuku <span className="text-gray-200">paid their gas</span>, so the chain itself
                 proves each one came through us, not the broader Predict network. Every number links to Suiscan.
               </p>
             </div>
@@ -193,12 +193,12 @@ export default function StatsPage() {
                 <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-gray-600">real users · attributable</span>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4">
-                <Stat label="Wallets onboarded" value={fmt(t.onboardedUsers)} sub="gas paid by Yosuku — provably ours" accent />
+                <Stat label="Wallets onboarded" value={fmt(t.onboardedUsers)} sub="gas paid by Yosuku, provably ours" accent />
                 <Stat label="Waitlist signups" value={fmt(t.waitlistSignups)} sub="signed on-chain" />
                 <Stat label="Gas-free actions" value={fmt(t.sponsoredActions)} sub="gas paid by Yosuku" />
               </div>
               <p className="font-mono text-[11px] text-gray-600 mb-10 leading-relaxed max-w-2xl">
-                Every wallet here had its gas <span className="text-gray-400">paid by Yosuku&apos;s sponsor</span> — the chain records us as sponsor,
+                Every wallet here had its gas <span className="text-gray-400">paid by Yosuku&apos;s sponsor</span>. The chain records us as sponsor,
                 so each provably came through Yosuku (web or mobile), not the broader Predict network. Our own infra/test wallets are excluded.
               </p>
 
@@ -214,7 +214,7 @@ export default function StatsPage() {
                 <Stat label="Volume" value={fmt(t.proven.volumeDusdc)} sub="DUSDC notional" />
               </div>
               <p className="font-mono text-[11px] text-gray-600 mb-10 leading-relaxed max-w-2xl">
-                The machine works, proven on real testnet transactions — <span className="text-gray-400">this includes our own demo/test runs.</span>
+                The machine works, proven on real testnet transactions. <span className="text-gray-400">This includes our own demo/test runs.</span>{' '}
                 It demonstrates capability (the attested agent, no-divert custody, the liquidation engine), not user volume.
               </p>
 
@@ -275,12 +275,12 @@ export default function StatsPage() {
               <p className="font-mono text-[11px] text-gray-600 mt-5 leading-relaxed">
                 Adoption reads Yosuku&apos;s <span className="text-gray-400">Onara gas-sponsor</span> ledger + the on-chain{' '}
                 <span className="text-gray-400">waitlist</span>; capability reads <span className="text-gray-400">social_vault</span>,{' '}
-                <span className="text-gray-400">margin</span> and <span className="text-gray-400">underwrite</span> events — all via Sui GraphQL.
+                <span className="text-gray-400">margin</span> and <span className="text-gray-400">underwrite</span> events, all via Sui GraphQL.
                 Testnet today; the same surface carries to mainnet at launch. Live for Sui Overflow 2026 judging; taken down afterward.
               </p>
             </>
           ) : (
-            <div className="font-mono text-sm text-rose-400 py-20 text-center">couldn&apos;t reach the chain — retrying…</div>
+            <div className="font-mono text-sm text-rose-400 py-20 text-center">couldn&apos;t reach the chain, retrying…</div>
           )}
         </div>
         <Footer />
