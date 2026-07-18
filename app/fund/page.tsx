@@ -119,7 +119,7 @@ export default function FundPage() {
         <span aria-hidden className="pointer-events-none select-none absolute -right-6 top-24 font-jp font-black leading-[0.8] text-[clamp(9rem,26vw,15rem)] text-white/[0.035]" style={{ writingMode: 'vertical-rl' }}>入金</span>
 
         <div className="relative z-10">
-          <div className="font-mono text-[11px] tracking-[0.28em] uppercase text-vermilion mb-4">予測 · Fund · Preview</div>
+          <div className="font-mono text-[11px] tracking-[0.28em] uppercase text-vermilion mb-4">予測 · Fund</div>
           <h1 className="font-display font-[800] tracking-[-0.03em] leading-[0.98] text-[clamp(2.3rem,7vw,3.4rem)]">
             Fund in <span className="text-vermilion">your own money.</span>
           </h1>
@@ -175,7 +175,7 @@ export default function FundPage() {
               {ccy === 'NGN' && (
                 <div className="mt-1 text-right font-mono text-[11px] text-gray-600">rate ≈ {fmtNgn(NGN_PER_DUSDC)} / DUSDC</div>
               )}
-              {capped && <div className="mt-1 text-right font-mono text-[11px] text-vermilion/80">preview capped at 50 DUSDC</div>}
+              {capped && <div className="mt-1 text-right font-mono text-[11px] text-vermilion/80">up to 50 at a time</div>}
 
               {/* the custody flow */}
               <div className="mt-6 flex items-center justify-between gap-2 text-center">
@@ -214,9 +214,9 @@ export default function FundPage() {
                 {err && <p className="mt-3 text-center text-[12px] text-rose-400">{err}</p>}
               </div>
 
-              {/* honest preview label */}
+              {/* honest, consumer-clean note (no dev jargon ever renders here) */}
               <div className="mt-6 pt-5 border-t border-white/[0.06] flex items-center justify-center gap-2 font-mono text-[10px] tracking-[0.1em] text-gray-500 text-center">
-                Preview · Paystack test mode · testnet funds{PAYSTACK_KEY ? '' : ' · simulated (add a pk_test key for the live popup)'}
+                Test mode · no real money moves
               </div>
             </div>
           ) : (
@@ -239,7 +239,7 @@ export default function FundPage() {
           )}
 
           <p className="mt-6 text-center font-mono text-[10.5px] leading-relaxed text-gray-600 max-w-[46ch] mx-auto">
-            At mainnet this runs through a licensed on-ramp partner. The funds go straight to your wallet. Yosuku never holds your money.
+            Your funds go straight to your wallet. Yosuku never holds your money.
           </p>
         </div>
       </main>
