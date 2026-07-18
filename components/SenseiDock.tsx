@@ -197,9 +197,25 @@ export default function SenseiDock({ targetTime, now }: Props) {
     const next: Msg[] = [...msgs, { role: 'user', content: t }];
     setMsgs(next); setInput(''); setLoading(true);
     try {
+      // Never ask Sensei blind. If the drawer's market context hasn't landed yet
+      // (a fast first tap beats the 20s loader), fetch it inline so the read is
+      // grounded instead of an honest-but-useless "I see no live market data"
+      // refusal. Only if the chain is truly unreachable do we send null and let
+      // Sensei say so.
+      let market = snapshot;
+      if (!market) {
+        try {
+          const [spot, markets] = await Promise.all([fetchSpot624(), fetchMarkets624()]);
+          const near = [...markets].sort((a, b) => a.expiry - b.expiry).slice(0, 4).map((m) => ({
+            cadence: inferCadence624(m.expiry), minsToClose: Math.max(0, Math.round((m.expiry - Date.now()) / 60000)), upLineUsd: Math.round(spot - BAND_USD),
+          }));
+          market = { spotUsd: Math.round(spot), markets: near };
+          setSnapshot(market);
+        } catch { /* chain really unreachable: Sensei will say so honestly */ }
+      }
       const res = await fetch('/api/sensei', {
         method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ messages: next.map(({ role, content }) => ({ role, content })), market: snapshot, userId: account?.address, restless }),
+        body: JSON.stringify({ messages: next.map(({ role, content }) => ({ role, content })), market, userId: account?.address, restless }),
       });
       const j = await res.json();
       const reply = res.ok && j.reply ? j.reply : (j.error || 'Something went wrong. Try again.');
