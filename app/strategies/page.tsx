@@ -230,6 +230,19 @@ export default function StrategiesPage() {
     [subscriptions],
   );
   const visible = useMemo(() => filterSort(strategies, tab), [strategies, tab]);
+  // Collapse the feed by copier+strategy so one person's repeated copies read as
+  // "copied ×N · total", not the same row eight times. Newest group first.
+  const groupedTrades = useMemo(() => {
+    const g = new Map<string, { strategy: string; agent: string; subscriber: string; count: number; total: number; leverageBps: number; ts: number; digest: string | null }>();
+    for (const t of copyTrades) {
+      const strat = t.strategy || t.agent;
+      const k = `${strat}::${t.subscriber}`;
+      const cur = g.get(k);
+      if (!cur) g.set(k, { strategy: strat, agent: t.agent, subscriber: t.subscriber, count: 1, total: t.notional, leverageBps: t.leverageBps, ts: t.ts, digest: t.digest ?? null });
+      else { cur.count += 1; cur.total += t.notional; if (t.ts > cur.ts) { cur.ts = t.ts; cur.digest = t.digest ?? cur.digest; cur.leverageBps = t.leverageBps; } }
+    }
+    return [...g.values()].sort((a, b) => b.ts - a.ts);
+  }, [copyTrades]);
   const totalCopiers = strategies.reduce((s, c) => s + (c.subscribers || 0), 0);
   const drawerCard = drawerId ? strategies.find((s) => s.id === drawerId) ?? null : null;
   const walletDusdc = dusdcCoins.reduce((s, c) => s + c.balance, BigInt(0));
@@ -449,10 +462,17 @@ export default function StrategiesPage() {
           onRead={readListing}
         />
 
-        {/* control bar — curated tabs (replaces the dead leaderboard) */}
-        <div className="sticky top-[64px] z-20 mt-14 -mx-4 px-4 py-3 mb-7 bg-bg/85 backdrop-blur-md border-b border-white/[0.06]">
+        {/* the grid below is an archive from an earlier venue — the live action is the desk above.
+            Framed honestly so archived cards don't read as an empty live catalogue. */}
+        <div className="mt-14 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <h2 className="font-display font-[800] text-[19px] text-white tracking-tight">Earlier agents</h2>
+          <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-white/35">archived · copying routes to the live desk above</p>
+        </div>
+
+        {/* control bar — curated tabs (zero-count tabs hidden so the row never advertises emptiness) */}
+        <div className="sticky top-[64px] z-20 mt-5 -mx-4 px-4 py-3 mb-7 bg-bg/85 backdrop-blur-md border-b border-white/[0.06]">
           <div className="flex items-center gap-5 overflow-x-auto no-scrollbar">
-            {TABS.map((t) => {
+            {TABS.filter((t) => t.key === 'all' || tabCount(t.key) > 0).map((t) => {
               const on = tab === t.key;
               const n = tabCount(t.key);
               return (
@@ -561,10 +581,10 @@ export default function StrategiesPage() {
                 <span className="font-mono text-[11px] text-white/30 tabular-nums">{copyTrades.length}</span>
               </div>
               <div className="border border-white/[0.08] bg-bg divide-y divide-white/[0.05] overflow-hidden">
-                {copyTrades.length === 0 ? (
+                {groupedTrades.length === 0 ? (
                   <div className="font-mono text-[11px] uppercase tracking-[0.2em] text-white/30 px-5 py-8 text-center">No copy-trades settled yet — be the first.</div>
                 ) : (
-                  copyTrades.slice(0, RECENT_TRADES_LIMIT).map((t, i) => {
+                  groupedTrades.slice(0, RECENT_TRADES_LIMIT).map((t, i) => {
                     const tradeName = codenameFromAddress(t.strategy || t.agent);
                     const inner = (
                       <div className="flex items-center gap-3 px-5 py-3 hover:bg-white/[0.02] transition-colors">
@@ -577,8 +597,9 @@ export default function StrategiesPage() {
                         >
                           {fmtAddr(t.subscriber)}
                         </a>
+                        {t.count > 1 && <span className="font-mono text-[10px] text-white/35 tabular-nums shrink-0 hidden sm:inline">copied ×{t.count}</span>}
                         <span className="flex-1" />
-                        <span className="font-mono text-[12px] text-white/70 tabular-nums whitespace-nowrap shrink-0">{fmtDusdc(t.notional)} DUSDC</span>
+                        <span className="font-mono text-[12px] text-white/70 tabular-nums whitespace-nowrap shrink-0">{fmtDusdc(t.total)} DUSDC</span>
                         <span className="font-mono text-[11px] text-white/40 w-10 text-right shrink-0 tabular-nums">{t.leverageBps / 10000}×</span>
                         <span className="font-mono text-[11px] text-white/30 w-14 text-right shrink-0">{ago(t.ts)}</span>
                         <span className="font-mono text-[11px] text-vermilion w-4 text-right shrink-0">{t.digest ? '↗' : ''}</span>

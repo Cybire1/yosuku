@@ -368,12 +368,23 @@ export default function LiveDesk() {
   // — the curve draws them and the net can read negative in muted white.
   // When there's no settled record yet, show nothing here — an empty placeholder box + copy
   // just adds noise. The record appears once trades settle.
+  // Win rate leads the record: the one honest number that frames a young, public track record
+  // without opening on a negative net. Won/Lost/Net stay in full below — nothing hidden.
+  const decided = stats.wins + stats.losses;
+  const winRate = decided > 0 ? Math.round((100 * stats.wins) / decided) : 0;
   const recordCard = stats.settled === 0 ? null : (
     <div className="rounded-lg border border-white/[0.08] bg-white/[0.015] overflow-hidden">
       {/* framing: young + public. The net can read negative — that's transparency, not spin. */}
       <div className="flex items-center justify-between px-4 pt-3">
         <span className="font-mono text-[9px] uppercase tracking-[0.18em] text-white/40">Track record</span>
         <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-white/30">{stats.settled} trades · public</span>
+      </div>
+      {/* the lead number — the win rate, over the full public record */}
+      <div className="px-4 pt-2.5 flex items-baseline gap-2.5">
+        <span className="font-display font-[800] text-[34px] leading-none text-white tabular-nums">{winRate}%</span>
+        <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-white/45">win rate</span>
+        <span className="flex-1" />
+        <span className="font-mono text-[10px] text-white/30 tabular-nums">{stats.settled} on-chain</span>
       </div>
       <div className="px-4 pt-2 pb-2">
         <EquitySparkline points={stats.curve} width={520} height={64} className="w-full h-[64px]" />
