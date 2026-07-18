@@ -49,6 +49,7 @@ const SECONDARY_NAV: NavLink[] = [
   { name: 'Sensei', href: '/sensei', icon: MessageSquare },
   { name: 'X-trade', href: '/trade-from-x', icon: Twitter },
   { name: 'Parlay', href: '/parlay', icon: ChartNoAxesCombined },
+  { name: 'Fund with Naira', href: '/fund', icon: BadgeDollarSign },
   { name: 'Docs', href: '/docs', icon: BookOpen },
 ];
 
