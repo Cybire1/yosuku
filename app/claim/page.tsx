@@ -2,11 +2,12 @@
 
 import { useState, useEffect, useCallback, useRef, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { useCurrentAccount, useSuiClient, useSignPersonalMessage, ConnectButton } from '@mysten/dapp-kit';
 import {
   fetchClaimAccount, unsealAccountKey, recoverFundsToWallet, type ClaimAccount,
 } from '@/lib/sui/claim';
+import Header from '@/components/Header';
 
 // Theme-aware tokens (follow the site's dark/light toggle via data-theme on <html>).
 const BG = 'var(--bg)';               // #050505 dark · #F4EEE3 cream light
@@ -22,7 +23,6 @@ type XIdentity = { handle: string; authorId: string; account: ClaimAccount | nul
 
 function ClaimInner() {
   const params = useSearchParams();
-  const router = useRouter();
   const account = useCurrentAccount();
   const wallet = account?.address ?? null;
   const suiClient = useSuiClient();
@@ -107,14 +107,17 @@ function ClaimInner() {
   const stage: 'in' | 'wallet' | 'ready' | 'done' = result ? 'done' : ready ? 'ready' : me ? 'wallet' : 'in';
 
   return (
-    <div style={{ minHeight: '100vh', background: BG, color: FG, fontFamily: 'var(--font-sora), ui-sans-serif, system-ui' }}>
-      <div style={{ position: 'fixed', top: 0, left: 0, width: 5, height: '100%', background: VERM, zIndex: 20 }} />
-      <main style={{ maxWidth: 560, margin: '0 auto', padding: 'clamp(40px, 9vw, 64px) clamp(20px, 6vw, 28px) 120px' }}>
-        <button onClick={() => router.push('/')} style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'none', border: 0, cursor: 'pointer', color: FG, marginBottom: 'clamp(36px, 9vw, 56px)' }}>
-          <Celebrant />
-          <span style={{ fontWeight: 800, letterSpacing: '0.12em', fontSize: 18 }}>YOSUKU</span>
-          <span style={{ color: VERM, letterSpacing: '0.2em', fontSize: 12 }}>予測</span>
-        </button>
+    <div style={{ minHeight: '100vh', background: BG, color: FG, fontFamily: 'var(--font-sora), ui-sans-serif, system-ui', position: 'relative', overflow: 'hidden' }}>
+      <Header />
+      {/* vermilion editorial rail */}
+      <div style={{ position: 'fixed', top: 0, left: 0, width: 5, height: '100%', background: VERM, zIndex: 40 }} />
+      {/* atmosphere — warm wash so the reward page isn't flat */}
+      <div aria-hidden style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0, background: 'radial-gradient(58% 44% at 80% 30%, color-mix(in srgb, var(--vermilion) 13%, transparent), transparent 68%)' }} />
+      <div aria-hidden style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0, background: 'radial-gradient(46% 40% at 14% 90%, color-mix(in srgb, var(--profit) 8%, transparent), transparent 72%)' }} />
+      <main className="container" style={{ position: 'relative', zIndex: 1, paddingTop: 'clamp(104px, 15vw, 150px)', paddingBottom: 120 }}>
+        <div className="grid grid-cols-1 lg:grid-cols-[1.02fr_0.98fr] gap-12 lg:gap-16 items-center" style={{ maxWidth: 1080, margin: '0 auto' }}>
+          {/* the claim flow */}
+          <div className="order-2 lg:order-1" style={{ width: '100%', maxWidth: 560 }}>
 
         <div style={{ marginBottom: 40 }}>
           <div style={{ fontSize: 13, letterSpacing: '0.22em', color: VERM, fontWeight: 600, marginBottom: 16 }}>YOUR WINNINGS</div>
@@ -183,9 +186,16 @@ function ClaimInner() {
           )}
         </AnimatePresence>
 
-        <p style={{ marginTop: 56, fontSize: 13, color: MUTE, lineHeight: 1.6, maxWidth: 440 }}>
+        <p style={{ marginTop: 48, fontSize: 13, color: MUTE, lineHeight: 1.6, maxWidth: 440 }}>
           We made you an account and locked it to you. Only you can open it, not even us. Signing in with X just proves it’s the same you that placed the bet.
         </p>
+          </div>
+
+          {/* the reward, made tangible */}
+          <div className="order-1 lg:order-2" style={{ width: '100%' }}>
+            <ReceiptCard amount={amount} handle={me?.handle} done={stage === 'done'} />
+          </div>
+        </div>
       </main>
     </div>
   );
@@ -206,6 +216,49 @@ function Step({ index, label, done, dim, children }: { index: number; label: str
 
 const Dot = () => <span style={{ width: 8, height: 8, borderRadius: 4, background: GREEN, display: 'inline-block', flexShrink: 0 }} />;
 const XGlyph = () => (<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M18.9 1.2h3.7l-8 9.1 9.4 12.5h-7.4l-5.8-7.6-6.6 7.6H.5l8.5-9.8L0 1.2h7.6l5.2 6.9 6.1-6.9Zm-1.3 19.4h2L6.5 3.3H4.4l13.2 17.3Z" /></svg>);
-const Celebrant = () => (
-  <svg width="22" height="26" viewBox="0 0 266 322" fill="none"><path d="M133 96c-18 0-30-16-30-34 0-17 13-31 30-31s30 14 30 31c0 18-12 34-30 34Z" fill="var(--white)" /><path d="M133 120c8 0 15 6 15 30v150c0 12-7 20-15 20s-15-8-15-20V150c0-24 7-30 15-30Z" fill="var(--white)" /><path d="M120 140 40 70M146 140l80-70" stroke="var(--white)" strokeWidth="26" strokeLinecap="round" /><circle cx="133" cy="300" r="16" fill="var(--vermilion)" /></svg>
+// the mark in fixed ink, for the always-cream reward ticket
+const CelebrantInk = () => (
+  <svg width="20" height="24" viewBox="0 0 266 322" fill="none"><path d="M133 96c-18 0-30-16-30-34 0-17 13-31 30-31s30 14 30 31c0 18-12 34-30 34Z" fill="#141210" /><path d="M133 120c8 0 15 6 15 30v150c0 12-7 20-15 20s-15-8-15-20V150c0-24 7-30 15-30Z" fill="#141210" /><path d="M120 140 40 70M146 140l80-70" stroke="#141210" strokeWidth="26" strokeLinecap="round" /><circle cx="133" cy="300" r="16" fill="#E04D26" /></svg>
 );
+
+// The reward, as a tangible cream ticket (borrows the brand's won-card language) — makes the page
+// feel like a prize, not a form. Always cream so it reads as a physical object in both themes.
+function ReceiptCard({ amount, handle, done }: { amount: number | null; handle?: string; done?: boolean }) {
+  const cPaper = '#FBF7EF', cInk = '#141210', cMute = '#6E6353', cGreen = '#2E6B4F', cFaint = '#9A8E7B';
+  const known = amount != null && amount > 0;
+  const bars = Array.from({ length: 46 }, (_, i) => 2 + ((i * 7 + 3) % 5));
+  return (
+    <div style={{ position: 'relative', width: '100%', maxWidth: 420, margin: '0 auto', background: cPaper, color: cInk, borderRadius: 22, boxShadow: '0 2px 4px rgba(40,28,18,0.06), 0 34px 80px -30px rgba(40,28,18,0.55)', overflow: 'hidden', fontFamily: 'var(--font-sora), ui-sans-serif, system-ui' }}>
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 6, background: cVermConst }} />
+      <div style={{ padding: '30px 30px 24px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <CelebrantInk />
+            <span style={{ fontWeight: 800, fontSize: 18, letterSpacing: '-0.3px' }}>yosuku</span>
+          </div>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, background: known ? 'rgba(46,107,79,0.12)' : 'rgba(20,18,16,0.06)', color: known ? cGreen : cFaint, borderRadius: 999, padding: '6px 13px', fontSize: 11, fontWeight: 700, fontFamily: 'var(--font-mono), ui-monospace, monospace', letterSpacing: '0.08em' }}>
+            <span style={{ width: 7, height: 7, borderRadius: 4, background: known ? cGreen : cFaint }} />{done ? 'CLAIMED' : known ? 'SETTLED · WON' : 'WAITING'}
+          </span>
+        </div>
+
+        <div style={{ marginTop: 32, fontFamily: 'var(--font-mono), ui-monospace, monospace', fontSize: 12, letterSpacing: '0.22em', color: cFaint }}>YOUR WINNINGS</div>
+        <div style={{ marginTop: 6, display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+          <span style={{ fontWeight: 800, fontSize: 'clamp(46px, 12vw, 60px)', letterSpacing: '-0.03em', lineHeight: 1, color: known ? cGreen : cInk }}>{known ? `$${amount!.toFixed(2)}` : '$ • •'}</span>
+          <span style={{ fontSize: 20, color: cMute, fontWeight: 700 }}>{done ? 'sent' : 'waiting'}</span>
+        </div>
+        <div style={{ marginTop: 12, fontSize: 14, color: cMute, fontFamily: 'var(--font-mono), ui-monospace, monospace' }}>{done ? 'paid straight to your wallet' : handle ? `held for @${handle}` : 'sign in with X to reveal'}</div>
+
+        <div style={{ height: 1, background: 'rgba(20,18,16,0.1)', margin: '26px 0 18px' }} />
+
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, height: 42 }} aria-hidden>
+          {bars.map((w, i) => <div key={i} style={{ width: w, height: '100%', background: cInk, opacity: 0.8 }} />)}
+        </div>
+        <div style={{ marginTop: 12, display: 'flex', justifyContent: 'space-between', fontFamily: 'var(--font-mono), ui-monospace, monospace', fontSize: 11, color: cFaint }}>
+          <span>Only you can cash out.</span>
+          <span>Sui testnet</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+const cVermConst = '#E04D26';
