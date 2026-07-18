@@ -64,7 +64,7 @@ export default function OGImage() {
             </div>
           </div>
 
-          {/* live-market card — dark, to pop off the cream */}
+          {/* live-market card — cream paper, matching the site and the other pages' cards */}
           <div
             style={{
               display: 'flex',
@@ -72,24 +72,25 @@ export default function OGImage() {
               width: 388,
               padding: '30px 32px',
               borderRadius: 22,
-              background: INK,
-              border: '1px solid rgba(26,22,18,0.9)',
+              background: '#FBF7EF',
+              border: '1px solid rgba(26,22,18,0.12)',
+              boxShadow: '0 22px 50px -26px rgba(40,28,18,0.35)',
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 13, marginBottom: 20 }}>
               <div style={{ display: 'flex', width: 42, height: 42, borderRadius: 21, background: '#F7931A', alignItems: 'center', justifyContent: 'center', fontSize: 24, fontWeight: 800, color: '#fff' }}>
                 B
               </div>
-              <div style={{ display: 'flex', fontSize: 15, color: '#b8b0a4', letterSpacing: '0.1em' }}>BTC · 5-MINUTE</div>
+              <div style={{ display: 'flex', fontSize: 15, color: MUTE, letterSpacing: '0.1em' }}>BTC · 5-MINUTE</div>
             </div>
-            <div style={{ display: 'flex', fontSize: 27, fontWeight: 800, color: CREAM, marginBottom: 24, lineHeight: 1.12 }}>
+            <div style={{ display: 'flex', fontSize: 27, fontWeight: 800, color: INK, marginBottom: 24, lineHeight: 1.12 }}>
               holds above $64,800?
             </div>
             <div style={{ display: 'flex', gap: 12 }}>
-              <div style={{ display: 'flex', flex: 1, alignItems: 'center', justifyContent: 'center', padding: '15px 0', borderRadius: 12, background: 'rgba(47,164,124,0.12)', border: `1px solid rgba(47,164,124,0.5)`, color: PROFIT, fontSize: 19, fontWeight: 700 }}>
+              <div style={{ display: 'flex', flex: 1, alignItems: 'center', justifyContent: 'center', padding: '15px 0', borderRadius: 12, background: 'rgba(47,164,124,0.14)', border: `1px solid rgba(47,164,124,0.55)`, color: PROFIT, fontSize: 19, fontWeight: 700 }}>
                 UP 64¢
               </div>
-              <div style={{ display: 'flex', flex: 1, alignItems: 'center', justifyContent: 'center', padding: '15px 0', borderRadius: 12, background: 'rgba(216,85,107,0.12)', border: `1px solid rgba(216,85,107,0.5)`, color: LOSS, fontSize: 19, fontWeight: 700 }}>
+              <div style={{ display: 'flex', flex: 1, alignItems: 'center', justifyContent: 'center', padding: '15px 0', borderRadius: 12, background: 'rgba(216,85,107,0.14)', border: `1px solid rgba(216,85,107,0.55)`, color: LOSS, fontSize: 19, fontWeight: 700 }}>
                 DOWN 36¢
               </div>
             </div>
