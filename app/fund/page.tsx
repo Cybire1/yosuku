@@ -17,7 +17,6 @@ import GrainOverlay from '@/components/GrainOverlay';
 
 const NGN_PER_DUSDC = 1600; // indicative demo rate
 const PRESETS_NGN = [2000, 5000, 10000];
-const PRESETS_USD = [2, 5, 10];
 const PAYSTACK_KEY = process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY || '';
 
 type Ccy = 'NGN' | 'USD';
@@ -27,13 +26,12 @@ type Phase = 'idle' | 'paying' | 'crediting' | 'done';
 declare global { interface Window { PaystackPop?: any } }
 
 const fmtNgn = (n: number) => `₦${Math.round(n).toLocaleString('en-US')}`;
-const fmtUsd = (n: number) => `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export default function FundPage() {
   const account = useCurrentAccount();
   const address = account?.address ?? null;
 
-  const [ccy, setCcy] = useState<Ccy>('NGN');
+  const ccy: Ccy = 'NGN'; // Naira only (the account collects NGN; USD is roadmap)
   const [amount, setAmount] = useState('5000');
   const [phase, setPhase] = useState<Phase>('idle');
   const [err, setErr] = useState('');
@@ -51,19 +49,11 @@ export default function FundPage() {
     document.body.appendChild(s);
   }, []);
 
-  const presets = ccy === 'NGN' ? PRESETS_NGN : PRESETS_USD;
+  const presets = PRESETS_NGN;
   const num = Math.max(0, Number(amount) || 0);
-  const dusdc = ccy === 'USD' ? num : num / NGN_PER_DUSDC;
+  const dusdc = num / NGN_PER_DUSDC;
   const dusdcShown = Math.min(dusdc, 50);
   const capped = dusdc > 50;
-
-  const setCcyKeepBalance = useCallback((next: Ccy) => {
-    if (next === ccy) return;
-    // convert the entered amount so the DUSDC value stays roughly steady
-    const d = ccy === 'USD' ? num : num / NGN_PER_DUSDC;
-    setAmount(next === 'USD' ? d.toFixed(2).replace(/\.00$/, '') : String(Math.round(d * NGN_PER_DUSDC)));
-    setCcy(next);
-  }, [ccy, num]);
 
   const credit = useCallback(async (reference?: string) => {
     if (!address) return;
@@ -91,7 +81,7 @@ export default function FundPage() {
     // DUSDC delivered stays what the user chose.
     if (PAYSTACK_KEY && window.PaystackPop) {
       setPhase('paying');
-      const ngn = ccy === 'USD' ? num * NGN_PER_DUSDC : num;
+      const ngn = num; // account collects Naira
       const handler = window.PaystackPop.setup({
         key: PAYSTACK_KEY,
         email: `${address.slice(2, 12)}@yosuku.xyz`,
@@ -133,18 +123,10 @@ export default function FundPage() {
           {/* ── the card ── */}
           {phase !== 'done' ? (
             <div className="mt-9 rounded-3xl border border-white/[0.08] bg-white/[0.02] p-6 sm:p-7 shadow-[0_40px_90px_-60px_rgba(0,0,0,0.9)]">
-              {/* currency toggle */}
-              <div className="relative flex rounded-full border border-white/[0.08] bg-white/[0.02] p-1 mb-6 font-mono text-[13px]">
-                <div
-                  className="absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-full bg-vermilion transition-transform duration-300"
-                  style={{ transform: ccy === 'USD' ? 'translateX(calc(100% + 4px))' : 'translateX(0)', ['--ease' as string]: 'cubic-bezier(0.16,1,0.3,1)' }}
-                />
-                {(['NGN', 'USD'] as Ccy[]).map((c) => (
-                  <button key={c} onClick={() => setCcyKeepBalance(c)} data-cursor="hover"
-                    className={`relative z-10 flex-1 py-2.5 rounded-full font-semibold tracking-wide transition-colors ${ccy === c ? 'text-white' : 'text-gray-400 hover:text-gray-200'}`}>
-                    {c === 'NGN' ? '₦ Naira' : '$ USD'}
-                  </button>
-                ))}
+              {/* pay in Naira */}
+              <div className="flex items-center justify-between mb-6">
+                <span className="inline-flex items-center gap-2 rounded-full border border-vermilion/40 bg-vermilion/[0.07] px-4 py-2 font-mono text-[13px] font-semibold text-vermilion">₦ Pay in Naira</span>
+                <span className="font-mono text-[10px] tracking-[0.14em] uppercase text-gray-500">USD · soon</span>
               </div>
 
               {/* amount */}
@@ -164,7 +146,7 @@ export default function FundPage() {
                   {presets.map((p) => (
                     <button key={p} onClick={() => setAmount(String(p))} data-cursor="hover"
                       className="rounded-lg border border-white/12 px-3 py-1.5 font-mono text-[12px] text-gray-400 hover:border-vermilion/50 hover:text-white transition-colors">
-                      {ccy === 'NGN' ? fmtNgn(p) : fmtUsd(p)}
+                      {fmtNgn(p)}
                     </button>
                   ))}
                 </div>
@@ -211,7 +193,7 @@ export default function FundPage() {
                     data-cursor="hover"
                     className="w-full rounded-full bg-vermilion text-white font-display font-bold py-4 text-[15px] hover:bg-vermilion-d active:scale-[0.99] transition-all disabled:opacity-50 shadow-[0_18px_40px_-16px_var(--vermilion)]"
                   >
-                    {phase === 'paying' ? 'Opening Paystack…' : phase === 'crediting' ? 'Delivering to your wallet…' : `Fund with Paystack · ${ccy === 'NGN' ? fmtNgn(num) : fmtUsd(num)}`}
+                    {phase === 'paying' ? 'Opening Paystack…' : phase === 'crediting' ? 'Delivering to your wallet…' : `Fund with Paystack · ${fmtNgn(num)}`}
                   </button>
                 )}
                 {err && <p className="mt-3 text-center text-[12px] text-rose-400">{err}</p>}
