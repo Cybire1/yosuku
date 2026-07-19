@@ -13,6 +13,19 @@ import { useBell624 } from '@/lib/sui/bell624';
 import { type PriceData } from '@/lib/sui/predictApi';
 import { FLOAT_SCALING } from '@/lib/sui/constants';
 import { getCanonicalMarketLine } from '@/lib/marketLine';
+import { fetchMarkets624, fetchSpot624 } from '@/lib/sui/predict624Client';
+import { BAND_USD } from '@/lib/sui/ticket624';
+
+/* Probability that BTC finishes above `line`, given spot + time left.
+   Same logistic the word-market board uses, so the hero dial reads like a
+   real near-flip on the venue that actually trades, not the dead 4-16
+   oracle (whose $50,050 strike vs ~$64k spot pinned this dial to 99%). */
+function probAbove(spot: number, line: number, msLeft: number): number {
+  const secs = Math.max(45, msLeft / 1000);
+  const sigma = spot * 0.00028 * Math.sqrt(secs / 60);
+  const z = (spot - line) / (sigma || 1);
+  return Math.max(0.03, Math.min(0.97, 1 / (1 + Math.exp(-1.15 * z))));
+}
 
 /* ───────── Types ───────── */
 interface FaqItem {
@@ -148,6 +161,7 @@ export default function HomePage() {
 
   /* ── state ── */
   const [probability, setProbability] = useState<number>(50);
+  const [heroLine, setHeroLine] = useState<number | null>(null);
   const [sparkPath, setSparkPath] = useState<string>('');
   const [marketTab, setMarketTab] = useState<string>('All');
   const [faqOpen, setFaqOpen] = useState<number>(0);
@@ -193,32 +207,40 @@ export default function HomePage() {
     return () => { cancelled = true; clearInterval(interval); };
   }, []);
 
-  /* ── Derive probability from first oracle ── */
+  /* ── Hero dial: near-spot UP line on the LIVE 6-24 venue ──
+     The dial used to read the dead 4-16 oracles, whose strike is stuck at
+     $50,050 while BTC trades ~$64k — so "UP" always computed to 99%. Drive
+     it off the same live spot the app trades on: a near-spot line (spot −
+     band) and the nearest real expiry, so it reads like the honest near-flip
+     it is. Keeps last-good on a fetch blip. */
   useEffect(() => {
-    if (futureOracles.length === 0 || !nowMs) return;
-    const firstOracle = futureOracles[0];
-    const prices = oraclePrices[firstOracle.oracle_id];
-    if (!prices) return;
-    // Lock strike on first price — display shouldn't fluctuate
-    if (!lockedStrikesRef.current[firstOracle.oracle_id]) {
-      lockedStrikesRef.current[firstOracle.oracle_id] = getCanonicalMarketLine({
-        oracle: firstOracle,
-        settledOracles,
-        referencePrice: prices.forward || prices.spot,
-      })!.strike;
+    let cancelled = false;
+    async function loadDial() {
+      try {
+        const [markets, spot] = await Promise.all([
+          fetchMarkets624(),
+          fetchSpot624().catch(() => null),
+        ]);
+        if (cancelled || spot == null || !(spot > 0)) return;
+        const now = Date.now();
+        const nearest = markets
+          .filter(m => m.expiry > now)
+          .sort((a, b) => a.expiry - b.expiry)[0];
+        // Price the SAME horizon the dial's countdown shows (the next bell),
+        // so the % and "closes in …" describe one market — not a ~45s market
+        // priced against a 5m clock, which reads as a suspicious 81%.
+        const msLeft = nextBellMs && nextBellMs > now
+          ? nextBellMs - now
+          : nearest ? nearest.expiry - now : 60_000;
+        const line = spot - BAND_USD;
+        setProbability(Math.round(probAbove(spot, line, msLeft) * 100));
+        setHeroLine(line);
+      } catch { /* keep last-good */ }
     }
-    const midStrike = lockedStrikesRef.current[firstOracle.oracle_id];
-    const midStrikeDollars = midStrike / FLOAT_SCALING;
-    const forward = prices.forward / FLOAT_SCALING;
-    if (midStrikeDollars > 0 && forward > 0) {
-      const diff = (forward - midStrikeDollars) / midStrikeDollars;
-      const secsLeft = Math.max(60, (firstOracle.expiry - nowMs) / 1000);
-      const sigma = 0.001 * Math.sqrt(secsLeft / 60);
-      const z = diff / (sigma || 0.01);
-      const p = Math.round(Math.max(1, Math.min(99, 100 / (1 + Math.exp(-1.7 * z)))));
-      setProbability(p);
-    }
-  }, [futureOracles, nowMs, oraclePrices, settledOracles]);
+    loadDial();
+    const iv = setInterval(loadDial, 15_000);
+    return () => { cancelled = true; clearInterval(iv); };
+  }, [nextBellMs]);
 
   /* ── Dial sparkline (decorative) ── */
   useEffect(() => {
@@ -344,25 +366,11 @@ export default function HomePage() {
     return byAsset;
   }, [futureOracles, oraclePrices]);
 
-  /* ── Dial question label ── */
+  /* ── Dial question label — the near-spot line from the live 6-24 dial ── */
   const dialLabel = useMemo(() => {
-    if (futureOracles.length === 0) return 'BTC > $95,000';
-    const o = futureOracles[0];
-    const asset = o.underlying_asset || 'BTC';
-    const prices = oraclePrices[o.oracle_id];
-    const refPrice = prices?.forward || prices?.spot;
-    if (!lockedStrikesRef.current[o.oracle_id]) {
-      lockedStrikesRef.current[o.oracle_id] = getCanonicalMarketLine({
-        oracle: o,
-        settledOracles,
-        referencePrice: refPrice,
-      })!.strike;
-    }
-    const midStrike = lockedStrikesRef.current[o.oracle_id]
-      ?? getCanonicalMarketLine({ oracle: o, settledOracles, referencePrice: refPrice })!.strike;
-    const dollars = midStrike / FLOAT_SCALING;
-    return `${asset} > $${dollars.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
-  }, [futureOracles, oraclePrices, settledOracles]);
+    if (heroLine == null) return 'BTC price';
+    return `BTC > $${heroLine.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+  }, [heroLine]);
 
   /* ── IntersectionObserver for .how-steps ── */
   useEffect(() => {
