@@ -38,9 +38,9 @@ export default function FundPage() {
   const [result, setResult] = useState<{ amount: number; explorer: string } | null>(null);
   const paystackReady = useRef(false);
 
-  // load Paystack inline (only when a key is configured)
+  // load the secure-checkout script (kept ready so the card screen opens instantly)
   useEffect(() => {
-    if (!PAYSTACK_KEY || document.getElementById('paystack-inline')) { paystackReady.current = !!window.PaystackPop; return; }
+    if (document.getElementById('paystack-inline')) { paystackReady.current = !!window.PaystackPop; return; }
     const s = document.createElement('script');
     s.id = 'paystack-inline';
     s.src = 'https://js.paystack.co/v1/inline.js';
@@ -112,72 +112,46 @@ export default function FundPage() {
         <span aria-hidden className="pointer-events-none select-none absolute -right-6 top-24 font-jp font-black leading-[0.8] text-[clamp(9rem,26vw,15rem)] text-white/[0.035]" style={{ writingMode: 'vertical-rl' }}>入金</span>
 
         <div className="relative z-10">
-          <div className="font-mono text-[11px] tracking-[0.28em] uppercase text-vermilion mb-4">予測 · Fund</div>
+          <div className="font-mono text-[11px] tracking-[0.28em] uppercase text-vermilion mb-4">予測 · Add money</div>
           <h1 className="font-display font-[800] tracking-[-0.03em] leading-[0.98] text-[clamp(2.3rem,7vw,3.4rem)]">
-            Fund in <span className="text-vermilion">your own money.</span>
+            Fund in <span className="text-vermilion">Naira.</span>
           </h1>
           <p className="mt-4 text-gray-400 leading-relaxed max-w-[42ch]">
-            Pay with Naira. Test dollars land in <span className="text-white">your own wallet</span>, and only you can ever cash them out.
+            Pay with your card. It lands in <span className="text-white">your wallet</span> in seconds, and only you can ever cash it out.
           </p>
 
           {/* ── the card ── */}
           {phase !== 'done' ? (
             <div className="mt-9 rounded-3xl border border-white/[0.08] bg-white/[0.02] p-6 sm:p-7 shadow-[0_40px_90px_-60px_rgba(0,0,0,0.9)]">
-              {/* pay in Naira */}
-              <div className="flex items-center justify-between mb-6">
-                <span className="inline-flex items-center gap-2 rounded-full border border-vermilion/40 bg-vermilion/[0.07] px-4 py-2 font-mono text-[13px] font-semibold text-vermilion">₦ Pay in Naira</span>
-                <span className="font-mono text-[10px] tracking-[0.14em] uppercase text-gray-500">USD · soon</span>
-              </div>
-
               {/* amount */}
-              <div className="rounded-2xl border border-white/[0.08] bg-black/20 px-5 py-4 focus-within:border-vermilion/50 transition-colors">
+              <div className="fund-amt rounded-2xl border border-white/[0.08] bg-black/20 px-5 py-4 focus-within:border-vermilion/50 transition-colors">
                 <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-gray-500 mb-1.5">You pay</div>
                 <div className="flex items-center gap-2">
-                  <span className="font-display text-3xl font-bold text-gray-500">{ccy === 'NGN' ? '₦' : '$'}</span>
+                  <span className="font-display text-3xl font-bold text-gray-500">₦</span>
                   <input
                     value={amount}
                     onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))}
                     inputMode="decimal"
                     className="flex-1 min-w-0 bg-transparent font-display text-4xl font-bold text-white outline-none tabular-nums"
-                    aria-label={`Amount in ${ccy}`}
+                    aria-label="Amount in Naira"
                   />
                 </div>
                 <div className="mt-3 flex gap-2">
                   {presets.map((p) => (
                     <button key={p} onClick={() => setAmount(String(p))} data-cursor="hover"
-                      className="rounded-lg border border-white/12 px-3 py-1.5 font-mono text-[12px] text-gray-400 hover:border-vermilion/50 hover:text-white transition-colors">
+                      className="fund-preset rounded-lg border border-white/12 px-3 py-1.5 font-mono text-[12px] text-gray-400 hover:border-vermilion/50 hover:text-white transition-colors">
                       {fmtNgn(p)}
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* conversion + flow */}
-              <div className="mt-5 flex items-center justify-between font-mono text-sm">
-                <span className="text-gray-500">you receive</span>
-                <span className="text-white font-bold tabular-nums text-lg">{dusdcShown.toFixed(2)} <span className="text-gray-500 text-sm">DUSDC</span></span>
+              {/* what lands in the wallet — a plain dollar figure, nothing more */}
+              <div className="mt-5 flex items-baseline justify-between">
+                <span className="font-mono text-sm text-gray-500">You get</span>
+                <span className="font-display font-bold tabular-nums text-2xl text-white">≈ ${dusdcShown.toFixed(2)}</span>
               </div>
-              {ccy === 'NGN' && (
-                <div className="mt-1 text-right font-mono text-[11px] text-gray-600">rate ≈ {fmtNgn(NGN_PER_DUSDC)} / DUSDC</div>
-              )}
-              {capped && <div className="mt-1 text-right font-mono text-[11px] text-vermilion/80">up to 50 at a time</div>}
-
-              {/* the custody flow */}
-              <div className="mt-6 flex items-center justify-between gap-2 text-center">
-                {[
-                  { l: ccy === 'NGN' ? 'Your Naira' : 'Your USD', tone: 'text-gray-300 border-white/12' },
-                  { l: 'Paystack', tone: 'text-gray-300 border-white/12' },
-                  { l: 'Your wallet', tone: 'text-profit border-profit/45', sub: 'self-custodial' },
-                ].map((n, i) => (
-                  <div key={i} className="contents">
-                    <div className={`flex-1 rounded-xl border ${n.tone} py-3 px-1`}>
-                      <div className="font-mono text-[11px] tracking-wide">{n.l}</div>
-                      {n.sub && <div className="font-mono text-[8.5px] uppercase tracking-[0.14em] text-profit/70 mt-0.5">{n.sub}</div>}
-                    </div>
-                    {i < 2 && <span className="text-gray-600 font-mono text-xs shrink-0">→</span>}
-                  </div>
-                ))}
-              </div>
+              {capped && <div className="mt-1 text-right font-mono text-[11px] text-vermilion/80">up to $50 at a time</div>}
 
               {/* CTA / gate */}
               <div className="mt-7">
@@ -193,15 +167,10 @@ export default function FundPage() {
                     data-cursor="hover"
                     className="w-full rounded-full bg-vermilion text-white font-display font-bold py-4 text-[15px] hover:bg-vermilion-d active:scale-[0.99] transition-all disabled:opacity-50 shadow-[0_18px_40px_-16px_var(--vermilion)]"
                   >
-                    {phase === 'paying' ? 'Opening Paystack…' : phase === 'crediting' ? 'Delivering to your wallet…' : `Fund with Paystack · ${fmtNgn(num)}`}
+                    {phase === 'paying' ? 'Opening secure checkout…' : phase === 'crediting' ? 'Adding to your wallet…' : `Pay ${fmtNgn(num)}`}
                   </button>
                 )}
                 {err && <p className="mt-3 text-center text-[12px] text-rose-400">{err}</p>}
-              </div>
-
-              {/* honest, consumer-clean note (no dev jargon ever renders here) */}
-              <div className="mt-6 pt-5 border-t border-white/[0.06] flex items-center justify-center gap-2 font-mono text-[10px] tracking-[0.1em] text-gray-500 text-center">
-                Test mode · no real money moves
               </div>
             </div>
           ) : (
@@ -211,9 +180,9 @@ export default function FundPage() {
                 <svg width="30" height="30" viewBox="0 0 24 24" fill="none"><path d="M4 12.5l5 5 11-11" stroke="var(--profit)" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
               </div>
               <div className="font-display font-[800] text-2xl">You're funded.</div>
-              <div className="mt-2 font-mono text-lg text-white tabular-nums">{result?.amount.toFixed(2)} DUSDC</div>
+              <div className="mt-2 font-display font-bold text-2xl text-white tabular-nums">≈ ${result?.amount.toFixed(2)}</div>
               <p className="mt-3 text-[13px] text-gray-400 max-w-[34ch] mx-auto leading-snug">
-                Landed in your own wallet. Only you can ever cash it out.
+                Landed in your wallet. Only you can ever cash it out.
               </p>
               <a href={result?.explorer} target="_blank" rel="noreferrer" className="inline-block mt-3 font-mono text-[11px] text-gray-500 hover:text-white transition-colors underline underline-offset-4">verify on-chain ↗</a>
               <div className="mt-7 flex flex-col sm:flex-row gap-3 justify-center">
