@@ -210,7 +210,7 @@ export default function StatsPage() {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
                 <Stat label="Tweet-trades" value={fmt(t.proven.tweetTrades)} sub="un-drainable" />
                 <Stat label="Leveraged opens" value={fmt(t.proven.leverageOpens)} sub="margin desk" />
-                <Stat label="Liquidations" value={fmt(t.proven.liquidations)} sub="agent-executed (in TEE)" />
+                <Stat label="Liquidations" value={fmt(t.proven.liquidations)} sub="agent-executed, on-chain" />
                 <Stat label="Volume" value={fmt(t.proven.volumeDusdc)} sub="DUSDC notional" />
               </div>
               <p className="font-mono text-[11px] text-gray-600 mb-10 leading-relaxed max-w-2xl">

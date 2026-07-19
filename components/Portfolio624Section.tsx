@@ -312,6 +312,9 @@ export default function Portfolio624Section() {
   // settled wins the permissionless keeper is auto-collecting (verified live: it
   // redeem_settled's every winner ~every 2 min). Not "claimable chores" — money on its way.
   const autoPaying = positions.filter((p) => isWonPos(p, mktStates[p.marketId])).length;
+  // "Open" = not yet settled. Settled-but-uncleared positions (lost, awaiting Close) must not
+  // inflate the open count — they are shown in the list but are not open.
+  const openCount = positions.filter((p) => !mktStates[p.marketId]?.settled).length;
   const hasDesk = deskLedger > 0 || deskSub != null || deskRows.length > 0;
 
   return (
@@ -385,7 +388,7 @@ export default function Portfolio624Section() {
               </div>
               <div className="px-4 py-3.5 border-l border-white/[0.06]">
                 <div className="font-mono text-[9px] uppercase tracking-[0.18em] text-white/40 mb-1">Open positions</div>
-                <div className="font-mono text-lg text-white tabular-nums">{positions.length}</div>
+                <div className="font-mono text-lg text-white tabular-nums">{openCount}</div>
               </div>
               <div className="px-4 py-3.5 border-l border-white/[0.06]">
                 <div className="font-mono text-[9px] uppercase tracking-[0.18em] text-white/40 mb-1">Auto-paying</div>
