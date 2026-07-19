@@ -2,10 +2,9 @@
 
 /* eslint-disable @next/next/no-img-element */
 // yosuku.xyz/pitch — "THE YOSUKU FOLIO": the deck as one authored premium issue.
-// Warm cream editorial (Yosuku identity) on a construction-frame system. Emphasis is the
-// "stub": a ticket-perforation underline that punches in with a vermilion eyelet (the peach
-// highlighter is retired). Spec panels + a real revenue table + sourced stats carry substance.
-// Nav: ← → space, dots, click.
+// Content rewritten to the Sui Overflow rubric, grounded in the real codebase (honest,
+// evidence-cited). Warm cream editorial on a construction-frame system. Emphasis is the
+// "stub" perforation underline. Nav: ← → space, dots, click.
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
@@ -28,19 +27,17 @@ const stagger = { hidden: {}, show: { transition: { staggerChildren: 0.08, delay
 const rise = { hidden: { opacity: 0, y: 22 }, show: { opacity: 1, y: 0, transition: { duration: 0.55, ease: EASE } } };
 const M = motion.div;
 
-/* ── the "stub": ticket-perforation emphasis (replaces the peach highlighter) ── */
+/* ── the "stub": ticket-perforation emphasis ── */
 function Emph({ children, delay = 0.55 }: { children: React.ReactNode; delay?: number }) {
   const reduce = useReducedMotion();
   return (
     <span className="relative inline-block" style={{ padding: '0 0.05em' }}>
       <span className="relative" style={{ zIndex: 1 }}>{children}</span>
-      {/* perforation underline: round ink punches, drawn left → right */}
       <motion.span aria-hidden className="absolute" style={{
         left: 0, right: '0.14em', bottom: '-0.16em', height: 4, zIndex: 0, transformOrigin: 'left',
         backgroundImage: `radial-gradient(circle at center, ${INK} 0 1.4px, transparent 1.7px)`,
         backgroundSize: '8px 4px', backgroundRepeat: 'repeat-x',
       }} initial={reduce ? false : { scaleX: 0 }} animate={{ scaleX: 1 }} transition={{ delay, duration: 0.5, ease: EASE }} />
-      {/* vermilion stub-eyelet */}
       <motion.span aria-hidden className="absolute rounded-full" style={{ right: '-0.02em', bottom: '-0.21em', width: 6, height: 6, background: VERM, zIndex: 2 }}
         initial={reduce ? false : { scale: 0 }} animate={{ scale: 1 }} transition={{ delay: delay + 0.5, type: 'spring', stiffness: 480, damping: 17 }} />
     </span>
@@ -62,7 +59,7 @@ function Pill({ children, tone = 'ink', icon }: { children: React.ReactNode; ton
   </span>;
 }
 
-/* ── referrer brand marks (monochrome ink, custom SVG) ── */
+/* ── brand marks (monochrome ink, custom SVG) ── */
 const LogoX = ({ s = 12, c = INK }: { s?: number; c?: string }) =>
   <svg width={s} height={s} viewBox="0 0 1200 1227" fill={c}><path d="M714.163 519.284 1160.89 0h-105.86L667.137 450.887 357.328 0H0l468.492 681.821L0 1226.37h105.866l409.625-476.152 327.181 476.152H1200L714.137 519.284h.026ZM569.165 687.828l-47.468-67.894-377.686-540.24h162.604l304.797 435.991 47.468 67.894 396.2 566.721H892.476L569.165 687.854v-.026Z" /></svg>;
 const LogoGoogle = ({ s = 13, c = INK }: { s?: number; c?: string }) =>
@@ -72,26 +69,10 @@ const LogoGoogle = ({ s = 13, c = INK }: { s?: number; c?: string }) =>
     <path d="M11.69 28.18C11.25 26.86 11 25.45 11 24s.25-2.86.69-4.18v-5.7H4.34C2.85 17.09 2 20.45 2 24s.85 6.91 2.34 9.88l7.35-5.7z" />
     <path d="M24 10.75c3.23 0 6.13 1.11 8.41 3.29l6.31-6.31C34.91 4.18 29.93 2 24 2 15.4 2 7.96 6.93 4.34 14.12l7.35 5.7c1.73-5.2 6.58-9.07 12.31-9.07z" />
   </svg>;
-const LogoTelegram = ({ s = 13, c = INK }: { s?: number; c?: string }) =>
-  <svg width={s} height={s} viewBox="0 0 24 24" fill={c}><path d="M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.3 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71L12.6 16.3l-1.99 1.93c-.23.23-.42.42-.83.42z" /></svg>;
 const LogoCard = ({ s = 22, c = INK }: { s?: number; c?: string }) =>
   <svg width={s} height={s * 0.7} viewBox="0 0 32 22" fill="none"><rect x="1.2" y="1.2" width="29.6" height="19.6" rx="3.2" stroke={c} strokeWidth="2.2" /><rect x="1.2" y="5.6" width="29.6" height="3.6" fill={c} /><rect x="5" y="14" width="9" height="2.6" rx="1.3" fill={c} /></svg>;
 const LogoSui = ({ s = 19, c = INK }: { s?: number; c?: string }) =>
   <svg width={s * 0.8} height={s} viewBox="0 0 100 124" fill={c}><path d="M50 6C50 6 14 51 14 81a36 36 0 1 0 72 0C86 51 50 6 50 6Z" /></svg>;
-const LogoApple = ({ s = 14, c = INK }: { s?: number; c?: string }) =>
-  <svg width={s} height={s} viewBox="0 0 24 24" fill={c}><path d="M17.05 12.04c-.03-2.6 2.12-3.85 2.22-3.91-1.21-1.77-3.09-2.01-3.76-2.04-1.6-.16-3.12.94-3.93.94-.81 0-2.06-.92-3.39-.9-1.74.03-3.35 1.01-4.25 2.57-1.81 3.14-.46 7.79 1.3 10.34.86 1.25 1.88 2.65 3.22 2.6 1.29-.05 1.78-.83 3.34-.83 1.56 0 2 .83 3.37.81 1.39-.03 2.27-1.27 3.12-2.53.98-1.45 1.39-2.85 1.41-2.92-.03-.01-2.7-1.04-2.73-4.13ZM14.6 4.87c.71-.86 1.19-2.06 1.06-3.25-1.02.04-2.26.68-2.99 1.54-.66.76-1.23 1.98-1.08 3.15 1.14.09 2.3-.58 3.01-1.44Z" /></svg>;
-const LogoWeb = ({ s = 15, c = INK }: { s?: number; c?: string }) =>
-  <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.7"><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3c2.6 2.6 2.6 15.4 0 18M12 3c-2.6 2.6-2.6 15.4 0 18" /></svg>;
-function PulseDot({ color = GREEN }: { color?: string }) {
-  return (
-    <span className="relative inline-flex" style={{ width: 8, height: 8 }}>
-      <motion.span aria-hidden className="absolute rounded-full" style={{ inset: 0, background: color }}
-        animate={{ scale: [1, 2.6], opacity: [0.5, 0] }} transition={{ duration: 1.9, repeat: Infinity, ease: 'easeOut' }} />
-      <span className="relative rounded-full" style={{ width: 8, height: 8, background: color }} />
-    </span>
-  );
-}
-
 function Celebrant({ h = 46 }: { h?: number }) {
   return (
     <svg width={h * 0.83} height={h} viewBox="0 0 266 322" fill="none">
@@ -106,36 +87,7 @@ function Celebrant({ h = 46 }: { h?: number }) {
 const Kanji = ({ className = '', style }: { className?: string; style?: React.CSSProperties }) =>
   <span className={`font-jp font-bold select-none ${className}`} style={style}>予</span>;
 
-function Barcode({ w = 220, h = 42, color = INK }: { w?: number; h?: number; color?: string }) {
-  const seed = [3, 1, 4, 1, 5, 9, 2, 6, 5, 3]; let x = 0; let i = 0; const arr: [number, number][] = [];
-  while (x < w - 1) { const s = seed[i % seed.length]; const bw = 1 + ((s * 7 + i * 3) % 5); const gap = 2 + ((s + i) % 3); if (x + bw <= w) arr.push([x, bw]); x += bw + gap; i++; }
-  return <svg width={w} height={h}>{arr.map(([bx, bw], k) => <rect key={k} x={bx} y={0} width={bw} height={h} fill={color} opacity={0.8} />)}</svg>;
-}
-
-function Ticket({ style }: { style?: React.CSSProperties }) {
-  return (
-    <div className="relative" style={{ width: 320, background: CARD, borderRadius: 18, boxShadow: '0 40px 90px -40px rgba(40,28,18,0.5)', ...style }}>
-      <div className="absolute" style={{ top: 0, left: 0, right: 0, height: 6, background: VERM, borderRadius: '18px 18px 0 0' }} />
-      <div style={{ padding: '24px 24px 20px' }}>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2"><Celebrant h={20} /><span className="font-display font-[800] text-[14px]" style={{ color: INK }}>yosuku</span></div>
-          <span className="inline-flex items-center gap-2 rounded-full px-2.5 py-1" style={{ background: 'rgba(46,107,79,0.12)' }}>
-            <span className="rounded-full" style={{ width: 6, height: 6, background: GREEN }} /><Mono className="text-[9px]" style={{ color: GREEN }}>SETTLED · WON</Mono>
-          </span>
-        </div>
-        <div className="mt-5"><Mono className="text-[10px]" style={{ color: FAINT }}>PAYOUT</Mono>
-          <div className="font-display font-[800] leading-none mt-1" style={{ fontSize: 46, color: GREEN, letterSpacing: '-0.03em' }}>+2.93</div>
-          <div className="font-mono text-[11px] mt-1.5" style={{ color: MUTE }}>paid to your wallet</div>
-        </div>
-        <div style={{ height: 1, background: HAIR, margin: '16px 0 12px' }} />
-        <Barcode w={272} h={34} />
-        <div className="flex justify-between mt-2"><Mono className="text-[9px]" style={{ color: FAINT }}>N° 64000·7FXM</Mono><Mono className="text-[9px]" style={{ color: FAINT }}>SUI TESTNET</Mono></div>
-      </div>
-    </div>
-  );
-}
-
-// labeled image placeholder (the founder drops real screenshots later)
+// labeled image placeholder (drop real screenshots later)
 function Drop({ label, tag = 'DROP IMAGE', w = 260, h = 300, tilt = 0 }: { label: string; tag?: string; w?: number | string; h?: number; tilt?: number }) {
   return (
     <M variants={rise} className="relative shrink-0 flex flex-col items-center justify-center text-center" style={{ width: w, height: h, transform: `rotate(${tilt}deg)`, border: `1.5px dashed ${HAIR}`, borderRadius: 12, background: SOFT, padding: 24 }}>
@@ -145,10 +97,30 @@ function Drop({ label, tag = 'DROP IMAGE', w = 260, h = 300, tilt = 0 }: { label
   );
 }
 
-// perforated dotted leader (echoes the ticket stub), used in the ledger + stats
+// clean Move code chip
+function CodeChip({ style }: { style?: React.CSSProperties }) {
+  return (
+    <div style={{ width: 380, background: '#17140F', borderRadius: 14, boxShadow: '0 40px 90px -44px rgba(40,28,18,0.6)', overflow: 'hidden', ...style }}>
+      <div className="flex items-center gap-1.5 px-4" style={{ height: 32, background: 'rgba(255,255,255,0.04)' }}>
+        <span className="rounded-full" style={{ width: 8, height: 8, background: 'rgba(255,255,255,0.14)' }} /><span className="rounded-full" style={{ width: 8, height: 8, background: 'rgba(255,255,255,0.14)' }} /><span className="rounded-full" style={{ width: 8, height: 8, background: VERM }} />
+        <Mono className="text-[9px] ml-2" style={{ color: 'rgba(255,255,255,0.4)' }}>vault624.move</Mono>
+      </div>
+      <div className="p-5 font-mono text-[12.5px]" style={{ color: '#E8E2D4', lineHeight: 1.7 }}>
+        <div><span style={{ color: '#C05CD8' }}>public fun</span> <span style={{ color: '#5B8DEF' }}>agent_open</span>(...) {'{'}</div>
+        <div className="pl-4" style={{ color: 'rgba(255,255,255,0.5)' }}>// the agent can only open a</div>
+        <div className="pl-4" style={{ color: 'rgba(255,255,255,0.5)' }}>// position the owner owns. no</div>
+        <div className="pl-4" style={{ color: 'rgba(255,255,255,0.5)' }}>// withdraw path exists for it.</div>
+        <div className="pl-4"><span style={{ color: '#2FA47C' }}>transfer</span>(win, <span style={{ color: VERM }}>owner</span>);</div>
+        <div>{'}'}</div>
+      </div>
+    </div>
+  );
+}
+
+// perforated dotted leader (echoes the ticket stub)
 const dots = (color = HAIR): React.CSSProperties => ({ backgroundImage: `radial-gradient(circle at center, ${color} 0 1.3px, transparent 1.6px)`, backgroundSize: '7px 3px', backgroundRepeat: 'repeat-x' });
 
-// our own data presentation: a receipt/ledger stub, not a boxed data panel
+// receipt/ledger stub (our own data presentation)
 function SpecPanel({ title, badge, badgeTone = 'live', rows, w }: { title: string; badge?: string; badgeTone?: 'live' | 'verm'; rows: [string, React.ReactNode, boolean?][]; w?: number | string }) {
   return (
     <M variants={rise} style={{ width: w ?? 400 }}>
@@ -161,10 +133,10 @@ function SpecPanel({ title, badge, badgeTone = 'live', rows, w }: { title: strin
       </div>
       <div style={{ marginTop: 3 }}>
         {rows.map(([k, v, hl], i) => (
-          <div key={i} className="flex items-baseline" style={{ padding: '10px 0' }}>
-            <Mono className="text-[11.5px]" style={{ color: MUTE, letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{k}</Mono>
+          <div key={i} className="flex items-baseline" style={{ padding: '9px 0' }}>
+            <Mono className="text-[11px]" style={{ color: MUTE, letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{k}</Mono>
             <span aria-hidden className="flex-1" style={{ height: 3, margin: '0 12px', transform: 'translateY(-3px)', ...dots() }} />
-            <span className="font-mono" style={{ fontSize: 14.5, color: hl ? GREEN : INK, whiteSpace: 'nowrap' }}>{v}</span>
+            <span className="font-mono" style={{ fontSize: 13.5, color: hl ? GREEN : INK, whiteSpace: 'nowrap' }}>{v}</span>
           </div>
         ))}
       </div>
@@ -172,7 +144,7 @@ function SpecPanel({ title, badge, badgeTone = 'live', rows, w }: { title: strin
   );
 }
 
-// cover hero facts: bold Sora values, no leaders, readable from the back of a room
+// cover hero facts: bold Sora values
 function Glance({ rows, w = 440 }: { rows: [string, React.ReactNode, boolean?][]; w?: number }) {
   return (
     <M variants={rise} style={{ width: w }}>
@@ -184,10 +156,10 @@ function Glance({ rows, w = 440 }: { rows: [string, React.ReactNode, boolean?][]
         <span className="absolute rounded-full" style={{ right: 0, top: '50%', transform: 'translate(50%,-50%)', width: 6, height: 6, background: VERM }} />
       </div>
       {rows.map(([k, v, hl], i) => (
-        <div key={i} className="flex items-center justify-between gap-6" style={{ padding: '13px 0', minHeight: 46, borderBottom: i < rows.length - 1 ? `1px solid ${HAIR}` : 'none' }}>
+        <div key={i} className="flex items-center justify-between gap-6" style={{ padding: '11px 0', minHeight: 42, borderBottom: i < rows.length - 1 ? `1px solid ${HAIR}` : 'none' }}>
           <Mono className="text-[10.5px]" style={{ color: FAINT, whiteSpace: 'nowrap' }}>{k}</Mono>
           {typeof v === 'string'
-            ? <span className="font-display font-[600] text-right" style={{ fontSize: 21, color: hl ? GREEN : INK, letterSpacing: '-0.015em', lineHeight: 1.1 }}>{v}</span>
+            ? <span className="font-display font-[600] text-right" style={{ fontSize: 20, color: hl ? GREEN : INK, letterSpacing: '-0.015em', lineHeight: 1.1 }}>{v}</span>
             : <span className="flex items-center gap-2.5">{v}</span>}
         </div>
       ))}
@@ -206,15 +178,13 @@ function StatCard({ value, label, source, hl }: { value: React.ReactNode; label:
   );
 }
 
-function ChannelRow({ name, stat, source, point, first }: { name: string; stat: string; source?: string; point: string; first?: boolean }) {
+// now/next/then + phase cards
+function PhaseCard({ tag, title, body, tone = 'ink' }: { tag: string; title: string; body: string; tone?: 'ink' | 'live' }) {
   return (
-    <M variants={rise} className="flex items-center gap-6" style={{ padding: '13px 0', borderTop: first ? `1px solid ${HAIR}` : 'none', borderBottom: `1px solid ${HAIR}` }}>
-      <div style={{ width: '23%' }}><div className="font-display font-[700]" style={{ fontSize: 20, color: INK, letterSpacing: '-0.01em' }}>{name}</div></div>
-      <div style={{ width: '32%' }}>
-        <div className="font-mono" style={{ fontSize: 14.5, color: INK, lineHeight: 1.4 }}>{stat}</div>
-        {source && <div className="font-mono mt-1" style={{ fontSize: 11, color: MUTE }}>{source}</div>}
-      </div>
-      <div className="flex-1 font-mono" style={{ fontSize: 14, color: BODY, lineHeight: 1.5 }}>{point}</div>
+    <M variants={rise} className="flex-1" style={{ background: CARD, border: `1px solid ${HAIR}`, borderLeft: `3px solid ${tone === 'live' ? GREEN : INK}`, borderRadius: 8, padding: '18px 20px' }}>
+      <Mono className="text-[10px]" style={{ color: tone === 'live' ? GREEN : VERM }}>{tag}</Mono>
+      <div className="font-display font-[700] mt-2" style={{ fontSize: 19, color: INK, letterSpacing: '-0.01em' }}>{title}</div>
+      <div className="mt-2 font-mono" style={{ fontSize: 12.5, color: BODY, lineHeight: 1.5 }}>{body}</div>
     </M>
   );
 }
@@ -226,66 +196,50 @@ function CountUp({ to, decimals = 0, dur = 1.4, prefix = '' }: { to: number; dec
 }
 
 const H1 = 'font-display font-[700] text-[#141210] tracking-[-0.03em] leading-[0.94]';
-const ARTSIZE = { fontSize: 'clamp(2.6rem,7.5vw,6.2rem)' };
+const ARTSIZE = { fontSize: 'clamp(2.4rem,6.8vw,5.6rem)' };
 const DENSE = { fontSize: 'clamp(1.9rem,3.9vw,3.2rem)' };
-const lead: React.CSSProperties = { color: BODY, fontSize: 'clamp(14px,1.55vw,17.5px)', lineHeight: 1.55, maxWidth: '44ch' };
+const lead: React.CSSProperties = { color: BODY, fontSize: 'clamp(14px,1.55vw,17.5px)', lineHeight: 1.55, maxWidth: '46ch' };
 
-/* ── the issue ── */
+/* ── the issue: 14 spreads, one per rubric beat ── */
 const SLIDES: { id: string; section: string; paper?: string; render: () => React.ReactNode }[] = [
+  // 01 · AT A GLANCE (problem/solution/value prop + presentation)
   {
-    id: 'cover', section: 'COVER',
+    id: 'glance', section: 'COVER',
     render: () => (
       <div className="relative w-full h-full flex items-center justify-between gap-12">
-        <div className="relative z-10" style={{ maxWidth: '54%' }}>
-          <M variants={rise} className="mb-5"><Celebrant h={44} /></M>
-          <M variants={rise}><Mono className="text-[12px]" style={{ color: MUTE }}>予測 · THE YOSUKU FOLIO</Mono></M>
-          <M variants={rise} className={`${H1} mt-3`} style={{ fontSize: 'clamp(2.4rem,6.5vw,5.4rem)' }}>
-            Only you can<br /><Emph delay={0.7}>cash out</Emph>
+        <div className="relative z-10" style={{ maxWidth: '52%' }}>
+          <M variants={rise} className={`${H1}`} style={{ fontSize: 'clamp(2.4rem,6.2vw,5.2rem)' }}>
+            Bet Bitcoin.<br />Only you can <Emph delay={0.7}>cash out</Emph>.
           </M>
-          <M variants={rise} className="mt-6 font-mono" style={lead}>
-            Yosuku is the consumer Bitcoin prediction market on Sui. Ask a plain-language question, tap Yes or No, and it settles on the oracle. The vault can never touch your money.
+          <M variants={rise} className="mt-6 font-mono" style={{ ...lead, maxWidth: '50ch' }}>
+            The one-tap Bitcoin prediction market on Sui. Bet Up or Down, or straight from a tweet, through an agent that can open your position but never withdraw. Sign in with Google, no seed phrase. <span style={{ color: INK }}>Live on testnet.</span>
           </M>
-          <M variants={rise} className="mt-8 flex items-center">
-            <span className="flex items-center gap-2.5" style={{ paddingRight: 22 }}>
-              <PulseDot /><Mono className="text-[11px]" style={{ color: GREEN }}>LIVE ON TESTNET</Mono>
-            </span>
-            <span style={{ width: 1, height: 14, background: HAIR }} />
-            <span className="flex items-center gap-3" style={{ padding: '0 22px' }}>
-              <LogoWeb s={15} /><LogoApple s={15} /><LogoX s={13} />
-            </span>
-            <span style={{ width: 1, height: 14, background: HAIR }} />
-            <span className="flex items-center gap-2" style={{ paddingLeft: 22 }}>
-              <LogoSui s={14} /><Mono className="text-[11px]" style={{ color: INK }}>BUILT ON SUI</Mono>
-            </span>
+          <M variants={rise} className="mt-7 flex gap-2.5 flex-wrap">
+            <Pill tone="live">Live on testnet</Pill><Pill>Web · iOS · X</Pill><Pill tone="verm">Built on Sui</Pill>
           </M>
         </div>
         <Glance rows={[
           ['Category', 'Bitcoin prediction market'],
-          ['Engine', 'DeepBook Predict', true],
+          ['Bet by', 'One tap, or a tweet'],
           ['Custody', 'Non-custodial', true],
-          ['Onboarding', (
-            <span className="flex items-center gap-3">
-              <LogoGoogle s={20} /><span style={{ color: FAINT }}>·</span><LogoCard s={25} /><span style={{ color: FAINT }}>·</span><LogoX s={16} />
-            </span>
-          )],
-          ['Built on', (
-            <span className="flex items-center gap-2.5">
-              <LogoSui s={21} /><span className="font-display font-[600]" style={{ fontSize: 21, color: INK, letterSpacing: '-0.015em' }}>Sui</span>
-            </span>
-          )],
+          ['Onboarding', (<span className="flex items-center gap-3"><LogoGoogle s={19} /><span style={{ color: FAINT }}>·</span><LogoCard s={24} /><span style={{ color: FAINT }}>·</span><LogoX s={16} /></span>)],
+          ['Real usage', '88 wallets · /stats', true],
+          ['Built on', (<span className="flex items-center gap-2.5"><LogoSui s={20} /><span className="font-display font-[600]" style={{ fontSize: 20, color: INK, letterSpacing: '-0.015em' }}>Sui</span></span>)],
         ]} />
       </div>
     ),
   },
+
+  // 02 · PROBLEM
   {
     id: 'problem', section: 'PROBLEM', paper: PAPER2,
     render: () => (
       <div className="relative w-full h-full flex items-center">
-        <div className="relative z-10" style={{ maxWidth: '52%' }}>
-          <Kicker>The wound</Kicker>
-          <M variants={rise} className={`${H1}`} style={ARTSIZE}>They froze<br />your money.</M>
-          <M variants={rise} className="mt-6 font-mono" style={{ ...lead, letterSpacing: '0.02em' }}>
-            Every betting app holds your balance and decides if you won. You are not a customer. You are a mark.
+        <div className="relative z-10" style={{ maxWidth: '54%' }}>
+          <Kicker>The problem</Kicker>
+          <M variants={rise} className={`${H1}`} style={ARTSIZE}>The app that trades<br />for you can <Emph delay={0.7}>drain you</Emph>.</M>
+          <M variants={rise} className="mt-6 font-mono" style={lead}>
+            Custodial betting apps hold your balance, so they can freeze you out of your own winnings. The new AI trading agents are worse: a prompt-injected agent can move your money somewhere you never chose. And real self-custody still means seed phrases, a gas token, and an order book.
           </M>
         </div>
         <M variants={rise} className="absolute" style={{ right: 0, top: '50%', transform: 'translateY(-50%) rotate(4deg)' }}>
@@ -303,52 +257,23 @@ const SLIDES: { id: string; section: string; paper?: string; render: () => React
       </div>
     ),
   },
+
+  // 03 · SOLUTION + value prop
   {
     id: 'solution', section: 'SOLUTION',
     render: () => (
-      <div className="w-full h-full flex items-center justify-between gap-10">
-        <div style={{ maxWidth: '54%' }}>
-          <Kicker>The answer, as code</Kicker>
-          <M variants={rise} className={`${H1}`} style={ARTSIZE}>We can never<br /><Emph delay={0.7}>touch it</Emph></M>
-          <M variants={rise} className="mt-6 font-mono" style={lead}>The vault only ever pays the owner. Not a promise in the pitch, a rule in the contract.</M>
-        </div>
-        <M variants={rise} className="shrink-0" style={{ transform: 'rotate(1.5deg)' }}>
-          <div style={{ width: 360, background: '#17140F', borderRadius: 14, boxShadow: '0 40px 90px -44px rgba(40,28,18,0.6)', overflow: 'hidden' }}>
-            <div className="flex items-center gap-1.5 px-4" style={{ height: 32, background: 'rgba(255,255,255,0.04)' }}>
-              <span className="rounded-full" style={{ width: 8, height: 8, background: 'rgba(255,255,255,0.14)' }} /><span className="rounded-full" style={{ width: 8, height: 8, background: 'rgba(255,255,255,0.14)' }} /><span className="rounded-full" style={{ width: 8, height: 8, background: VERM }} />
-              <Mono className="text-[9px] ml-2" style={{ color: 'rgba(255,255,255,0.4)' }}>no_divert_vault.move</Mono>
-            </div>
-            <div className="p-5 font-mono text-[12.5px]" style={{ color: '#E8E2D4', lineHeight: 1.7 }}>
-              <div><span style={{ color: '#C05CD8' }}>public fun</span> <span style={{ color: '#5B8DEF' }}>agent_trade</span>(...) {'{'}</div>
-              <div className="pl-4" style={{ color: 'rgba(255,255,255,0.5)' }}>// payout can only ever</div>
-              <div className="pl-4" style={{ color: 'rgba(255,255,255,0.5)' }}>// return to the owner</div>
-              <div className="pl-4"><span style={{ color: '#2FA47C' }}>transfer</span>(win, <span style={{ color: VERM }}>owner</span>);</div>
-              <div>{'}'}</div>
-            </div>
-          </div>
-          <div className="mt-3"><Mono className="text-[10px]" style={{ color: FAINT }}>CUSTODY IS CODE · VERIFIABLE ON-CHAIN</Mono></div>
-        </M>
-      </div>
-    ),
-  },
-  {
-    id: 'product', section: 'PRODUCT', paper: PAPER2,
-    render: () => (
       <div className="w-full h-full flex flex-col justify-center">
-        <div className="flex items-center justify-between gap-10">
-          <div style={{ maxWidth: '52%' }}>
-            <Kicker>The product</Kicker>
-            <M variants={rise} className={`${H1}`} style={ARTSIZE}>One tap.<br />You are <Emph delay={0.7}>in</Emph></M>
-            <M variants={rise} className="mt-6 font-mono" style={lead}>Ask a plain-language question. Tap Yes or No. Getting your first bet down is a card tap, not a crypto exchange detour.</M>
-          </div>
-          <M variants={rise} className="shrink-0" style={{ transform: 'rotate(-2deg)' }}><Ticket /></M>
-        </div>
+        <Kicker>The solution</Kicker>
+        <M variants={rise} className={`${H1}`} style={ARTSIZE}>One tap, or one tweet.<br />And <Emph delay={0.75}>un-drainable</Emph>.</M>
+        <M variants={rise} className="mt-6 font-mono" style={{ ...lead, maxWidth: '64ch' }}>
+          Anyone bets Up or Down on Bitcoin in one tap, or just by tweeting, through an agent that can open your position but can never withdraw. Only you can cash out, the vault can never touch it.
+        </M>
         <M variants={rise} className="mt-9">
-          <div className="flex" style={{ border: `1px solid ${HAIR}`, borderRadius: 12, overflow: 'hidden', background: CARD, maxWidth: 940 }}>
-            {[['Card or bank', 'Paystack · test mode'], ['Sign in with Google', 'zkLogin, no seed phrase'], ['Gas on us', 'sponsored every bet']].map(([n, l], i) => (
+          <div className="flex" style={{ border: `1px solid ${HAIR}`, borderRadius: 12, overflow: 'hidden', background: CARD, maxWidth: 1000 }}>
+            {[['One tap', 'Up or Down mints a position in one tx'], ['Tweet-to-bet', 'from a vault only you can withdraw'], ['Google sign-in', 'no seed phrase, never hold SUI']].map(([n, l], i) => (
               <div key={i} className="flex-1" style={{ padding: '18px 22px', borderRight: i < 2 ? `1px solid ${HAIR}` : 'none' }}>
-                <div className="font-display font-[700]" style={{ fontSize: 19, letterSpacing: '-0.02em', color: INK }}>{n}</div>
-                <div className="mt-2"><Mono className="text-[11.5px]" style={{ color: MUTE }}>{l}</Mono></div>
+                <div className="font-display font-[700]" style={{ fontSize: 20, letterSpacing: '-0.02em', color: INK }}>{n}</div>
+                <div className="mt-1.5 font-mono" style={{ fontSize: 12.5, color: BODY, lineHeight: 1.5 }}>{l}</div>
               </div>
             ))}
           </div>
@@ -356,222 +281,283 @@ const SLIDES: { id: string; section: string; paper?: string; render: () => React
       </div>
     ),
   },
+
+  // 04 · LIVE DEMO / PROOF (centerpiece)
   {
-    id: 'proof', section: 'PROOF · THE CENTERPIECE',
+    id: 'demo', section: 'PROOF · TRADE FROM X', paper: PAPER2,
     render: () => (
       <div className="w-full h-full flex flex-col justify-center">
-        <Kicker>On-chain proof of custody</Kicker>
-        <M variants={rise} className={`${H1}`} style={{ fontSize: 'clamp(2.2rem,5.5vw,4.6rem)' }}>It moved your money.</M>
-        <M variants={rise} className="font-display font-[500] mt-1" style={{ fontSize: 'clamp(1.4rem,3.4vw,2.6rem)', color: MUTE, letterSpacing: '-0.02em' }}>
-          Its own balance moved <span className="font-[800]" style={{ color: GREEN }}>0.00</span>
+        <Kicker>Live: a tweet becomes a position</Kicker>
+        <M variants={rise} className={`${H1}`} style={{ fontSize: 'clamp(2rem,5.2vw,4.2rem)' }}>It opened your bet. It took <Emph delay={0.85}>zero</Emph>.</M>
+        <M variants={rise} className="font-mono mt-3" style={{ ...lead, maxWidth: '58ch', color: MUTE }}>
+          A plain-English tweet opened a real position. Even a perfect prompt injection could only move the money into your own bet. Never out.
         </M>
-        <div className="mt-9 grid grid-cols-2 items-stretch" style={{ maxWidth: 860 }}>
+        <div className="mt-8 grid grid-cols-2 items-stretch" style={{ maxWidth: 860 }}>
           <div className="pr-10" style={{ borderRight: `2px dashed ${VERM}` }}>
-            <Mono className="text-[11px]" style={{ color: FAINT }}>YOUR ACCOUNT</Mono>
-            <div className="font-display font-[800] mt-2" style={{ fontSize: 'clamp(1.8rem,4vw,3rem)', color: INK, letterSpacing: '-0.02em' }}>+<CountUp to={2.93} decimals={2} /> <span style={{ fontSize: '0.5em', color: MUTE }}>DUSDC</span></div>
-            <div className="font-mono text-[12px] mt-2" style={{ color: MUTE }}>position opened, credited to you</div>
+            <Mono className="text-[11px]" style={{ color: FAINT }}>RETURNED TO YOU</Mono>
+            <div className="font-display font-[800] mt-2" style={{ fontSize: 'clamp(1.8rem,4vw,3rem)', color: INK, letterSpacing: '-0.02em' }}>+<CountUp to={0.953} decimals={3} /> <span style={{ fontSize: '0.5em', color: MUTE }}>DUSDC</span></div>
+            <div className="font-mono text-[12px] mt-2" style={{ color: MUTE }}>settled back to your wallet</div>
           </div>
           <div className="pl-10">
-            <Mono className="text-[11px]" style={{ color: FAINT }}>THE AGENT</Mono>
+            <Mono className="text-[11px]" style={{ color: FAINT }}>TAKEN BY THE AGENT</Mono>
             <div className="font-display font-[800] mt-2" style={{ fontSize: 'clamp(1.8rem,4vw,3rem)', letterSpacing: '-0.02em' }}><Emph delay={0.7}><span style={{ color: GREEN }}>0.00</span></Emph></div>
-            <div className="font-mono text-[12px] mt-2" style={{ color: MUTE }}>the contract gives it no way to divert</div>
+            <div className="font-mono text-[12px] mt-2" style={{ color: MUTE }}>the vault gives it no withdraw path</div>
           </div>
         </div>
         <M variants={rise} className="mt-8 flex items-center gap-3 flex-wrap">
-          <Mono className="text-[11px]" style={{ color: MUTE }}>MOVE CODE · VERIFIABLE ON-CHAIN</Mono>
+          <Mono className="text-[11px]" style={{ color: MUTE }}>PROVEN ON-CHAIN · vault624 0x27931b56</Mono>
           <span style={{ color: FAINT }}>·</span>
-          <span className="font-mono text-[11px]" style={{ color: VERM }}>tx 9zN7JacN…</span>
+          <span className="font-mono text-[11px]" style={{ color: VERM }}>close-loop tx BmuJroQS</span>
         </M>
       </div>
     ),
   },
+
+  // 05 · REAL-WORLD DEMAND
   {
-    id: 'why-sui', section: 'WHY SUI', paper: PAPER2,
+    id: 'demand', section: 'REAL-WORLD DEMAND',
     render: () => (
-      <div className="relative w-full h-full flex items-center justify-between gap-12">
-        <Kanji className="absolute" style={{ bottom: '-30%', left: '-8%', fontSize: 'clamp(20rem,40vw,48rem)', color: 'rgba(20,18,16,0.04)', lineHeight: 1, zIndex: 0 }} />
-        <div className="relative z-10" style={{ maxWidth: '46%' }}>
-          <Kicker>Technical implementation</Kicker>
-          <M variants={rise} className={`${H1}`} style={ARTSIZE}>Only possible<br />on <Emph delay={0.7}>Sui</Emph></M>
-          <M variants={rise} className="mt-6 font-mono" style={lead}>Every layer that makes cannot-touch-it real is native to the chain, not bolted on.</M>
+      <div className="w-full h-full flex flex-col justify-center">
+        <Kicker>Do not trust us, trust the chain</Kicker>
+        <M variants={rise} className={`${H1}`} style={DENSE}>Real usage, read live<br />from the <Emph delay={0.85}>chain</Emph>.</M>
+        <div className="mt-8 flex gap-4" style={{ maxWidth: 1020 }}>
+          <StatCard value={<CountUp to={88} />} label="wallets onboarded, gas we sponsored" source="traction.ts · un-fakeable arrivals" />
+          <StatCard value={<CountUp to={313} />} label="gas-free on-chain actions, each links to Suiscan" source="sponsor 0xe26c1184" hl />
+          <StatCard value="2 in 3" label="arrivals who go on to place a bet" source="first-session activation" />
         </div>
-        <SpecPanel title="THE STACK" badge="ALL SHIPPED" w={420} rows={[
-          ['Engine', 'DeepBook Predict', true],
-          ['Onboarding', 'zkLogin · Google sign-in'],
-          ['Fees', 'Sponsored gas'],
-          ['Bet', 'One-signature PTB'],
-          ['Custody', 'No-divert Move vault', true],
-          ['Agent feed', 'Walrus'],
-          ['Memory', 'Seal-encrypted'],
+        <M variants={rise} className="mt-7 font-mono" style={{ maxWidth: '84ch', fontSize: 13.5, color: BODY, lineHeight: 1.55 }}>
+          Counted live from our own contracts at yosuku.xyz/stats, not self-reported emails. Plus the first TypeScript SDK for DeepBook Predict and an MCP server, with hundreds of npm installs. Web traffic last week, roughly 1,500 views, up about 62% (Vercel, off-chain color).
+        </M>
+      </div>
+    ),
+  },
+
+  // 06 · TARGET USERS / PMF
+  {
+    id: 'users', section: 'TARGET USERS · PMF', paper: PAPER2,
+    render: () => (
+      <div className="w-full h-full flex items-center justify-between gap-12">
+        <div style={{ maxWidth: '46%' }}>
+          <Kicker>Who it is for</Kicker>
+          <M variants={rise} className={`${H1}`} style={ARTSIZE}>Who bets, and<br />why they <Emph delay={0.7}>stay</Emph>.</M>
+          <M variants={rise} className="mt-6">
+            {['Crypto-curious retail who want plain-language bets', 'People burned by custodial apps that froze them', 'X-native speculators who argue Bitcoin on the timeline', 'Emerging-market users, Nigeria first, funding in local currency', 'AI-agent builders who want programmatic market access'].map((u, i) => (
+              <div key={i} className="flex items-baseline gap-3 font-mono" style={{ padding: '7px 0', fontSize: 13.5, color: BODY, lineHeight: 1.4 }}>
+                <span style={{ width: 5, height: 5, background: VERM, borderRadius: '50%', flexShrink: 0, transform: 'translateY(-2px)' }} />{u}
+              </div>
+            ))}
+          </M>
+        </div>
+        <SpecPanel title="WHY THEY ADOPT" badge="ACTIVATION 2 IN 3" w={430} rows={[
+          ['Arrive', 'Google, no seed, no SUI'],
+          ['First bet', 'One tap or one tweet'],
+          ['Trust', 'The agent cannot drain you', true],
+          ['Return', 'Winnings waiting to cash out'],
+          ['Payout', 'Auto-redeem keeper · tx 32fkHJUz', true],
         ]} />
       </div>
     ),
   },
+
+  // 07 · ARCHITECTURE (custody)
   {
-    id: 'market', section: 'MARKET', paper: PAPER2,
+    id: 'arch', section: 'ARCHITECTURE',
     render: () => (
-      <div className="w-full h-full flex flex-col justify-center">
-        <Kicker>The market</Kicker>
-        <M variants={rise} className={`${H1}`} style={DENSE}>The crowd is <Emph delay={0.85}>already here</Emph></M>
-        <div className="mt-8 flex gap-4" style={{ maxWidth: 1020 }}>
-          <StatCard value="$50B+" label="prediction-market volume, World Cup opening month" source="CoinDesk · Jul 2026" />
-          <StatCard value="$23.8B" label="Kalshi 2025 volume, up 1,108% year on year" source="KalshiData · FY2025" hl />
-          <StatCard value="$9B / 314K" label="Polymarket 2024 volume / active traders" source="The Block · Jan 2025" />
+      <div className="w-full h-full flex items-center justify-between gap-10">
+        <div style={{ maxWidth: '50%' }}>
+          <Kicker>How the money stays yours</Kicker>
+          <M variants={rise} className={`${H1}`} style={DENSE}>The agent can open.<br />It can never <Emph delay={0.85}>withdraw</Emph>.</M>
+          <M variants={rise} className="mt-6 font-mono" style={lead}>
+            Every bet settles through a self-owned DeepBook Predict account. The agent key can open a position you own, and there is no withdraw door for it. Custody is enforced in Move, not in a policy we promise to honor.
+          </M>
+          <M variants={rise} className="mt-6 flex flex-col gap-2">
+            {[['1', 'You fund a self-owned account'], ['2', 'Agent opens a position, cannot withdraw'], ['3', 'Settles on the oracle at close'], ['4', 'Keeper redeems, credits you']].map(([n, t], i) => (
+              <div key={i} className="flex items-center gap-3 font-mono" style={{ fontSize: 13, color: BODY }}>
+                <span className="flex items-center justify-center" style={{ width: 20, height: 20, borderRadius: '50%', border: `1px solid ${HAIR}`, fontSize: 10, color: VERM, flexShrink: 0 }}>{n}</span>{t}
+              </div>
+            ))}
+          </M>
         </div>
-        <M variants={rise} className="mt-7 font-mono" style={{ ...lead, maxWidth: '80ch', fontSize: 14, color: MUTE }}>
-          The demand is proven. Volume is lumpy and event-driven, it fell after the 2024 US election before rebuilding. Revenue is young: Kalshi charges per-contract fees, Polymarket only switched on trading fees in March 2026. What is missing is a version the crowd cannot be locked out of.
+        <M variants={rise} className="shrink-0" style={{ transform: 'rotate(1.5deg)' }}>
+          <CodeChip />
+          <div className="mt-3"><Mono className="text-[10px]" style={{ color: FAINT }}>MOVE · VERIFIABLE · vault624 0x27931b56</Mono></div>
         </M>
       </div>
     ),
   },
+
+  // 08 · THE AGENT (technical, honest about TEE)
   {
-    id: 'traction', section: 'TRACTION',
+    id: 'agent', section: 'THE AGENT', paper: PAPER2,
     render: () => (
       <div className="w-full h-full flex items-center justify-between gap-12">
-        <div style={{ maxWidth: '44%' }}>
-          <Kicker>Do not trust us, trust data</Kicker>
-          <M variants={rise} className={`${H1}`} style={DENSE}>They show up.<br />Then they <Emph delay={0.85}>bet</Emph></M>
-          <M variants={rise} className="mt-6 font-mono" style={lead}>Traffic is climbing and it converts. Two in three strangers who land actually place a bet, and every wallet was ours to onboard, gas paid.</M>
-          <M variants={rise} className="mt-6 flex gap-2.5 flex-wrap">
-            <Pill icon={<LogoX />}>X</Pill><Pill icon={<LogoGoogle />}>Google</Pill><Pill icon={<LogoTelegram />}>Telegram</Pill>
+        <div style={{ maxWidth: '48%' }}>
+          <Kicker>An agent bounded by consensus</Kicker>
+          <M variants={rise} className={`${H1}`} style={DENSE}>Three checks. The hard<br />one is <Emph delay={0.85}>plain code</Emph>.</M>
+          <M variants={rise} className="mt-6 flex flex-col gap-3">
+            {[['Pre-flight', 'A deterministic guard vetoes, not an LLM'], ['In the enclave', 'The verdict is signed inside the TEE'], ['On-chain', 'Move re-checks the same caps, trustlessly']].map(([n, t], i) => (
+              <div key={i} className="flex items-baseline gap-3">
+                <Mono className="text-[10px]" style={{ color: VERM, width: 78, flexShrink: 0 }}>{n}</Mono>
+                <span className="font-mono" style={{ fontSize: 13.5, color: BODY, lineHeight: 1.4 }}>{t}</span>
+              </div>
+            ))}
           </M>
         </div>
-        <div className="flex flex-col gap-8 shrink-0">
-          <SpecPanel title="DEMAND · LAST 7 DAYS" badge="↑ GROWING" w={430} rows={[
-            ['Page views', <span key="pv">1,459 <span style={{ color: GREEN }}>+62%</span></span>, false],
-            ['Visitors', <span key="v">209 <span style={{ color: GREEN }}>+27%</span></span>, false],
-            ['Bounce rate', '33%'],
-            ['Top page', '/markets'],
-          ]} />
-          <SpecPanel title="ON-CHAIN · TO DATE" badge="ON SUI" w={430} rows={[
-            ['Wallets onboarded', '98 · gas ours', true],
-            ['Gas-free actions', '379'],
-            ['Arrive → bet', '2 in 3', true],
-          ]} />
-        </div>
+        <SpecPanel title="ATTESTATION" badge="VERIFIER LIVE" w={430} rows={[
+          ['Move verify', 'ed25519 attestation', true],
+          ['Package', '0x614a7412'],
+          ['Attested trade', 'tx 9zN7JacN'],
+          ['Companion', 'Sensei, live'],
+          ['Brain today', 'DeepSeek'],
+          ['Real Nitro TEE', 'next step', false],
+        ]} />
       </div>
     ),
   },
+
+  // 09 · WHY SUI
   {
-    id: 'fresh', section: 'LAST 24 HOURS', paper: PAPER2,
+    id: 'why-sui', section: 'WHY SUI',
     render: () => (
-      <div className="w-full h-full flex flex-col justify-center">
-        <Kicker>Live external validation</Kicker>
-        <M variants={rise} className={`${H1}`} style={{ fontSize: 'clamp(1.9rem,5vw,4.2rem)' }}>
-          &ldquo;dope.&rdquo; Then three<br />strangers <Emph delay={0.7}>won</Emph>
-        </M>
-        <div className="mt-7 flex items-stretch gap-6">
-          <Drop tag="DROP · 01" label="@aslan_web3 'wait this is dope' reply on X" w={230} h={300} tilt={-2} />
-          <Drop tag="DROP · 02" label="three winning receipts, settled on-chain" w={230} h={300} tilt={2} />
-          <M variants={rise} className="font-mono flex items-center" style={{ ...lead, maxWidth: '22ch' }}>
-            A DeepBook contributor called it dope. Minutes later, three people bet from an X reply and won, live, with receipts in the thread.
+      <div className="relative w-full h-full flex items-center justify-between gap-12">
+        <Kanji className="absolute" style={{ bottom: '-30%', left: '-8%', fontSize: 'clamp(20rem,40vw,48rem)', color: 'rgba(20,18,16,0.04)', lineHeight: 1, zIndex: 0 }} />
+        <div className="relative z-10" style={{ maxWidth: '44%' }}>
+          <Kicker>Why Sui</Kicker>
+          <M variants={rise} className={`${H1}`} style={ARTSIZE}>Built on primitives<br />only <Emph delay={0.7}>Sui</Emph> has.</M>
+          <M variants={rise} className="mt-6 font-mono" style={lead}>This product could not exist on another chain. The venue, the custody guarantee, the attestation, and gasless onboarding are all Sui-native, and all in our shipped code.</M>
+        </div>
+        <SpecPanel title="THE STACK · IN SHIPPED CODE" badge="ALL NATIVE" w={440} rows={[
+          ['Venue', 'DeepBook Predict · 0xdb3ef5a5', true],
+          ['Custody', 'No-divert Move vault · 0x27931b56', true],
+          ['Attestation', 'Nautilus TEE · 0x614a7412'],
+          ['Private content', 'Seal · memory market 0x60189503'],
+          ['Storage', 'Walrus · takes 0xeb4d4847'],
+          ['Sign-in', 'zkLogin · Google'],
+          ['Gas', 'Sponsored · PTB'],
+        ]} />
+      </div>
+    ),
+  },
+
+  // 10 · UX
+  {
+    id: 'ux', section: 'UX', paper: PAPER2,
+    render: () => (
+      <div className="w-full h-full flex items-center justify-between gap-10">
+        <div style={{ maxWidth: '52%' }}>
+          <Kicker>A consumer app</Kicker>
+          <M variants={rise} className={`${H1}`} style={ARTSIZE}>A consumer app,<br />not a <Emph delay={0.7}>datasheet</Emph>.</M>
+          <M variants={rise} className="mt-6">
+            {[['Native iOS app', '24 screens, per-device wallet, Face ID + PIN', 'BUILT'], ['Vertical feed reel', 'live rounds and community takes, TikTok-style', 'BUILT'], ['Daily on-chain streak', 'derived from mint days, un-inflatable', 'BUILT'], ['Honest share cards', 'real-numbers-only, back into X', 'LIVE']].map(([n, d, s], i) => (
+              <div key={i} className="flex items-center gap-4" style={{ padding: '11px 0', borderBottom: i < 3 ? `1px solid ${HAIR}` : 'none' }}>
+                <div style={{ flex: 1 }}>
+                  <div className="font-display font-[700]" style={{ fontSize: 17, color: INK }}>{n}</div>
+                  <div className="font-mono mt-0.5" style={{ fontSize: 12, color: BODY }}>{d}</div>
+                </div>
+                <Mono className="text-[9.5px]" style={{ color: s === 'LIVE' ? GREEN : MUTE, background: s === 'LIVE' ? 'rgba(46,107,79,0.12)' : 'rgba(20,18,16,0.06)', padding: '3px 9px', borderRadius: 4 }}>{s}</Mono>
+              </div>
+            ))}
           </M>
         </div>
+        <Drop tag="DROP · MOBILE" label="native app, one-tap bet screen" w={230} h={420} tilt={-1.5} />
       </div>
     ),
   },
+
+  // 11 · GO-TO-MARKET
   {
-    id: 'distribution', section: 'GO-TO-MARKET',
+    id: 'gtm', section: 'GO-TO-MARKET',
     render: () => (
       <div className="w-full h-full flex flex-col justify-center">
-        <Kicker>Distribution</Kicker>
-        <M variants={rise} className={`${H1}`} style={DENSE}>Meet the crowd where<br />they <Emph delay={0.85}>already are</Emph></M>
-        <M variants={rise} className="mt-7" style={{ maxWidth: 1080 }}>
-          <ChannelRow first name="Bet from X" stat="~561M monthly actives" source="indep. estimate · 2025" point="A one-tap Yes or No inside a reply, un-drainable, so every bet placed is a visible ad others can tap to copy." />
-          <ChannelRow name="MCP server" stat="10,000+ MCP servers · 97M+ SDK dl/mo" source="Anthropic · Dec 2025" point="Agent-ready before the wave lands. An agent can place a bet, and non-custody means it can never drain the vault." />
-          <ChannelRow name="Native mobile" stat="~142B app downloads in 2025" source="Statista / Business of Apps · 2025" point="A second top-of-funnel in the store, where roughly 80% of US wagers already happen on a phone." />
-          <ChannelRow name="Paystack on-ramp" stat="200,000+ merchants · test mode" source="Paystack · matches testnet" point="Onboard with a familiar card or bank payment instead of a crypto exchange detour." />
+        <Kicker>Distribution built into the product</Kicker>
+        <M variants={rise} className={`${H1}`} style={DENSE}>The wedge is a feature.<br />And a <Emph delay={0.85}>channel</Emph>.</M>
+        <M variants={rise} className="mt-5 font-mono" style={{ ...lead, maxWidth: '76ch' }}>
+          Un-drainable trade-from-X lets you bet where the crowd already argues about Bitcoin, and every bet placed is an ad the next person can tap to copy.
         </M>
+        <div className="mt-7 flex gap-4" style={{ maxWidth: 1020 }}>
+          <PhaseCard tag="PHASE 0 · NOW" tone="live" title="X betting line" body="Founder posts a card, replies become bets, brand-new tweeters auto-onboard, share cards pull the next person in." />
+          <PhaseCard tag="PHASE 1 · NEXT" title="Agents + mobile" body="Publish the MCP so any LLM agent bets through Yosuku, ship the iOS app to TestFlight with streaks and app-lock." />
+          <PhaseCard tag="PHASE 2 · THEN" title="Mainnet on-ramp" body="Flip the Paystack Naira on-ramp live so a Nigerian funds in local currency into a self-custodial wallet." />
+        </div>
+        <M variants={rise} className="mt-6"><Mono className="text-[11px]" style={{ color: MUTE }}>HONEST BOTTLENECK · TOP-OF-FUNNEL DISTRIBUTION, NOT CONVERSION</Mono></M>
       </div>
     ),
   },
+
+  // 12 · MONETIZATION / SUSTAINABILITY
   {
-    id: 'business', section: 'BUSINESS MODEL',
+    id: 'money', section: 'MONETIZATION · SUSTAINABILITY', paper: PAPER2,
     render: () => (
       <div className="w-full h-full flex flex-col justify-center">
         <Kicker>How we make money</Kicker>
-        <M variants={rise} className={`${H1}`} style={DENSE}>Base bets stay free.<br />We earn on the <Emph delay={0.85}>edges</Emph></M>
-        <M variants={rise} className="mt-7" style={{ maxWidth: 1000 }}>
+        <M variants={rise} className={`${H1}`} style={DENSE}>Three rails in code.<br />Base bet <Emph delay={0.85}>free</Emph>.</M>
+        <M variants={rise} className="mt-7" style={{ maxWidth: 1020 }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead><tr>
-              {['Revenue line', 'What it is', 'Status'].map((h, i) => (
-                <th key={i} className="font-mono uppercase" style={{ fontSize: 11.5, letterSpacing: '0.12em', color: INK, fontWeight: 500, padding: '0 18px 9px', background: 'transparent', textAlign: i === 2 ? 'right' : 'left', borderBottom: `2px solid ${INK}` }}>{h}</th>
+              {['Revenue rail', 'What it is', 'Status'].map((h, i) => (
+                <th key={i} className="font-mono uppercase" style={{ fontSize: 11, letterSpacing: '0.12em', color: INK, fontWeight: 500, padding: '0 16px 9px', textAlign: i === 2 ? 'right' : 'left', borderBottom: `2px solid ${INK}` }}>{h}</th>
               ))}
             </tr></thead>
             <tbody>
               {[
-                { line: 'Builder-fee rail', what: 'Native DeepBook rail, registered on-chain, wired at 0', status: 'Flips at mainnet', live: false, us: true },
-                { line: 'Memory-pass market', what: 'Seal-gated memories sold as priced on-chain assets', status: 'Live', live: true },
-                { line: 'Copy-trade subscriptions', what: 'Follow an attested agent strategy for a fee', status: 'Live', live: true, us: true },
-                { line: 'Private bets', what: 'Incognito execution for a small premium', status: 'Live', live: true },
+                { line: 'Builder-fee rail', what: 'Native DeepBook rail, attached on-chain, config-flip capped at min(10% fee, 0.5% notional)', status: 'Flips at mainnet', live: false, us: true },
+                { line: 'Memory Market', what: 'Seal-gated passes sold in DUSDC (0x60189503)', status: 'Live rail', live: true },
+                { line: 'Copy-trade subs', what: 'Follow an attested strategy for a DUSDC fee (0x47d3c108)', status: 'Live rail', live: true, us: true },
+                { line: 'Private bets', what: 'Incognito execution premium', status: 'Built', live: false },
               ].map((r, i) => (
                 <tr key={i} style={{ background: r.us ? 'rgba(224,77,38,0.04)' : 'transparent' }}>
-                  <td style={{ padding: '14px 18px', fontSize: 16.5, color: INK, borderBottom: i < 3 ? `1px solid ${HAIR}` : 'none' }}>{r.line}</td>
-                  <td style={{ padding: '14px 18px', fontSize: 14.5, color: BODY, borderBottom: i < 3 ? `1px solid ${HAIR}` : 'none' }}>{r.what}</td>
-                  <td style={{ padding: '13px 18px', textAlign: 'right', borderBottom: i < 3 ? `1px solid ${HAIR}` : 'none' }}>
-                    <span className="font-mono uppercase rounded" style={{ fontSize: 10.5, letterSpacing: '0.08em', padding: '4px 10px', background: r.live ? 'rgba(46,107,79,0.12)' : 'rgba(20,18,16,0.06)', color: r.live ? GREEN : MUTE }}>{r.status}</span>
+                  <td style={{ padding: '13px 16px', fontSize: 15.5, color: INK, borderBottom: i < 3 ? `1px solid ${HAIR}` : 'none' }}>{r.line}</td>
+                  <td style={{ padding: '13px 16px', fontSize: 13.5, color: BODY, borderBottom: i < 3 ? `1px solid ${HAIR}` : 'none' }}>{r.what}</td>
+                  <td style={{ padding: '13px 16px', textAlign: 'right', borderBottom: i < 3 ? `1px solid ${HAIR}` : 'none' }}>
+                    <span className="font-mono uppercase rounded" style={{ fontSize: 10, letterSpacing: '0.08em', padding: '4px 10px', background: r.live ? 'rgba(46,107,79,0.12)' : 'rgba(20,18,16,0.06)', color: r.live ? GREEN : MUTE }}>{r.status}</span>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </M>
-        <M variants={rise} className="mt-5 font-mono" style={{ ...lead, maxWidth: '74ch' }}>
-          Revenue is already flowing from memory passes and copy-trade subscriptions. The builder-fee rail is registered on DeepBook and set to zero, one config flip away from live the day the protocol opens it.
+        <M variants={rise} className="mt-5 font-mono" style={{ maxWidth: '82ch', fontSize: 13.5, color: BODY, lineHeight: 1.55 }}>
+          Pre-revenue by design, not pre-product. Three DUSDC rails already transact. Creators keep 100% today to seed the marketplace, the builder fee is set to zero, and the base bet is always free. Usage compounds into revenue at mainnet without asking anyone to pay to bet.
         </M>
       </div>
     ),
   },
+
+  // 13 · ROADMAP
   {
-    id: 'roadmap', section: 'ROADMAP', paper: PAPER2,
+    id: 'roadmap', section: 'ROADMAP',
     render: () => (
       <div className="w-full h-full flex flex-col justify-center">
-        <Kicker>Where it goes</Kicker>
-        <M variants={rise} className={`${H1}`} style={ARTSIZE}>Advises today.<br /><Emph delay={0.75}>Trades tomorrow</Emph></M>
-        <div className="mt-8 flex gap-4" style={{ maxWidth: 980 }}>
-          {[['Now', 'One-tap bets, trade-from-X, native mobile, attested agent advice. Live on testnet.'], ['Next', 'Sensei graduates from advising to executing, under the same vault that can never take your money.'], ['Then', 'Mainnet, one config flip away. The builder-fee rail switches on.']].map(([t, d], i) => (
-            <M key={i} variants={rise} className="flex-1" style={{ background: CARD, border: `1px solid ${HAIR}`, borderLeft: `3px solid ${i === 0 ? GREEN : INK}`, borderRadius: 8, padding: '18px 20px' }}>
-              <div className="font-display font-[700]" style={{ fontSize: 20, color: INK }}>{t}</div>
-              <div className="mt-2 font-mono" style={{ fontSize: 12, color: MUTE, lineHeight: 1.5 }}>{d}</div>
-            </M>
-          ))}
+        <Kicker>Path to production</Kicker>
+        <M variants={rise} className={`${H1}`} style={ARTSIZE}>Now. Next. <Emph delay={0.8}>Then</Emph>.</M>
+        <div className="mt-8 flex gap-4" style={{ maxWidth: 1020 }}>
+          <PhaseCard tag="NOW" tone="live" title="Testnet, live" body="Non-custodial one-tap bets and trade-from-X proven on-chain, gasless onboarding, a keeper that leaves winnings waiting, live /stats." />
+          <PhaseCard tag="NEXT" title="Harden + retain" body="Finish the AWS Nitro enclave with production PCRs, ship mobile to TestFlight, wire mobile zkLogin, finish private-bet env." />
+          <PhaseCard tag="THEN" title="Mainnet + revenue" body="Flip the builder fee on, take the Naira on-ramp live, grow the marketplaces from seeded to fee-earning, expand MCP and SDK." />
         </div>
         <M variants={rise} className="mt-7 inline-flex items-center gap-3" style={{ borderTop: `2px solid ${GREEN}`, paddingTop: 12, alignSelf: 'flex-start' }}>
-          <Mono className="text-[12px]" style={{ color: GREEN }}>IT STILL CANNOT TAKE IT</Mono>
+          <Mono className="text-[12px]" style={{ color: GREEN }}>EVERY NEXT ITEM MAPS TO A SEAM WE NAMED HONESTLY</Mono>
         </M>
       </div>
     ),
   },
-  {
-    id: 'team', section: 'THE TEAM',
-    render: () => (
-      <div className="w-full h-full flex items-center justify-between gap-12">
-        <div style={{ maxWidth: '48%' }}>
-          <Kicker>The team</Kicker>
-          <M variants={rise} className={`${H1}`} style={ARTSIZE}>One builder.<br />The whole <Emph delay={0.7}>stack</Emph></M>
-          <M variants={rise} className="mt-6 font-mono" style={lead}>Move contracts, an attested TEE agent, a native iOS app, the 24/7 X relay, and the web app. Product, protocol and design, shipped solo.</M>
-          <M variants={rise} className="mt-5 font-mono" style={{ fontSize: 15, color: INK, lineHeight: 1.5, maxWidth: '42ch' }}>If one person can ship this much, imagine the pace with a team.</M>
-        </div>
-        <SpecPanel title="SHIPPED SOLO · ON SUI" badge="IN PRODUCTION" w={420} rows={[
-          ['Contracts', 'Move · Sui testnet', true],
-          ['Agent', 'Nautilus TEE · attested'],
-          ['Onboarding', 'zkLogin · sponsored gas'],
-          ['Apps', 'Native iOS + web'],
-          ['Distribution', 'Trade-from-X relay'],
-        ]} />
-      </div>
-    ),
-  },
+
+  // 14 · CLOSE / ASK
   {
     id: 'close', section: 'THE ASK', paper: PAPER2,
     render: () => (
       <div className="relative w-full h-full flex items-center">
-        <div className="relative z-10" style={{ maxWidth: '54%' }}>
+        <div className="relative z-10" style={{ maxWidth: '56%' }}>
           <Kicker>The ask</Kicker>
-          <M variants={rise} className={`${H1}`} style={{ fontSize: 'clamp(2.4rem,6vw,5rem)' }}>Mainnet is <Emph delay={0.7}>one flip away</Emph>.<br />Take it there.</M>
-          <M variants={rise} className="mt-7"><Mono className="text-[12px]" style={{ color: MUTE }}>WITH THE SUI AND DEEPBOOK TEAMS · yosuku.xyz</Mono></M>
+          <M variants={rise} className={`${H1}`} style={{ fontSize: 'clamp(2.4rem,6vw,5rem)' }}>Only you can<br /><Emph delay={0.7}>cash out</Emph>.</M>
+          <M variants={rise} className="mt-6 font-mono" style={lead}>
+            88 wallets and 313 actions live on-chain. Tweet-to-bet proven in tx BmuJroQS. Three revenue rails in code. Built entirely on Sui-native primitives.
+          </M>
+          <M variants={rise} className="mt-6 font-mono" style={{ fontSize: 15, color: INK, lineHeight: 1.5, maxWidth: '42ch' }}>
+            Mainnet is a config flip. We want to take it there with the Sui and DeepBook teams. Verify us live at yosuku.xyz/stats.
+          </M>
         </div>
-        <M variants={rise} className="absolute overflow-hidden" style={{ right: 0, top: 0, bottom: 0, width: '40%', borderRadius: 14 }}>
+        <M variants={rise} className="absolute overflow-hidden" style={{ right: 0, top: 0, bottom: 0, width: '38%', borderRadius: 14 }}>
           <motion.img src="/pitch/paris.jpg" alt="paid" className="h-full w-full object-cover" style={{ filter: 'sepia(0.15) saturate(0.9)' }}
             initial={{ scale: 1.0 }} animate={{ scale: 1.05 }} transition={{ duration: 9, ease: 'linear' }} />
           <div className="absolute" style={{ inset: 0, background: `linear-gradient(90deg, ${PAPER2} 0%, rgba(244,238,227,0.2) 30%, transparent 60%)` }} />
