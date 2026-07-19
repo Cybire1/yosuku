@@ -502,8 +502,8 @@ const SLIDES: { id: string; section: string; paper?: string; render: () => React
         <Kicker>Do not trust us, trust the chain</Kicker>
         <M variants={rise} className={`${H1}`} style={DENSE}>Real usage, read live<br />from the <Emph delay={0.85}>chain</Emph>.</M>
         <div className="mt-8 flex gap-4" style={{ maxWidth: 1020 }}>
-          <StatCard value={<CountUp to={88} />} label="wallets onboarded, gas we sponsored" source="traction.ts · un-fakeable arrivals" />
-          <StatCard value={<CountUp to={313} />} label="gas-free on-chain actions, each links to Suiscan" source="sponsor 0xe26c1184" hl />
+          <StatCard value={<CountUp to={103} />} label="wallets onboarded, gas we sponsored" source="traction.ts · un-fakeable arrivals" />
+          <StatCard value={<CountUp to={427} />} label="gas-free on-chain actions, each links to Suiscan" source="sponsor 0xe26c1184" hl />
           <StatCard value="2 in 3" label="arrivals who go on to place a bet" source="first-session activation" />
         </div>
         <M variants={rise} className="mt-7 font-mono" style={{ maxWidth: '84ch', fontSize: 14.5, color: BODY, lineHeight: 1.6 }}>
@@ -593,7 +593,7 @@ const SLIDES: { id: string; section: string; paper?: string; render: () => React
           <Kicker>The ask</Kicker>
           <M variants={rise} className={`${H1}`} style={{ fontSize: 'clamp(2.4rem,6vw,5rem)' }}>Only you can<br /><Emph delay={0.7}>cash out</Emph>.</M>
           <M variants={rise} className="mt-6 font-mono" style={lead}>
-            DeepBook built the engine. We bring it to where people already are: a tweet, a card, a phone, an agent. 88 wallets and 313 actions live on-chain, tweet-to-bet proven, non-custodial throughout.
+            DeepBook built the engine. We bring it to where people already are: a tweet, a card, a phone, an agent. 103 wallets and 427 actions live on-chain, tweet-to-bet proven, non-custodial throughout.
           </M>
           <M variants={rise} className="mt-6 font-mono" style={{ fontSize: 15, color: INK, lineHeight: 1.5, maxWidth: '42ch' }}>
             Mainnet is a config flip. We want to take it there with the Sui and DeepBook teams. Verify us live at yosuku.xyz/stats.
