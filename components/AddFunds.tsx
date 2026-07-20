@@ -77,9 +77,9 @@ export default function AddFunds({ open, onClose, onFunded }: { open: boolean; o
           <span className="w-1.5 h-1.5 rounded-full bg-vermilion" style={{ boxShadow: '0 0 12px var(--vermilion)' }} />
           <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-gray-500">Add funds · testnet</span>
         </div>
-        <h2 id="add-funds-title" className="font-display text-2xl font-extrabold tracking-tight mb-1">Get DUSDC</h2>
+        <h2 id="add-funds-title" className="font-display text-2xl font-extrabold tracking-tight mb-1">Add money</h2>
         <p className="text-gray-400 text-sm leading-relaxed mb-6">
-          Yosuku runs on testnet — these are play chips, not real money. Tap once and they land in your wallet. When you bet, Yosuku moves only what is needed into your Trading Balance.
+          Yosuku runs on testnet, so these are play chips, not real money. Request some for free, or buy with a card. Either way it lands straight in your wallet.
         </p>
 
         {!address ? (
@@ -108,14 +108,23 @@ export default function AddFunds({ open, onClose, onFunded }: { open: boolean; o
                 Trade from wallet →
               </Link>
             ) : (
-              <button
-                type="button"
-                onClick={getFunds}
-                disabled={state === 'loading'}
-                className="w-full bg-white text-black font-semibold rounded-full py-3 hover:scale-[1.02] active:scale-[0.97] transition-transform disabled:opacity-60"
-              >
-                {state === 'loading' ? 'Adding…' : 'Get 2 DUSDC'}
-              </button>
+              <div className="flex flex-col gap-2.5">
+                <button
+                  type="button"
+                  onClick={getFunds}
+                  disabled={state === 'loading'}
+                  className="w-full bg-white text-black font-semibold rounded-full py-3 hover:scale-[1.02] active:scale-[0.97] transition-transform disabled:opacity-60"
+                >
+                  {state === 'loading' ? 'Adding…' : 'Request 2 DUSDC free'}
+                </button>
+                <Link
+                  href="/fund"
+                  onClick={onClose}
+                  className="block w-full text-center rounded-full border border-white/15 py-3 font-semibold text-gray-200 hover:border-vermilion/50 hover:text-white transition-colors"
+                >
+                  Buy with a card →
+                </Link>
+              </div>
             )}
 
             {msg && (

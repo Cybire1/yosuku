@@ -1,7 +1,7 @@
 'use client';
 
 import { useCurrentAccount, useDisconnectWallet, ConnectButton } from '@mysten/dapp-kit';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
 import {
   BadgeDollarSign,
@@ -72,7 +72,6 @@ export default function Header() {
   const [showMenu, setShowMenu] = useState(false);
   const [showMore, setShowMore] = useState(false);
   const [showFunds, setShowFunds] = useState(false);
-  const router = useRouter();
   const { balance: dusdcRaw, loading: dusdcLoading, refresh: refreshDusdc } = useDUSDCBalance();
   // The trading balance the header shows is the LIVE 6-24 DeepBook Predict account
   // (the one base bets actually run from) — not the legacy 4-16 vault, which only
@@ -264,7 +263,7 @@ export default function Header() {
             <ThemeToggle />
             {mounted && address && (
               <button
-                onClick={() => router.push('/fund')}
+                onClick={() => setShowFunds(true)}
                 data-cursor="hover"
                 title="Tap to add money."
                 className="dusdc-pill flex items-center gap-1.5 font-mono text-[12px] px-2.5 sm:px-3 py-1.5 rounded-full border border-white/10 hover:border-white/25 hover:bg-white/[0.03] text-gray-300 hover:text-white transition-colors"
