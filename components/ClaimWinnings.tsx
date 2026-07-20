@@ -1,19 +1,20 @@
 'use client';
 
 import { useState } from 'react';
-import { Trophy, Loader2, Check } from 'lucide-react';
+import { Trophy, Loader2, Check, ArrowRight } from 'lucide-react';
 import { useCurrentAccount } from '@mysten/dapp-kit';
 import { redeemPermissionlessTx } from '@/lib/sui/predictClient';
 import { useSmartSubmit } from '@/lib/sui/useSmartSubmit';
 import { useDUSDCBalance, useManager } from '@/lib/sui/hooks';
-import { formatPred, type RoundState, type ReputationData } from '@/lib/predictionContract';
+import { type RoundState, type ReputationData } from '@/lib/predictionContract';
 import { markClaimed } from '@/lib/roundHelpers';
 import { humanizeTxError } from '@/lib/errorMessages';
-import { FLOAT_SCALING } from '@/lib/sui/constants';
+import { FLOAT_SCALING, DUSDC_MULTIPLIER } from '@/lib/sui/constants';
 
 interface ClaimWinningsProps {
   round: RoundState;
-  userDeposit: number;       // position quantity (base units)
+  userDeposit: number;       // position quantity = gross payout on a win (base units, micro DUSDC)
+  stake: number;             // net premium paid to open (base units, micro DUSDC) — for the P&L
   userDirection: 'UP' | 'DOWN';
   strike: number;            // FLOAT_SCALING-encoded
   reputation?: ReputationData;
@@ -27,6 +28,7 @@ interface ClaimWinningsProps {
 export default function ClaimWinnings({
   round,
   userDeposit,
+  stake,
   userDirection,
   strike,
   onClaimed,
@@ -50,6 +52,11 @@ export default function ClaimWinnings({
   const asset = round.underlyingAsset || 'BTC';
   const usd = (scaled: number) => '$' + (scaled / FLOAT_SCALING).toLocaleString(undefined, { maximumFractionDigits: 0 });
   const diff = settlement !== null ? Math.abs(settlement - strike) / FLOAT_SCALING : 0;
+
+  // Realized P&L: what you actually made = gross payout minus the premium you staked.
+  const profitMicro = Math.max(0, payout - stake);
+  const money = (micro: number) => (micro / DUSDC_MULTIPLIER).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const roiPct = stake > 0 ? Math.round((profitMicro / stake) * 100) : 0;
 
   const handleRedeem = async () => {
     if (!address || !manager) { setError('Connect your wallet first.'); return; }
@@ -95,8 +102,8 @@ export default function ClaimWinnings({
       <div className="rounded-2xl border border-white/[0.07] bg-white/[0.015] p-5">
         <div className="font-mono text-[10px] tracking-[0.16em] uppercase text-gray-500 mb-1.5">Not this time</div>
         <p className="text-sm text-gray-400">
-          {asset} closed <span className="text-gray-200 font-mono">{usd(settlement)}</span>
-          {' '}— {settlement > strike ? 'above' : 'below'} your {userDirection} line at{' '}
+          {asset} closed <span className="text-gray-200 font-mono">{usd(settlement)}</span>,{' '}
+          {settlement > strike ? 'above' : 'below'} your {userDirection} line at{' '}
           <span className="text-gray-200 font-mono">{usd(strike)}</span>.
         </p>
       </div>
@@ -117,16 +124,35 @@ export default function ClaimWinnings({
           </span>
         </div>
 
-        <div className="flex items-baseline gap-2">
-          <span className="font-mono text-4xl font-bold text-emerald-400 tracking-tight tabular-nums">
-            +{formatPred(payout)}
-          </span>
-          <span className="font-mono text-sm text-emerald-400/60">DUSDC</span>
+        {/* Realized P&L — the profit is the hero, matching the share card's focal number */}
+        <div className="flex items-end justify-between gap-3">
+          <div>
+            <div className="flex items-baseline gap-1.5">
+              <span className="font-display text-[2.75rem] leading-[0.9] font-[800] text-emerald-400 tracking-tight tabular-nums">
+                +{money(profitMicro)}
+              </span>
+              <span className="font-mono text-sm text-emerald-400/60 pb-1">DUSDC</span>
+            </div>
+            <div className="font-mono text-[10px] tracking-[0.18em] uppercase text-emerald-400/70 mt-1">Profit</div>
+          </div>
+          {roiPct > 0 && (
+            <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/[0.08] px-3 py-1.5 text-center shrink-0">
+              <div className="font-mono text-lg font-bold text-emerald-300 tabular-nums leading-none">+{roiPct}%</div>
+              <div className="font-mono text-[8px] tracking-[0.16em] uppercase text-emerald-400/60 mt-1">return</div>
+            </div>
+          )}
         </div>
 
-        <p className="text-xs text-gray-400 mt-2">
-          {asset} closed <span className="text-gray-200 font-mono">{usd(settlement)}</span>
-          {' '}— <span className="text-gray-200 font-mono">{usd(diff * FLOAT_SCALING)}</span>{' '}
+        {/* stake → payout, so the profit is fully accounted for */}
+        <div className="mt-3 flex items-center gap-2 font-mono text-[11px] text-gray-400">
+          <span>Stake <span className="text-gray-200 tabular-nums">${money(stake)}</span></span>
+          <ArrowRight className="w-3 h-3 text-gray-600 shrink-0" />
+          <span>Payout <span className="text-gray-200 tabular-nums">${money(payout)}</span></span>
+        </div>
+
+        <p className="text-xs text-gray-400 mt-3">
+          {asset} closed <span className="text-gray-200 font-mono">{usd(settlement)}</span>,{' '}
+          <span className="text-gray-200 font-mono">{usd(diff * FLOAT_SCALING)}</span>{' '}
           above your {userDirection} line at <span className="text-gray-200 font-mono">{usd(strike)}</span>.
         </p>
 
@@ -146,7 +172,7 @@ export default function ClaimWinnings({
               {loading ? (<><Loader2 className="w-4 h-4 animate-spin" /> Collecting…</>) : 'Collect it now'}
             </button>
             <p className="text-[10px] text-gray-500 text-center mt-2">
-              Winners are paid out automatically — this just collects it now. Gas-free.
+              Winners are paid out automatically. This just collects it now. Gas-free.
             </p>
           </>
         )}

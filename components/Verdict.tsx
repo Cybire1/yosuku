@@ -107,6 +107,7 @@ export default function Verdict({ oracle }: VerdictProps) {
             key={p.timestamp}
             round={round}
             userDeposit={p.quantity}
+            stake={p.cost}
             userDirection={p.direction}
             strike={p.strike}
             onClaimed={() => recordPnl((won ? p.quantity : 0) / DUSDC_MULTIPLIER - p.cost / DUSDC_MULTIPLIER)}
