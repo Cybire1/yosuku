@@ -96,18 +96,18 @@ export default function StudioPage() {
   // ── passphrase gate ──
   if (!unlocked) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-bg px-6">
-        <div className="w-full max-w-sm rounded-2xl border border-white/[0.08] bg-white/[0.02] p-6">
+      <div className="min-h-screen flex items-center justify-center bg-[#0b0b0c] px-6">
+        <div className="w-full max-w-sm rounded-2xl border border-white/[0.08] bg-[#141416] p-6">
           <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-gray-500">Yosuku</div>
-          <h1 className="mt-1 font-display text-2xl font-[800] text-white">Line Studio</h1>
+          <h1 className="mt-1 font-display text-2xl font-[800] text-[#f5f2ec]">Line Studio</h1>
           <p className="mt-1 text-sm text-gray-400">Post a live line to X in a few taps.</p>
           <input
             type="password" value={pass} onChange={(e) => setPass(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') unlock(); }}
             placeholder="passphrase" autoFocus
-            className="mt-4 w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-white outline-none focus:border-white/25"
+            className="mt-4 w-full rounded-xl border border-white/10 bg-[#19191c] px-4 py-3 text-[#f5f2ec] outline-none focus:border-white/25"
           />
-          <button onClick={unlock} disabled={authing || !pass} className="mt-3 w-full rounded-xl px-4 py-3 text-sm font-bold text-white disabled:opacity-50" style={{ background: VERM }}>
+          <button onClick={unlock} disabled={authing || !pass} className="mt-3 w-full rounded-xl px-4 py-3 text-sm font-bold text-[#f5f2ec] disabled:opacity-50" style={{ background: VERM }}>
             {authing ? 'Checking…' : 'Unlock'}
           </button>
           {authErr && <div className="mt-2 text-[12px] text-[#E04D26]">{authErr}</div>}
@@ -120,7 +120,7 @@ export default function StudioPage() {
   const markets = (opts?.markets ?? []).slice().sort((a, b) => (cadenceOrder[a.cadence] ?? 9) - (cadenceOrder[b.cadence] ?? 9));
 
   return (
-    <div className="min-h-screen bg-bg text-white">
+    <div className="min-h-screen bg-[#0b0b0c] text-[#f5f2ec]">
       <div className="mx-auto max-w-md px-5 py-8">
         {/* header */}
         <div className="flex items-end justify-between">
@@ -128,10 +128,10 @@ export default function StudioPage() {
             <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-gray-500">Yosuku · Line Studio</div>
             <h1 className="mt-0.5 font-display text-2xl font-[800]">Post a live line</h1>
           </div>
-          <button onClick={() => { loadOptions(); loadLines(); }} className="font-mono text-[11px] text-gray-400 hover:text-white">refresh</button>
+          <button onClick={() => { loadOptions(); loadLines(); }} className="font-mono text-[11px] text-gray-400 hover:text-[#f5f2ec]">refresh</button>
         </div>
         {opts && (
-          <div className="mt-1 font-mono text-[12px] text-gray-400">BTC <span className="text-white tabular-nums">{money(opts.spot)}</span> · spot live</div>
+          <div className="mt-1 font-mono text-[12px] text-gray-400">BTC <span className="text-[#f5f2ec] tabular-nums">{money(opts.spot)}</span> · spot live</div>
         )}
 
         {/* market picker */}
@@ -164,7 +164,7 @@ export default function StudioPage() {
               const cf = s === opts?.coinflip;
               return (
                 <button key={s} onClick={() => setStrike(String(s))}
-                  className={`rounded-lg border px-3 py-2 font-mono text-xs transition-colors ${on ? 'border-[#E04D26] text-white' : 'border-white/10 text-gray-300 hover:text-white'}`}>
+                  className={`rounded-lg border px-3 py-2 font-mono text-xs transition-colors ${on ? 'border-[#E04D26] text-[#f5f2ec]' : 'border-white/10 text-gray-300 hover:text-[#f5f2ec]'}`}>
                   {money(s)}{cf && <span className="ml-1 text-[9px] text-[#E04D26]">~50%</span>}
                 </button>
               );
@@ -173,7 +173,7 @@ export default function StudioPage() {
           <div className="mt-2 flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 w-fit">
             <span className="text-gray-500 text-sm">$</span>
             <input value={strike} onChange={(e) => setStrike(e.target.value.replace(/[^0-9]/g, ''))} inputMode="numeric"
-              aria-label="Custom strike price" className="w-24 bg-transparent text-white text-sm outline-none tabular-nums" />
+              aria-label="Custom strike price" className="w-24 bg-transparent text-[#f5f2ec] text-sm outline-none tabular-nums" />
             <span className="font-mono text-[10px] text-gray-600">custom</span>
           </div>
         </div>
@@ -181,7 +181,7 @@ export default function StudioPage() {
         {/* preview */}
         <div className="mt-6">
           <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-gray-500 mb-2">Preview {previewing && <span className="text-gray-600">· rendering…</span>}</div>
-          <div className="rounded-2xl border border-white/[0.08] bg-black/20 p-3">
+          <div className="rounded-2xl border border-white/[0.08] bg-[#141416] p-3">
             {preview ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={`data:image/png;base64,${preview.cardPngBase64}`} alt="live line card" className="w-full rounded-xl" />
@@ -197,11 +197,11 @@ export default function StudioPage() {
         {/* actions */}
         <div className="mt-4 flex gap-2">
           <button onClick={() => post('bot')} disabled={!preview || !!posting}
-            className="flex-1 rounded-xl px-4 py-3 text-sm font-bold text-white disabled:opacity-50" style={{ background: VERM }}>
+            className="flex-1 rounded-xl px-4 py-3 text-sm font-bold text-[#f5f2ec] disabled:opacity-50" style={{ background: VERM }}>
             {posting === 'bot' ? 'Posting…' : 'Post from bot'}
           </button>
           <button onClick={() => post('hand')} disabled={!preview || !!posting}
-            className="rounded-xl border border-white/15 px-4 py-3 text-sm font-bold text-white hover:bg-white/[0.06] disabled:opacity-50">
+            className="rounded-xl border border-white/15 px-4 py-3 text-sm font-bold text-[#f5f2ec] hover:bg-white/[0.06] disabled:opacity-50">
             {posting === 'hand' ? 'Arming…' : 'Copy for hand-post'}
           </button>
         </div>
