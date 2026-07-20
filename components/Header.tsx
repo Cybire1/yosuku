@@ -1,7 +1,7 @@
 'use client';
 
 import { useCurrentAccount, useDisconnectWallet, ConnectButton } from '@mysten/dapp-kit';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
 import {
   BadgeDollarSign,
@@ -24,7 +24,6 @@ import AddFunds from './AddFunds';
 import CreditWelcome from './CreditWelcome';
 import YosukuMark from './YosukuMark';
 import ThemeToggle from './ThemeToggle';
-import TradingBalanceModal from './TradingBalanceModal';
 import { useToast } from './Toast';
 import { useDUSDCBalance } from '@/lib/sui/hooks';
 import { useAccount624 } from '@/lib/sui/ticket624';
@@ -73,7 +72,7 @@ export default function Header() {
   const [showMenu, setShowMenu] = useState(false);
   const [showMore, setShowMore] = useState(false);
   const [showFunds, setShowFunds] = useState(false);
-  const [showBalance, setShowBalance] = useState(false);
+  const router = useRouter();
   const { balance: dusdcRaw, loading: dusdcLoading, refresh: refreshDusdc } = useDUSDCBalance();
   // The trading balance the header shows is the LIVE 6-24 DeepBook Predict account
   // (the one base bets actually run from) — not the legacy 4-16 vault, which only
@@ -265,13 +264,13 @@ export default function Header() {
             <ThemeToggle />
             {mounted && address && (
               <button
-                onClick={() => setShowBalance(true)}
+                onClick={() => router.push('/fund')}
                 data-cursor="hover"
-                title="Tap to move funds between your wallet and your Trading Balance."
+                title="Tap to add money."
                 className="dusdc-pill flex items-center gap-1.5 font-mono text-[12px] px-2.5 sm:px-3 py-1.5 rounded-full border border-white/10 hover:border-white/25 hover:bg-white/[0.03] text-gray-300 hover:text-white transition-colors"
               >
-                {/* One compact total — the Trading · Wallet split lives in the Move-funds modal.
-                    On phones the icon + number carry it; the unit label costs too much width. */}
+                {/* One compact total: the user's money. On phones the icon + number
+                    carry it; the unit label costs too much width. */}
                 <span className="flex items-center gap-1.5">
                   <Coins className="w-3.5 h-3.5 text-gray-500" />
                   <span className="text-white font-semibold tabular-nums">{(acct624Balance + dusdcRaw / 1e6).toFixed(2)}</span>
@@ -393,7 +392,6 @@ export default function Header() {
       <CreditWelcome />
 
       <AddFunds open={showFunds} onClose={() => setShowFunds(false)} onFunded={() => { refreshDusdc(); refreshTrading(); }} />
-      {showBalance && <TradingBalanceModal onClose={() => { setShowBalance(false); refreshDusdc(); refreshTrading(); }} />}
     </>
   );
 }
