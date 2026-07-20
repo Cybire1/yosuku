@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { fetchTraction, type TractionStats, type Interaction, type GrowthPoint } from '@/lib/sui/traction';
-import WaitlistCard from '@/components/WaitlistCard';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import Marquee from '@/components/Marquee';
@@ -143,15 +142,9 @@ export default function StatsPage() {
                 {t ? fmt(t.onboardedUsers) : '—'}
               </div>
               <div className="font-mono text-[11px] text-emerald-400/80 mt-2 mb-5">gas paid by Yosuku · un-fakeable</div>
-              <div className="border-t border-white/[0.07] pt-4 grid grid-cols-2 gap-4">
-                <div>
-                  <div className="font-mono text-[9px] uppercase tracking-[0.16em] text-gray-600">Waitlist</div>
-                  <div className="font-mono text-lg font-bold tabular-nums">{t ? fmt(t.waitlistSignups) : '—'}</div>
-                </div>
-                <div>
-                  <div className="font-mono text-[9px] uppercase tracking-[0.16em] text-gray-600">Gas-free actions</div>
-                  <div className="font-mono text-lg font-bold tabular-nums">{t ? fmt(t.sponsoredActions) : '—'}</div>
-                </div>
+              <div className="border-t border-white/[0.07] pt-4">
+                <div className="font-mono text-[9px] uppercase tracking-[0.16em] text-gray-600">Gas-free actions</div>
+                <div className="font-mono text-lg font-bold tabular-nums">{t ? fmt(t.sponsoredActions) : '—'}</div>
               </div>
             </div>
           </div>
@@ -192,9 +185,8 @@ export default function StatsPage() {
                 <h2 className="font-display text-lg font-bold">Adoption</h2>
                 <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-gray-600">real users · attributable</span>
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4">
+              <div className="grid grid-cols-2 gap-3 mb-4">
                 <Stat label="Wallets onboarded" value={fmt(t.onboardedUsers)} sub="gas paid by Yosuku, provably ours" accent />
-                <Stat label="Waitlist signups" value={fmt(t.waitlistSignups)} sub="signed on-chain" />
                 <Stat label="Gas-free actions" value={fmt(t.sponsoredActions)} sub="gas paid by Yosuku" />
               </div>
               <p className="font-mono text-[11px] text-gray-600 mb-10 leading-relaxed max-w-2xl">
@@ -218,29 +210,20 @@ export default function StatsPage() {
                 It demonstrates capability (the attested agent, no-divert custody, the liquidation engine), not user volume.
               </p>
 
-              {/* ── 04 · DEMAND PIPELINE (waitlist) ── */}
-              <div className="flex items-baseline gap-3 mb-3">
-                <span className="font-mono text-[11px] text-vermilion font-bold">04</span>
-                <h2 className="font-display text-lg font-bold">The demand pipeline</h2>
-              </div>
-              <div className="mb-10">
-                <WaitlistCard />
-              </div>
-
-              {/* ── 05 · LIVE ACTIVITY (verify it yourself) ── */}
+              {/* ── 04 · LIVE ACTIVITY (verify it yourself) ── */}
               <div className="flex items-baseline justify-between mb-3">
                 <div className="flex items-baseline gap-3">
-                  <span className="font-mono text-[11px] text-vermilion font-bold">05</span>
+                  <span className="font-mono text-[11px] text-vermilion font-bold">04</span>
                   <h2 className="font-display text-lg font-bold">Live activity</h2>
                   <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-gray-600">click any row → Suiscan</span>
                 </div>
                 <span className="font-mono text-[10px] text-gray-600">updated {ago(t.updatedAt)}</span>
               </div>
               <div className="border border-white/[0.07] rounded-2xl bg-[#0d0d10] divide-y divide-white/[0.05] overflow-hidden">
-                {t.recent.length === 0 && (
+                {t.recent.filter((r) => r.kind !== 'waitlist').length === 0 && (
                   <div className="font-mono text-xs text-gray-500 px-5 py-8 text-center">no activity indexed yet</div>
                 )}
-                {t.recent.map((r, i) => {
+                {t.recent.filter((r) => r.kind !== 'waitlist').map((r, i) => {
                   const inner = (
                     <div className="flex items-center gap-3 px-5 py-3 hover:bg-white/[0.02] transition-colors">
                       <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: KIND_DOT[r.kind], boxShadow: `0 0 8px ${KIND_DOT[r.kind]}` }} />
@@ -273,9 +256,9 @@ export default function StatsPage() {
               </div>
 
               <p className="font-mono text-[11px] text-gray-600 mt-5 leading-relaxed">
-                Adoption reads Yosuku&apos;s <span className="text-gray-400">Onara gas-sponsor</span> ledger + the on-chain{' '}
-                <span className="text-gray-400">waitlist</span>; capability reads <span className="text-gray-400">social_vault</span>,{' '}
-                <span className="text-gray-400">margin</span> and <span className="text-gray-400">underwrite</span> events, all via Sui GraphQL.
+                Adoption reads Yosuku&apos;s <span className="text-gray-400">Onara gas-sponsor</span> ledger; capability reads{' '}
+                <span className="text-gray-400">social_vault</span>, <span className="text-gray-400">margin</span> and{' '}
+                <span className="text-gray-400">underwrite</span> events, all via Sui GraphQL.
                 Testnet today; the same surface carries to mainnet at launch. Live for Sui Overflow 2026 judging; taken down afterward.
               </p>
             </>
