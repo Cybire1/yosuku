@@ -252,6 +252,48 @@ export async function fetchLedger624(user: string): Promise<number> {
   }
 }
 
+/** `user`'s live ledger balance (raw micro) inside the DEDICATED trade-from-X vault
+ *  (VAULT624_TWEET, 0x3f99…), the one the tweet relay actually trades from. 0n on read failure.
+ *  (fetchLedger624 reads the copy-desk vault 0x0af6…, a DIFFERENT object.) Use the exact micro
+ *  for a full cash-out: vault624::withdraw wants the precise integer (else EBalanceTooLow). */
+export async function fetchTweetLedger624Micro(user: string): Promise<bigint> {
+  try {
+    const tx = new Transaction();
+    tx.moveCall({
+      target: `${VAULT624_TWEET.pkg}::vault624::ledger_of`,
+      arguments: [tx.object(VAULT624_TWEET.vaultId), tx.pure.address(user)],
+    });
+    const [micro] = await simulateReturnU64s(tx, user);
+    return micro ?? 0n;
+  } catch {
+    return 0n;
+  }
+}
+
+/** Same trade-from-X balance as a display DUSDC number. 0 on read failure. */
+export async function fetchTweetLedger624(user: string): Promise<number> {
+  return Number(await fetchTweetLedger624Micro(user)) / DUSDC_MULTIPLIER;
+}
+
+/** Withdraw from the SENDER's own ledger in the trade-from-X vault (VAULT624_TWEET, 0x3f99…) —
+ *  the coin is transferred to the sender unconditionally, so ONLY the user can cash out; the
+ *  bounded relay agent has no withdraw path. Mirrors buildVaultWithdraw624 but on the tweet vault
+ *  (0x3f99…), which the portfolio Fund X wallet flow deposits into via buildEnableTweetTrading624. */
+export function buildTweetVaultWithdraw624(p: { amountMicro: bigint }): Transaction {
+  const tx = new Transaction();
+  tx.moveCall({
+    target: `${VAULT624_TWEET.pkg}::vault624::withdraw`,
+    arguments: [
+      tx.object(VAULT624_TWEET.vaultId),
+      tx.object(VAULT624_TWEET.wrapperId),
+      tx.pure.u64(p.amountMicro),
+      tx.object(VAULT624_TWEET.accumulatorRoot),
+      tx.object(VAULT624_TWEET.clock),
+    ],
+  });
+  return tx;
+}
+
 export interface Sub624 {
   agent: string;
   maxMarginMicro: number;
