@@ -163,10 +163,11 @@ export default function EarnPage() {
                     <span className="font-mono text-[10px] tracking-[0.18em] uppercase text-gray-500">Predict PLP</span>
                   </div>
 
-                  {/* share price is the hero — with its growth since par + a rising micro-line */}
+                  {/* share price is the hero — the "/ share" unit keeps it reading as the
+                     vault's public price (this card shows with no wallet), not a personal balance */}
                   <div className="flex items-end gap-3">
                     <div className="font-display text-[clamp(2.8rem,5vw,3.5rem)] font-extrabold leading-[0.88] tracking-tight tabular-nums">
-                      {sharePrice != null ? sharePrice.toFixed(4) : '—'}
+                      {sharePrice != null ? sharePrice.toFixed(4) : '—'}<span className="ml-1 align-baseline font-mono text-[0.9rem] font-normal tracking-normal text-gray-500">/ share</span>
                     </div>
                     {sharePrice != null && sharePrice > 1.0001 && (
                       <span className="earn-chipg rounded-full px-2.5 py-1 mb-1 inline-flex items-center gap-1.5 font-mono text-[11px] text-new-mint">
@@ -176,8 +177,7 @@ export default function EarnPage() {
                     )}
                   </div>
                   <div className="mt-2.5 flex items-center gap-2.5">
-                    <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-gray-500">Value per share</span>
-                    <span className="font-mono text-[10px] text-gray-500/70 hidden sm:inline">· since 1.0000 par</span>
+                    <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-gray-500">Up from 1.0000 at launch</span>
                     <svg width="58" height="16" viewBox="0 0 58 16" className="ml-auto shrink-0 opacity-90" aria-hidden>
                       <path d="M1,15 C15,13 26,11 36,7 C44,4 52,3 57,1" fill="none" stroke="#34D399" strokeWidth="1.5" strokeLinecap="round" />
                     </svg>
