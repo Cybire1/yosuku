@@ -21,6 +21,11 @@ const HAIR = 'color-mix(in srgb, var(--white) 12%, transparent)';
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 type XIdentity = { handle: string; authorId: string; account: ClaimAccount | null };
 
+// Attested claim: sign-in runs INSIDE the enclave (it proves your handle AND signs your wallet in-TEE),
+// so no operator key can bind your account to anyone. Flag-gated; when off, the original path is used.
+const ATTESTED = process.env.NEXT_PUBLIC_ATTESTED_BIND === '1';
+const ENCLAVE_OAUTH = process.env.NEXT_PUBLIC_ENCLAVE_OAUTH_URL || 'https://contemporary-necessary-text-let.trycloudflare.com';
+
 function ClaimInner() {
   const params = useSearchParams();
   const account = useCurrentAccount();
@@ -45,6 +50,39 @@ function ClaimInner() {
         if (r.ok) { const j = await r.json(); if (j.handle) { setMe(j); setAcct(j.account ?? null); } }
       } catch { /* stay signed out */ }
     })();
+  }, [params]);
+
+  // Attested return: the ENCLAVE's OAuth callback lands us back with ?bind=true&handle=&token=. The token
+  // carries the in-TEE proof of (handle, committed wallet); POST it so the chain binds via set_owner_attested,
+  // then reveal the now-unlocked account. No operator key can substitute the wallet.
+  useEffect(() => {
+    if (!ATTESTED || params.get('bind') !== 'true') return;
+    const token = params.get('token');
+    const handle = params.get('handle') || '';
+    if (!token) return;
+    (async () => {
+      setBinding(true); setErr(null);
+      try {
+        const r = await fetch('/api/claim/bind-attested', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token }) });
+        const j = await r.json().catch(() => ({} as { ok?: boolean; reason?: string; owner?: string }));
+        if (!r.ok || j?.ok === false) {
+          setBinding(false);
+          setErr(j?.reason ? `Couldn’t link: ${j.reason}` : 'Could not link this account. Sign in with X again to retry.');
+          return;
+        }
+        setMe({ handle, authorId: '', account: null });
+        const bound = String(j.owner || wallet || '').toLowerCase();
+        let tries = 0;
+        const check = async () => {
+          tries += 1;
+          try { const a = await fetchClaimAccount(bound); if (a && a.owner === bound) { setAcct(a); setBinding(false); if (pollRef.current) clearInterval(pollRef.current); return; } } catch { /* keep polling */ }
+          if (tries >= 12) { setBinding(false); if (pollRef.current) clearInterval(pollRef.current); }
+        };
+        check();
+        pollRef.current = setInterval(check, 3000);
+      } catch { setBinding(false); setErr('Network hiccup. Sign in with X again to retry.'); }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params]);
 
   // Once both X + wallet are present, ask the relay to bind (set_owner) so the funds unlock to this wallet.
@@ -84,7 +122,7 @@ function ClaimInner() {
   }, [me, wallet]);
 
   useEffect(() => {
-    if (me && wallet && !(acct?.owner === wallet)) bind();
+    if (!ATTESTED && me && wallet && !(acct?.owner === wallet)) bind();
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [me, wallet, acct?.owner, bind]);
 
@@ -142,29 +180,61 @@ function ClaimInner() {
           )}
         </div>
 
-        <Step index={1} label="Prove it’s you" done={!!me}>
-          {me ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: GREEN, fontWeight: 600 }}><Dot /> signed in as @{me.handle}</div>
-          ) : (
-            <a href="/api/claim/x/start"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 10, background: FG, color: BG, borderRadius: 999, padding: '13px 22px', fontSize: 15, fontWeight: 700, textDecoration: 'none' }}>
-              <XGlyph /> Sign in with X
-            </a>
-          )}
-        </Step>
+        {ATTESTED ? (
+          <>
+            <Step index={1} label="Connect your wallet" done={!!wallet}>
+              {wallet ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: GREEN, fontWeight: 600, minWidth: 0 }}>
+                  <Dot /> <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{short(wallet)} connected</span>
+                </div>
+              ) : (
+                <div><ConnectButton /></div>
+              )}
+            </Step>
 
-        <Step index={2} label="Where do you want to cash out?" done={!!wallet} dim={!me}>
-          {wallet ? (
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: GREEN, fontWeight: 600, minWidth: 0 }}>
-                <Dot /> <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{short(wallet)} connected{binding && <span style={{ color: MUTE, fontWeight: 500, marginLeft: 8 }}>· linking…</span>}</span>
-              </div>
+            <Step index={2} label="Prove it’s you" done={!!me} dim={!wallet}>
+              {me ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: GREEN, fontWeight: 600 }}>
+                  <Dot /> signed in{me.handle ? ` as @${me.handle}` : ''}{binding && <span style={{ color: MUTE, fontWeight: 500, marginLeft: 8 }}>· linking…</span>}
+                </div>
+              ) : wallet ? (
+                <a href={`${ENCLAVE_OAUTH}/twitter/auth?wallet=${wallet}&mode=bind`}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 10, background: FG, color: BG, borderRadius: 999, padding: '13px 22px', fontSize: 15, fontWeight: 700, textDecoration: 'none' }}>
+                  <XGlyph /> Sign in with X
+                </a>
+              ) : (
+                <div style={{ color: MUTE, fontSize: 14 }}>Connect your wallet above first.</div>
+              )}
               {err && !ready && <p style={{ color: 'var(--loss)', fontSize: 13, marginTop: 10, fontWeight: 500, lineHeight: 1.5 }}>{err}</p>}
-            </div>
-          ) : (
-            <div style={{ opacity: me ? 1 : 0.4, pointerEvents: me ? 'auto' : 'none' }}><ConnectButton /></div>
-          )}
-        </Step>
+            </Step>
+          </>
+        ) : (
+          <>
+            <Step index={1} label="Prove it’s you" done={!!me}>
+              {me ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: GREEN, fontWeight: 600 }}><Dot /> signed in as @{me.handle}</div>
+              ) : (
+                <a href="/api/claim/x/start"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 10, background: FG, color: BG, borderRadius: 999, padding: '13px 22px', fontSize: 15, fontWeight: 700, textDecoration: 'none' }}>
+                  <XGlyph /> Sign in with X
+                </a>
+              )}
+            </Step>
+
+            <Step index={2} label="Where do you want to cash out?" done={!!wallet} dim={!me}>
+              {wallet ? (
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: GREEN, fontWeight: 600, minWidth: 0 }}>
+                    <Dot /> <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{short(wallet)} connected{binding && <span style={{ color: MUTE, fontWeight: 500, marginLeft: 8 }}>· linking…</span>}</span>
+                  </div>
+                  {err && !ready && <p style={{ color: 'var(--loss)', fontSize: 13, marginTop: 10, fontWeight: 500, lineHeight: 1.5 }}>{err}</p>}
+                </div>
+              ) : (
+                <div style={{ opacity: me ? 1 : 0.4, pointerEvents: me ? 'auto' : 'none' }}><ConnectButton /></div>
+              )}
+            </Step>
+          </>
+        )}
 
         <AnimatePresence>
           {stage === 'ready' && (
