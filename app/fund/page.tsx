@@ -1,13 +1,13 @@
 'use client';
 
-// /fund — the Naira on-ramp, PREVIEWED. A Nigerian pays in their own currency and
-// testnet DUSDC lands in their OWN wallet, so even funding is self-custodial. This is
-// the mainnet go-to-market shown on testnet: Paystack TEST MODE (no real money), a
-// licensed partner at mainnet, and Yosuku never holds the fiat.
+// /fund — the on-ramp, PREVIEWED. The user states how much DUSDC they want; the card is
+// charged the derived cost (in Naira today, since Paystack collects NGN) and testnet DUSDC
+// lands in their OWN wallet, so even funding is self-custodial. This is the mainnet
+// go-to-market shown on testnet: Paystack TEST MODE (no real money), Yosuku never holds fiat.
 //
 // Live Paystack popup when NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY (a pk_test_… key) is set;
 // otherwise a clearly-labelled simulated test payment so the flow always demos.
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useCurrentAccount, ConnectButton } from '@mysten/dapp-kit';
 import Header from '@/components/Header';
@@ -15,11 +15,10 @@ import Footer from '@/components/Footer';
 import Marquee from '@/components/Marquee';
 import GrainOverlay from '@/components/GrainOverlay';
 
-const NGN_PER_DUSDC = 1600; // indicative demo rate
-const PRESETS_NGN = [2000, 5000, 10000];
+const NGN_PER_DUSDC = 1600; // indicative demo rate (the card is charged this much Naira per DUSDC)
+const PRESETS_DUSDC = [5, 10, 25];
 const PAYSTACK_KEY = process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY || '';
 
-type Ccy = 'NGN' | 'USD';
 type Phase = 'idle' | 'paying' | 'crediting' | 'done';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -31,8 +30,7 @@ export default function FundPage() {
   const account = useCurrentAccount();
   const address = account?.address ?? null;
 
-  const ccy: Ccy = 'NGN'; // Naira only (the account collects NGN; USD is roadmap)
-  const [amount, setAmount] = useState('5000');
+  const [amount, setAmount] = useState('10'); // DUSDC the user wants
   const [phase, setPhase] = useState<Phase>('idle');
   const [err, setErr] = useState('');
   const [result, setResult] = useState<{ amount: number; explorer: string } | null>(null);
@@ -49,11 +47,11 @@ export default function FundPage() {
     document.body.appendChild(s);
   }, []);
 
-  const presets = PRESETS_NGN;
-  const num = Math.max(0, Number(amount) || 0);
-  const dusdc = num / NGN_PER_DUSDC;
-  const dusdcShown = Math.min(dusdc, 50);
-  const capped = dusdc > 50;
+  const presets = PRESETS_DUSDC;
+  const want = Math.max(0, Number(amount) || 0);       // DUSDC requested
+  const dusdcShown = Math.min(want, 50);               // capped per request
+  const capped = want > 50;
+  const ngnCost = Math.round(dusdcShown * NGN_PER_DUSDC); // derived Naira cost the card is charged
 
   const credit = useCallback(async (reference?: string) => {
     if (!address) return;
@@ -76,12 +74,10 @@ export default function FundPage() {
   const pay = useCallback(() => {
     if (!address || dusdcShown <= 0) return;
     setErr('');
-    // live Paystack test-mode popup when a key is present. The account collects Naira,
-    // so we always charge NGN (converting the USD view to its Naira equivalent). The
-    // DUSDC delivered stays what the user chose.
+    // The card is charged the derived Naira cost; the user gets the DUSDC they asked for.
     if (PAYSTACK_KEY && window.PaystackPop) {
       setPhase('paying');
-      const ngn = num; // account collects Naira
+      const ngn = ngnCost;
       const handler = window.PaystackPop.setup({
         key: PAYSTACK_KEY,
         email: `${address.slice(2, 12)}@yosuku.xyz`,
@@ -98,7 +94,7 @@ export default function FundPage() {
     // simulated test payment (no key configured): brief pause, then credit
     setPhase('paying');
     setTimeout(() => credit(`sim_${Date.now()}`), 1100);
-  }, [address, dusdcShown, ccy, num, credit]);
+  }, [address, dusdcShown, ngnCost, credit]);
 
   const reset = () => { setPhase('idle'); setResult(null); setErr(''); };
 
@@ -114,44 +110,44 @@ export default function FundPage() {
         <div className="relative z-10">
           <div className="font-mono text-[11px] tracking-[0.28em] uppercase text-vermilion mb-4">予測 · Add money</div>
           <h1 className="font-display font-[800] tracking-[-0.03em] leading-[0.98] text-[clamp(2.3rem,7vw,3.4rem)]">
-            Fund in <span className="text-vermilion">Naira.</span>
+            Fund your <span className="text-vermilion">wallet.</span>
           </h1>
           <p className="mt-4 text-gray-400 leading-relaxed max-w-[42ch]">
-            Pay with your card. It lands in <span className="text-white">your wallet</span> in seconds, and only you can ever cash it out.
+            Choose how much DUSDC you want. Pay by card, it lands in <span className="text-white">your wallet</span> in seconds, and only you can ever cash it out.
           </p>
 
           {/* ── the card ── */}
           {phase !== 'done' ? (
             <div className="mt-9 rounded-3xl border border-white/[0.08] bg-white/[0.02] p-6 sm:p-7 shadow-[0_40px_90px_-60px_rgba(0,0,0,0.9)]">
-              {/* amount */}
+              {/* how much DUSDC you want */}
               <div className="fund-amt rounded-2xl border border-white/[0.08] bg-black/20 px-5 py-4 focus-within:border-vermilion/50 transition-colors">
-                <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-gray-500 mb-1.5">You pay</div>
-                <div className="flex items-center gap-2">
-                  <span className="font-display text-3xl font-bold text-gray-500">₦</span>
+                <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-gray-500 mb-1.5">You get</div>
+                <div className="flex items-center gap-3">
                   <input
                     value={amount}
                     onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))}
                     inputMode="decimal"
                     className="flex-1 min-w-0 bg-transparent font-display text-4xl font-bold text-white outline-none tabular-nums"
-                    aria-label="Amount in Naira"
+                    aria-label="Amount of DUSDC"
                   />
+                  <span className="font-mono text-sm font-semibold text-gray-300 shrink-0">DUSDC</span>
                 </div>
                 <div className="mt-3 flex gap-2">
                   {presets.map((p) => (
                     <button key={p} onClick={() => setAmount(String(p))} data-cursor="hover"
                       className="fund-preset rounded-lg border border-white/12 px-3 py-1.5 font-mono text-[12px] text-gray-400 hover:border-vermilion/50 hover:text-white transition-colors">
-                      {fmtNgn(p)}
+                      {p} DUSDC
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* what lands in the wallet — a plain dollar figure, nothing more */}
+              {/* what it costs — charged to the card in Naira */}
               <div className="mt-5 flex items-baseline justify-between">
-                <span className="font-mono text-sm text-gray-500">You get</span>
-                <span className="font-display font-bold tabular-nums text-2xl text-white">≈ ${dusdcShown.toFixed(2)}</span>
+                <span className="font-mono text-sm text-gray-500">You pay</span>
+                <span className="font-display font-bold tabular-nums text-2xl text-white">≈ {fmtNgn(ngnCost)}</span>
               </div>
-              {capped && <div className="mt-1 text-right font-mono text-[11px] text-vermilion/80">up to $50 at a time</div>}
+              {capped && <div className="mt-1 text-right font-mono text-[11px] text-vermilion/80">up to 50 DUSDC at a time</div>}
 
               {/* CTA / gate */}
               <div className="mt-7">
@@ -167,7 +163,7 @@ export default function FundPage() {
                     data-cursor="hover"
                     className="w-full rounded-full bg-vermilion text-white font-display font-bold py-4 text-[15px] hover:bg-vermilion-d active:scale-[0.99] transition-all disabled:opacity-50 shadow-[0_18px_40px_-16px_var(--vermilion)]"
                   >
-                    {phase === 'paying' ? 'Opening secure checkout…' : phase === 'crediting' ? 'Adding to your wallet…' : `Pay ${fmtNgn(num)}`}
+                    {phase === 'paying' ? 'Opening secure checkout…' : phase === 'crediting' ? 'Adding to your wallet…' : 'Fund'}
                   </button>
                 )}
                 {err && <p className="mt-3 text-center text-[12px] text-rose-400">{err}</p>}
@@ -180,7 +176,7 @@ export default function FundPage() {
                 <svg width="30" height="30" viewBox="0 0 24 24" fill="none"><path d="M4 12.5l5 5 11-11" stroke="var(--profit)" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
               </div>
               <div className="font-display font-[800] text-2xl">You're funded.</div>
-              <div className="mt-2 font-display font-bold text-2xl text-white tabular-nums">≈ ${result?.amount.toFixed(2)}</div>
+              <div className="mt-2 font-display font-bold text-2xl text-white tabular-nums">{result?.amount.toFixed(2)} DUSDC</div>
               <p className="mt-3 text-[13px] text-gray-400 max-w-[34ch] mx-auto leading-snug">
                 Landed in your wallet. Only you can ever cash it out.
               </p>
