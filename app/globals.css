@@ -386,20 +386,27 @@ body.urgent::before {
 .st-card { border: 1px solid rgba(255,255,255,0.08); border-radius: 13px; background: rgba(255,255,255,0.025); padding: 11px 12px; transition: border-color 200ms var(--ease), background 200ms var(--ease); }
 [data-theme="light"] .st-card { border-color: rgba(20,18,16,0.09); background: #fffdf8; }
 .st-card.armed { border-color: rgba(224,77,38,0.4); }
-.st-row { display: flex; align-items: center; gap: 10px; }
-.st-q { flex: 1; font-family: var(--font-display); font-weight: 600; font-size: 14px; color: var(--white); line-height: 1.15; }
-[data-theme="light"] .st-q { color: #221d18; }
-.st-q b { font-weight: 800; }
-.st-q .st-meta { display: block; font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.02em; color: var(--gray-500); margin-top: 3px; font-variant-numeric: tabular-nums; }
-.st-sides { display: flex; gap: 6px; flex: none; }
-.st-side { border: 1px solid; border-radius: 9px; padding: 7px 13px; font-family: var(--font-mono); font-size: 12px; font-weight: 700; letter-spacing: 0.06em; cursor: pointer; background: transparent; transition: background 150ms var(--ease), transform 120ms var(--ease), border-color 150ms var(--ease); }
-.st-side:active { transform: scale(0.95); }
-.st-side.up { color: var(--profit); border-color: color-mix(in srgb, var(--profit) 40%, transparent); }
-.st-side.up:hover, .st-side.up.on { background: color-mix(in srgb, var(--profit) 14%, transparent); border-color: var(--profit); }
-.st-side.down { color: var(--loss); border-color: color-mix(in srgb, var(--loss) 40%, transparent); }
-.st-side.down:hover, .st-side.down.on { background: color-mix(in srgb, var(--loss) 14%, transparent); border-color: var(--loss); }
+.st-cardhead { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 9px; }
+.st-asset { font-family: var(--font-display); font-weight: 700; font-size: 14px; color: var(--white); }
+.st-asset b { font-weight: 800; font-variant-numeric: tabular-nums; }
+[data-theme="light"] .st-asset { color: #171310; }
+.st-meta { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--gray-500); font-variant-numeric: tabular-nums; }
+.st-sides { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.st-side { display: flex; flex-direction: column; align-items: stretch; gap: 3px; border: 1px solid; border-radius: 11px; padding: 9px 11px 8px; background: transparent; cursor: pointer; text-align: left; transition: background 150ms var(--ease), border-color 150ms var(--ease), transform 120ms var(--ease); }
+.st-side:active { transform: scale(0.98); }
+.st-sidetop { display: flex; align-items: baseline; justify-content: space-between; }
+.st-sidelabel { font-family: var(--font-mono); font-weight: 800; font-size: 12.5px; letter-spacing: 0.1em; }
+.st-sideprob { font-family: var(--font-mono); font-weight: 800; font-size: 16px; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.st-sideline { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.01em; color: var(--gray-500); font-variant-numeric: tabular-nums; }
+.st-sidepay { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--gray-600); }
+.st-side.up { color: var(--profit); border-color: color-mix(in srgb, var(--profit) 30%, transparent); }
+.st-side.up:hover, .st-side.up.on { background: color-mix(in srgb, var(--profit) 12%, transparent); border-color: var(--profit); }
+.st-side.up.on { box-shadow: inset 0 0 0 1px var(--profit); }
+.st-side.down { color: var(--loss); border-color: color-mix(in srgb, var(--loss) 30%, transparent); }
+.st-side.down:hover, .st-side.down.on { background: color-mix(in srgb, var(--loss) 12%, transparent); border-color: var(--loss); }
+.st-side.down.on { box-shadow: inset 0 0 0 1px var(--loss); }
 .st-side.pick { box-shadow: inset 0 0 0 1px var(--vermilion); }
-.st-done { font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--profit); letter-spacing: 0.04em; white-space: nowrap; }
+.st-done { font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--profit); letter-spacing: 0.04em; white-space: nowrap; text-align: center; padding: 6px 0; }
 .st-arm { margin-top: 11px; padding-top: 11px; border-top: 1px dashed rgba(255,255,255,0.1); }
 [data-theme="light"] .st-arm { border-top-color: rgba(20,18,16,0.12); }
 .st-connect { font-size: 12.5px; color: var(--gray-400); text-align: center; padding: 4px 0; }

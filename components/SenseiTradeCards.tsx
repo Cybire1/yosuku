@@ -12,8 +12,9 @@ import { useCurrentAccount } from '@mysten/dapp-kit';
 import type { Transaction } from '@mysten/sui/transactions';
 import { useToast } from '@/components/Toast';
 import { useSmartSubmit } from '@/lib/sui/useSmartSubmit';
-import { useAccount624, placeMint624, placeFirstBet624, qtyForStake, strike624 } from '@/lib/sui/ticket624';
+import { useAccount624, placeMint624, placeFirstBet624, placeTopUpAndBet624, qtyForStake, strike624 } from '@/lib/sui/ticket624';
 import { inferCadence624, fetchMarkets624, fetchSpot624, type Market624 } from '@/lib/sui/predict624Client';
+import { DUSDC_MULTIPLIER } from '@/lib/sui/constants';
 
 type Dir = 'up' | 'down';
 type Pick = { marketId: string; dir: Dir } | null;
@@ -26,6 +27,16 @@ function mmss(msLeft: number): string {
   const s = Math.max(0, Math.floor(msLeft / 1000));
   return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
 }
+
+// Entry probability that BTC finishes above `line` (same logistic the word-market board uses),
+// so each side shows its OWN odds honestly rather than a blank near-spot guess.
+function probAbove(spot: number, line: number, msLeft: number): number {
+  const secs = Math.max(45, msLeft / 1000);
+  const sigma = spot * 0.00028 * Math.sqrt(secs / 60);
+  const z = (spot - line) / (sigma || 1);
+  return Math.max(0.03, Math.min(0.97, 1 / (1 + Math.exp(-1.15 * z))));
+}
+const payoutX = (prob: number) => Math.max(1.05, 1 / prob);
 
 export default function SenseiTradeCards({ active, pick }: { active: boolean; pick?: Pick }) {
   const account = useCurrentAccount();
@@ -87,14 +98,28 @@ export default function SenseiTradeCards({ active, pick }: { active: boolean; pi
       // rough payout size; both helpers re-quote/re-probe on-chain and cap the real cost.
       const qty = qtyForStake(stake, 1, 0.5);
       const strikeUsd = strike624(spot, dir);
+      const walletD = acct.walletMicro / DUSDC_MULTIPLIER;
       if (!acct.wrapperId) {
+        // No trading account yet: create it, fund it, and bet in one signature.
         await placeFirstBet624({
           submit: sponsored, address: account.address, marketId: m.id, dir, qty, lev: 1, spot,
           stakeDusdc: stake, walletDusdcMicro: BigInt(Math.floor(acct.walletMicro)),
           coinIds: acct.dusdcCoins.map((c) => c.coinObjectId), cadence,
         });
         acct.refreshWallet();
+      } else if (acct.acctBalance < stake && walletD > 0.01 && acct.acctBalance + walletD >= stake) {
+        // Account exists but can't cover this bet, and the wallet can make up the shortfall:
+        // deposit the difference from the wallet AND mint in the SAME tap (the main ticket's
+        // proven one-tap top-up). Without this an empty account aborts EBalanceTooLow (code 1).
+        await placeTopUpAndBet624({
+          submit: sponsored, address: account.address, wrapperId: acct.wrapperId, marketId: m.id,
+          dir, qty, lev: 1, spot, stakeDusdc: stake, acctBalance: acct.acctBalance,
+          walletDusdcMicro: BigInt(Math.floor(acct.walletMicro)),
+          coinIds: acct.dusdcCoins.map((c) => c.coinObjectId), cadence,
+        });
+        acct.refreshWallet();
       } else {
+        // Account already covers the bet: mint against its balance.
         await placeMint624({
           submit: sponsored, address: account.address, wrapperId: acct.wrapperId, marketId: m.id,
           dir, qty, lev: 1, spot, acctBalance: acct.acctBalance, cadence,
@@ -107,8 +132,8 @@ export default function SenseiTradeCards({ active, pick }: { active: boolean; pi
       toast(`You're in. ${dir.toUpperCase()} ${dir === 'up' ? 'over' : 'under'} ${fmtUsd0(strikeUsd)}`, 'success');
     } catch (e) {
       const raw = String(e instanceof Error ? e.message : e);
-      const friendly = /no DUSDC|faucet/i.test(raw) ? 'You need test dollars first. Add funds, then bet.'
-        : /deposit a little more|not enough/i.test(raw) ? 'A little short. Top up, then place.'
+      const friendly = /no DUSDC|faucet|to top up/i.test(raw) ? 'You need test dollars first. Add money, then bet.'
+        : /abort code:?\s*1|EBalanceTooLow|below the live cost|deposit a little more|not enough/i.test(raw) ? 'Your trading account needs funds. Add money, then bet.'
         : `Could not place: ${raw.slice(0, 90)}`;
       toast(friendly, 'error');
     } finally { setBusy(false); }
@@ -126,34 +151,50 @@ export default function SenseiTradeCards({ active, pick }: { active: boolean; pi
         </span>
       </div>
       {near.map((m) => {
-        const overUsd = strike624(spot, 'up');
-        const underUsd = strike624(spot, 'down');
+        const overUsd = strike624(spot, 'up');   // UP wins ABOVE this
+        const underUsd = strike624(spot, 'down'); // DOWN wins BELOW this
         const msLeft = m.expiry - now;
+        const probUp = probAbove(spot, overUsd, msLeft);
+        const probDown = 1 - probAbove(spot, underUsd, msLeft);
         const isArmed = armed?.id === m.id;
         const wonIt = done?.id === m.id;
         const cad = inferCadence624(m.expiry);
+        const armDir = isArmed ? armed!.dir : null;
+        const armLine = armDir === 'up' ? overUsd : underUsd;
+        const armProb = armDir === 'up' ? probUp : probDown;
         return (
           <div key={m.id} className={`st-card ${isArmed ? 'armed' : ''}`}>
-            <div className="st-row">
-              <div className="st-q">
-                BTC over <b>{fmtUsd0(overUsd)}</b>
-                <span className="st-meta">{cadenceLabel[cad] ?? cad} · closes {mmss(msLeft)}</span>
-              </div>
-              {!wonIt ? (
-                <div className="st-sides">
-                  <button
-                    className={`st-side up ${isArmed && armed?.dir === 'up' ? 'on' : ''} ${pick?.marketId === m.id && pick.dir === 'up' ? 'pick' : ''}`}
-                    onClick={() => arm(m.id, 'up')} data-cursor="hover"
-                  >UP</button>
-                  <button
-                    className={`st-side down ${isArmed && armed?.dir === 'down' ? 'on' : ''} ${pick?.marketId === m.id && pick.dir === 'down' ? 'pick' : ''}`}
-                    onClick={() => arm(m.id, 'down')} data-cursor="hover"
-                  >DOWN</button>
-                </div>
-              ) : (
-                <div className="st-done">You&apos;re in · {done!.dir.toUpperCase()}</div>
-              )}
+            <div className="st-cardhead">
+              <span className="st-asset">BTC <b>{fmtUsd0(spot)}</b></span>
+              <span className="st-meta">{cadenceLabel[cad] ?? cad} · {mmss(msLeft)}</span>
             </div>
+
+            {wonIt ? (
+              <div className="st-done">You&apos;re in · {done!.dir.toUpperCase()} {done!.dir === 'up' ? 'over' : 'under'} {fmtUsd0(done!.strikeUsd)}</div>
+            ) : (
+              <div className="st-sides">
+                {(['up', 'down'] as const).map((d) => {
+                  const line = d === 'up' ? overUsd : underUsd;
+                  const prob = d === 'up' ? probUp : probDown;
+                  const on = isArmed && armDir === d;
+                  return (
+                    <button
+                      key={d}
+                      className={`st-side ${d} ${on ? 'on' : ''} ${pick?.marketId === m.id && pick.dir === d ? 'pick' : ''}`}
+                      onClick={() => arm(m.id, d)}
+                      data-cursor="hover"
+                    >
+                      <span className="st-sidetop">
+                        <span className="st-sidelabel">{d.toUpperCase()}</span>
+                        <span className="st-sideprob">{Math.round(prob * 100)}%</span>
+                      </span>
+                      <span className="st-sideline">{d === 'up' ? 'above' : 'below'} {fmtUsd0(line)}</span>
+                      <span className="st-sidepay">pays {payoutX(prob).toFixed(2)}×</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
 
             {isArmed && (
               <div className="st-arm">
@@ -170,10 +211,10 @@ export default function SenseiTradeCards({ active, pick }: { active: boolean; pi
                         <button key={c} className="st-chip" onClick={() => setStakeStr(String((Number(stakeStr) || 0) + c))} data-cursor="hover">+{c}</button>
                       ))}
                     </div>
-                    <button className="st-place" disabled={!canPlace} onClick={() => place(m, armed!.dir)} data-cursor="hover">
-                      {busy ? 'Placing…' : `Bet ${armed?.dir === 'up' ? 'UP' : 'DOWN'}${stake > 0 ? ` · ${stake} DUSDC` : ''}`}
+                    <button className="st-place" disabled={!canPlace} onClick={() => place(m, armDir!)} data-cursor="hover">
+                      {busy ? 'Placing…' : `Bet ${armDir!.toUpperCase()}${stake > 0 ? ` · to win ${(stake * payoutX(armProb)).toFixed(2)}` : ''}`}
                     </button>
-                    <div className="st-note">Gas-free · you win {armed?.dir === 'up' ? 'above' : 'below'} {fmtUsd0(armed?.dir === 'up' ? overUsd : underUsd)} at close</div>
+                    <div className="st-note">Gas-free · you win {armDir === 'up' ? 'above' : 'below'} <b>{fmtUsd0(armLine)}</b> at close · pays {payoutX(armProb).toFixed(2)}×</div>
                   </>
                 )}
               </div>
