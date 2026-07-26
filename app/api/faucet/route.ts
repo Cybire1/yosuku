@@ -7,7 +7,7 @@
 //   2. per-account — on-chain: did the faucet fund this address in the last 24h?
 //                    (the chain is the store → survives cookie-clears; for zkLogin
 //                     the address == the Google account, so this is per-account)
-//   3. balance gate — won't top up an address that already holds more than 3 DUSDC
+//   3. balance gate — won't top up an address that already holds more than 5 DUSDC
 import { NextRequest, NextResponse } from 'next/server';
 import { SuiJsonRpcClient } from '@mysten/sui/jsonRpc';
 import { Transaction } from '@mysten/sui/transactions';
@@ -15,8 +15,8 @@ import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
 import { DUSDC_TYPE } from '@/lib/sui/constants';
 
-const DRIP = BigInt(2_000_000);     // 2 DUSDC per claim
-const FUND_CAP = BigInt(3_000_000); // already holds more than 3 DUSDC → don't fund
+const DRIP = BigInt(5_000_000);     // 5 DUSDC per claim
+const FUND_CAP = BigInt(5_000_000); // already holds more than 5 DUSDC → don't fund
 const DAY_MS = 24 * 60 * 60 * 1000;
 const FAUCET_ADDR = '0x7c89c67ca62eca789d2247d4168edc3dded1d93ec2706119e861f128ef212fab';
 const OFFICIAL_FAUCET = 'https://tally.so/r/Xx102L';
