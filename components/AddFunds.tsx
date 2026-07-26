@@ -115,7 +115,7 @@ export default function AddFunds({ open, onClose, onFunded }: { open: boolean; o
                   disabled={state === 'loading'}
                   className="w-full bg-white text-black font-semibold rounded-full py-3 hover:scale-[1.02] active:scale-[0.97] transition-transform disabled:opacity-60"
                 >
-                  {state === 'loading' ? 'Adding…' : 'Request 5 DUSDC free'}
+                  {state === 'loading' ? 'Adding…' : 'Request 2 DUSDC free'}
                 </button>
                 <Link
                   href="/fund"

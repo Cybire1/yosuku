@@ -7,7 +7,10 @@
 //   2. per-account — on-chain: did the faucet fund this address in the last 24h?
 //                    (the chain is the store → survives cookie-clears; for zkLogin
 //                     the address == the Google account, so this is per-account)
-//   3. balance gate — won't top up an address that already holds more than 5 DUSDC
+//   3. balance gate — won't top up an address that already holds more than 3 DUSDC
+//
+// The open web claim drips 2 DUSDC. The X-Predict auto-onboard relay drips 5, gated
+// behind a shared key (ONBOARD_KEY) so only the relay — not the public button — pulls the larger amount.
 import { NextRequest, NextResponse } from 'next/server';
 import { SuiJsonRpcClient } from '@mysten/sui/jsonRpc';
 import { Transaction } from '@mysten/sui/transactions';
@@ -15,8 +18,11 @@ import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
 import { DUSDC_TYPE } from '@/lib/sui/constants';
 
-const DRIP = BigInt(5_000_000);     // 5 DUSDC per claim
-const FUND_CAP = BigInt(5_000_000); // already holds more than 5 DUSDC → don't fund
+const DRIP = BigInt(2_000_000);          // 2 DUSDC — the open web claim
+const ONBOARD_DRIP = BigInt(5_000_000);  // 5 DUSDC — X-Predict auto-onboard only (key-gated)
+const FUND_CAP = BigInt(3_000_000);      // already holds more than 3 DUSDC → don't fund
+// shared secret: only the X-Predict relay knows this, so the open button can't pull the 5 DUSDC drip.
+const ONBOARD_KEY = process.env.FAUCET_ONBOARD_KEY || 'yx_onbk_9f4c2e7a13b6d805e2a4c1';
 const DAY_MS = 24 * 60 * 60 * 1000;
 const FAUCET_ADDR = '0x7c89c67ca62eca789d2247d4168edc3dded1d93ec2706119e861f128ef212fab';
 const OFFICIAL_FAUCET = 'https://tally.so/r/Xx102L';
@@ -53,11 +59,14 @@ export async function POST(req: NextRequest) {
   if (!key) return NextResponse.json({ error: 'Faucet not configured.', faucetUrl: OFFICIAL_FAUCET }, { status: 503 });
 
   let address: string;
-  try { ({ address } = await req.json()); }
+  let onboardKey: string | undefined;
+  try { ({ address, onboardKey } = await req.json()); }
   catch { return NextResponse.json({ error: 'Bad request.' }, { status: 400 }); }
   if (!/^0x[0-9a-fA-F]{64}$/.test(address ?? '')) {
     return NextResponse.json({ error: 'Invalid address.' }, { status: 400 });
   }
+  // the X-Predict relay pulls the larger drip; the open web button gets the standard 2 DUSDC.
+  const amount = onboardKey && onboardKey === ONBOARD_KEY ? ONBOARD_DRIP : DRIP;
 
   // 1. per-device cookie gate
   const claimedAt = Number(req.cookies.get(COOKIE)?.value ?? 0);
@@ -81,21 +90,21 @@ export async function POST(req: NextRequest) {
     const faucet = Ed25519Keypair.fromSecretKey(decodeSuiPrivateKey(key).secretKey);
     const coins = (await client.getCoins({ owner: faucet.toSuiAddress(), coinType: DUSDC_TYPE })).data;
     const total = coins.reduce((s, c) => s + BigInt(c.balance), BigInt(0));
-    if (total < DRIP) {
+    if (total < amount) {
       return NextResponse.json({ error: 'The instant faucet is empty right now — grab DUSDC from the DeepBook faucet.', faucetUrl: OFFICIAL_FAUCET }, { status: 503 });
     }
 
     const tx = new Transaction();
     const [primary, ...rest] = coins.map((c) => tx.object(c.coinObjectId));
     if (rest.length) tx.mergeCoins(primary, rest);
-    const [drip] = tx.splitCoins(primary, [DRIP]);
+    const [drip] = tx.splitCoins(primary, [amount]);
     tx.transferObjects([drip], address);
 
     const res = await client.signAndExecuteTransaction({ signer: faucet, transaction: tx });
     await client.waitForTransaction({ digest: res.digest });
 
     const out = NextResponse.json({
-      ok: true, amount: Number(DRIP) / 1e6, digest: res.digest,
+      ok: true, amount: Number(amount) / 1e6, digest: res.digest,
       explorer: `https://suiscan.xyz/testnet/tx/${res.digest}`,
     });
     out.cookies.set(COOKIE, String(Date.now()), {
