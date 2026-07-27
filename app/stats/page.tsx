@@ -194,26 +194,10 @@ export default function StatsPage() {
                 so each provably came through Yosuku (web or mobile), not the broader Predict network. Our own infra/test wallets are excluded.
               </p>
 
-              {/* ── 03 · CAPABILITY (engine proven) ── */}
-              <div className="flex items-baseline gap-3 mb-3">
-                <span className="font-mono text-[11px] text-vermilion font-bold">03</span>
-                <h2 className="font-display text-lg font-bold">Capability, proven on-chain</h2>
-              </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
-                <Stat label="Tweet-trades" value={fmt(t.proven.tweetTrades)} sub="un-drainable" />
-                <Stat label="Leveraged opens" value={fmt(t.proven.leverageOpens)} sub="margin desk" />
-                <Stat label="Liquidations" value={fmt(t.proven.liquidations)} sub="agent-executed, on-chain" />
-                <Stat label="Volume" value={fmt(t.proven.volumeDusdc)} sub="DUSDC notional" />
-              </div>
-              <p className="font-mono text-[11px] text-gray-600 mb-10 leading-relaxed max-w-2xl">
-                The machine works, proven on real testnet transactions. <span className="text-gray-400">This includes our own demo/test runs.</span>{' '}
-                It demonstrates capability (the attested agent, no-divert custody, the liquidation engine), not user volume.
-              </p>
-
-              {/* ── 04 · LIVE ACTIVITY (verify it yourself) ── */}
+              {/* ── 03 · LIVE ACTIVITY (verify it yourself) ── */}
               <div className="flex items-baseline justify-between mb-3">
                 <div className="flex items-baseline gap-3">
-                  <span className="font-mono text-[11px] text-vermilion font-bold">04</span>
+                  <span className="font-mono text-[11px] text-vermilion font-bold">03</span>
                   <h2 className="font-display text-lg font-bold">Live activity</h2>
                   <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-gray-600">click any row → Suiscan</span>
                 </div>
