@@ -378,7 +378,12 @@ body.urgent::before {
 @keyframes senseiTradeIn { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .sensei-trade { animation: none; } }
 [data-theme="light"] .sensei-trade { border-top-color: rgba(20,18,16,0.08); }
-.st-head { display: flex; align-items: baseline; justify-content: space-between; padding: 2px 2px 0; }
+/* The panel is a sibling of the (scrolling) message list, so it must cap its own
+   height: with 3+ live markets it used to grow past the drawer with no way to
+   scroll. The head stays pinned and only the cards scroll. */
+.sensei-trade { flex: none; min-height: 0; max-height: 46vh; }
+.st-list { overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; display: flex; flex-direction: column; gap: 8px; padding-bottom: 2px; }
+.st-head { display: flex; align-items: baseline; justify-content: space-between; padding: 2px 2px 0; flex: none; }
 .st-head span:first-child { font-family: var(--font-display); font-weight: 700; font-size: 13px; color: var(--white); }
 [data-theme="light"] .st-head span:first-child { color: #171310; }
 .st-head .st-sub { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--gray-500); }

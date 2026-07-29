@@ -150,6 +150,7 @@ export default function SenseiTradeCards({ active, pick }: { active: boolean; pi
           <button className="st-hide" onClick={() => setHidden(true)} aria-label="Hide trade cards" data-cursor="hover">✕</button>
         </span>
       </div>
+      <div className="st-list">
       {near.map((m) => {
         const overUsd = strike624(spot, 'up');   // UP wins ABOVE this
         const underUsd = strike624(spot, 'down'); // DOWN wins BELOW this
@@ -222,6 +223,7 @@ export default function SenseiTradeCards({ active, pick }: { active: boolean; pi
           </div>
         );
       })}
+      </div>
     </div>
   );
 }
