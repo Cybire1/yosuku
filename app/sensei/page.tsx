@@ -98,7 +98,7 @@ export default function SenseiPage() {
         {/* header */}
         <div className="flex items-end justify-between gap-4 border-b border-white/[0.08] pb-4">
           <div className="min-w-0">
-            <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-vermilion mb-1.5">先生 · Your trading assistant</div>
+            <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-vermilion mb-1.5">Your trading assistant</div>
             <div className="flex items-center gap-2.5">
               <h1 className="font-display font-[800] text-3xl sm:text-[34px] text-white leading-none">Sensei</h1>
               <span className="shrink-0 font-mono text-[9px] uppercase tracking-[0.16em] text-vermilion border border-vermilion/40 rounded-full px-2 py-0.5">beta</span>

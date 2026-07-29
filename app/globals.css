@@ -205,7 +205,7 @@ body.urgent::before {
 @keyframes senseiDot { 0%, 100% { transform: translateY(0); opacity: 0.4; } 50% { transform: translateY(-4px); opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .sensei-dots i { animation: none; } }
 
-/* ── SenseiDock: a compact 先 mark that expands on hover, with a cute question teaser ── */
+/* ── SenseiDock: a compact Yosuku mark that expands on hover, with a cute question teaser ── */
 .sensei-dock-wrap { position: fixed; right: 22px; bottom: 22px; z-index: 900; display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
 .sensei-dock {
   position: relative; display: inline-flex; align-items: center; gap: 0;
@@ -225,7 +225,9 @@ body.urgent::before {
 .sensei-dock-ring .sd-track { fill: none; stroke: rgba(255,255,255,0.12); stroke-width: 4; }
 [data-theme="light"] .sensei-dock-ring .sd-track { stroke: rgba(20,18,16,0.12); }
 .sensei-dock-ring .sd-fill { fill: none; stroke: var(--vermilion); stroke-width: 4; stroke-linecap: round; transition: stroke-dashoffset 900ms linear; filter: drop-shadow(0 0 4px rgba(224,77,38,0.55)); }
-.sd-avatar-glyph { position: relative; z-index: 1; font-family: 'Noto Serif JP', var(--font-display); font-weight: 700; font-size: 18px; color: var(--white); line-height: 1; }
+/* the Yosuku mark, sized to sit inside the draining ring. `color` drives the
+   figure (currentColor); the heart dot keeps its own vermilion. */
+.sd-avatar-glyph { position: relative; z-index: 1; width: 24px; height: auto; display: block; color: var(--white); }
 [data-theme="light"] .sd-avatar-glyph { color: #1A1613; }
 
 /* soft, almost-imperceptible idle pulse ring on the mark (replaces the wide glow) */
@@ -329,12 +331,13 @@ body.urgent::before {
 .sd-row { display: flex; align-items: flex-end; gap: 8px; animation: sdPop 340ms cubic-bezier(.22,1,.36,1) both; }
 .sd-row.user { justify-content: flex-end; }
 @keyframes sdPop { from { opacity: 0; transform: translateY(9px) scale(0.985); } to { opacity: 1; transform: none; } }
-/* Sensei's 先 avatar — a small brush-mark seal, not an emoji */
+/* Sensei's chat avatar — the Yosuku mark in a soft vermilion seal, not an emoji */
 .sd-ava {
   flex: none; width: 27px; height: 27px; border-radius: 50%; display: grid; place-items: center; margin-bottom: 1px;
-  font-family: 'Noto Serif JP', var(--font-display), serif; font-weight: 700; font-size: 13px; line-height: 1; color: var(--vermilion);
+  line-height: 1; color: var(--vermilion);
   background: rgba(224,77,38,0.13); border: 1px solid rgba(224,77,38,0.32);
 }
+.sd-ava-mark { width: 11px; height: auto; display: block; }
 [data-theme="light"] .sd-ava { background: rgba(224,77,38,0.1); border-color: rgba(224,77,38,0.28); }
 /* modern bubble */
 .sd-msg { max-width: 82%; border-radius: 17px; padding: 11px 14px; font-size: 14px; line-height: 1.55; word-break: break-word; }
@@ -1615,6 +1618,7 @@ body.urgent::before {
 .mc-room-ico { font-size: 12px; filter: grayscale(0.2); }
 .mc-room-label { font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; }
 .mc-room-hint { margin-left: auto; opacity: 0.5; font-size: 9px; text-transform: uppercase; letter-spacing: 0.12em; }
+
 
 /* badges (top-right) */
 .mc-badge {

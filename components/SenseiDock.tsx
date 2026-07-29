@@ -9,6 +9,7 @@ import { useCurrentAccount } from '@mysten/dapp-kit';
 import { fetchSpot624, fetchMarkets624, fetchPythHistory624, inferCadence624 } from '@/lib/sui/predict624Client';
 import { BAND_USD } from '@/lib/sui/ticket624';
 import SenseiTradeCards from './SenseiTradeCards';
+import YosukuMark from './YosukuMark';
 
 type Props = { targetTime?: number; now?: number };
 type Msg = { role: 'user' | 'assistant'; content: string };
@@ -228,7 +229,7 @@ export default function SenseiDock({ targetTime, now }: Props) {
 
   return (
     <>
-      {/* ── the dock: a compact 先 mark that expands on hover, plus a cute question teaser ── */}
+      {/* ── the dock: a compact Yosuku mark that expands on hover, plus a cute question teaser ── */}
       <div className="sensei-dock-wrap">
         {teaserIdx >= 0 && !open && (
           <button
@@ -255,7 +256,7 @@ export default function SenseiDock({ targetTime, now }: Props) {
               <circle cx="36" cy="36" r={R} className="sd-track" />
               <circle cx="36" cy="36" r={R} className="sd-fill" style={{ strokeDasharray: TAU, strokeDashoffset: TAU * (1 - frac) }} />
             </svg>
-            <span className="sd-avatar-glyph">先</span>
+            <YosukuMark className="sd-avatar-glyph" />
             <span className="sensei-dock-pulse" aria-hidden />
           </span>
         </button>
@@ -266,7 +267,7 @@ export default function SenseiDock({ targetTime, now }: Props) {
       <aside className={`sensei-drawer ${open ? 'open' : ''}`} role="dialog" aria-label="Sensei" aria-modal={open}>
         <header className="sensei-drawer-head">
           <div>
-            <div className="sd-eyebrow">先生 · Your trading assistant</div>
+            <div className="sd-eyebrow">Your trading assistant</div>
             <div className="sd-title">Sensei <span className="sd-beta">beta</span></div>
           </div>
           <div className="sd-head-right">
@@ -314,7 +315,7 @@ export default function SenseiDock({ targetTime, now }: Props) {
         <div ref={scrollRef} className="sensei-drawer-msgs">
           {msgs.map((m, i) => (
             <div key={i} className={`sd-row ${m.role}`}>
-              {m.role === 'assistant' && <span className="sd-ava" aria-hidden>先</span>}
+              {m.role === 'assistant' && <span className="sd-ava" aria-hidden><YosukuMark className="sd-ava-mark" /></span>}
               <div className={`sd-msg ${m.role}`}>
                 {m.role === 'assistant' && i === typingIdx
                   ? <Typewriter text={m.content} onDone={() => setTypingIdx(-1)} onType={() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight })} />
@@ -324,7 +325,7 @@ export default function SenseiDock({ targetTime, now }: Props) {
           ))}
           {loading && (
             <div className="sd-row assistant">
-              <span className="sd-ava" aria-hidden>先</span>
+              <span className="sd-ava" aria-hidden><YosukuMark className="sd-ava-mark" /></span>
               <div className="sd-msg assistant"><span className="sensei-dots"><i /><i /><i /></span></div>
             </div>
           )}
