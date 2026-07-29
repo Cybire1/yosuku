@@ -2810,6 +2810,9 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
   position: relative; z-index: 2;
   display: flex; gap: 14px; align-items: center;
 }
+/* the hero pair carries the page, so it runs a size up from the shared .btn
+   (which /portfolio also uses and must not change). */
+.hero-cta-row .btn { font-size: 15px; padding: 15px 30px; gap: 9px; }
 
 .btn-secondary {
   display: inline-flex; align-items: center; gap: 8px;
