@@ -13,13 +13,13 @@ import { formatAddress } from '@/lib/leaderboardStats';
 
 // Deterministic decorative kanji from an address — a light, semi-transparent
 // identity mark for avatars (texture, not a readable label).
-const KANJI_POOL = '林青霧桜雷雪川石山松森光鳥夜梅藤熊寒銀金空海風波';
+const GLYPH_POOL = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 function glyphFromAddress(addr: string): string {
   let hash = 0;
   for (let i = 0; i < addr.length; i++) {
     hash = ((hash << 5) - hash + addr.charCodeAt(i)) | 0;
   }
-  return KANJI_POOL[Math.abs(hash) % KANJI_POOL.length];
+  return GLYPH_POOL[Math.abs(hash) % GLYPH_POOL.length];
 }
 
 function fmtPnl(v: number) {

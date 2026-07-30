@@ -764,11 +764,11 @@ export function ago(ts: number): string {
 
 // Deterministic decorative kanji from an address — a light identity mark (texture, not
 // a label), matching the leaderboard's avatar treatment.
-const KANJI_POOL = '林青霧桜雷雪川石山松森光鳥夜梅藤熊寒銀金空海風波';
+const GLYPH_POOL = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 export function glyphFromAddress(addr: string): string {
   let hash = 0;
   for (let i = 0; i < addr.length; i++) hash = ((hash << 5) - hash + addr.charCodeAt(i)) | 0;
-  return KANJI_POOL[Math.abs(hash) % KANJI_POOL.length];
+  return GLYPH_POOL[Math.abs(hash) % GLYPH_POOL.length];
 }
 
 // Deterministic human name for an agent — gives each strategy a person to remember instead of a
