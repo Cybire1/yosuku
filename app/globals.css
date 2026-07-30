@@ -315,6 +315,21 @@ body.urgent::before {
 .sensei-meter.urgent .sm-time-num { color: var(--vermilion); }
 .sensei-meter.urgent .sm-drain { background: var(--vermilion); opacity: 1; animation: senseiDrainPulse 1s step-start infinite; }
 @keyframes senseiDrainPulse { 50% { opacity: 0.4; } }
+/* /sensei — the standalone page was written dark-only, so on cream its bubbles, borders and
+   body text all landed as white-on-white. Scoped to the page (the .feed-card idiom) so the
+   shared utility classes keep their meaning everywhere else. */
+[data-theme="light"] .sensei-page .bg-white\/\[0\.04\] { background-color: rgba(20,18,16,0.04); }
+[data-theme="light"] .sensei-page .bg-white\/\[0\.03\] { background-color: rgba(20,18,16,0.035); }
+[data-theme="light"] .sensei-page .bg-white\/\[0\.02\] { background-color: rgba(20,18,16,0.03); }
+[data-theme="light"] .sensei-page .border-white\/\[0\.08\],
+[data-theme="light"] .sensei-page .border-white\/\[0\.1\],
+[data-theme="light"] .sensei-page .border-white\/\[0\.12\] { border-color: rgba(20,18,16,0.12); }
+[data-theme="light"] .sensei-page .text-gray-100 { color: #141210; }
+[data-theme="light"] .sensei-page .text-gray-300 { color: rgba(20,18,16,0.74); }
+[data-theme="light"] .sensei-page .text-gray-500 { color: rgba(20,18,16,0.56); }
+[data-theme="light"] .sensei-page .text-gray-600 { color: rgba(20,18,16,0.46); }
+[data-theme="light"] .sensei-page .placeholder\:text-gray-600::placeholder { color: rgba(20,18,16,0.46); }
+
 /* the read sits on the real chart — full-bleed to the drawer edges, flush to the border below.
    The canvas carries an EXPLICIT height, never 100%: setupCanvas sizes the bitmap from the
    measured box, so a percentage height would let the canvas feed its own height back and

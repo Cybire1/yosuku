@@ -98,7 +98,7 @@ export default function SenseiPage() {
       <GrainOverlay />
       <CustomCursor />
 
-      <main className="flex-1 w-full max-w-2xl mx-auto px-4 sm:px-6 pt-[120px] pb-6 flex flex-col">
+      <main className="sensei-page flex-1 w-full max-w-2xl mx-auto px-4 sm:px-6 pt-[120px] pb-6 flex flex-col">
         {/* header */}
         <div className="flex items-end justify-between gap-4 border-b border-white/[0.08] pb-4">
           <div className="min-w-0">
