@@ -544,6 +544,13 @@ export function drawPriceLine(
   lo -= headroom; hi += headroom;
   const range = (hi - lo) || 1;
 
+  // Momentum: how hard the last handful of ticks have moved, 0..1. Drives the
+  // live "thrill" — the line thickens, glows harder, and the head blooms when
+  // the market rips; it settles to a calm breathing glow when price is flat.
+  const surge = motion
+    ? Math.min(1, Math.abs(series[series.length - 1] - series[Math.max(0, series.length - 1 - 6)]) / (range * 0.10 || 1))
+    : 0;
+
   const rightEdge = w - axisR;
   const xFor = (i: number) => padX + (i / (series.length - 1)) * (rightEdge - padX * 2);
   const yFor = (v: number) => padTop + (hi - v) * (h - padTop - padBot) / range;
@@ -673,14 +680,26 @@ export function drawPriceLine(
     }
   }
 
-  // Current-price dot + glow — in verdict mode it wears the current verdict
+  // Current-price dot + glow — in verdict mode it wears the current verdict.
+  // The halo radii are in raw pixels, so scale them by the chart's own height: at
+  // hero size (≥220px) nothing changes, but on a short strip like the Sensei meter
+  // a full-surge bloom would otherwise cover half the chart and the price axis.
+  const headK = Math.min(1, h / 220);
+  if (motion && surge > 0.015) {
+    // momentum flare — the head blooms outward when the market surges
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = hexA(dotCol, 0.12 + surge * 0.4);
+    ctx.beginPath(); ctx.arc(last.x, last.y, (10 + surge * 24) * headK, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
   if (motion) {
     ctx.strokeStyle = hexA(dotCol, 0.24 + pulse * 0.18);
     ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.arc(last.x, last.y, 12 + pulse * 8, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(last.x, last.y, (12 + pulse * 8) * headK, 0, Math.PI * 2); ctx.stroke();
   }
   ctx.fillStyle = hexA(dotCol, motion ? 0.2 + pulse * 0.08 : 0.18);
-  ctx.beginPath(); ctx.arc(last.x, last.y, motion ? 9 + pulse * 4 : 9, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(last.x, last.y, (motion ? 9 + pulse * 4 : 9) * headK, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = dotCol;
   ctx.beginPath(); ctx.arc(last.x, last.y, motion ? 3.8 + pulse * 0.8 : 3.5, 0, Math.PI * 2); ctx.fill();
 

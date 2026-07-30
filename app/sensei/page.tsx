@@ -8,6 +8,7 @@ import CustomCursor from '@/components/CustomCursor';
 import Marquee from '@/components/Marquee';
 import { fetchSpot624, fetchMarkets624, inferCadence624 } from '@/lib/sui/predict624Client';
 import { BAND_USD } from '@/lib/sui/ticket624';
+import SenseiTape, { usePythTape } from '@/components/SenseiTape';
 
 type Msg = { role: 'user' | 'assistant'; content: string };
 type MarketLite = { cadence: string; minsToClose: number; upLineUsd: number };
@@ -86,6 +87,9 @@ export default function SenseiPage() {
   }, [msgs, snapshot, loading, account?.address]);
 
   const nearest = snapshot?.markets[0];
+  // Same live tape and same chart as the Sensei dock — the read sits on the picture
+  // it was made from, instead of a lone price with nothing to check it against.
+  const { series, drift } = usePythTape(true, nearest?.cadence ?? '5m');
 
   return (
     <div className="min-h-screen relative flex flex-col">
@@ -114,6 +118,20 @@ export default function SenseiPage() {
               <div className="font-mono text-[10px] text-gray-500">next close ~{nearest.minsToClose}m · {nearest.cadence}</div>
             )}
           </div>
+        </div>
+
+        {/* the live read: the chart Sensei is reading, so its call is checkable */}
+        <div className="pt-4 border-b border-white/[0.08] pb-3">
+          <SenseiTape series={series} upLine={nearest?.upLineUsd ?? null} bleed={false} />
+          {drift && (
+            <div className="font-mono text-[10px] text-gray-500 mt-2">
+              {drift.dir === 'flat'
+                ? 'flat'
+                : `${drift.usd > 0 ? '+' : '−'}$${Math.abs(Math.round(drift.usd)).toLocaleString()}`}
+              {' over the last '}
+              {drift.spanMin < 1 ? 'minute' : `${drift.spanMin} min`}
+            </div>
+          )}
         </div>
 
         {/* messages */}

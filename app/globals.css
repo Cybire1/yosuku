@@ -220,14 +220,14 @@ body.urgent::before {
 .sensei-dock:active { transform: translateY(0) scale(0.97); }
 .sensei-dock.is-open { transform: scale(0.9); opacity: 0.45; }
 
-.sensei-dock-avatar { position: relative; width: 54px; height: 54px; flex: none; display: grid; place-items: center; }
-.sensei-dock-ring { position: absolute; inset: 0; width: 54px; height: 54px; transform: rotate(-90deg); }
+.sensei-dock-avatar { position: relative; width: 46px; height: 46px; flex: none; display: grid; place-items: center; }
+.sensei-dock-ring { position: absolute; inset: 0; width: 46px; height: 46px; transform: rotate(-90deg); }
 .sensei-dock-ring .sd-track { fill: none; stroke: rgba(255,255,255,0.12); stroke-width: 4; }
 [data-theme="light"] .sensei-dock-ring .sd-track { stroke: rgba(20,18,16,0.12); }
 .sensei-dock-ring .sd-fill { fill: none; stroke: var(--vermilion); stroke-width: 4; stroke-linecap: round; transition: stroke-dashoffset 900ms linear; filter: drop-shadow(0 0 4px rgba(224,77,38,0.55)); }
 /* the Yosuku mark, sized to sit inside the draining ring. `color` drives the
    figure (currentColor); the heart dot keeps its own vermilion. */
-.sd-avatar-glyph { position: relative; z-index: 1; width: 28px; height: auto; display: block; color: var(--white); }
+.sd-avatar-glyph { position: relative; z-index: 1; width: 24px; height: auto; display: block; color: var(--white); }
 [data-theme="light"] .sd-avatar-glyph { color: #1A1613; }
 
 /* soft, almost-imperceptible idle pulse ring on the mark (replaces the wide glow) */
@@ -315,14 +315,18 @@ body.urgent::before {
 .sensei-meter.urgent .sm-time-num { color: var(--vermilion); }
 .sensei-meter.urgent .sm-drain { background: var(--vermilion); opacity: 1; animation: senseiDrainPulse 1s step-start infinite; }
 @keyframes senseiDrainPulse { 50% { opacity: 0.4; } }
-.sm-spark-wrap { position: relative; width: 100%; height: 15px; }
-.sm-spark { width: 100%; height: 15px; display: block; overflow: visible; color: var(--dir); }
-.sm-spark polyline { stroke: var(--dir); }
-.sm-dot { position: absolute; right: 0; width: 5px; height: 5px; border-radius: 50%; background: var(--dir); transform: translate(50%, -50%); animation: senseiNowDot 2.4s ease-in-out infinite; }
-@keyframes senseiNowDot { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
-.sm-spark-empty { height: 15px; display: flex; align-items: center; font-family: var(--font-mono); font-size: 10px; color: var(--gray-600); letter-spacing: 0.04em; }
+/* the read sits on the real chart — full-bleed to the drawer edges, flush to the border below.
+   The canvas carries an EXPLICIT height, never 100%: setupCanvas sizes the bitmap from the
+   measured box, so a percentage height would let the canvas feed its own height back and
+   double every frame. */
+.sm-chart-wrap { margin: 2px -20px -8px; height: 124px; }
+.sm-chart-wrap.sm-chart-inset { margin: 0; }
+.sm-chart { display: block; width: 100%; height: 124px; }
+.sm-chart-empty { height: 124px; display: flex; align-items: center; justify-content: center; font-family: var(--font-mono); font-size: 10px; color: var(--gray-600); letter-spacing: 0.04em; }
+@media (max-width: 560px) {
+  .sm-chart-wrap, .sm-chart, .sm-chart-empty { height: 108px; }
+}
 @media (prefers-reduced-motion: reduce) {
-  .sm-dot { animation: none; }
   .sensei-meter.urgent .sm-drain { animation: none; }
   .sm-drain { transition: none; }
 }
@@ -1624,6 +1628,56 @@ body.urgent::before {
 .mc-room-label { font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; }
 .mc-room-hint { margin-left: auto; opacity: 0.5; font-size: 9px; text-transform: uppercase; letter-spacing: 0.12em; }
 
+/* Bet with Bitcoin — a small premium moment for holders: a gold coin, their live
+   BTC, a chevron, and a quiet gold sheen. Rendered ONLY when the connected wallet
+   holds hBTC, so it is never a dead button for everyone else. */
+.mc-btbtc {
+  position: relative; overflow: hidden;
+  display: flex; align-items: center; gap: 11px; width: calc(100% - 24px);
+  margin: 0 12px 12px; padding: 10px 13px; border-radius: 12px; cursor: pointer;
+  border: 1px solid rgba(247,166,40,0.34);
+  background:
+    radial-gradient(120% 160% at 0% 0%, rgba(255,214,140,0.16), transparent 55%),
+    linear-gradient(180deg, rgba(247,147,26,0.10), rgba(247,147,26,0.045));
+  box-shadow: inset 0 1px 0 rgba(255,226,170,0.28), 0 1px 0 rgba(0,0,0,0.15);
+  transition: border-color 200ms var(--ease), transform 160ms var(--ease), box-shadow 220ms var(--ease);
+}
+.mc-btbtc:hover {
+  border-color: rgba(247,166,40,0.7); transform: translateY(-1px);
+  box-shadow: inset 0 1px 0 rgba(255,226,170,0.4), 0 10px 26px -12px rgba(247,147,26,0.6);
+}
+.mc-btbtc-coin { flex: none; filter: drop-shadow(0 2px 5px rgba(240,150,20,0.5)); }
+.mc-btbtc-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.mc-btbtc-title { font-family: var(--font-sans); font-weight: 650; font-size: 13px; letter-spacing: -0.01em; color: #F6B24A; line-height: 1; }
+.mc-btbtc-sub { font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(246,178,74,0.62); }
+.mc-btbtc-amt { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.mc-btbtc-bal { text-align: right; display: flex; flex-direction: column; gap: 2px; }
+.mc-btbtc-bal b { font-family: var(--font-mono); font-size: 12px; font-weight: 700; color: #FBC77A; letter-spacing: -0.01em; line-height: 1; }
+.mc-btbtc-bal span { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.16em; text-transform: uppercase; color: rgba(251,199,122,0.5); }
+.mc-btbtc-chev { color: rgba(246,178,74,0.7); flex: none; transition: transform 180ms var(--ease); }
+.mc-btbtc:hover .mc-btbtc-chev { transform: translateX(2px); }
+/* a slow, subtle gold glint — the "special unlock" signal, disabled for reduced motion */
+.mc-btbtc::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(105deg, transparent 34%, rgba(255,244,214,0.20) 50%, transparent 64%);
+  transform: translateX(-130%); animation: btbGlint 7s var(--ease) infinite;
+}
+@keyframes btbGlint { 0%, 72% { transform: translateX(-130%); } 88%, 100% { transform: translateX(130%); } }
+@media (prefers-reduced-motion: reduce) { .mc-btbtc::after { animation: none; } }
+/* light theme */
+[data-theme="light"] .mc-btbtc {
+  border-color: rgba(198,120,20,0.42);
+  background:
+    radial-gradient(120% 160% at 0% 0%, rgba(255,205,120,0.35), transparent 55%),
+    linear-gradient(180deg, rgba(247,147,26,0.16), rgba(247,147,26,0.06));
+  box-shadow: inset 0 1px 0 rgba(255,240,210,0.7), 0 1px 2px rgba(150,90,20,0.06);
+}
+[data-theme="light"] .mc-btbtc:hover { border-color: rgba(198,120,20,0.85); box-shadow: inset 0 1px 0 rgba(255,240,210,0.8), 0 10px 26px -14px rgba(198,110,10,0.4); }
+[data-theme="light"] .mc-btbtc-title { color: #9A5A08; }
+[data-theme="light"] .mc-btbtc-sub { color: rgba(154,90,8,0.7); }
+[data-theme="light"] .mc-btbtc-bal b { color: #8A4E06; }
+[data-theme="light"] .mc-btbtc-bal span { color: rgba(138,78,6,0.55); }
+[data-theme="light"] .mc-btbtc-chev { color: rgba(154,90,8,0.6); }
 
 /* badges (top-right) */
 .mc-badge {
@@ -2815,9 +2869,6 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
   position: relative; z-index: 2;
   display: flex; gap: 14px; align-items: center;
 }
-/* the hero pair carries the page, so it runs a size up from the shared .btn
-   (which /portfolio also uses and must not change). */
-.hero-cta-row .btn { font-size: 15px; padding: 15px 30px; gap: 9px; }
 
 .btn-secondary {
   display: inline-flex; align-items: center; gap: 8px;

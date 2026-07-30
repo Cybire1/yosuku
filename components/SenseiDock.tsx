@@ -4,11 +4,12 @@
 // It keeps the timer's job (a draining ring + CLOSE time, urgent under a minute)
 // but the whole orb is now Sensei: tap it and an award-winning side drawer springs
 // in with the market-aware assistant (same /api/sensei brain as the /sensei page).
-import { useState, useEffect, useRef, useCallback, useMemo, type CSSProperties } from 'react';
+import { useState, useEffect, useRef, useCallback, type CSSProperties } from 'react';
 import { useCurrentAccount } from '@mysten/dapp-kit';
-import { fetchSpot624, fetchMarkets624, fetchPythHistory624, inferCadence624 } from '@/lib/sui/predict624Client';
+import { fetchSpot624, fetchMarkets624, inferCadence624 } from '@/lib/sui/predict624Client';
 import { BAND_USD } from '@/lib/sui/ticket624';
 import SenseiTradeCards from './SenseiTradeCards';
+import SenseiTape, { usePythTape } from './SenseiTape';
 import YosukuMark from './YosukuMark';
 
 type Props = { targetTime?: number; now?: number };
@@ -65,53 +66,12 @@ function chipsFor(reply: string): string[] {
   return ['Why?', "What's the risk?", 'Read the next market'];
 }
 
-// ── the live market read (meter) — drift from REAL Pyth history, never the fake ~$20 line ──
-type PricePt = { usd: number; tsMs: number };
-type Drift = { usd: number; spanMin: number; dir: 'up' | 'down' | 'flat' };
-const DRIFT_WINDOW_MIN: Record<string, number> = { '1m': 1, '5m': 5, '1h': 15 };
-const HIST_LIMIT: Record<string, number> = { '1m': 90, '5m': 300, '1h': 360 };
-
-// Directional drift over the cadence window, measured on the SAME feed that settles
-// markets. spanMin is the ACTUAL span held — it never overstates the window.
-function computeDrift(hist: PricePt[], cadence: string): Drift | null {
-  if (!hist || hist.length < 2) return null;
-  const windowMins = DRIFT_WINDOW_MIN[cadence] ?? 5;
-  const latest = hist[hist.length - 1];
-  const cutoff = latest.tsMs - windowMins * 60_000;
-  let chosen = hist[0];
-  for (let i = 0; i < hist.length; i++) { if (hist[i].tsMs >= cutoff) { chosen = hist[i]; break; } }
-  const usd = latest.usd - chosen.usd;
-  const spanMin = Math.max(0, Math.round((latest.tsMs - chosen.tsMs) / 60_000));
-  const dir: Drift['dir'] = Math.abs(usd) <= 3 ? 'flat' : usd > 0 ? 'up' : 'down';
-  return { usd, spanMin, dir };
-}
-
-// Featherweight sparkline points, auto-ranged to the window's own min/max — a near-flat
-// tape stays a flat line, so noise never renders as a fake trend.
-function sparkPoints(hist: PricePt[]): { W: number; pts: string; lastX: number; lastY: number } | null {
-  const n = hist.length;
-  if (n < 2) return null;
-  const ys = hist.map((p) => p.usd);
-  const min = Math.min(...ys), max = Math.max(...ys);
-  const span = max - min;
-  const W = n - 1;
-  let lastY = 6;
-  const pts = hist
-    .map((p, i) => {
-      const y = span < 1 ? 6 : 11 - ((p.usd - min) / span) * 10;
-      lastY = +y.toFixed(2);
-      return `${i},${+y.toFixed(2)}`;
-    })
-    .join(' ');
-  return { W, pts, lastX: W, lastY };
-}
 
 export default function SenseiDock({ targetTime, now }: Props) {
   const account = useCurrentAccount();
   const [secsLeft, setSecsLeft] = useState(0);
   const [open, setOpen] = useState(false);
   const [snapshot, setSnapshot] = useState<Snapshot>(null);
-  const [hist, setHist] = useState<PricePt[]>([]);
   const [msgs, setMsgs] = useState<Msg[]>([INTRO]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -134,8 +94,9 @@ export default function SenseiDock({ targetTime, now }: Props) {
   const frac = Math.max(0, Math.min(1, secsLeft / roundSecs));
   const urgent = secsLeft > 0 && secsLeft < 60;
   const cadence = targetTime ? inferCadence624(targetTime) : '5m';
-  const drift = useMemo(() => computeDrift(hist, cadence), [hist, cadence]);
-  const spark = useMemo(() => sparkPoints(hist), [hist]);
+  const { series, drift } = usePythTape(open, cadence);
+  // The line Sensei is actually talking about: the nearest market's UP line.
+  const upLine = snapshot?.markets[0]?.upLineUsd ?? null;
 
   // ── market context (only while open; refresh 20s) ──
   useEffect(() => {
@@ -151,15 +112,11 @@ export default function SenseiDock({ targetTime, now }: Props) {
           setSnapshot({ spotUsd: Math.round(spot), markets: near });
         }
       } catch { /* keep last-good */ }
-      // live price tape for the meter — its OWN catch, so a history hiccup never blanks spot
-      const limit = targetTime ? (HIST_LIMIT[inferCadence624(targetTime)] ?? 300) : 300;
-      const h = await fetchPythHistory624(limit).catch(() => null);
-      if (alive && h && h.length) setHist(h);
     };
     load();
     const id = setInterval(load, 20000);
     return () => { alive = false; clearInterval(id); };
-  }, [open, targetTime]);
+  }, [open]);
 
   useEffect(() => { if (open) scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' }); }, [msgs, loading, open]);
   useEffect(() => {
@@ -299,17 +256,7 @@ export default function SenseiDock({ targetTime, now }: Props) {
               </span>
             )}
           </div>
-          {spark ? (
-            <div className="sm-spark-wrap">
-              <svg className="sm-spark" viewBox={`0 0 ${spark.W} 12`} preserveAspectRatio="none" aria-hidden>
-                <polyline points={spark.pts} fill="none" vectorEffect="non-scaling-stroke" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              {/* round now-dot as an HTML overlay — a <circle> in the stretched SVG would smear into an ellipse */}
-              <i className="sm-dot" style={{ top: `${(spark.lastY / 12) * 100}%` } as CSSProperties} aria-hidden />
-            </div>
-          ) : (
-            <div className="sm-spark-empty">reading the market…</div>
-          )}
+          <SenseiTape series={series} upLine={upLine} active={open} />
         </div>
 
         <div ref={scrollRef} className="sensei-drawer-msgs">
