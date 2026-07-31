@@ -36,10 +36,10 @@ const notoSerifJP = Noto_Serif_JP({
 export const metadata: Metadata = {
   metadataBase: new URL('https://yosuku.xyz'),
   title: "Yosuku — Prediction Markets on Sui",
-  description: "Trade binary positions on BTC price direction. Oracle-based settlement, DUSDC stablecoins, 1-minute to hourly rounds.",
+  description: "Bet on Bitcoin from a reply on X, the web, your phone, or your AI agent. Gasless, no seed phrase, and only you can cash out.",
   openGraph: {
     title: "Yosuku — Prediction Markets on Sui",
-    description: "Trade binary positions on BTC price direction. Oracle-based settlement, DUSDC stablecoins, 1-minute to hourly rounds.",
+    description: "Bet on Bitcoin from a reply on X, the web, your phone, or your AI agent. Gasless, no seed phrase, and only you can cash out.",
     siteName: "Yosuku",
     locale: "en_US",
     type: "website",
@@ -47,7 +47,7 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: "Yosuku — Prediction Markets on Sui",
-    description: "Trade binary positions on BTC price direction. Oracle-based settlement, DUSDC stablecoins, 1-minute to hourly rounds.",
+    description: "Bet on Bitcoin from a reply on X, the web, your phone, or your AI agent. Gasless, no seed phrase, and only you can cash out.",
   },
   manifest: '/manifest.json',
   appleWebApp: {
