@@ -1,6 +1,15 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+// Live BTC price from Pyth, shared by every consumer.
+//
+// This used to open ONE EventSource PER CALL SITE (11 files, and Marquee renders on 16 pages),
+// each reconnecting on a fixed 3s timer with no cap. A single upstream hiccup therefore turned
+// into ~20 reconnects/minute/client, forever — the app's clearest rate-limit amplifier.
+//
+// Now: one module-level stream behind a refcount, capped exponential backoff with jitter, and it
+// disconnects while the tab is hidden (a background tab has no reason to hold a price socket).
+
+import { useState, useEffect } from 'react';
 
 interface BtcPriceData {
   price: number;
@@ -20,112 +29,116 @@ function parsePythPrice(parsed: any): number {
   return Number(p.price) * Math.pow(10, p.expo);
 }
 
-export function useBtcPrice() {
-  const [data, setData] = useState<BtcPriceData>({
-    price: 0,
-    change24h: 0,
-    high24h: 0,
-    low24h: 0,
+type Snapshot = BtcPriceData & { connected: boolean };
+
+// ─── the single shared stream ───
+const EMPTY: Snapshot = { price: 0, change24h: 0, high24h: 0, low24h: 0, timestamp: 0, connected: false };
+let snapshot: Snapshot = EMPTY;
+let firstPrice = 0;
+let es: EventSource | null = null;
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let attempt = 0;
+let refs = 0;
+const subscribers = new Set<(s: Snapshot) => void>();
+
+function publish(next: Partial<Snapshot>) {
+  snapshot = { ...snapshot, ...next };
+  for (const fn of subscribers) fn(snapshot);
+}
+
+function applyPrice(price: number) {
+  if (!(price > 0)) return;
+  if (firstPrice === 0) firstPrice = price;
+  publish({
+    price,
+    change24h: firstPrice > 0 ? ((price - firstPrice) / firstPrice) * 100 : 0,
+    high24h: Math.max(snapshot.high24h, price),
+    low24h: snapshot.low24h === 0 ? price : Math.min(snapshot.low24h, price),
     timestamp: Date.now(),
   });
-  const [connected, setConnected] = useState(false);
-  const eventSourceRef = useRef<EventSource | null>(null);
-  const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const firstPrice = useRef(0);
+}
 
-  // Fetch initial price via REST (immediate)
-  const fetchInitial = useCallback(async () => {
-    try {
-      const res = await fetch(PYTH_REST_URL);
-      if (!res.ok) return;
-      const json = await res.json();
-      const parsed = json.parsed?.[0];
-      if (!parsed) return;
-      const price = parsePythPrice(parsed);
-      if (price > 0) {
-        if (firstPrice.current === 0) firstPrice.current = price;
-        setData(prev => ({
-          ...prev,
-          price,
-          timestamp: Date.now(),
-        }));
-      }
-    } catch {
-      // silent
-    }
-  }, []);
+async function fetchInitial() {
+  try {
+    const res = await fetch(PYTH_REST_URL);
+    if (!res.ok) return;
+    const json = await res.json();
+    const parsed = json.parsed?.[0];
+    if (parsed) applyPrice(parsePythPrice(parsed));
+  } catch { /* silent */ }
+}
 
-  // Connect to Pyth SSE stream
-  const connectSSE = useCallback(() => {
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-    }
+function clearReconnect() {
+  if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+}
 
-    try {
-      const es = new EventSource(PYTH_SSE_URL);
-      eventSourceRef.current = es;
+function disconnect() {
+  clearReconnect();
+  if (es) { es.close(); es = null; }
+  publish({ connected: false });
+}
 
-      es.onopen = () => {
-        setConnected(true);
-        if (reconnectTimer.current) {
-          clearTimeout(reconnectTimer.current);
-          reconnectTimer.current = null;
-        }
-      };
+function connect() {
+  if (es || typeof window === 'undefined') return;
+  if (document.visibilityState === 'hidden') return; // no socket for a background tab
+  try {
+    const stream = new EventSource(PYTH_SSE_URL);
+    es = stream;
+    stream.onopen = () => { attempt = 0; clearReconnect(); publish({ connected: true }); };
+    stream.onmessage = (e) => {
+      try {
+        const json = JSON.parse(e.data);
+        const parsed = json.parsed?.[0];
+        if (parsed) applyPrice(parsePythPrice(parsed));
+      } catch { /* ignore parse errors */ }
+    };
+    stream.onerror = () => {
+      stream.close();
+      if (es === stream) es = null;
+      publish({ connected: false });
+      scheduleReconnect();
+    };
+  } catch {
+    scheduleReconnect();
+  }
+}
 
-      es.onmessage = (event) => {
-        try {
-          const json = JSON.parse(event.data);
-          const parsed = json.parsed?.[0];
-          if (!parsed) return;
-          const price = parsePythPrice(parsed);
-          if (price <= 0) return;
+// capped exponential backoff + jitter: 1s, 2s, 4s … 30s max (was a flat 3s, forever)
+function scheduleReconnect() {
+  if (reconnectTimer || refs === 0) return;
+  const base = Math.min(30_000, 1000 * 2 ** attempt);
+  attempt = Math.min(attempt + 1, 5);
+  reconnectTimer = setTimeout(() => { reconnectTimer = null; connect(); }, base + Math.random() * 500);
+}
 
-          if (firstPrice.current === 0) firstPrice.current = price;
-          const change24h = firstPrice.current > 0
-            ? ((price - firstPrice.current) / firstPrice.current) * 100
-            : 0;
+function onVisibility() {
+  if (refs === 0) return;
+  if (document.visibilityState === 'visible') { attempt = 0; void fetchInitial(); connect(); }
+  else disconnect();
+}
 
-          setData(prev => ({
-            price,
-            change24h,
-            high24h: Math.max(prev.high24h, price),
-            low24h: prev.low24h === 0 ? price : Math.min(prev.low24h, price),
-            timestamp: Date.now(),
-          }));
-        } catch {
-          // ignore parse errors
-        }
-      };
-
-      es.onerror = () => {
-        setConnected(false);
-        es.close();
-        eventSourceRef.current = null;
-        // Reconnect after 3s
-        reconnectTimer.current = setTimeout(connectSSE, 3000);
-      };
-    } catch {
-      reconnectTimer.current = setTimeout(connectSSE, 3000);
-    }
-  }, []);
+export function useBtcPrice() {
+  const [data, setData] = useState<Snapshot>(snapshot);
 
   useEffect(() => {
-    // Get initial price immediately via REST
-    fetchInitial();
-    // Then connect SSE for streaming updates
-    connectSSE();
-
+    subscribers.add(setData);
+    refs += 1;
+    if (refs === 1) {
+      document.addEventListener('visibilitychange', onVisibility);
+      void fetchInitial();
+      connect();
+    } else {
+      setData(snapshot); // late joiner gets the current value immediately
+    }
     return () => {
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
-        eventSourceRef.current = null;
-      }
-      if (reconnectTimer.current) {
-        clearTimeout(reconnectTimer.current);
+      subscribers.delete(setData);
+      refs -= 1;
+      if (refs === 0) {
+        document.removeEventListener('visibilitychange', onVisibility);
+        disconnect();
       }
     };
-  }, [fetchInitial, connectSSE]);
+  }, []);
 
-  return { ...data, connected };
+  return data;
 }

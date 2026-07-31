@@ -28,6 +28,7 @@
 // spike-624b.mjs (delegated vault path), predict624.mjs (the node twin of this file).
 
 import { Transaction, type TransactionObjectArgument } from '@mysten/sui/transactions';
+import { suiJsonRpc } from './jsonRpc';
 import { gql, grpc } from './modernClients';
 import { DUSDC_TYPE, CLOCK_ID, DUSDC_MULTIPLIER } from './constants';
 
@@ -739,15 +740,13 @@ export function buildRedeemSettledTx(p: {
 
 const RPC_URL = process.env.NEXT_PUBLIC_SUI_RPC_URL || 'https://sui-testnet-rpc.publicnode.com'; // public fullnode JSON-RPC sunset
 
+/** The 6-24 money path's JSON-RPC reads. Routed through the shared multi-node failover client
+ *  (lib/sui/jsonRpc.ts) instead of a single hardcoded node with no timeout and no retry — one
+ *  node hiccup used to be indistinguishable from "you have no money". Still returns null on
+ *  total failure; callers MUST treat null as "unknown", never as zero. */
 async function jsonRpc<T>(method: string, params: unknown[]): Promise<T | null> {
   try {
-    const r = await fetch(RPC_URL, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
-    });
-    const j = await r.json();
-    return (j.result ?? null) as T | null;
+    return ((await suiJsonRpc<T>(method, params)) ?? null) as T | null;
   } catch {
     return null;
   }
@@ -820,12 +819,28 @@ export async function fetchAccountBalance624(wrapperId: string): Promise<number 
 
 /** Read the wrapper's INNER `account.account_id` — the id the indexer feeds key on. */
 export async function fetchInnerAccountId624(wrapperId: string): Promise<string | null> {
+  return (await fetchAccountSnapshot624(wrapperId)).accountId;
+}
+
+/** ONE sui_getObject on the wrapper, returning BOTH the inner account id and the balances-bag id.
+ *  Account discovery used to fetch this identical object twice (~811ms of pure duplicate), once
+ *  for the account id and again as the first hop of the balance read. Null = read failed. */
+export async function fetchAccountSnapshot624(
+  wrapperId: string,
+): Promise<{ accountId: string | null; bagId: string | null; ok: boolean }> {
   const obj = await jsonRpc<{ data?: { content?: { fields?: Record<string, any> } } }>('sui_getObject', [
     wrapperId,
     { showContent: true },
   ]);
-  const id = obj?.data?.content?.fields?.account?.fields?.account_id?.id;
-  return typeof id === 'string' && id.startsWith('0x') ? id : null;
+  if (obj == null) return { accountId: null, bagId: null, ok: false };
+  const acct = obj?.data?.content?.fields?.account?.fields;
+  const id = acct?.account_id?.id;
+  const bag = acct?.balances?.fields?.id?.id;
+  return {
+    accountId: typeof id === 'string' && id.startsWith('0x') ? id : null,
+    bagId: typeof bag === 'string' && bag.startsWith('0x') ? bag : null,
+    ok: true,
+  };
 }
 
 /** One `order_state` row from /accounts/{account_id}/positions. */

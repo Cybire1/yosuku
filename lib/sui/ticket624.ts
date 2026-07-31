@@ -28,6 +28,7 @@ import {
   usdToTick,
   findWrapperId624,
   fetchInnerAccountId624,
+  fetchAccountSnapshot624,
   fetchAccountBalance624,
   buildCreateAccountTx,
   buildDepositTx,
@@ -54,6 +55,29 @@ export const EST_PROB_HIGH = 0.62;
  *  keeps the no-quote paths (first-bet, top-up) close enough that they clear with the buffer. */
 const EST_PROB_BY_CADENCE: Record<string, number> = { '1m': 0.8, '5m': 0.72, '1h': 0.62 };
 export const estProb = (cadence?: string) => EST_PROB_BY_CADENCE[cadence ?? '5m'] ?? 0.68;
+// ─── account-id cache ───
+// The 6-24 account is one shared object per owner, derived deterministically from the owner
+// address, with no transfer, no destroy and no owner setter in the whole package. So once we
+// have learned a user's ids they are true forever, and re-discovering them on every page load
+// was pure latency. Cache them per owner and hydrate on first render.
+type AccountCache = { wrapperId: string; innerAccountId: string | null };
+const ACCT_CACHE_KEY = (owner: string) => `yx_acct624_${owner}`;
+
+function readAccountCache(owner: string | null): AccountCache | null {
+  if (!owner || typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(ACCT_CACHE_KEY(owner));
+    if (!raw) return null;
+    const v = JSON.parse(raw) as AccountCache;
+    return typeof v?.wrapperId === 'string' && v.wrapperId.startsWith('0x') ? v : null;
+  } catch { return null; }
+}
+
+function writeAccountCache(owner: string, v: AccountCache): void {
+  if (typeof window === 'undefined') return;
+  try { window.localStorage.setItem(ACCT_CACHE_KEY(owner), JSON.stringify(v)); } catch { /* quota/private mode */ }
+}
+
 /** The sponsor's address, fetched once and cached — quotes/probes set it as gas owner so
  *  build-time gas selection works for SUI-less wallets (the whole flow is sponsored). */
 let _sponsorAddrP: Promise<string | null> | null = null;
@@ -190,9 +214,14 @@ export function useAccount624(): Account624 {
   const { mutateAsync: signTransaction } = useSignTransaction();
   const { balance: walletMicro, coins: dusdcCoins, refresh: refreshWallet } = useDUSDCBalance();
 
-  const [wrapperId, setWrapperId] = useState<string | null>(null);
-  const [innerAccountId, setInnerAccountId] = useState<string | null>(null);
-  const [wrapperChecked, setWrapperChecked] = useState(false);
+  // A user's account ids are DETERMINISTIC and permanent (one shared account per owner, derived
+  // from the owner address, never transferable). So they are safe to cache forever and hydrate
+  // SYNCHRONOUSLY — which is what removes the ~4.3s of "Reading the chain" a returning user hit
+  // on EVERY navigation (the header uses full page loads, so that cost was paid over and over).
+  const cached = readAccountCache(address ?? null);
+  const [wrapperId, setWrapperId] = useState<string | null>(cached?.wrapperId ?? null);
+  const [innerAccountId, setInnerAccountId] = useState<string | null>(cached?.innerAccountId ?? null);
+  const [wrapperChecked, setWrapperChecked] = useState(!!cached?.wrapperId);
   const [acctBalance, setAcctBalance] = useState(0);
 
   const { submit } = useSmartSubmit();
@@ -224,23 +253,46 @@ export function useAccount624(): Account624 {
   // wrapper discovery on connect / disconnect
   useEffect(() => {
     let live = true;
-    setWrapperId(null);
-    setInnerAccountId(null);
-    setWrapperChecked(false);
-    setAcctBalance(0);
+    const hit = readAccountCache(address ?? null);
+    // Only blank the ids when we have NOTHING cached for this owner; otherwise keep showing the
+    // known-good account while we confirm in the background (the ids can't change).
+    if (!hit) {
+      setWrapperId(null);
+      setInnerAccountId(null);
+      setWrapperChecked(false);
+      setAcctBalance(0);
+    } else {
+      setWrapperId(hit.wrapperId);
+      setInnerAccountId(hit.innerAccountId);
+      setWrapperChecked(true);
+    }
     if (!address) {
       setWrapperChecked(true);
       return;
     }
     (async () => {
       try {
+        // Cached owner: skip discovery entirely and go straight to the balance.
+        if (hit) {
+          void refreshAcctBalance(hit.wrapperId);
+          if (!hit.innerAccountId) {
+            const snap = await fetchAccountSnapshot624(hit.wrapperId);
+            if (live && snap.accountId) {
+              setInnerAccountId(snap.accountId);
+              writeAccountCache(address, { wrapperId: hit.wrapperId, innerAccountId: snap.accountId });
+            }
+          }
+          return;
+        }
         const wid = await findWrapperId624(address);
         if (!live) return;
         setWrapperId(wid);
         if (wid) {
-          const inner = await fetchInnerAccountId624(wid);
+          // ONE getObject for both the account id and the balances bag (was two identical fetches).
+          const snap = await fetchAccountSnapshot624(wid);
           if (!live) return;
-          setInnerAccountId(inner);
+          setInnerAccountId(snap.accountId);
+          writeAccountCache(address, { wrapperId: wid, innerAccountId: snap.accountId });
           fetchAccountBalance624(wid)
             .then((b) => {
               if (live && b != null) setAcctBalance(b);

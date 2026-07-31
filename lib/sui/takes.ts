@@ -86,7 +86,14 @@ export async function writeTake(take: Take, opts?: { signal?: AbortSignal }): Pr
  * Read one take back from Walrus by blobId and validate its shape. Throws on a
  * missing/garbled blob so the feed can skip it rather than render junk.
  */
+/** Walrus blobs are CONTENT-ADDRESSED and immutable, so a blobId always resolves to the same
+ *  bytes. The feed polls every 25s and used to re-download every take each cycle (~72 redundant
+ *  aggregator GETs/min). Cache forever; no TTL is meaningful for immutable content. */
+const takeCache = new Map<string, HydratedTake>();
+
 export async function readTake(blobId: string, opts?: { signal?: AbortSignal }): Promise<HydratedTake> {
+  const cached = takeCache.get(blobId);
+  if (cached) return cached;
   const res = await fetch(`${WALRUS_AGGREGATOR}/${encodeURIComponent(blobId)}`, {
     signal: opts?.signal ?? AbortSignal.timeout(20_000),
   });
@@ -97,7 +104,9 @@ export async function readTake(blobId: string, opts?: { signal?: AbortSignal }):
   if (!isTake(raw)) {
     throw new Error('Blob is not a valid take');
   }
-  return { ...raw, blobId };
+  const hydrated = { ...raw, blobId };
+  takeCache.set(blobId, hydrated);
+  return hydrated;
 }
 
 /** Hydrate many takes in parallel; drop any that fail rather than fail the feed. */
