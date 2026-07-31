@@ -23,6 +23,7 @@ import SectionHeader from '@/components/SectionHeader';
 import TradeReceipt from '@/components/TradeReceipt';
 import ShareTradeButton from '@/components/ShareTradeButton';
 import { joinSettledTrades, type SettledTrade } from '@/lib/sui/settledTrade';
+import { readAccountCache, writeAccountCache } from '@/lib/sui/ticket624';
 import { useSmartSubmit } from '@/lib/sui/useSmartSubmit';
 import { DUSDC_MULTIPLIER } from '@/lib/sui/constants';
 import {
@@ -201,13 +202,24 @@ export default function Portfolio624Section() {
     if (!address) { setChecked(true); return; }
     (async () => {
       try {
-        const wid = await findWrapperId624(address);
+        // Reuse the ids the header already resolved (they are deterministic and permanent), so
+        // /portfolio stops running a SECOND full discovery waterfall on every load.
+        const hit = readAccountCache(address);
+        if (hit) {
+          setWrapperId(hit.wrapperId);
+          setInnerAccountId(hit.innerAccountId);
+          refreshBalance(hit.wrapperId);
+          if (hit.innerAccountId) loadPositions(hit.innerAccountId);
+          if (hit.innerAccountId) return;
+        }
+        const wid = hit?.wrapperId ?? (await findWrapperId624(address));
         if (!live) return;
         setWrapperId(wid);
         if (wid) {
           const inner = await fetchInnerAccountId624(wid);
           if (!live) return;
           setInnerAccountId(inner);
+          writeAccountCache(address, { wrapperId: wid, innerAccountId: inner });
           refreshBalance(wid);
           if (inner) loadPositions(inner);
         }

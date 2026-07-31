@@ -63,7 +63,7 @@ export const estProb = (cadence?: string) => EST_PROB_BY_CADENCE[cadence ?? '5m'
 type AccountCache = { wrapperId: string; innerAccountId: string | null };
 const ACCT_CACHE_KEY = (owner: string) => `yx_acct624_${owner}`;
 
-function readAccountCache(owner: string | null): AccountCache | null {
+export function readAccountCache(owner: string | null): AccountCache | null {
   if (!owner || typeof window === 'undefined') return null;
   try {
     const raw = window.localStorage.getItem(ACCT_CACHE_KEY(owner));
@@ -73,7 +73,7 @@ function readAccountCache(owner: string | null): AccountCache | null {
   } catch { return null; }
 }
 
-function writeAccountCache(owner: string, v: AccountCache): void {
+export function writeAccountCache(owner: string, v: AccountCache): void {
   if (typeof window === 'undefined') return;
   try { window.localStorage.setItem(ACCT_CACHE_KEY(owner), JSON.stringify(v)); } catch { /* quota/private mode */ }
 }
