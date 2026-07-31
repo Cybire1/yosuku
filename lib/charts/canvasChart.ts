@@ -690,18 +690,18 @@ export function drawPriceLine(
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
     ctx.fillStyle = hexA(dotCol, 0.12 + surge * 0.4);
-    ctx.beginPath(); ctx.arc(last.x, last.y, (10 + surge * 24) * headK, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(last.x, last.y, (3.6 + surge * 6.5) * headK, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
   }
   if (motion) {
     ctx.strokeStyle = hexA(dotCol, 0.24 + pulse * 0.18);
     ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.arc(last.x, last.y, (12 + pulse * 8) * headK, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(last.x, last.y, (4.8 + pulse * 2) * headK, 0, Math.PI * 2); ctx.stroke();
   }
   ctx.fillStyle = hexA(dotCol, motion ? 0.2 + pulse * 0.08 : 0.18);
-  ctx.beginPath(); ctx.arc(last.x, last.y, (motion ? 9 + pulse * 4 : 9) * headK, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(last.x, last.y, (motion ? 3.9 + pulse * 1.2 : 3.9) * headK, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = dotCol;
-  ctx.beginPath(); ctx.arc(last.x, last.y, motion ? 3.8 + pulse * 0.8 : 3.5, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(last.x, last.y, motion ? 2.9 + pulse * 0.5 : 2.8, 0, Math.PI * 2); ctx.fill();
 
   // The roaming UP-vs-DOWN stick duel, riding the price line end to end
   if (opts.fighters) {
