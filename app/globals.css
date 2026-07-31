@@ -4392,6 +4392,11 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
   border-radius: 999px;
   padding: 5px 6px;
   gap: 2px;
+  /* It is centred and fixed, so anything wider than the screen gets clipped on BOTH sides
+     (six items at full padding overflow a 320px phone, and a zoomed Safari has the same
+     effect). Never let it exceed the viewport. */
+  max-width: calc(100vw - 20px);
+  box-sizing: border-box;
 }
 .mobile-bottom-nav a,
 .mobile-bottom-nav button {
@@ -4492,6 +4497,23 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
   .header-right .dusdc-pill .dusdc-unit { display: none; }
   .mobile-menu-toggle { display: none; }
   .mobile-bottom-nav { display: flex; }
+  /* Let the six items give up padding before the bar gives up width, so nothing is ever
+     clipped off the right edge on a narrow (or zoomed) phone. */
+  .mobile-bottom-nav a,
+  .mobile-bottom-nav button { flex: 0 1 auto; min-width: 0; padding-left: clamp(5px, 2.4vw, 11px); padding-right: clamp(5px, 2.4vw, 11px); }
+  .mobile-bottom-nav a span,
+  .mobile-bottom-nav button span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+/* Six labelled items need ~345px. Below that (small phones, and Safari when the page is
+   zoomed) drop the labels rather than let the bar run off the screen — the icons still read,
+   and the active item keeps its tint. */
+@media (max-width: 380px) {
+  .mobile-bottom-nav a span,
+  .mobile-bottom-nav button span { display: none; }
+  .mobile-bottom-nav a,
+  .mobile-bottom-nav button { padding: 9px 10px; }
+}
+@media (max-width: 720px) {
   .mobile-more-menu { display: grid; }
   /* Clear the fixed floating bottom-nav (~72px incl. its 16px offset) so page
      content + footers never hide beneath it on phones. */
