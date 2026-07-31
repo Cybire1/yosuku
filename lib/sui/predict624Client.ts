@@ -149,7 +149,35 @@ export function inferCadence624(expiryMs: number): Cadence624 {
  * the list, so those lanes falsely appear empty. A generous limit keeps every open
  * cadence in view (max market window is ~3h; 500 events ≈ 7h of creations). */
 const MARKETS_FETCH_LIMIT = 500;
-export async function fetchMarkets624(): Promise<Market624[]> {
+// ─── shared read cache ───
+// /markets is a ~534KB uncompressed payload and THREE components poll it independently at three
+// different intervals (page 15s, word board 12s, marquee 15s), so a single tab pulled it several
+// times a minute for the same handful of expiry timestamps. Spot had the same shape (page + word
+// board, 5s each, against a ~1.7s endpoint with no in-flight guard).
+//
+// One TTL cache with in-flight dedup fixes both: concurrent callers share one request, and a
+// caller inside the TTL gets the last value for free. Cheap, no new dependency, no API change.
+function cachedFetch<T>(slot: { v: T | null; at: number; p: Promise<T> | null }, ttlMs: number, run: () => Promise<T>): Promise<T> {
+  const now = Date.now();
+  if (slot.v !== null && now - slot.at < ttlMs) return Promise.resolve(slot.v);
+  if (slot.p) return slot.p; // a request is already in flight — join it
+  slot.p = run()
+    .then((v) => { slot.v = v; slot.at = Date.now(); return v; })
+    .finally(() => { slot.p = null; });
+  return slot.p;
+}
+const marketsSlot: { v: Market624[] | null; at: number; p: Promise<Market624[]> | null } = { v: null, at: 0, p: null };
+const spotSlot: { v: number | null; at: number; p: Promise<number> | null } = { v: null, at: 0, p: null };
+/** Markets change on expiry boundaries, so a few seconds of staleness is invisible. */
+const MARKETS_TTL_MS = 10_000;
+/** Spot is displayed to the nearest dollar; sub-3s staleness is not perceivable. */
+const SPOT_TTL_MS = 3_000;
+
+export function fetchMarkets624(): Promise<Market624[]> {
+  return cachedFetch(marketsSlot, MARKETS_TTL_MS, fetchMarkets624Uncached);
+}
+
+async function fetchMarkets624Uncached(): Promise<Market624[]> {
   const res = await fetch(`${PREDICT624.indexer}/markets?limit=${MARKETS_FETCH_LIMIT}`, { headers: { accept: 'application/json' } });
   if (!res.ok) throw new Error(`predict624 indexer /markets ${res.status}`);
   const rows = (await res.json()) as IndexerMarketRow[];
@@ -238,7 +266,11 @@ export async function fetchPythHistory624(limit = 120): Promise<{ usd: number; t
 }
 
 /** Latest BTC/USD spot from the settlement pyth feed → USD number. */
-export async function fetchSpot624(): Promise<number> {
+export function fetchSpot624(): Promise<number> {
+  return cachedFetch(spotSlot, SPOT_TTL_MS, fetchSpot624Uncached);
+}
+
+async function fetchSpot624Uncached(): Promise<number> {
   const res = await fetch(
     `${PREDICT624.propbook}/oracles/${PREDICT624.pythFeed}/pyth/latest`,
     { headers: { accept: 'application/json' } },

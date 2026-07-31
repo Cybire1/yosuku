@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { pollWhileVisible } from '@/lib/hooks/usePoll';
 import { useBtcPrice } from '@/lib/hooks/useBtcPrice';
 import { useBell624, fmtBell624 } from '@/lib/sui/bell624';
 import { FLOAT_SCALING } from '@/lib/sui/constants';
@@ -65,8 +66,8 @@ export default function Marquee() {
       } catch { /* keep last values */ }
     }
     load();
-    const iv = setInterval(load, 15_000);
-    return () => { cancelled = true; clearInterval(iv); };
+    const iv = pollWhileVisible(load, 15_000);
+    return () => { cancelled = true; iv(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

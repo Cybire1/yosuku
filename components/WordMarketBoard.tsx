@@ -5,6 +5,7 @@
 // drop in under the markets page OR stand alone. Yes/No hands off to the proven ticket.
 
 import { useEffect, useMemo, useState } from 'react';
+import { pollWhileVisible } from '@/lib/hooks/usePoll';
 import { useRouter } from 'next/navigation';
 import { fetchMarkets624, fetchSpot624, type Market624 } from '@/lib/sui/predict624Client';
 import { BAND_USD } from '@/lib/sui/ticket624';
@@ -57,8 +58,8 @@ export default function WordMarketBoard() {
       } catch { if (alive) setLoaded(true); }
     };
     load();
-    const id = setInterval(load, 12_000);
-    return () => { alive = false; clearInterval(id); };
+    const stop = pollWhileVisible(load, 12_000);
+    return () => { alive = false; stop(); };
   }, []);
 
   const questions: WordQ[] = useMemo(() => {
