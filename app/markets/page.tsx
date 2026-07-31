@@ -14,6 +14,7 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import Link from 'next/link';
+import { pollWhileVisible } from '@/lib/hooks/usePoll';
 import { useOracles } from '@/lib/sui/hooks';
 import { type PriceData } from '@/lib/sui/predictApi';
 import { getCanonicalMarketLine } from '@/lib/marketLine';
@@ -176,12 +177,24 @@ function useHouseOdds624(markets: Market624[], spot: number | null) {
       }
     };
 
+    // The 600ms timer used to be the ONLY early trigger, and it bails when spot is still null —
+    // so the first real sweep waited for the 3s tick and the odds sat on "—". Poll briefly for
+    // spot's arrival instead, then sweep immediately.
     const t = setTimeout(() => void sweep(), 600); // fast first paint once data lands
-    const iv = setInterval(() => void sweep(), ODDS_TICK_MS);
+    let waited = 0;
+    const armed = setInterval(() => {
+      waited += 200;
+      if (spotRef.current != null || waited > 15_000) {
+        clearInterval(armed);
+        if (spotRef.current != null) void sweep();
+      }
+    }, 200);
+    const iv = pollWhileVisible(() => void sweep(), ODDS_TICK_MS);
     return () => {
       dead = true;
       clearTimeout(t);
-      clearInterval(iv);
+      clearInterval(armed);
+      iv();
     };
   }, []);
 
@@ -389,10 +402,10 @@ export default function MarketsPage() {
       }
     };
     load();
-    const iv = setInterval(load, 15_000);
+    const iv = pollWhileVisible(load, 15_000);
     return () => {
       dead = true;
-      clearInterval(iv);
+      iv();
     };
   }, []);
 
@@ -409,10 +422,10 @@ export default function MarketsPage() {
       }
     };
     load();
-    const iv = setInterval(load, 5_000);
+    const iv = pollWhileVisible(load, 5_000);
     return () => {
       dead = true;
-      clearInterval(iv);
+      iv();
     };
   }, []);
 
@@ -430,10 +443,10 @@ export default function MarketsPage() {
       }
     };
     load();
-    const iv = setInterval(load, 15_000);
+    const iv = pollWhileVisible(load, 15_000);
     return () => {
       dead = true;
-      clearInterval(iv);
+      iv();
     };
   }, []);
   const liveSeries = useMemo(
@@ -510,8 +523,11 @@ export default function MarketsPage() {
 
   // REAL odds — house dry-run quotes, staggered, ~20s per-market refresh.
   const quoteMarkets = useMemo(() => {
-    const byId = new Map(railMarkets.map((m) => [m.id, m]));
+    // HERO FIRST. The sweep is staggered, so putting the hero behind a full quote pair left the
+    // page's flagship number showing "—" for several seconds on every load.
+    const byId = new Map<string, typeof railMarkets[number]>();
     if (heroMarket) byId.set(heroMarket.id, heroMarket);
+    for (const m of railMarkets) if (!byId.has(m.id)) byId.set(m.id, m);
     return Array.from(byId.values());
   }, [railMarkets, heroMarket]);
   const odds = useHouseOdds624(quoteMarkets, spot);
@@ -671,14 +687,12 @@ export default function MarketsPage() {
           {/* Loading / error */}
           {markets.length === 0 && !marketsErr && (
             <div className="empty-state">
-              <div className="jp">予</div>
               <h3>Reading live markets…</h3>
               <p>Loading the latest Bitcoin markets</p>
             </div>
           )}
           {markets.length === 0 && marketsErr && (
             <div className="empty-state">
-              <div className="jp">誤</div>
               <h3>Connection error</h3>
               <p>Couldn&apos;t reach the market feed — retrying every 15s.</p>
             </div>
@@ -715,7 +729,7 @@ export default function MarketsPage() {
 
           {/* Word markets — the same live markets, said in plain language */}
           <section className="markets-section">
-            <SectionHeader number="02" title="Just ask" jp="言葉" desc="No chart to read — will Bitcoin be up? Just answer yes or no." />
+            <SectionHeader number="02" title="Just ask" desc="No chart to read — will Bitcoin be up? Just answer yes or no." />
             <WordMarketBoard />
           </section>
 

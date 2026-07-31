@@ -29,9 +29,9 @@ function probAbove(spot: number, line: number, msLeft: number): number {
 interface WordQ { market: Market624; line: number; text: string; yesProb: number; closeMs: number; }
 
 const HORIZONS = [
-  { key: 'soon', label: 'Closing in minutes', jp: '数分', test: (m: Market624, now: number) => m.expiry - now <= 6 * 60_000 },
-  { key: 'hour', label: 'Closing this hour', jp: 'この時間', test: (m: Market624, now: number) => m.expiry - now > 6 * 60_000 && m.expiry - now <= 65 * 60_000 },
-  { key: 'later', label: 'Later today', jp: '本日', test: (m: Market624, now: number) => m.expiry - now > 65 * 60_000 },
+  { key: 'soon', label: 'Closing in minutes', test: (m: Market624, now: number) => m.expiry - now <= 6 * 60_000 },
+  { key: 'hour', label: 'Closing this hour', test: (m: Market624, now: number) => m.expiry - now > 6 * 60_000 && m.expiry - now <= 65 * 60_000 },
+  { key: 'later', label: 'Later today', test: (m: Market624, now: number) => m.expiry - now > 65 * 60_000 },
 ];
 const TEMPLATES = [
   (l: string, t: string) => `Will Bitcoin be above ${l} at ${t}?`,
@@ -91,7 +91,6 @@ export default function WordMarketBoard() {
       {grouped.map((g) => (
         <div key={g.key} className="words-section">
           <div className="words-sechead">
-            <span className="words-sec-jp">{g.jp}</span>
             <span className="words-sec-label">{g.label}</span>
             <span className="words-sec-count">{g.items.length}</span>
           </div>
