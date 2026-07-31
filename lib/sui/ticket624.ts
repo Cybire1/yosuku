@@ -210,7 +210,10 @@ export function useAccount624(): Account624 {
       const id = wid ?? wrapperId;
       if (!id) return;
       try {
-        setAcctBalance(await fetchAccountBalance624(id));
+        const b = await fetchAccountBalance624(id);
+        // null = the read FAILED (rate limit / node hiccup). Keep the last-good number:
+        // showing 0 here told funded users they had nothing and blocked their bet.
+        if (b != null) setAcctBalance(b);
       } catch {
         /* keep last good balance */
       }
@@ -240,7 +243,7 @@ export function useAccount624(): Account624 {
           setInnerAccountId(inner);
           fetchAccountBalance624(wid)
             .then((b) => {
-              if (live) setAcctBalance(b);
+              if (live && b != null) setAcctBalance(b);
             })
             .catch(() => {});
         }
@@ -337,10 +340,26 @@ export function useMintQuote624(p: {
   spotRef.current = p.spot;
   const enabled = p.enabled !== false;
   const hasBand = p.band != null && p.band.lowerUsd < p.band.higherUsd;
+  // The band edges are DERIVED from spot (spot ± half), and spot polls every 5s. Keeping them in
+  // the dep array tore this effect down every 5 seconds, which blanked the quote and left the
+  // Place button unclickable for a large slice of every window. Read them from a ref instead so
+  // only the user's own inputs drive a re-quote.
+  const bandRef = useRef(p.band);
+  bandRef.current = p.band;
+  const levRef = useRef(p.lev);
+  levRef.current = p.lev;
+  // The bet's IDENTITY. Only a change here should blank the last quote; a stake edit or a
+  // periodic refresh keeps showing the previous quote while the new one loads (the click path
+  // re-quotes fresh anyway, so a briefly stale display is never what gets signed).
+  const betKey = `${p.address}|${p.wrapperId}|${p.marketId}|${p.dir}|${hasBand}`;
+  const betKeyRef = useRef(betKey);
 
   useEffect(() => {
-    setQuote(null);
-    setQuoteErr(null);
+    if (betKeyRef.current !== betKey) {
+      betKeyRef.current = betKey;
+      setQuote(null);
+      setQuoteErr(null);
+    }
     if (!enabled || !p.address || !p.wrapperId || !p.marketId || p.qty <= 0 || p.spot == null) return;
     if (!hasBand && !p.dir) return;
     let dead = false;
@@ -348,27 +367,33 @@ export function useMintQuote624(p: {
       const spot = spotRef.current;
       if (spot == null) return;
       setQuoting(true);
-      const { lowerTick, higherTick } = hasBand
-        ? rangeTicks624(p.band!.lowerUsd, p.band!.higherUsd)
-        : ticks624(spot, p.dir!);
-      const q = await quoteMint624({
-        sender: p.address!,
-        marketId: p.marketId!,
-        wrapperId: p.wrapperId!,
-        lowerTick,
-        higherTick,
-        qtyMicro: positionQuantityMicro624(p.qty),
-        leverage1e9: BigInt(p.lev) * 1_000_000_000n,
-        gasOwner: await sponsorAddr(), // SUI-less wallets: sponsor satisfies build-time gas selection
-      });
-      if (dead) return;
-      setQuoting(false);
-      if ('error' in q) {
-        setQuote(null);
-        setQuoteErr(q.error);
-      } else {
-        setQuote(q);
-        setQuoteErr(null);
+      try {
+        const band = bandRef.current;
+        const { lowerTick, higherTick } = hasBand && band
+          ? rangeTicks624(band.lowerUsd, band.higherUsd)
+          : ticks624(spot, p.dir!);
+        const q = await quoteMint624({
+          sender: p.address!,
+          marketId: p.marketId!,
+          wrapperId: p.wrapperId!,
+          lowerTick,
+          higherTick,
+          qtyMicro: positionQuantityMicro624(p.qty),
+          leverage1e9: BigInt(levRef.current) * 1_000_000_000n,
+          gasOwner: await sponsorAddr(), // SUI-less wallets: sponsor satisfies build-time gas selection
+        });
+        if (dead) return;
+        if ('error' in q) {
+          setQuote(null);
+          setQuoteErr(q.error);
+        } else {
+          setQuote(q);
+          setQuoteErr(null);
+        }
+      } finally {
+        // ALWAYS clear the spinner, even when this run was superseded — it used to sit after the
+        // dead-check, so a teardown latched `quoting` true forever.
+        setQuoting(false);
       }
     };
     const t = setTimeout(run, 350); // debounce typing
@@ -379,7 +404,7 @@ export function useMintQuote624(p: {
       clearInterval(iv);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, p.address, p.wrapperId, p.marketId, p.dir, hasBand, p.band?.lowerUsd, p.band?.higherUsd, p.qty, p.lev, p.spot != null]);
+  }, [enabled, betKey, p.qty, p.lev, p.spot != null]);
 
   return { quote, quoteErr, quoting };
 }
@@ -559,7 +584,9 @@ export async function placeFirstBet624(p: {
   // Sponsor as gas owner satisfies gas selection for a SUI-less wallet; falls back to the
   // caller's estimate-sized qty only if the probe itself fails.
   let qtyDisplay = p.qty;
-  const sponsor = await getSponsorStatus().catch(() => null);
+  // cached module-level sponsor address: an uncached getSponsorStatus() here put a 4s-timeout
+  // HTTP call directly in the click path of the user's very first bet.
+  const sponsorGas = await sponsorAddr();
   const probe = await probeCombinedMint624({
     wrapperId: null,
     coinIds: p.coinIds,
@@ -569,7 +596,7 @@ export async function placeFirstBet624(p: {
     higherTick,
     leverage1e9: BigInt(p.lev) * 1_000_000_000n,
     sender: p.address,
-    gasOwner: sponsor?.address ?? null,
+    gasOwner: sponsorGas,
   });
   if (!('error' in probe) && probe.entryProb > 0.01) {
     qtyDisplay = qtyForStake(p.stakeDusdc, p.lev, probe.entryProb);
@@ -643,7 +670,9 @@ export async function placeTopUpAndBet624(p: {
   // Probe the REAL entry probability (see placeFirstBet624) — sizes qty so the measured cost
   // lands near the stake instead of blowing past maxCost when the band's prob runs high.
   let qtyDisplay = p.qty;
-  const sponsor = await getSponsorStatus().catch(() => null);
+  // cached module-level sponsor address: an uncached getSponsorStatus() here put a 4s-timeout
+  // HTTP call directly in the click path of the user's very first bet.
+  const sponsorGas = await sponsorAddr();
   const probe = await probeCombinedMint624({
     wrapperId: p.wrapperId,
     coinIds: p.coinIds,
@@ -653,7 +682,7 @@ export async function placeTopUpAndBet624(p: {
     higherTick,
     leverage1e9: BigInt(p.lev) * 1_000_000_000n,
     sender: p.address,
-    gasOwner: sponsor?.address ?? null,
+    gasOwner: sponsorGas,
   });
   if (!('error' in probe) && probe.entryProb > 0.01) {
     qtyDisplay = qtyForStake(p.stakeDusdc, p.lev, probe.entryProb);

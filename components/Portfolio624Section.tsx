@@ -173,7 +173,7 @@ export default function Portfolio624Section() {
   const refreshBalance = useCallback(async (wid?: string | null) => {
     const id = wid ?? wrapperId;
     if (!id) return;
-    try { setAcctBalance(await fetchAccountBalance624(id)); } catch { /* keep last good */ }
+    try { const b = await fetchAccountBalance624(id); if (b != null) setAcctBalance(b); } catch { /* keep last good */ }
   }, [wrapperId]);
 
   const loadPositions = useCallback(async (acctId?: string | null) => {
@@ -290,6 +290,11 @@ export default function Portfolio624Section() {
       // only checks stored >= amount and allows draining to exactly the stored value,
       // so an exact-integer amount clears regardless of open/settled positions.
       const amountMicro = await fetchAccountBalanceMicro624(wrapperId);
+      if (amountMicro == null) {
+        // read failed — never guess an amount here, an over-read aborts EBalanceTooLow
+        toast('Could not read your balance just now. Try again in a moment.', 'error');
+        return;
+      }
       if (amountMicro <= BigInt(0)) {
         toast('Nothing to withdraw right now.', 'error');
         return;

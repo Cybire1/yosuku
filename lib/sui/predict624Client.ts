@@ -384,6 +384,10 @@ export function buildMintTx(p: {
   maxCostMicro: bigint;
   /** Caps the quoted per-contract probability before fees, 1e9-scaled. */
   maxProb1e9: bigint;
+  /** Fold in the Rooms bet_registry record. TRUE for the real mint, FALSE for quotes/probes:
+   *  the record has no effect in a dry run, and including it put a FOREIGN package on the
+   *  critical path of 100% of displayed odds (its outage blanked the whole board). */
+  withRoomsGate?: boolean;
 }): Transaction {
   const lower = BigInt(p.lowerTick);
   const higher = BigInt(p.higherTick);
@@ -426,7 +430,7 @@ export function buildMintTx(p: {
       tx.object(PREDICT624.clock),
     ],
   });
-  appendRecordBet(tx, p.marketId);
+  if (p.withRoomsGate !== false) appendRecordBet(tx, p.marketId);
   return tx;
 }
 
@@ -618,6 +622,7 @@ export async function probeCombinedMint624(p: {
     if (!p.wrapperId) tx.moveCall({ target: `${PREDICT624.accountPackage}::account::share`, arguments: [wrapper] });
     tx.setSender(p.sender);
     if (p.gasOwner) tx.setGasOwner(p.gasOwner);
+    tx.setGasBudget(120_000_000); // skip build's gas-estimation simulation (nothing executes here)
     const bytes = await tx.build({ client: grpc });
     const b64 = typeof Buffer !== 'undefined' ? Buffer.from(bytes).toString('base64') : btoa(String.fromCharCode(...bytes));
     const r = await fetch(RPC_URL, {
@@ -665,9 +670,13 @@ export async function quoteMint624(p: {
       marketId: p.marketId, wrapperId: p.wrapperId, lowerTick: p.lowerTick, higherTick: p.higherTick,
       qtyMicro: p.qtyMicro, leverage1e9: p.leverage1e9,
       maxCostMicro: 18446744073709551615n, maxProb1e9: 990_000_000n, // uncapped guards: pure price discovery
+      withRoomsGate: false, // a quote must not depend on the Rooms package being up
     });
     tx.setSender(p.sender);
     if (p.gasOwner) tx.setGasOwner(p.gasOwner); // dry-runs need no signature — sponsor coins satisfy gas selection
+    // Without an explicit budget, tx.build() runs a FULL simulation just to estimate gas — a whole
+    // extra network round on every quote. The number is irrelevant here (nothing executes).
+    tx.setGasBudget(120_000_000);
     const bytes = await tx.build({ client: grpc }); // resolution simulates; throws on protocol rejects
     const b64 = typeof Buffer !== 'undefined' ? Buffer.from(bytes).toString('base64') : btoa(String.fromCharCode(...bytes));
     const r = await fetch(RPC_URL, {
@@ -751,16 +760,21 @@ async function jsonRpc<T>(method: string, params: unknown[]): Promise<T | null> 
  * the exact reader proven in predict624.mjs. Mint debits and redeem payouts are
  * synchronous stored-balance ops, so this is exact for the trade path (only async
  * LP fills lag until the next account-touching call sweeps the accumulator).
- * Returns 0 on any read failure (missing wrapper, empty bag, RPC hiccup).
+ * Returns NULL when a read FAILS (RPC hiccup / rate limit) and 0 only when the account
+ * genuinely holds no DUSDC row. Callers must keep their last-good value on null: returning
+ * 0 on a failed read showed funded users $0.00 and then refused their bet with
+ * "balance below the live cost" (a single 429 was enough).
  */
-export async function fetchAccountBalanceMicro624(wrapperId: string): Promise<bigint> {
+export async function fetchAccountBalanceMicro624(wrapperId: string): Promise<bigint | null> {
   const obj = await jsonRpc<{ data?: { content?: { fields?: Record<string, any> } } }>('sui_getObject', [
     wrapperId,
     { showContent: true },
   ]);
+  if (obj == null) return null; // read failed — do NOT report zero
   const bagId = obj?.data?.content?.fields?.account?.fields?.balances?.fields?.id?.id;
-  if (!bagId) return BigInt(0);
+  if (!bagId) return BigInt(0); // account exists, no balances bag yet → genuinely zero
   const dfs = await jsonRpc<{ data?: Array<Record<string, any>> }>('suix_getDynamicFields', [bagId, null, 50]);
+  if (dfs == null) return null; // read failed
   const rows = dfs?.data ?? [];
   // STRICT: match only the DUSDC CoinKey. Never fall back to rows[0] — the bag can
   // also hold PLP/DEEP balances, and a wrong-coin figure passed to
@@ -770,21 +784,23 @@ export async function fetchAccountBalanceMicro624(wrapperId: string): Promise<bi
       String(f.name?.type ?? '').includes('CoinKey') &&
       String(f.objectType ?? f.name?.type ?? '').toLowerCase().includes('dusdc'),
   );
-  if (!hit) return BigInt(0);
+  if (!hit) return BigInt(0); // no DUSDC row in the bag → genuinely zero
   const v = await jsonRpc<{ data?: { content?: { fields?: { value?: string | number } } } }>('sui_getObject', [
     hit.objectId,
     { showContent: true },
   ]);
+  if (v == null) return null; // read failed
   try {
     return BigInt(v?.data?.content?.fields?.value ?? 0);
   } catch {
-    return BigInt(0);
+    return null;
   }
 }
 
-/** Display number (DUSDC) derived from the exact integer reader above. */
-export async function fetchAccountBalance624(wrapperId: string): Promise<number> {
-  return Number(await fetchAccountBalanceMicro624(wrapperId)) / DUSDC_MULTIPLIER;
+/** Display number (DUSDC) derived from the exact integer reader above. Null = read failed. */
+export async function fetchAccountBalance624(wrapperId: string): Promise<number | null> {
+  const micro = await fetchAccountBalanceMicro624(wrapperId);
+  return micro == null ? null : Number(micro) / DUSDC_MULTIPLIER;
 }
 
 // ─── per-account order/position feeds (live beta indexer — routes VERIFIED 2026-07-03) ───
