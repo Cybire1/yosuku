@@ -35,8 +35,8 @@ Predict directly from X, with leverage, private trading, and agent strategies. O
 
 [The problem](#the-problem) · [What Yosuku is](#what-yosuku-is) · [The everyday loop](#the-everyday-loop) · [How predict-from-X works](#how-predict-from-x-works) · [The Sui stack](#how-we-used-the-sui-stack) · [Proven on-chain](#proven-on-chain) · [Traction](#traction) · [Quickstart](#quickstart) · [Roadmap](#roadmap)
 
-live stats yosuku.xyz/stats
-testflight link: http://testflight.apple.com/join/7AxcFCf5 
+live stats http://yosuku.xyz/stats
+<br/>testflight link: http://testflight.apple.com/join/7AxcFCf5 
 
 
 ---
