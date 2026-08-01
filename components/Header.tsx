@@ -76,7 +76,7 @@ export default function Header() {
   // The trading balance the header shows is the LIVE 6-24 DeepBook Predict account
   // (the one base bets actually run from) — not the legacy 4-16 vault, which only
   // still backs the leverage/private/cash-out surfaces.
-  const { acctBalance: acct624Balance, refreshAcctBalance: refreshTrading } = useAccount624();
+  const { acctBalance: acct624Balance, refreshAcctBalance: refreshTrading, totalDusdc, totalReady, totalUnknown } = useAccount624();
   const autoFundingRef = useRef(false);   // in-flight guard (avoid concurrent drips)
   const lowEpisodeRef = useRef(false);    // already auto-funded for the current low episode
   const moreMenuRef = useRef<HTMLDivElement>(null);
@@ -272,7 +272,12 @@ export default function Header() {
                     carry it; the unit label costs too much width. */}
                 <span className="flex items-center gap-1.5">
                   <Coins className="w-3.5 h-3.5 text-gray-500" />
-                  <span className="text-white font-semibold tabular-nums">{(acct624Balance + dusdcRaw / 1e6).toFixed(2)}</span>
+                  <span className={`font-semibold tabular-nums ${totalReady ? 'text-white' : 'text-white/55'}`}>
+                    {/* Never show a HALF-loaded sum: until both the wallet and the trading
+                        account have been read we show the last confirmed total (dimmed), or a
+                        placeholder on a first-ever visit. */}
+                    {totalUnknown ? '—' : totalDusdc.toFixed(2)}
+                  </span>
                   <span className="hidden sm:inline text-gray-500">DUSDC</span>
                 </span>
                 <span className="text-vermilion font-bold ml-0.5 text-[15px] leading-none">+</span>

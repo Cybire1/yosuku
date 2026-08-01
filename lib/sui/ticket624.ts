@@ -78,6 +78,26 @@ export function writeAccountCache(owner: string, v: AccountCache): void {
   try { window.localStorage.setItem(ACCT_CACHE_KEY(owner), JSON.stringify(v)); } catch { /* quota/private mode */ }
 }
 
+// ─── last-known total ───
+// The money figure users see is wallet + trading account. Those load independently, so during
+// the gap the UI used to render a PARTIAL sum (a real number, just not theirs) and then correct
+// itself. Remember the last confirmed total per owner and show that until both halves are in.
+const TOTAL_CACHE_KEY = (owner: string) => `yx_total624_${owner}`;
+
+export function readTotalCache(owner: string | null): number | null {
+  if (!owner || typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(TOTAL_CACHE_KEY(owner));
+    const n = raw == null ? NaN : Number(raw);
+    return Number.isFinite(n) && n >= 0 ? n : null;
+  } catch { return null; }
+}
+
+function writeTotalCache(owner: string, total: number): void {
+  if (typeof window === 'undefined' || !Number.isFinite(total)) return;
+  try { window.localStorage.setItem(TOTAL_CACHE_KEY(owner), String(total)); } catch { /* quota/private mode */ }
+}
+
 /** The sponsor's address, fetched once and cached — quotes/probes set it as gas owner so
  *  build-time gas selection works for SUI-less wallets (the whole flow is sponsored). */
 let _sponsorAddrP: Promise<string | null> | null = null;
@@ -201,6 +221,12 @@ export interface Account624 {
   walletMicro: number;
   dusdcCoins: { coinObjectId: string; balance: bigint }[];
   refreshWallet: () => void;
+  /** Wallet + trading account, in DUSDC. The single figure to show as "your money". */
+  totalDusdc: number;
+  /** False while either half is still loading — render the number as pending, not as fact. */
+  totalReady: boolean;
+  /** No live total AND nothing remembered: show a placeholder rather than a number. */
+  totalUnknown: boolean;
 }
 
 /**
@@ -212,7 +238,7 @@ export function useAccount624(): Account624 {
   const account = useCurrentAccount();
   const address = account?.address ?? null;
   const { mutateAsync: signTransaction } = useSignTransaction();
-  const { balance: walletMicro, coins: dusdcCoins, refresh: refreshWallet } = useDUSDCBalance();
+  const { balance: walletMicro, coins: dusdcCoins, loading: walletLoading, refresh: refreshWallet } = useDUSDCBalance();
 
   // A user's account ids are DETERMINISTIC and permanent (one shared account per owner, derived
   // from the owner address, never transferable). So they are safe to cache forever and hydrate
@@ -223,6 +249,10 @@ export function useAccount624(): Account624 {
   const [innerAccountId, setInnerAccountId] = useState<string | null>(cached?.innerAccountId ?? null);
   const [wrapperChecked, setWrapperChecked] = useState(!!cached?.wrapperId);
   const [acctBalance, setAcctBalance] = useState(0);
+  // Has the trading-account balance been READ yet? Without this the UI cannot tell "you have
+  // nothing" from "we have not looked", and the header rendered the partial sum
+  // (wallet only, account still 0) before correcting itself a moment later.
+  const [acctBalanceLoaded, setAcctBalanceLoaded] = useState(false);
 
   const { submit } = useSmartSubmit();
   const submitTx = useCallback(
@@ -242,7 +272,7 @@ export function useAccount624(): Account624 {
         const b = await fetchAccountBalance624(id);
         // null = the read FAILED (rate limit / node hiccup). Keep the last-good number:
         // showing 0 here told funded users they had nothing and blocked their bet.
-        if (b != null) setAcctBalance(b);
+        if (b != null) { setAcctBalance(b); setAcctBalanceLoaded(true); }
       } catch {
         /* keep last good balance */
       }
@@ -261,10 +291,13 @@ export function useAccount624(): Account624 {
       setInnerAccountId(null);
       setWrapperChecked(false);
       setAcctBalance(0);
+      setAcctBalanceLoaded(false); // a fresh owner: nothing has been read yet
     } else {
       setWrapperId(hit.wrapperId);
       setInnerAccountId(hit.innerAccountId);
       setWrapperChecked(true);
+      // ids are known instantly, but THIS owner's balance still has to be read
+      setAcctBalanceLoaded(false);
     }
     if (!address) {
       setWrapperChecked(true);
@@ -295,9 +328,13 @@ export function useAccount624(): Account624 {
           writeAccountCache(address, { wrapperId: wid, innerAccountId: snap.accountId });
           fetchAccountBalance624(wid)
             .then((b) => {
-              if (live && b != null) setAcctBalance(b);
+              if (live && b != null) { setAcctBalance(b); setAcctBalanceLoaded(true); }
             })
             .catch(() => {});
+        } else if (live) {
+          // No account for this owner => its contribution is a KNOWN zero, so the total is
+          // complete as soon as the wallet lands.
+          setAcctBalanceLoaded(true);
         }
       } finally {
         if (live) setWrapperChecked(true);
@@ -347,6 +384,17 @@ export function useAccount624(): Account624 {
     [address, wrapperId, dusdcCoins, submitTx, refreshWallet, refreshAcctBalance],
   );
 
+  // ── the ONE money figure, and whether it can be trusted yet ──
+  // totalReady is false until BOTH halves have been read; until then consumers should show
+  // totalDusdc (the last confirmed total for this owner) rather than a half-loaded sum.
+  const totalReady = !address ? true : acctBalanceLoaded && !walletLoading;
+  const liveTotal = acctBalance + walletMicro / DUSDC_MULTIPLIER;
+  const cachedTotal = address ? readTotalCache(address) : null;
+  const totalDusdc = !address ? 0 : totalReady ? liveTotal : cachedTotal ?? liveTotal;
+  useEffect(() => {
+    if (address && totalReady) writeTotalCache(address, liveTotal);
+  }, [address, totalReady, liveTotal]);
+
   return {
     address,
     wrapperId,
@@ -360,6 +408,10 @@ export function useAccount624(): Account624 {
     walletMicro,
     dusdcCoins,
     refreshWallet,
+    totalDusdc,
+    totalReady,
+    /** True when we have neither a live nor a remembered total (first ever visit). */
+    totalUnknown: !!address && !totalReady && cachedTotal == null,
   };
 }
 
