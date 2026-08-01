@@ -13,7 +13,7 @@
 // behind a shared key (ONBOARD_KEY) so only the relay — not the public button — pulls the larger amount.
 import { NextRequest, NextResponse } from 'next/server';
 import { SuiJsonRpcClient } from '@mysten/sui/jsonRpc';
-import { Transaction } from '@mysten/sui/transactions';
+import { Transaction, coinWithBalance } from '@mysten/sui/transactions';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
 import { DUSDC_TYPE } from '@/lib/sui/constants';
@@ -88,17 +88,23 @@ export async function POST(req: NextRequest) {
     }
 
     const faucet = Ed25519Keypair.fromSecretKey(decodeSuiPrivateKey(key).secretKey);
-    const coins = (await client.getCoins({ owner: faucet.toSuiAddress(), coinType: DUSDC_TYPE })).data;
-    const total = coins.reduce((s, c) => s + BigInt(c.balance), BigInt(0));
-    if (total < amount) {
-      return NextResponse.json({ error: 'The instant faucet is empty right now — grab DUSDC from the DeepBook faucet.', faucetUrl: OFFICIAL_FAUCET }, { status: 503 });
+
+    // Ask what the wallet HOLDS, not what it holds as Coin objects.
+    //
+    // These stopped being the same thing. Sui now keeps funds in an address balance as well as
+    // in Coin objects, and `getCoins` only ever returns the objects. This faucet was funded with
+    // 2000 DUSDC that landed in the address balance, so `getCoins` reported 1.19 and every claim
+    // was refused as "the faucet is empty" while 2000 DUSDC sat in the wallet untouched. The
+    // money was never missing; we were counting it in the one place it was not.
+    const held = BigInt((await client.getBalance({ owner: faucet.toSuiAddress(), coinType: DUSDC_TYPE })).totalBalance);
+    if (held < amount) {
+      return NextResponse.json({ error: 'The instant faucet is empty right now. Grab DUSDC from the DeepBook faucet.', faucetUrl: OFFICIAL_FAUCET }, { status: 503 });
     }
 
+    // coinWithBalance sources the drip from the address balance when there is one and falls back
+    // to owned coins otherwise, so it spends the whole holding rather than just the object half.
     const tx = new Transaction();
-    const [primary, ...rest] = coins.map((c) => tx.object(c.coinObjectId));
-    if (rest.length) tx.mergeCoins(primary, rest);
-    const [drip] = tx.splitCoins(primary, [amount]);
-    tx.transferObjects([drip], address);
+    tx.transferObjects([coinWithBalance({ type: DUSDC_TYPE, balance: amount })], address);
 
     const res = await client.signAndExecuteTransaction({ signer: faucet, transaction: tx });
     await client.waitForTransaction({ digest: res.digest });
