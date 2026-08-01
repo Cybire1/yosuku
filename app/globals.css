@@ -5201,6 +5201,14 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
 
 /* the other earn surfaces (were hardcoded white-opacity → invisible on cream) */
 .earn-card { border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.02); border-radius: 16px; }
+/* Phones: the 24px card padding on top of the page gutter left the fields cramped and pushed
+   long rows (a wallet balance, the MAX/DUSDC suffixes) toward the edge. Give the content back
+   its width instead of shrinking the type. */
+@media (max-width: 480px) {
+  .earn-card, .earn-vault { padding: 16px !important; }
+  .earn-page main .container { padding-left: 14px !important; padding-right: 14px !important; }
+  .earn-field { padding-left: 12px !important; padding-right: 12px !important; }
+}
 [data-theme="light"] .earn-card { border-color: rgba(20,18,16,0.10); background: rgba(20,18,16,0.015); box-shadow: 0 20px 44px -32px rgba(20,18,16,0.16); }
 .earn-field { border: 1px solid rgba(255,255,255,0.10); transition: border-color .2s; }
 .earn-field:focus-within { border-color: rgba(255,255,255,0.25); }

@@ -53,7 +53,6 @@ export default function TakeReelCard({ take }: { take: FeedTake }) {
         <div aria-hidden className="pointer-events-none absolute inset-0 z-30 opacity-[0.05] mix-blend-overlay"
           style={{ backgroundImage: "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.5 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>\")" }} />
         <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 z-20 h-px bg-gradient-to-r from-transparent via-vermilion/50 to-transparent" />
-        <span aria-hidden className="pointer-events-none absolute -right-5 top-16 z-0 select-none font-jp text-[150px] font-bold leading-none text-white/[0.022]">賭</span>
 
         {/* author */}
         <div className="relative z-10 flex items-center justify-between px-5 pt-5">

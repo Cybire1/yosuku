@@ -127,7 +127,7 @@ export default function EarnPage() {
   }
 
   return (
-    <div className="min-h-screen relative">
+    <div className="earn-page min-h-screen relative">
       <Marquee />
       <Header />
       <GrainOverlay />
@@ -219,9 +219,9 @@ export default function EarnPage() {
                     </div>
                   ) : (
                     <>
-                      <div className="flex items-baseline justify-between mb-3">
+                      <div className="flex items-baseline justify-between gap-3 mb-3 min-w-0">
                         <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-gray-600">Amount</span>
-                        <span className="font-mono text-[10px] text-gray-600">wallet {fmt(walletDusdc)} DUSDC</span>
+                        <span className="font-mono text-[10px] text-gray-600 truncate shrink">wallet {fmt(walletDusdc)} DUSDC</span>
                       </div>
                       <div className="flex items-center gap-2 earn-field rounded-xl px-4 py-3.5 mb-3">
                         <input value={plpAmount} onChange={(e) => setPlpAmount(e.target.value.replace(/[^0-9.]/g, ''))} placeholder="0.00" inputMode="decimal" className="bg-transparent flex-1 outline-none font-mono text-2xl min-w-0" />
@@ -233,7 +233,7 @@ export default function EarnPage() {
                           <button key={a} onClick={() => setPlpAmount(a)} className={`rounded-lg py-2 font-mono text-xs border transition-all ${plpAmount === a ? 'bg-vermilion/15 border-vermilion/50 text-white' : 'earn-chip text-gray-500 hover:text-gray-300'}`}>{a}</button>
                         ))}
                       </div>
-                      <button onClick={doDepositPlp} disabled={busy === 'plp-deposit'} className="block w-full sm:w-auto sm:mx-auto sm:px-16 bg-vermilion text-white font-semibold rounded-full py-3.5 hover:bg-vermilion-d active:scale-[0.98] transition-all disabled:opacity-60">
+                      <button onClick={doDepositPlp} disabled={busy === 'plp-deposit'} className="block w-full max-w-[280px] mx-auto sm:w-auto sm:px-16 bg-vermilion text-white font-semibold rounded-full py-3.5 hover:bg-vermilion-d active:scale-[0.98] transition-all disabled:opacity-60">
                         {busy === 'plp-deposit' ? 'Supplying…' : 'Supply DUSDC'}
                       </button>
                     </>
@@ -251,7 +251,7 @@ export default function EarnPage() {
                     <>
                       <div className="font-display text-4xl font-extrabold tracking-tight">{fmt(myValue)} <span className="text-base text-gray-500 font-mono font-normal">DUSDC</span></div>
                       <div className="font-mono text-[11px] text-gray-500 mt-1 mb-5">{fmt(myPlp)} shares · at {sharePrice != null ? sharePrice.toFixed(4) : '—'} / share</div>
-                      <button onClick={doWithdrawPlp} disabled={busy === 'plp-withdraw' || plpCoins.length === 0} className="w-full earn-ghost rounded-full py-3 font-mono text-xs uppercase tracking-wider text-vermilion hover:text-white transition-colors disabled:opacity-50">
+                      <button onClick={doWithdrawPlp} disabled={busy === 'plp-withdraw' || plpCoins.length === 0} className="block w-full max-w-[280px] mx-auto earn-ghost rounded-full py-3 font-mono text-xs uppercase tracking-wider text-vermilion hover:text-white transition-colors disabled:opacity-50">
                         {busy === 'plp-withdraw' ? 'Withdrawing…' : 'Withdraw all'}
                       </button>
                     </>

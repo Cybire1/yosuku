@@ -123,8 +123,6 @@ function ReelCard({
         <div aria-hidden className="pointer-events-none absolute inset-0 z-30 opacity-[0.05] mix-blend-overlay"
           style={{ backgroundImage: "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.5 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>\")" }} />
         <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 z-20 h-px bg-gradient-to-r from-transparent via-vermilion/50 to-transparent" />
-        {/* ghost kanji */}
-        <span aria-hidden className="pointer-events-none absolute -right-5 top-16 z-0 select-none font-jp text-[150px] font-bold leading-none text-white/[0.022]">賭</span>
 
         {/* top meta */}
         <div className="relative z-10 flex items-start justify-between px-5 pt-5">
@@ -202,7 +200,6 @@ function EmptyReel({ children }: { children: ReactNode }) {
   return (
     <section className="feed-card flex items-center justify-center px-3 pt-2 pb-[92px]">
       <div className="relative z-10 flex h-full w-full max-w-[460px] flex-col items-center justify-center gap-3.5 rounded-[26px] border border-white/[0.1] bg-[#0a0807] text-center">
-        <span aria-hidden className="font-jp text-[40px] text-white/10">賭</span>
         <div className="font-display text-xl font-bold text-white">{children}</div>
         {/* motion cue so the state reads as live/working, never frozen */}
         <div aria-hidden className="mt-0.5 flex items-center gap-1.5">
