@@ -3902,6 +3902,47 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
 }
 .draw-line.in-view { transform: scaleX(1); }
 
+/* ───────── Landing: on iOS ─────────
+   Deliberately the quietest band on the page: a hairline, one line of type, one door out.
+   The app is the only thing here that is not already on this website, so it does not need
+   decoration to earn attention, only somewhere obvious to stand. */
+.ios {
+  border-top: 1px solid rgba(255,255,255,0.08);
+  padding: 150px 0 160px;
+}
+.ios-inner { max-width: 1320px; margin: 0 auto; }
+.ios-title {
+  font-family: var(--font-display); font-weight: 700;
+  font-size: clamp(2rem, 5vw, 3.5rem);
+  line-height: 1.05; letter-spacing: -0.035em;
+  color: var(--white); max-width: 14ch; margin: 0 0 28px;
+}
+.ios-title em { font-style: italic; color: var(--gray-500); }
+.ios-line {
+  color: var(--gray-400); font-size: 17px; line-height: 1.6;
+  max-width: 46ch; margin: 0 0 40px;
+}
+.ios-cta {
+  display: inline-flex; align-items: center; gap: 12px;
+  background: var(--white); color: var(--black);
+  padding: 17px 27px; border-radius: 999px; text-decoration: none;
+  font-family: var(--font-display); font-size: 17px; font-weight: 500;
+  letter-spacing: -0.01em;
+  transition: transform 240ms var(--ease);
+}
+.ios-cta .arr { transition: transform 240ms var(--ease); }
+.ios-cta:hover { transform: translateY(-2px); }
+.ios-cta:hover .arr { transform: translateX(4px); }
+.ios-meta {
+  display: flex; gap: 28px; margin-top: 32px;
+  font-family: var(--font-mono); font-size: 10px;
+  letter-spacing: 0.28em; text-transform: uppercase; color: var(--gray-600);
+}
+@media (max-width: 720px) {
+  .ios { padding: 100px 0 110px; }
+  .ios-meta { gap: 18px; flex-wrap: wrap; }
+}
+
 /* ───────── Landing: Section horizontal padding ───────── */
 .landing .stats,
 .landing .how,
@@ -3909,6 +3950,7 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
 .landing .manifesto,
 .landing .split,
 .landing .markets-preview,
+.landing .ios,
 .landing .faq,
 .landing .landing-footer {
   padding-left: 64px;

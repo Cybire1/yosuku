@@ -119,6 +119,7 @@ const SPEC_ROWS: SpecRow[] = [
 const FOOTER_COLS: { title: string; links: { label: string; href: string; ext?: boolean }[] }[] = [
   { title: 'Product', links: [
     { label: 'Markets', href: '/markets' },
+    { label: 'iOS app', href: 'https://testflight.apple.com/join/7AxcFCf5', ext: true },
     { label: 'Sensei', href: '/sensei' },
     { label: 'Reels', href: '/reels' },
     { label: 'Portfolio', href: '/portfolio' },
@@ -854,6 +855,34 @@ export default function HomePage() {
       </section>
 
       {/* ═══════ MARKETS PREVIEW ═══════ */}
+
+      {/* ═══════ ON iOS ═══════ */}
+      <section className="ios fade-up">
+        <div className="ios-inner">
+          <div className="section-eyebrow">04 &middot; Mobile</div>
+          <h2 className="ios-title">
+            It fits in <em>your pocket.</em>
+          </h2>
+          <p className="ios-line">
+            The same markets, on iOS. Sign in with Google, call it up or down, and get paid when the
+            round closes.
+          </p>
+          <a
+            href="https://testflight.apple.com/join/7AxcFCf5"
+            target="_blank"
+            rel="noreferrer"
+            className="ios-cta"
+            data-cursor="hover"
+          >
+            Get the app <span className="arr">{'↗'}</span>
+          </a>
+          <div className="ios-meta">
+            <span>TestFlight</span>
+            <span>iPhone</span>
+            <span>Testnet</span>
+          </div>
+        </div>
+      </section>
 
       {/* ═══════ FAQ ═══════ */}
       <section className="faq fade-up">
