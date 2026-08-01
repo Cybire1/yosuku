@@ -17,7 +17,7 @@ Predict directly from X, with leverage, private trading, and agent strategies. O
 [![MCP](https://img.shields.io/npm/v/@yosuku/deepbook-predict-mcp?style=flat-square&label=mcp&color=7C5CFC)](https://www.npmjs.com/package/@yosuku/deepbook-predict-mcp)
 [![License](https://img.shields.io/badge/license-MIT-yellow?style=flat-square)](LICENSE)
 
-**[Live → yosuku.xyz](https://yosuku.xyz)**  ·  **[SDK](https://www.npmjs.com/package/@yosuku/deepbook-predict)**  ·  **[Demo](https://x.com/yosuku0/status/2052336134387114053)**  ·  **[X → @yosuku0](https://x.com/yosuku0)**  ·  *Sui Overflow 2026, DeepBook Predict track*
+**[Live → yosuku.xyz](https://yosuku.xyz)**  ·  **[Proof → on-chain traction](https://yosuku.xyz/stats)**  ·  **[iOS → TestFlight](https://testflight.apple.com/join/7AxcFCf5)**  ·  **[SDK](https://www.npmjs.com/package/@yosuku/deepbook-predict)**  ·  **[Demo](https://x.com/yosuku0/status/2052336134387114053)**  ·  **[X → @yosuku0](https://x.com/yosuku0)**  ·  *Sui Overflow 2026, DeepBook Predict track*
 
 </div>
 
@@ -54,7 +54,7 @@ But a primitive is not a product. Out of the box there is **no consumer app, no 
 | | DeepBook Predict alone | **With Yosuku** |
 |---|---|---|
 | **People** | Raw Move calls, gas, seed phrases | One-tap UP/DOWN, **gasless** (sponsored), no seed phrase, a **TikTok-style live feed** you post your own take into, a faucet that finds you |
-| **Mobile** | Nothing | A **native iOS + Android app** (Expo), installable today as an Android APK and an iOS TestFlight build, per-device non-custodial keys, full feature parity with web |
+| **Mobile** | Nothing | A **native iOS + Android app** (Expo), installable today as an Android APK and an [iOS TestFlight build](https://testflight.apple.com/join/7AxcFCf5), per-device non-custodial keys, full feature parity with web |
 | **Social** | Nothing | **Predict directly from X**, post a call, a bounded executor opens it from your own un-drainable vault. No-divert enforced in Move, proven on-chain |
 | **Agents** | No path | **Agent strategies**, subscribe to a creator's agent with a capped budget and zero withdrawal control, plus the attested **Bellkeeper** (decisions signed in a Nitro enclave, verified on-chain) |
 | **Money** | Funds stranded across wallet, managers, escrow | One **Trading Balance**, deposit once and route into normal / private / leverage / agentic trades, withdraw anytime |
@@ -115,7 +115,11 @@ Composed, not bolted on.
 
 ## Traction
 
-On-chain (testnet), early and verifiable: **~9 distinct non-team wallets** have touched our contracts, **6 of them have placed real bets/trades** (verified on-chain 2026-06-23), via Onara-sponsored gas (~42–51 sponsored on-chain actions), with the running count at **[yosuku.xyz/stats](https://yosuku.xyz/stats)**. Developer pull: about **440 npm installs last month** across our two Predict packages (`@yosuku/deepbook-predict` 249, `@yosuku/deepbook-predict-mcp` 191) — the only SDK and MCP server for DeepBook Predict.
+Verifiable, not self-reported. **169 wallets onboarded** and **928 gas-free actions** on testnet. Every one is provable: Yosuku's sponsor paid the gas, so the chain itself records that the wallet arrived through us and not the wider Predict network. Our own infra and test wallets are excluded.
+
+The count is live at **[yosuku.xyz/stats](https://yosuku.xyz/stats)**, read straight from chain, so it will already have moved past the numbers above. Every row there links to Suiscan.
+
+Developer pull: **~515 downloads to date** across our two Predict packages (`@yosuku/deepbook-predict`, `@yosuku/deepbook-predict-mcp`), the only SDK and MCP server for DeepBook Predict.
 
 ## Quickstart
 
