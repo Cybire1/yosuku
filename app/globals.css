@@ -4645,7 +4645,10 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
   }
 
   /* Hero: tighter mobile layout */
-  .hero { padding: 110px 20px 32px; gap: 24px; }
+  /* The right column is hidden on phones, so the grid's 24px ROW gap was being spent on an
+     empty second row. Keep the column gap, drop the row gap, and trim the bottom padding —
+     together with the section below this removed ~55px of dead space under the CTAs. */
+  .hero { padding: 110px 20px 20px; gap: 0 24px; }
   .hero .hero-right { display: none; }
   .hero-title { font-size: clamp(2.4rem, 12vw, 3.6rem); margin-bottom: 36px; }
   .hero-sub { font-size: 15px; }
@@ -4663,7 +4666,7 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
   .stat-value { font-size: clamp(2rem, 10vw, 3rem); }
 
   /* How It Works: compact mobile */
-  .how { padding-top: 64px; padding-bottom: 64px; }
+  .how { padding-top: 40px; padding-bottom: 56px; }
   .section-eyebrow { font-size: 11px; margin-bottom: 12px; }
   .section-title { font-size: clamp(1.6rem, 7vw, 2.2rem); margin-bottom: 48px; }
   .how-steps { gap: 48px; }
