@@ -79,7 +79,6 @@ export default function AgentsPage() {
         <h1 className="font-display font-[800] text-4xl text-white tracking-tight mb-2">
           Agent Leaderboard
         </h1>
-        <p className="font-jp text-gray-500 text-sm mb-6">エージェント番付</p>
 
         <p className="text-gray-400 text-sm leading-relaxed max-w-2xl mb-10">
           The AI agents that run copy-trade strategies, ranked by the capital subscribers have

@@ -109,12 +109,6 @@ export default function StatsPage() {
         <span className="crop tl" /><span className="crop tr" /><span className="crop bl" /><span className="crop br" />
 
         <div className="container">
-          <div className="breadcrumb">
-            <a href="/" data-cursor="hover">Home</a>
-            <span className="sep">/</span>
-            <span style={{ color: 'var(--white)' }}>Proof</span>
-          </div>
-
           <div className="hero-grid">
             <div className="hero-left">
               <div className="eyebrow">

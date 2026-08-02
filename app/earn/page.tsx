@@ -139,12 +139,6 @@ export default function EarnPage() {
             collided with the panel's lower edge at ~1280px */}
 
         <div className="container">
-          <div className="breadcrumb">
-            <a href="/" data-cursor="hover">Home</a>
-            <span className="sep">/</span>
-            <span style={{ color: 'var(--white)' }}>Earn</span>
-          </div>
-
           <div className="hero-grid">
             <div className="hero-left">
               <h1 className="page-title">

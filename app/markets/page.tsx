@@ -15,7 +15,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import Link from 'next/link';
 import { pollWhileVisible } from '@/lib/hooks/usePoll';
-import { useOracles } from '@/lib/sui/hooks';
+import { useOracles, useHbtcBalance } from '@/lib/sui/hooks';
 import { type PriceData } from '@/lib/sui/predictApi';
 import { getCanonicalMarketLine } from '@/lib/marketLine';
 import { useBtcPrice } from '@/lib/hooks/useBtcPrice';
@@ -90,6 +90,13 @@ function RailPlaceholder({ cadence }: { cadence: Cadence624 }) {
 }
 
 const fmtUsd0 = (n: number) => `$${Math.round(n).toLocaleString('en-US')}`;
+// Compact BTC amount for the "Bet with Bitcoin" strip: enough precision for small
+// testnet holdings without a wall of zeros.
+const fmtBtc = (n: number) =>
+  n >= 1 ? n.toLocaleString('en-US', { maximumFractionDigits: 3 })
+  : n >= 0.0001 ? n.toFixed(4)
+  : n > 0 ? n.toFixed(8).replace(/0+$/, '')
+  : '0';
 
 function fmtCountdown(msLeft: number): string {
   if (msLeft <= 0) return 'settling';
@@ -221,6 +228,8 @@ function Market624Card({
   odds,
   now,
   onOpen,
+  holdsBtc = false,
+  btcAmount = 0,
 }: {
   market: Market624;
   spot: number | null;
@@ -228,7 +237,9 @@ function Market624Card({
   deltaPct: number | null;
   odds: HouseOdds | undefined;
   now: number;
-  onOpen: (market: Market624, side: Dir624 | null) => void;
+  onOpen: (market: Market624, side: Dir624 | null, fundWith?: 'btc') => void;
+  holdsBtc?: boolean;
+  btcAmount?: number;
 }) {
   const [roomOpen, setRoomOpen] = useState(false);
   const msLeft = now > 0 ? market.expiry - now : null;
@@ -342,6 +353,46 @@ function Market624Card({
             <span className="price">{odds?.downCents != null ? `${odds.downCents}¢` : '···'}</span>
           </button>
         </div>
+      )}
+
+      {holdsBtc && !closing && (
+        <button
+          type="button"
+          className="mc-btbtc"
+          data-cursor="hover"
+          aria-label={`Bet with your Bitcoin, ${fmtBtc(btcAmount)} BTC ready. Your hBTC funds the stake and only you can cash out.`}
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpen(market, null, 'btc');
+          }}
+        >
+          <svg className="mc-btbtc-coin" width="26" height="26" viewBox="0 0 26 26" fill="none" aria-hidden>
+            <defs>
+              <radialGradient id="btbGold" cx="34%" cy="28%" r="82%">
+                <stop offset="0%" stopColor="#FFE7B0" />
+                <stop offset="42%" stopColor="#F7A81E" />
+                <stop offset="100%" stopColor="#BC630B" />
+              </radialGradient>
+            </defs>
+            <circle cx="13" cy="13" r="12" fill="url(#btbGold)" />
+            <circle cx="13" cy="13" r="12" fill="none" stroke="#FFF4D6" strokeOpacity="0.4" strokeWidth="0.9" />
+            <circle cx="13" cy="13" r="9.4" fill="none" stroke="#7A3F04" strokeOpacity="0.28" strokeWidth="0.8" />
+            <text x="13" y="17.6" textAnchor="middle" fontFamily="var(--font-sans)" fontWeight="800" fontSize="14.5" fill="#fff">₿</text>
+          </svg>
+          <span className="mc-btbtc-txt">
+            <span className="mc-btbtc-title">Bet with Bitcoin</span>
+            <span className="mc-btbtc-sub">funded from your BTC</span>
+          </span>
+          <span className="mc-btbtc-amt">
+            <span className="mc-btbtc-bal">
+              <b>{fmtBtc(btcAmount)}</b>
+              <span>BTC ready</span>
+            </span>
+            <svg className="mc-btbtc-chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M9 6l6 6-6 6" />
+            </svg>
+          </span>
+        </button>
       )}
 
       <button
@@ -493,13 +544,19 @@ export default function MarketsPage() {
   // ticket = the market you're actively sizing a bet on. Tapping a card sets it,
   // and the HERO renders this market (chart + bet controls together) — so a card
   // tap "loads into the hero", never a separate panel.
+  // Native BTC (hBTC via Hashi) the connected user holds. Gates the "bet with Bitcoin"
+  // affordance in the cards: it only appears when there's BTC to bet with, and the strip
+  // shows the live amount.
+  const { holdsBtc, btc: btcAmount } = useHbtcBalance();
+
   const [ticket, setTicket] = useState<{
     market: Market624;
     side: Dir624 | null;
     sessionId: number;
+    fundWith?: 'btc';
   } | null>(null);
-  const openTicket = (market: Market624, side: Dir624 | null) => {
-    setTicket({ market, side, sessionId: Date.now() });
+  const openTicket = (market: Market624, side: Dir624 | null, fundWith?: 'btc') => {
+    setTicket({ market, side, sessionId: Date.now(), fundWith });
     // desktop: the bet lives in the hero at the top — bring it into view
     if (typeof window !== 'undefined' && window.innerWidth >= 1024) {
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -581,12 +638,6 @@ export default function MarketsPage() {
         <span className="crop br" />
 
         <div className="container">
-          <div className="breadcrumb">
-            <a href="/" data-cursor="hover">Home</a>
-            <span className="sep">/</span>
-            <span style={{ color: 'var(--white)' }}>Markets</span>
-          </div>
-
           <div className="hero-grid hero-grid-mini lg:![grid-template-columns:minmax(0,1fr)_400px] lg:!items-start">
             {/* Hero chart — the soonest live market */}
             <div className="hero-chart">
@@ -675,6 +726,7 @@ export default function MarketsPage() {
               spot={spot}
               series={liveSeries}
               mobileOpen={!!ticket}
+              fundWith={ticket?.fundWith ?? null}
               onClose={() => setTicket(null)}
             />
           </div>
@@ -718,6 +770,8 @@ export default function MarketsPage() {
                       odds={odds[item.market.id]}
                       now={now}
                       onOpen={openTicket}
+                      holdsBtc={holdsBtc}
+                      btcAmount={btcAmount}
                     />
                   ) : (
                     <RailPlaceholder key={`ph-${item.cadence}`} cadence={item.cadence} />

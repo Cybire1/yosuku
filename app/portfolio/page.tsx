@@ -247,17 +247,9 @@ export default function PortfolioPage() {
       <GrainOverlay />
 
       <main className="container pt-[120px] pb-12">
-        {/* Breadcrumb */}
-        <div className="font-mono text-[11px] tracking-[0.18em] uppercase text-gray-500 mb-7 flex items-center gap-3">
-          <a href="/" className="hover:text-white transition-colors">Yosuku</a>
-          <span className="text-gray-700">/</span>
-          <span className="text-white">Portfolio</span>
-        </div>
-
         <h1 className="font-display font-[800] text-4xl text-white tracking-tight mb-2">
           Portfolio
         </h1>
-        <p className="font-jp text-gray-500 text-sm mb-8">ポートフォリオ</p>
 
         {/* Trade-from-X account — shows whether or not a Sui wallet is connected */}
         <div className="mb-10">

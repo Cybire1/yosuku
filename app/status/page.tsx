@@ -38,12 +38,6 @@ export default function StatusPage() {
       <GrainOverlay />
 
       <main className="container pt-[120px] pb-12">
-        <div className="breadcrumb mb-6">
-          <a href="/" data-cursor="hover">Home</a>
-          <span className="sep">/</span>
-          <span style={{ color: 'var(--white)' }}>Status</span>
-        </div>
-
         <SectionHeader number="01" title="System Status" jp="システム状態" />
 
         {loading && (
