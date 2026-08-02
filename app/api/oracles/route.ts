@@ -1,182 +1,133 @@
+// Markets + spot for the web app.
+//
+// This used to read `predict-server.testnet.mystenlabs.com`. That hostname no longer resolves
+// (NXDOMAIN — Mysten retired the pre-6-24 indexer), so every request threw, the route answered
+// 502, and the markets page went blank. It now reads the live beta indexer, which is the same
+// source the mobile app already uses, and keeps the OUTPUT shape byte-compatible so nothing
+// downstream has to change: `{ oracles: [{ oracle_id, expiry, status, ... }], prices: { id: { spot } } }`.
+//
+// The beta rows describe expiry markets, not the old "oracles", so status is derived from the
+// clock rather than read from a field: a market is active until its expiry passes.
 import { NextResponse } from 'next/server';
-import { readFile, writeFile } from 'node:fs/promises';
 
-const PREDICT_BASE = 'https://predict-server.testnet.mystenlabs.com';
-const ORACLE_CACHE_TTL = 30_000;      // fast rounds need a short market-list cache
-const PRICE_CACHE_TTL = 10_000;       // 10 seconds for prices
-const ORACLE_COLD_TIMEOUT_MS = 30_000; // /oracles is ~2MB and can be slow on cold local dev
-const PRICE_TIMEOUT_MS = 8_000;
-const ORACLE_DISK_CACHE = '/tmp/yosuku-predict-oracles-cache.json';
+const INDEXER = 'https://predict-server-beta.testnet.mystenlabs.com';
+const PROPBOOK = 'https://propbook.api.testnet.mystenlabs.com';
+const PYTH_FEED = '0xc78d7de16217d46d21b92ae475da799448be30b71a758dc6d7bb3ac2f1c35afb';
+
+const MARKET_CACHE_TTL = 15_000;
+const PRICE_CACHE_TTL = 5_000;
+const TIMEOUT_MS = 12_000;
 
 interface OracleEntry {
   oracle_id: string;
   status: string;
   settled_at: number | null;
   expiry: number;
-  [key: string]: unknown;
+  min_strike: string;
+  tick_size: string;
+  underlying_asset: string;
+  max_admission_leverage?: string;
 }
 
-interface Cached<T> { data: T; ts: number; }
+interface Cached<T> { data: T; ts: number }
+let marketCache: Cached<OracleEntry[]> | null = null;
+let priceCache: Cached<number | null> | null = null;
+let marketInFlight: Promise<OracleEntry[]> | null = null;
 
-let oracleCache: Cached<OracleEntry[]> | null = null;
-let priceCache: Cached<Record<string, unknown>> | null = null;
-let oracleInFlight: Promise<OracleEntry[]> | null = null;
-let priceInFlight: Promise<Record<string, unknown>> | null = null;
+const j = async <T>(url: string): Promise<T> => {
+  const res = await fetch(url, { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(TIMEOUT_MS) });
+  if (!res.ok) throw new Error(`${url}: ${res.status}`);
+  return res.json() as Promise<T>;
+};
 
-function filterRelevant(all: OracleEntry[]): OracleEntry[] {
+async function fetchMarkets(): Promise<OracleEntry[]> {
+  const rows = await j<Array<Record<string, unknown>>>(`${INDEXER}/markets`);
   const now = Date.now();
-  const cutoff = now - 2 * 60 * 60 * 1000;
-  const activeGrace = now - 2 * 60_000;
-  const rank = (status: string) =>
-    status === 'active' ? 0 : status === 'pending_settlement' ? 1 : 2;
-
-  return all
-    .filter(o =>
-      (o.status === 'active' && o.expiry > activeGrace) ||
-      o.status === 'pending_settlement' ||
-      (o.status === 'settled' && (o.settled_at ?? o.expiry) > cutoff)
-    )
-    .sort((a, b) => {
-      const ar = rank(a.status);
-      const br = rank(b.status);
-      if (ar !== br) return ar - br;
-      return ar === 2
-        ? (b.settled_at ?? b.expiry) - (a.settled_at ?? a.expiry)
-        : a.expiry - b.expiry;
+  const seen = new Set<string>();
+  const out: OracleEntry[] = [];
+  for (const m of Array.isArray(rows) ? rows : []) {
+    const id = String(m.expiry_market_id ?? '');
+    const expiry = Number(m.expiry);
+    if (!id || !Number.isFinite(expiry) || seen.has(id)) continue;
+    seen.add(id);
+    // Keep recently-settled rounds around briefly so a just-closed market can still render.
+    if (expiry < now - 2 * 60 * 60 * 1000) continue;
+    out.push({
+      oracle_id: id,
+      expiry,
+      status: expiry > now ? 'active' : 'settled',
+      settled_at: expiry > now ? null : expiry,
+      min_strike: '0',
+      tick_size: String(m.tick_size ?? '1000000000'),
+      underlying_asset: 'BTC',
+      max_admission_leverage: m.max_admission_leverage != null ? String(m.max_admission_leverage) : undefined,
     });
+  }
+  const rank = (s: string) => (s === 'active' ? 0 : 1);
+  out.sort((a, b) => rank(a.status) - rank(b.status) || (rank(a.status) === 0 ? a.expiry - b.expiry : b.expiry - a.expiry));
+  marketCache = { data: out, ts: Date.now() };
+  return out;
 }
 
-async function fetchOraclesFromUpstream(): Promise<OracleEntry[]> {
-  // /oracles is large (~2MB). On local dev, three long retries can make the
-  // markets page look dead, so cold loads get one generous attempt. Warm loads
-  // are protected by stale-while-revalidate below.
-  const res = await fetch(`${PREDICT_BASE}/oracles`, {
-    headers: { accept: 'application/json' },
-    signal: AbortSignal.timeout(ORACLE_COLD_TIMEOUT_MS),
-  });
-  if (!res.ok) throw new Error(`Upstream oracles: ${res.status}`);
-  const all: OracleEntry[] = await res.json();
-  const relevant = filterRelevant(all);
-  oracleCache = { data: relevant, ts: Date.now() };
-  void writeFile(ORACLE_DISK_CACHE, JSON.stringify(relevant)).catch(() => {});
-  return relevant;
-}
-
-async function getDiskOracles(): Promise<OracleEntry[] | null> {
+/** Live BTC spot from the settlement feed's HISTORY.
+ *
+ *  Deliberately not `/pyth/latest`: that endpoint currently returns a row about a day old while
+ *  the history beside it is seconds fresh, so reading "latest" would put a stale price on the
+ *  screen. The newest history row is the actual latest observation. */
+async function fetchSpot(): Promise<number | null> {
   try {
-    const raw = await readFile(ORACLE_DISK_CACHE, 'utf8');
-    const parsed = JSON.parse(raw) as OracleEntry[];
-    const relevant = filterRelevant(parsed);
-    if (relevant.length === 0) return null;
-    oracleCache = { data: relevant, ts: Date.now() };
-    return relevant;
+    const rows = await j<Array<Record<string, unknown>>>(`${PROPBOOK}/oracles/${PYTH_FEED}/pyth?limit=1`);
+    const r = Array.isArray(rows) ? rows[0] : null;
+    if (!r) return null;
+    const exp = Number(r.exponent_magnitude);
+    const scale = r.exponent_is_negative === false ? 10 ** exp : 10 ** -exp;
+    const price = Number(r.price_magnitude) * scale * (r.price_is_negative ? -1 : 1);
+    return Number.isFinite(price) && price > 0 ? price : null;
   } catch {
     return null;
   }
 }
 
-/** Stale-while-revalidate: return stale data instantly, refresh in background */
-async function getOracles(now: number): Promise<OracleEntry[]> {
-  if (oracleCache && now - oracleCache.ts < ORACLE_CACHE_TTL) return oracleCache.data;
-
-  if (oracleCache) {
-    // Stale — return immediately, background refresh
-    if (!oracleInFlight) {
-      oracleInFlight = fetchOraclesFromUpstream()
-        .catch(() => oracleCache!.data)
-        .finally(() => { oracleInFlight = null; });
+async function getMarkets(now: number): Promise<OracleEntry[]> {
+  if (marketCache && now - marketCache.ts < MARKET_CACHE_TTL) return marketCache.data;
+  // Stale-while-revalidate: a slow upstream never blanks a page that already has data.
+  if (marketCache) {
+    if (!marketInFlight) {
+      marketInFlight = fetchMarkets().catch(() => marketCache!.data).finally(() => { marketInFlight = null; });
     }
-    return oracleCache.data;
+    return marketCache.data;
   }
-
-  const disk = await getDiskOracles();
-  if (disk) {
-    if (!oracleInFlight) {
-      oracleInFlight = fetchOraclesFromUpstream()
-        .catch(() => disk)
-        .finally(() => { oracleInFlight = null; });
-    }
-    return disk;
-  }
-
-  // Cold — must wait
-  if (oracleInFlight) return oracleInFlight;
-  oracleInFlight = fetchOraclesFromUpstream()
-    .finally(() => { oracleInFlight = null; });
-  return oracleInFlight;
+  if (marketInFlight) return marketInFlight;
+  marketInFlight = fetchMarkets().finally(() => { marketInFlight = null; });
+  return marketInFlight;
 }
 
-async function fetchPrice(oracleId: string): Promise<unknown | null> {
-  try {
-    const res = await fetch(`${PREDICT_BASE}/oracles/${oracleId}/prices/latest`, {
-      headers: { accept: 'application/json' },
-      signal: AbortSignal.timeout(PRICE_TIMEOUT_MS),
-    });
-    if (!res.ok) return null;
-    return await res.json();
-  } catch { return null; }
-}
-
-async function fetchAllPrices(oracles: OracleEntry[]): Promise<Record<string, unknown>> {
-  const prices: Record<string, unknown> = {};
-  const activeIds = oracles.filter(o => o.status === 'active').map(o => o.oracle_id);
-  const results = await Promise.allSettled(activeIds.map(id => fetchPrice(id)));
-  results.forEach((r, i) => {
-    if (r.status === 'fulfilled' && r.value) prices[activeIds[i]] = r.value;
-  });
-  return prices;
-}
-
-async function getPrices(oracles: OracleEntry[], now: number): Promise<Record<string, unknown>> {
+async function getSpot(now: number): Promise<number | null> {
   if (priceCache && now - priceCache.ts < PRICE_CACHE_TTL) return priceCache.data;
-
-  if (priceCache) {
-    if (!priceInFlight) {
-      priceInFlight = fetchAllPrices(oracles)
-        .then(p => { priceCache = { data: p, ts: Date.now() }; return p; })
-        .catch(() => priceCache!.data)
-        .finally(() => { priceInFlight = null; });
-    }
-    return priceCache.data;
-  }
-
-  if (priceInFlight) return priceInFlight;
-  priceInFlight = fetchAllPrices(oracles)
-    .then(p => { priceCache = { data: p, ts: Date.now() }; return p; })
-    .finally(() => { priceInFlight = null; });
-  return priceInFlight;
+  const spot = await fetchSpot();
+  priceCache = { data: spot, ts: Date.now() };
+  return spot;
 }
 
 /**
- * Combined oracles + prices endpoint.
  * ?prices=1 → { oracles, prices }
- * Otherwise → oracle list
- *
- * Stale-while-revalidate caching. Cold cache ~2-3s, warm ~10ms.
+ * otherwise → oracle list
  */
 export async function GET(request: Request) {
   const now = Date.now();
-  const url = new URL(request.url);
-  const withPrices = url.searchParams.get('prices') === '1';
+  const withPrices = new URL(request.url).searchParams.get('prices') === '1';
 
   try {
-    const oracles = await getOracles(now);
+    const oracles = await getMarkets(now);
     if (!withPrices) return NextResponse.json(oracles);
-
-    const prices = await getPrices(oracles, now);
+    const spot = await getSpot(now);
+    const prices: Record<string, { spot: number }> = {};
+    if (spot != null) for (const o of oracles) if (o.status === 'active') prices[o.oracle_id] = { spot };
     return NextResponse.json({ oracles, prices });
   } catch (err) {
-    console.error('Failed to fetch oracles:', err);
-    if (oracleCache) {
-      return NextResponse.json(
-        withPrices
-          ? { oracles: oracleCache.data, prices: priceCache?.data ?? {} }
-          : oracleCache.data
-      );
-    }
-    const disk = await getDiskOracles();
-    if (disk) {
-      return NextResponse.json(withPrices ? { oracles: disk, prices: priceCache?.data ?? {} } : disk);
+    console.error('oracles route failed:', err);
+    if (marketCache) {
+      return NextResponse.json(withPrices ? { oracles: marketCache.data, prices: {} } : marketCache.data);
     }
     return NextResponse.json(withPrices ? { oracles: [], prices: {} } : [], { status: 502 });
   }
