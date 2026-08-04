@@ -146,6 +146,8 @@ export interface StrategyCard {
   wins: number;
   losses: number;
   liquidations: number;
+  /** Closed copies oldest-first, for the equity curve. Empty until positions close. */
+  exits: StrategyExit[];
 }
 
 export interface StrategyLeaderboardRow extends StrategyCard {
@@ -395,6 +397,17 @@ interface StrategyRealized {
   wins: number;
   losses: number;
   liquidations: number;
+  /** Every closed copy, oldest first — the raw material for the equity curve. */
+  exits: StrategyExit[];
+}
+
+/** One closed copy-trade: what the subscriber put up, what came back, and when. */
+export interface StrategyExit {
+  ts: number;        // ms epoch
+  margin: number;    // DUSDC risked
+  returned: number;  // DUSDC returned on exit
+  pnl: number;       // returned − margin
+  liquidated: boolean;
 }
 
 const emptyRealized = (): StrategyRealized => ({
@@ -405,11 +418,13 @@ const emptyRealized = (): StrategyRealized => ({
   wins: 0,
   losses: 0,
   liquidations: 0,
+  exits: [],
 });
 
-function addRealized(map: Map<string, StrategyRealized>, strategy: string, margin: number, returned: number, liquidated: boolean) {
+function addRealized(map: Map<string, StrategyRealized>, strategy: string, margin: number, returned: number, liquidated: boolean, ts = 0) {
   const row = map.get(strategy) ?? emptyRealized();
   const pnl = returned - margin;
+  row.exits.push({ ts, margin, returned, pnl, liquidated });
   row.realizedTrades += 1;
   row.realizedReturned += returned;
   row.realizedMargin += margin;
@@ -470,14 +485,15 @@ async function fetchRealizedByStrategy(copyTrades: CopyTrade[]): Promise<Map<str
     const j = event.contents?.json ?? {};
     const copy = positionToCopy.get(String(j.position ?? ''));
     if (!copy) continue;
-    addRealized(realized, copy.strategy, copy.margin, num(j.returned) / DUSDC_MULTIPLIER, false);
+    addRealized(realized, copy.strategy, copy.margin, num(j.returned) / DUSDC_MULTIPLIER, false, Number(event.timestamp ? Date.parse(event.timestamp) : 0));
   }
   for (const event of liquidations) {
     const j = event.contents?.json ?? {};
     const copy = positionToCopy.get(String(j.position ?? ''));
     if (!copy) continue;
-    addRealized(realized, copy.strategy, copy.margin, num(j.returned) / DUSDC_MULTIPLIER, true);
+    addRealized(realized, copy.strategy, copy.margin, num(j.returned) / DUSDC_MULTIPLIER, true, Number(event.timestamp ? Date.parse(event.timestamp) : 0));
   }
+  for (const row of realized.values()) row.exits.sort((a, b) => a.ts - b.ts);
   return realized;
 }
 
@@ -563,6 +579,7 @@ export async function fetchStrategies(): Promise<StrategyCard[]> {
         distinctSubscribers: subs.size,
         lastActive: ts.reduce((m, t) => Math.max(m, t.ts), 0),
         realizedTrades: realized.realizedTrades,
+        exits: realized.exits,
         realizedReturned: realized.realizedReturned,
         realizedPnl: realized.realizedPnl,
         realizedRoi: realized.realizedMargin > 0 ? realized.realizedPnl / realized.realizedMargin : 0,

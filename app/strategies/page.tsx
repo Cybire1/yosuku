@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback, useMemo, type ReactNode } from 'react';
+import EquityCurve from '@/components/EquityCurve';
 import { useCurrentAccount, useSuiClient, useSignPersonalMessage, ConnectButton } from '@mysten/dapp-kit';
 import { Share2, X, Lock, ArrowRight, Sparkles } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -39,6 +40,7 @@ import {
   type StrategySubscription,
   type PresetKey,
   type StrategySpec,
+  type StrategyExit,
 } from '@/lib/sui/strategyClient';
 import { fetchMemoryMarket, fetchAllMemoryListings, buildBuyPassTx, readMemory, type MemoryMarketInfo, type MemoryListingCard } from '@/lib/sui/memoryMarketClient';
 import LiveDesk from '@/components/LiveDesk';
@@ -145,6 +147,8 @@ function filterSort(list: StrategyCard[], tab: TabKey): StrategyCard[] {
   else out.sort((a, b) => settledFirst(a, b) || b.copyTrades - a.copyTrades || b.subscribers - a.subscribers);
   return out;
 }
+
+
 
 export default function StrategiesPage() {
   const account = useCurrentAccount();
@@ -541,12 +545,17 @@ export default function StrategiesPage() {
                       {/* the one bold move — real net P&L for settled agents, honest 'new' otherwise */}
                       <div className="mt-6 min-h-[42px]">
                         {settled ? (
-                          <div className="flex items-baseline gap-2 flex-wrap">
-                            <span className="font-display font-[800] text-[30px] leading-none tabular-nums" style={{ color: pnl >= 0 ? 'var(--gain)' : 'var(--loss)' }}>
-                              {pnl >= 0 ? '+' : '−'}{fmtDusdc(Math.abs(pnl))}
-                            </span>
-                            <span className="font-mono text-[10px] text-white/40 uppercase tracking-[0.12em]">DUSDC net · {card.realizedTrades} settled</span>
-                          </div>
+                          <>
+                            <div className="flex items-baseline gap-2 flex-wrap">
+                              <span className="font-display font-[800] text-[30px] leading-none tabular-nums" style={{ color: pnl >= 0 ? 'var(--gain)' : 'var(--loss)' }}>
+                                {pnl >= 0 ? '+' : '−'}{fmtDusdc(Math.abs(pnl))}
+                              </span>
+                              <span className="font-mono text-[10px] text-white/40 uppercase tracking-[0.12em]">DUSDC net · {card.realizedTrades} settled</span>
+                            </div>
+                            {(card.exits?.length ?? 0) >= 2 && (
+                              <div className="mt-3 -mx-1 text-white"><EquityCurve exits={card.exits} /></div>
+                            )}
+                          </>
                         ) : (
                           <div className="font-mono text-[11px] text-white/40 uppercase tracking-[0.14em] pt-2.5">New · no track record yet</div>
                         )}
