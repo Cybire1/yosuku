@@ -5324,3 +5324,175 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
 .earn-page .hero-grid .hero-left { margin-bottom: 0; }
 .earn-page main > .container { padding-top: 10px !important; padding-bottom: 22px !important; }
 .earn-page .section-head { margin-bottom: 16px !important; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   APP BAND  ·  the slow strip that carries you to /download
+   ══════════════════════════════════════════════════════════════════════════
+   A cream band across a near-black page. The contrast does the work, so the
+   band needs no border, no shadow and no badge art to be noticed.
+
+   It drifts rather than scrolls. The price ticker at the top of the site runs
+   its loop in 80s and reads as data moving; this one takes 64s over a much
+   larger type size, which reads as a held breath instead of a feed. Slow is
+   the brief, and slow is also what keeps a repeating line from feeling like
+   an advertisement chasing you down the page.
+
+   The whole band is one link. Nothing inside it competes for the click. */
+.appband {
+  display: block;
+  position: relative;
+  overflow: hidden;
+  background: var(--cream, #F4EEE3);
+  color: #141210;
+  text-decoration: none;
+  padding: clamp(26px, 4.2vw, 44px) 0;
+  isolation: isolate;
+}
+.appband-track {
+  display: flex;
+  align-items: center;
+  gap: clamp(28px, 4vw, 56px);
+  white-space: nowrap;
+  width: max-content;
+  padding-left: clamp(28px, 4vw, 56px);
+  animation: appbandDrift 64s linear infinite;
+  will-change: transform;
+}
+.appband:hover .appband-track { animation-play-state: paused; }
+.appband-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: clamp(18px, 2.4vw, 34px);
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(1.5rem, 4vw, 3.1rem);
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+/* The second half of every pair is set in the reading face, not the display
+   face, so the line has a rhythm instead of shouting the whole way across. */
+.appband-cell em {
+  font-family: var(--font-serif, var(--font-display));
+  font-style: italic;
+  font-weight: 500;
+  color: var(--vermilion-d, #B83A1B);
+}
+.appband-mark {
+  display: inline-flex;
+  width: clamp(20px, 2.4vw, 30px);
+  color: #141210;
+  opacity: 0.9;
+  flex: none;
+}
+.appband-mark svg { width: 100%; height: auto; display: block; }
+/* The rule reads as a typographic separator rather than a bullet, which keeps
+   the strip closer to a printed masthead than to a marquee of offers. */
+.appband-rule {
+  width: clamp(26px, 3.4vw, 54px);
+  height: 2px;
+  background: #141210;
+  opacity: 0.25;
+  flex: none;
+}
+/* Fade the ends so the loop never shows its seam against the page edge. */
+.appband::before,
+.appband::after {
+  content: '';
+  position: absolute; top: 0; bottom: 0;
+  width: clamp(40px, 8vw, 130px);
+  z-index: 2; pointer-events: none;
+}
+.appband::before { left: 0;  background: linear-gradient(90deg, var(--cream, #F4EEE3), transparent); }
+.appband::after  { right: 0; background: linear-gradient(270deg, var(--cream, #F4EEE3), transparent); }
+.appband:hover .appband-cell em { color: var(--vermilion, #E04D26); }
+@keyframes appbandDrift { 0% { transform: translate3d(0,0,0); } 100% { transform: translate3d(-50%,0,0); } }
+
+/* The band inverts in the cream theme.
+   Its whole idea is a band of paper laid across a dark page: the contrast is
+   the design, and there is no border or shadow doing that job for it. On the
+   cream theme the page is already paper, so cream-on-cream dissolves it into
+   the background and the strip stops reading as an object at all. Inverting to
+   ink keeps the same relationship, just the other way up. */
+[data-theme="light"] .appband { background: #141210; color: var(--cream, #F4EEE3); }
+[data-theme="light"] .appband-mark { color: var(--cream, #F4EEE3); }
+[data-theme="light"] .appband-rule { background: var(--cream, #F4EEE3); opacity: 0.3; }
+[data-theme="light"] .appband-cell em { color: #F0805F; } /* vermilion lifts on ink, the -d shade muddies */
+[data-theme="light"] .appband:hover .appband-cell em { color: #FF9271; }
+[data-theme="light"] .appband::before { background: linear-gradient(90deg, #141210, transparent); }
+[data-theme="light"] .appband::after  { background: linear-gradient(270deg, #141210, transparent); }
+
+
+@media (prefers-reduced-motion: reduce) {
+  /* Motion is the decoration here, never the message: the words are already
+     legible standing still, so honour the preference and simply stop. */
+  .appband-track { animation: none; padding-left: clamp(28px, 6vw, 56px); }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   /download
+   ══════════════════════════════════════════════════════════════════════════ */
+.dl { padding: clamp(28px, 6vw, 70px) clamp(20px, 5vw, 76px) 90px; max-width: 1240px; margin: 0 auto; }
+.dl-hero {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 420px);
+  gap: clamp(32px, 6vw, 90px); align-items: center;
+  padding-top: clamp(20px, 5vw, 56px);
+}
+.dl-title {
+  font-family: var(--font-display); font-weight: 800;
+  font-size: clamp(2.6rem, 7vw, 5.1rem); line-height: 0.94; letter-spacing: -0.035em;
+  margin: 14px 0 0; color: var(--white);
+}
+.dl-title em { font-family: var(--font-serif, var(--font-display)); font-style: italic; font-weight: 500; color: var(--vermilion); }
+.dl-line { margin: 22px 0 0; max-width: 46ch; color: var(--gray-400, #A3A3A3); font-size: clamp(0.98rem, 1.5vw, 1.12rem); line-height: 1.65; }
+
+.dl-cta {
+  display: inline-flex; align-items: center; gap: 12px; margin-top: 34px;
+  padding: 15px 30px; border-radius: 999px;
+  background: var(--vermilion); color: var(--white);
+  font-family: var(--font-display); font-weight: 700; font-size: 1rem; letter-spacing: -0.01em;
+  text-decoration: none; border: 1px solid transparent;
+  transition: transform 220ms cubic-bezier(0.2,0.7,0.3,1), background 220ms ease, box-shadow 220ms ease;
+}
+.dl-cta:hover { background: var(--vermilion-d); transform: translateY(-2px); box-shadow: 0 14px 34px rgba(224,77,38,0.28); }
+/* The glyph is an arrow descending into a tray: 'get', not 'share'. No rotation. */
+.dl-cta-arrow { width: 18px; height: 18px; }
+
+.dl-meta { list-style: none; display: flex; flex-wrap: wrap; gap: clamp(20px, 3vw, 42px); margin: 40px 0 0; padding: 0; }
+.dl-meta li { display: flex; flex-direction: column; gap: 5px; }
+.dl-meta b { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--vermilion); font-weight: 500; }
+.dl-meta span { font-size: 0.86rem; color: var(--gray-500, #8A8A8A); }
+
+.dl-stage { position: relative; display: flex; justify-content: center; }
+.dl-art { width: 100%; max-width: 320px; height: auto; position: relative; z-index: 1; filter: drop-shadow(0 40px 80px rgba(0,0,0,0.6)); }
+/* One soft bloom behind the device instead of a glow on every element: the
+   screen is the brightest thing on the page and should stay that way. */
+.dl-halo {
+  position: absolute; inset: -12% -22%; z-index: 0; pointer-events: none;
+  background: radial-gradient(closest-side, rgba(224,77,38,0.20), transparent 72%);
+  filter: blur(14px);
+}
+.dl-t-mono { font-family: var(--font-mono); font-size: 12px; }
+.dl-t-lbl  { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.16em; }
+.dl-t-num  { font-family: var(--font-mono); font-size: 21px; font-weight: 700; }
+.dl-t-h    { font-family: var(--font-display); font-size: 25px; font-weight: 800; fill: #FAFAFA; letter-spacing: -0.02em; }
+.dl-t-btn  { font-family: var(--font-display); font-size: 15px; font-weight: 700; }
+
+.dl-points {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: clamp(22px, 3vw, 46px);
+  margin-top: clamp(60px, 9vw, 118px);
+  padding-top: clamp(30px, 4vw, 50px);
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+.dl-points h3 { font-family: var(--font-display); font-weight: 700; font-size: 1.08rem; color: var(--white); margin: 16px 0 8px; letter-spacing: -0.01em; }
+.dl-points p { color: var(--gray-500, #8A8A8A); font-size: 0.92rem; line-height: 1.6; margin: 0; max-width: 34ch; }
+.dl-pt-mark { display: inline-flex; width: 22px; color: var(--vermilion); }
+.dl-pt-mark svg { width: 100%; height: auto; display: block; }
+
+.dl-foot { margin: clamp(46px, 6vw, 76px) 0 0; color: var(--gray-600, #6E6E6E); font-size: 0.84rem; line-height: 1.7; max-width: 62ch; }
+
+@media (max-width: 860px) {
+  .dl-hero { grid-template-columns: 1fr; gap: 44px; }
+  .dl-stage { order: -1; }
+  .dl-art { max-width: 260px; }
+}

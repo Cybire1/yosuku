@@ -152,6 +152,14 @@ function clamp(v: number, lo: number, hi: number): number {
 /* ═══════════════════════════════════════════════════
    COMPONENT
    ═══════════════════════════════════════════════════ */
+// The band's line. Short clauses, because at 3rem a long sentence never finishes
+// crossing the screen before you have stopped reading it.
+const APP_BAND_WORDS = [
+  { lead: 'Try it on', tail: 'your phone' },
+  { lead: 'Call the next round in', tail: 'ten seconds' },
+  { lead: 'Yosuku for', tail: 'iPhone' },
+];
+
 export default function HomePage() {
   const { price: btcPrice } = useBtcPrice();
   const { nextBellMs, liveCount: liveBells624 } = useBell624();
@@ -856,6 +864,26 @@ export default function HomePage() {
 
       {/* ═══════ MARKETS PREVIEW ═══════ */}
 
+      {/* ═══════ APP BAND ═══════ */}
+      {/* Duplicated cell list: the track translates -50%, so the second copy is
+          what makes the loop seamless. Keep the two halves identical. */}
+      <a className="appband" href="/download" aria-label="Try Yosuku on iPhone" data-cursor="hover">
+        <div className="appband-track">
+          {[0, 1].map((half) => (
+            <div key={half} className="appband-cell" aria-hidden={half === 1}>
+              {APP_BAND_WORDS.map((w, i) => (
+                <span key={i} className="appband-cell">
+                  <span>{w.lead} <em>{w.tail}</em></span>
+                  {i % 2 === 0
+                    ? <span className="appband-mark"><YosukuMark /></span>
+                    : <span className="appband-rule" />}
+                </span>
+              ))}
+            </div>
+          ))}
+        </div>
+      </a>
+
       {/* ═══════ ON iOS ═══════ */}
       <section className="ios fade-up">
         <div className="ios-inner">
@@ -867,14 +895,8 @@ export default function HomePage() {
             The same markets, on iOS. Sign in with Google, call it up or down, and get paid when the
             round closes.
           </p>
-          <a
-            href="https://testflight.apple.com/join/7AxcFCf5"
-            target="_blank"
-            rel="noreferrer"
-            className="ios-cta"
-            data-cursor="hover"
-          >
-            Get the app <span className="arr">{'↗'}</span>
+          <a href="/download" className="ios-cta" data-cursor="hover">
+            See it on iPhone <span className="arr">{'→'}</span>
           </a>
           <div className="ios-meta">
             <span>TestFlight</span>
