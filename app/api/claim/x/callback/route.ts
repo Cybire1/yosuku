@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { signSession } from '@/lib/claimOAuth';
+import { signSession, SESSION_TTL_MS } from '@/lib/claimOAuth';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,8 +37,14 @@ export async function GET(req: NextRequest) {
     if (!id) return NextResponse.redirect(`${home}?x=err`);
 
     const res = NextResponse.redirect(`${home}?x=1`);
+    // 30 days, not 30 minutes, and read from the same constant readSession enforces so the two
+    // can't drift apart (the shorter of the pair always wins). The old half-hour expiry meant the
+    // portfolio told returning users "Connect X first" on nearly every visit, including people who
+    // were already linked and funded, because the cookie was all that page could read. Still
+    // httpOnly + secure + sameSite; the binding itself lives on the relay, so this only governs
+    // how long the browser can prove which account it is.
     res.cookies.set('x_sess', signSession({ authorId: String(id), handle: username || null, t: Date.now() }), {
-      httpOnly: true, secure: true, sameSite: 'lax', path: '/', maxAge: 1800,
+      httpOnly: true, secure: true, sameSite: 'lax', path: '/', maxAge: Math.floor(SESSION_TTL_MS / 1000),
     });
     res.cookies.delete('x_v');
     res.cookies.delete('x_s');

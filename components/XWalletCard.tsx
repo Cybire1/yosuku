@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Twitter, ArrowUpRight } from 'lucide-react';
 import { useCurrentAccount } from '@mysten/dapp-kit';
 import { useSmartSubmit } from '@/lib/sui/useSmartSubmit';
@@ -11,6 +11,10 @@ type XMe = {
   handle: string | null;
   authorId?: string;
   account?: { address: string; balanceDusdc: number; owner: string | null } | null;
+  // Which X account the relay actually routes to this wallet. `handle` alone only means "signed in
+  // with X in this browser", which is not the same thing and does not make a tweet reach the money.
+  binding?: { authorId: string; handle: string | null; address: string | null; sealed: boolean } | null;
+  signedIn?: boolean;
 };
 
 const DUSDC_MUL = 1_000_000;
@@ -37,18 +41,22 @@ export default function XWalletCard() {
   const [loadingMe, setLoadingMe] = useState(true);
   const [balMicro, setBalMicro] = useState<bigint | null>(null);
   const [amount, setAmount] = useState('5');
-  const [busy, setBusy] = useState<'' | 'fund' | 'cashout' | 'faucet'>('');
+  const [busy, setBusy] = useState<'' | 'fund' | 'cashout' | 'faucet' | 'link'>('');
   const [err, setErr] = useState('');
   const [ok, setOk] = useState('');
   const [needsFaucet, setNeedsFaucet] = useState(false);
 
-  useEffect(() => {
-    fetch('/api/claim/x/me', { cache: 'no-store' })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((j) => setMe(j))
-      .catch(() => setMe(null))
-      .finally(() => setLoadingMe(false));
-  }, []);
+  // Re-runs when the wallet changes: the binding is per-wallet, so switching accounts has to
+  // re-ask, and passing ?wallet lets the answer come from the relay even with no session cookie.
+  const refreshMe = useCallback(async () => {
+    try {
+      const q = address ? `?wallet=${encodeURIComponent(address)}` : '';
+      const r = await fetch(`/api/claim/x/me${q}`, { cache: 'no-store' });
+      setMe(r.ok ? await r.json() : null);
+    } catch { setMe(null); }
+    finally { setLoadingMe(false); }
+  }, [address]);
+  useEffect(() => { void refreshMe(); }, [refreshMe]);
 
   const refreshBalance = useCallback(async () => {
     if (!address) { setBalMicro(null); return; }
@@ -156,6 +164,44 @@ export default function XWalletCard() {
   // only surface it when it isn't the connected wallet itself (that balance already shows above).
   const sealed = acct && acct.balanceDusdc > 0 && address && acct.address.toLowerCase() !== address.toLowerCase() ? acct : null;
 
+  // The state that actually decides whether a tweet can spend this balance: does the relay route
+  // this wallet to an X account? Signed in with X is NOT enough on its own, and treating the two as
+  // the same is what let people fund a balance their replies could never reach.
+  const routed = !!me?.binding;
+  const needsLink = !!address && !!me?.signedIn && !routed;
+
+  const link = useCallback(async () => {
+    if (!address || busy) return;
+    setErr(''); setOk(''); setBusy('link');
+    try {
+      const r = await fetch('/api/claim/x/link', {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ wallet: address }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || j?.ok === false) {
+        if (j?.reason === 'already_claimed_other' && j?.boundWallet) {
+          throw new Error(`That X account is already pointed at ${short(String(j.boundWallet))}. Connect that wallet instead.`);
+        }
+        throw new Error(typeof j?.reason === 'string' && j.reason ? j.reason : 'Could not link this wallet. Please try again.');
+      }
+      setOk('Linked. Your replies now bet from this balance.');
+      await refreshMe();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally { setBusy(''); }
+  }, [address, busy, refreshMe]);
+
+  // Finish the job the Connect X button started. OAuth bounces back here with ?x=1 having only set
+  // a cookie; without this the user is signed in, funded, and still unroutable, with nothing on
+  // screen saying so. Fires once, only on that return, and only when a wallet is actually present.
+  const autoLinked = useRef(false);
+  useEffect(() => {
+    if (autoLinked.current || loadingMe || !needsLink) return;
+    if (!new URLSearchParams(window.location.search).has('x')) return;
+    autoLinked.current = true;
+    void link();
+  }, [loadingMe, needsLink, link]);
+
   return (
     <section>
       <div className="mb-3 flex items-center gap-2">
@@ -167,11 +213,27 @@ export default function XWalletCard() {
         {/* WHO this balance bets for. The relay routes a reply by X account, so the binding is the
             thing that makes a funded balance reachable from a tweet. It used to sit in small gray
             type UNDER the fund controls, which read as a footnote instead of the first step. */}
-        {!loadingMe && (connected ? (
+        {!loadingMe && (needsLink ? (
+          // Signed in with X, but the relay does not route this wallet yet. The dangerous state:
+          // funding here produces a balance no tweet can spend, and until now nothing said so.
+          <div className="mb-4 rounded-lg border border-[#E04D26]/30 bg-[#E04D26]/[0.07] px-3.5 py-3">
+            <div className="text-[13px] font-bold text-white">One more step to bet from @{me!.handle}.</div>
+            <p className="mt-1 text-[12px] leading-snug text-gray-400">
+              Point that account at this wallet, so a reply you tweet spends this balance and not some other.
+            </p>
+            <button
+              onClick={link}
+              disabled={!!busy}
+              className="mt-2.5 inline-flex items-center gap-2 whitespace-nowrap rounded-xl border border-[#E04D26]/45 px-4 py-2 text-sm font-bold text-[#E04D26] transition-colors hover:bg-[#E04D26]/10 disabled:opacity-60"
+            >
+              <Twitter className="h-4 w-4" /> {busy === 'link' ? 'Linking…' : 'Link @' + me!.handle + ' to this wallet'}
+            </button>
+          </div>
+        ) : connected ? (
           <div className="mb-4 flex flex-wrap items-center gap-x-2 gap-y-0.5 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2">
             <Twitter className="h-3.5 w-3.5 shrink-0 text-[#E04D26]" />
             <span className="font-display text-sm font-[700] text-white">@{me!.handle}</span>
-            <span className="text-[12px] text-gray-500">bets from this balance</span>
+            <span className="text-[12px] text-gray-500">{routed ? 'bets from this balance' : 'signed in'}</span>
           </div>
         ) : (
           <div className="mb-4 rounded-lg border border-[#E04D26]/30 bg-[#E04D26]/[0.07] px-3.5 py-3">
