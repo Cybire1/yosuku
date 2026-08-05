@@ -36,7 +36,7 @@ import {
   fetchMarkets624,
   fetchSpot624,
   fetchPythHistory624,
-  quoteMint624,
+  quoteOddsCents624,
   type Cadence624,
   type Market624,
 } from '@/lib/sui/predict624Client';
@@ -50,7 +50,6 @@ const HOUSE_SENDER = '0x0099f97251af2d072fc492316ae30de3ab5639beb09073509d54bf49
 const HOUSE_WRAPPER = '0xc820ff1e36d8810f29d80ad81415fd064e02b7f20c41a4469e2f4400d514e706';
 // 2 DUSDC payout @1× — the venue's smallest quotable ticket (min net premium is
 // 1 DUSDC; a 1 DUSDC quote aborts). Cents shown = cost per $1 of payout.
-const ODDS_QTY_MICRO = 2_000_000n;
 const ODDS_STALE_MS = 18_000; // per-market cache — effective ~20s refresh
 const ODDS_TICK_MS = 3_000; // sweep cadence (each sweep skips fresh markets)
 const ODDS_STAGGER_MS = 350; // gap between per-market quote pairs
@@ -133,17 +132,20 @@ function useHouseOdds624(markets: Market624[], spot: number | null) {
 
     const quoteSide = async (marketId: string, dir: Dir624, spotNow: number): Promise<number | null> => {
       const { lowerTick, higherTick } = ticks624(spotNow, dir);
-      const q = await quoteMint624({
+      // Amount-based, and the dry run carries its own deposit. quoteMint624 builds
+      // mint_exact_quantity, which the venue refuses for this band on every live market
+      // (assert_mint_probability_and_leverage_policy #6, measured 2026-08-05), and it ran against
+      // a house account whose balance is zero. Both faults returned {error} on every sweep, which
+      // the board rendered as "LOADING ODDS…" forever. See quoteOddsCents624.
+      const q = await quoteOddsCents624({
         sender: HOUSE_SENDER,
         wrapperId: HOUSE_WRAPPER,
         marketId,
         lowerTick,
         higherTick,
-        qtyMicro: ODDS_QTY_MICRO,
-        leverage1e9: 1_000_000_000n,
       });
       if ('error' in q) return null;
-      return Math.max(1, Math.min(99, Math.round((q.costMicro / Number(ODDS_QTY_MICRO)) * 100)));
+      return q.cents;
     };
 
     const sweep = async () => {

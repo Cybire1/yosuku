@@ -19,17 +19,15 @@
 // `access-control-allow-origin: *` (verified 2026-07-03), so the browser fetches
 // them directly — no /api proxy route is needed.
 //
-// Everything here follows the strategyClient/modernClients idioms: reads via
-// GraphQL/gRPC (gql/grpc) with a JSON-RPC fallback where testnet GraphQL is
-// unreliable; writes are wallet-signed `Transaction` builders (no keys, no node
-// imports — browser-safe).
+// Everything here follows the strategyClient/modernClients idioms: reads and
+// simulations use GraphQL/gRPC (gql/grpc); writes are wallet-signed `Transaction`
+// builders (no keys, no node imports — browser-safe).
 //
 // Proven-on-chain reference flows: suioverflow/x-relay/spike-624.mjs (owner path),
 // spike-624b.mjs (delegated vault path), predict624.mjs (the node twin of this file).
 
-import { Transaction, type TransactionObjectArgument } from '@mysten/sui/transactions';
-import { suiJsonRpc } from './jsonRpc';
-import { gql, grpc } from './modernClients';
+import { Transaction, coinWithBalance, type TransactionObjectArgument } from '@mysten/sui/transactions';
+import { gql, grpc, readClient } from './modernClients';
 import { DUSDC_TYPE, CLOCK_ID, DUSDC_MULTIPLIER } from './constants';
 
 // ─── strike-tick sentinels (vendor predict source, constants.move) ───
@@ -72,6 +70,11 @@ export const PREDICT624 = {
   indexer: 'https://predict-server-beta.testnet.mystenlabs.com',
   /** Oracle (propbook) indexer — off-chain pyth observations + feed discovery. */
   propbook: 'https://propbook.api.testnet.mystenlabs.com',
+  marketCreatedEventType: '0xdb3ef5a5129920e59c9b2ae25a77eddb48acd0e1c6307b97073f0e076016446e::config_events::MarketCreated',
+  orderMintedEventType: '0xdb3ef5a5129920e59c9b2ae25a77eddb48acd0e1c6307b97073f0e076016446e::order_events::OrderMinted',
+  liveOrderRedeemedEventType: '0xdb3ef5a5129920e59c9b2ae25a77eddb48acd0e1c6307b97073f0e076016446e::order_events::LiveOrderRedeemed',
+  settledOrderRedeemedEventType: '0xdb3ef5a5129920e59c9b2ae25a77eddb48acd0e1c6307b97073f0e076016446e::order_events::SettledOrderRedeemed',
+  liquidatedOrderRedeemedEventType: '0xdb3ef5a5129920e59c9b2ae25a77eddb48acd0e1c6307b97073f0e076016446e::order_events::LiquidatedOrderRedeemed',
   /** Open-ended range sentinels (tick indices): lower 0 = −inf, higher 2^30−1 = +inf. */
   POS_INF_TICK,
   NEG_INF_TICK,
@@ -178,7 +181,9 @@ export function fetchMarkets624(): Promise<Market624[]> {
 }
 
 async function fetchMarkets624Uncached(): Promise<Market624[]> {
-  const res = await fetch(`${PREDICT624.indexer}/markets?limit=${MARKETS_FETCH_LIMIT}`, { headers: { accept: 'application/json' } });
+  const res = await fetch(`${PREDICT624.indexer}/markets?limit=${MARKETS_FETCH_LIMIT}`, {
+    headers: { accept: 'application/json' },
+  });
   if (!res.ok) throw new Error(`predict624 indexer /markets ${res.status}`);
   const rows = (await res.json()) as IndexerMarketRow[];
   const now = Date.now();
@@ -240,6 +245,29 @@ interface PythLatest {
   price_is_negative?: boolean;
 }
 
+interface PythObservationEvent {
+  propbook_oracle_id?: string;
+  observation?: {
+    source_timestamp_ms?: string | number;
+    update_timestamp_ms?: string | number;
+    value?: PythLatest;
+  };
+}
+
+interface MarketSettledEvent {
+  expiry_market_id?: string;
+  expiry?: string | number;
+  settlement_price?: string | number;
+  settled_at_ms?: string | number;
+}
+
+function parsePythPrice(j: PythLatest | null | undefined): number {
+  const exp = Number(j?.exponent_magnitude);
+  const magnitude = Number(j?.price_magnitude);
+  const scale = j?.exponent_is_negative === false ? 10 ** exp : 10 ** -exp;
+  return magnitude * scale * (j?.price_is_negative ? -1 : 1);
+}
+
 /**
  * Pyth observation history from the SETTLEMENT feed (propbook), OLDEST-FIRST for
  * charting: [{ usd, tsMs }]. Observations land roughly once per second, so
@@ -262,7 +290,7 @@ export async function fetchPythHistory624(limit = 120): Promise<{ usd: number; t
       tsMs: Number(r.source_timestamp_ms ?? r.update_timestamp_ms),
     }))
     .filter((r) => Number.isFinite(r.usd) && r.usd > 0)
-    .reverse(); // newest-first from the API → oldest-first for charts
+    .reverse(); // newest-first from the API -> oldest-first for charts
 }
 
 /** Latest BTC/USD spot from the settlement pyth feed → USD number. */
@@ -271,17 +299,60 @@ export function fetchSpot624(): Promise<number> {
 }
 
 async function fetchSpot624Uncached(): Promise<number> {
-  const res = await fetch(
-    `${PREDICT624.propbook}/oracles/${PREDICT624.pythFeed}/pyth/latest`,
-    { headers: { accept: 'application/json' } },
-  );
-  if (!res.ok) throw new Error(`propbook pyth/latest ${res.status}`);
-  const j = (await res.json()) as PythLatest;
-  const exp = Number(j.exponent_magnitude);
-  const scale = j.exponent_is_negative === false ? 10 ** exp : 10 ** -exp;
-  const price = Number(j.price_magnitude) * scale * (j.price_is_negative ? -1 : 1);
+  const latest = await fetchPythHistory624(1);
+  const price = latest.at(-1)?.usd ?? NaN;
   if (!Number.isFinite(price) || price <= 0) throw new Error('pyth spot unavailable');
   return price;
+}
+
+export interface SettlementPrint624 {
+  marketId: string;
+  cadence: Cadence624;
+  expiry: number;
+  priceUsd: number;
+  settledAtMs: number;
+}
+
+export async function fetchRecentSettlements624(limit = 6): Promise<SettlementPrint624[]> {
+  const res = await fetch(`${PREDICT624.indexer}/markets?limit=${Math.max(120, limit * 8)}`, {
+    headers: { accept: 'application/json' },
+  });
+  if (!res.ok) throw new Error(`predict624 indexer /markets ${res.status}`);
+  const rows = (await res.json()) as IndexerMarketRow[];
+  const now = Date.now();
+  const past = rows
+    .map((m) => ({
+      id: String(m.expiry_market_id ?? ''),
+      expiry: Number(m.expiry),
+    }))
+    .filter((m) => m.id && Number.isFinite(m.expiry) && m.expiry <= now)
+    .sort((a, b) => b.expiry - a.expiry)
+    .slice(0, limit + 2);
+  const prints = await Promise.all(
+    past.map(async (m) => {
+      try {
+        const res = await fetch(`${PREDICT624.indexer}/markets/${m.id}/state`, {
+          headers: { accept: 'application/json' },
+        });
+        if (!res.ok) return null;
+        const j = (await res.json()) as {
+          settlement?: { settlement_price?: string | number; settled_at_ms?: string | number } | null;
+        };
+        const settlement = j?.settlement;
+        if (settlement?.settlement_price == null) return null;
+        return {
+          marketId: m.id,
+          cadence: inferCadence624(m.expiry),
+          expiry: m.expiry,
+          priceUsd: Number(settlement.settlement_price) / FLOAT_SCALING_624,
+          settledAtMs: Number(settlement.settled_at_ms ?? m.expiry),
+        };
+      } catch {
+        return null;
+      }
+    }),
+  );
+  return prints.filter((p): p is SettlementPrint624 => p != null).slice(0, limit);
 }
 
 // ─── tx builders (OWNER path — wallet signs; Auth is generated in-PTB, tied to the sender) ───
@@ -297,12 +368,44 @@ async function fetchSpot624Uncached(): Promise<number> {
  *  be the tx sender. Pays 0 until the protocol enables the rail: wired now so revenue is
  *  a config flip, not a migration. */
 function appendSetBuilderCode(tx: Transaction, wrapper: TransactionObjectArgument | string): void {
+  if (!PREDICT624.builderCode) return;
   const w = typeof wrapper === 'string' ? tx.object(wrapper) : wrapper;
   const auth = tx.moveCall({ target: `${PREDICT624.accountPackage}::account::generate_auth`, arguments: [] });
   tx.moveCall({
     target: `${PREDICT624.predictPackage}::predict_account::set_builder_code`,
     arguments: [w, auth, tx.object(PREDICT624.builderCode)],
   });
+}
+
+function appendLoadLivePricer(tx: Transaction, market: TransactionObjectArgument | string): TransactionObjectArgument {
+  const m = typeof market === 'string' ? tx.object(market) : market;
+  return tx.moveCall({
+    target: `${PREDICT624.predictPackage}::expiry_market::load_live_pricer`,
+    arguments: [
+      m,
+      tx.object(PREDICT624.protocolConfig),
+      tx.object(PREDICT624.oracleRegistry),
+      tx.object(PREDICT624.pythFeed),
+      tx.object(PREDICT624.bsSpotFeed),
+      tx.object(PREDICT624.bsForwardFeed),
+      tx.object(PREDICT624.bsSviFeed),
+      tx.object(PREDICT624.clock),
+    ],
+  });
+}
+
+async function simulateOrderMinted624(tx: Transaction): Promise<{ event?: Record<string, any>; error?: string }> {
+  const res = await grpc.simulateTransaction({ transaction: tx, include: { events: true, effects: true } });
+  const simulated = (res as any).Transaction ?? (res as any).FailedTransaction;
+  const event = (simulated?.events ?? []).find((e: { eventType?: string }) =>
+    String(e.eventType ?? '').includes('OrderMinted'),
+  )?.json as Record<string, any> | undefined;
+  if (event) return { event };
+  // NOT sliced to 160. A 6-24 MoveAbort renders its module name at index 187 and its function
+  // name past 248, so a 160-char cut lands inside the module ADDRESS and throws away the only
+  // part that says what failed. That is exactly how the mobile client's abort dictionary became
+  // unreachable in production while passing its own unit checks.
+  return { error: String(simulated?.status?.error ?? 'no OrderMinted in simulation').slice(0, 1024) };
 }
 
 export function buildCreateAccountTx(): Transaction {
@@ -428,19 +531,7 @@ export function buildMintTx(p: {
     throw new Error('full open range (−inf, +inf) is prohibited on-chain (EInvalidRange)');
   }
   const tx = new Transaction();
-  const pricer = tx.moveCall({
-    target: `${PREDICT624.predictPackage}::expiry_market::load_live_pricer`,
-    arguments: [
-      tx.object(p.marketId),
-      tx.object(PREDICT624.protocolConfig),
-      tx.object(PREDICT624.oracleRegistry),
-      tx.object(PREDICT624.pythFeed),
-      tx.object(PREDICT624.bsSpotFeed),
-      tx.object(PREDICT624.bsForwardFeed),
-      tx.object(PREDICT624.bsSviFeed),
-      tx.object(PREDICT624.clock),
-    ],
-  });
+  const pricer = appendLoadLivePricer(tx, p.marketId);
   const auth = tx.moveCall({
     target: `${PREDICT624.accountPackage}::account::generate_auth`,
     arguments: [],
@@ -513,14 +604,7 @@ export function buildCreateFundAndMint624(p: {
     arguments: [wrapper, authDep, pay, tx.object(PREDICT624.accumulatorRoot), tx.object(PREDICT624.clock)],
   });
   // 3. place the first bet against the just-funded account
-  const pricer = tx.moveCall({
-    target: `${PREDICT624.predictPackage}::expiry_market::load_live_pricer`,
-    arguments: [
-      tx.object(p.marketId), tx.object(PREDICT624.protocolConfig), tx.object(PREDICT624.oracleRegistry),
-      tx.object(PREDICT624.pythFeed), tx.object(PREDICT624.bsSpotFeed), tx.object(PREDICT624.bsForwardFeed),
-      tx.object(PREDICT624.bsSviFeed), tx.object(PREDICT624.clock),
-    ],
-  });
+  const pricer = appendLoadLivePricer(tx, p.marketId);
   const authMint = tx.moveCall({ target: `${PREDICT624.accountPackage}::account::generate_auth`, arguments: [] });
   tx.moveCall({
     target: `${PREDICT624.predictPackage}::expiry_market::mint_exact_quantity`,
@@ -574,14 +658,7 @@ export function buildTopUpAndMint624(p: {
     arguments: [tx.object(p.wrapperId), authDep, pay, tx.object(PREDICT624.accumulatorRoot), tx.object(PREDICT624.clock)],
   });
   // 2. place the bet against the now-funded account
-  const pricer = tx.moveCall({
-    target: `${PREDICT624.predictPackage}::expiry_market::load_live_pricer`,
-    arguments: [
-      tx.object(p.marketId), tx.object(PREDICT624.protocolConfig), tx.object(PREDICT624.oracleRegistry),
-      tx.object(PREDICT624.pythFeed), tx.object(PREDICT624.bsSpotFeed), tx.object(PREDICT624.bsForwardFeed),
-      tx.object(PREDICT624.bsSviFeed), tx.object(PREDICT624.clock),
-    ],
-  });
+  const pricer = appendLoadLivePricer(tx, p.marketId);
   const authMint = tx.moveCall({ target: `${PREDICT624.accountPackage}::account::generate_auth`, arguments: [] });
   tx.moveCall({
     target: `${PREDICT624.predictPackage}::expiry_market::mint_exact_quantity`,
@@ -633,14 +710,7 @@ export async function probeCombinedMint624(p: {
       typeArguments: [PREDICT624.dusdcType],
       arguments: [wrapper, authDep, pay, tx.object(PREDICT624.accumulatorRoot), tx.object(PREDICT624.clock)],
     });
-    const pricer = tx.moveCall({
-      target: `${PREDICT624.predictPackage}::expiry_market::load_live_pricer`,
-      arguments: [
-        tx.object(p.marketId), tx.object(PREDICT624.protocolConfig), tx.object(PREDICT624.oracleRegistry),
-        tx.object(PREDICT624.pythFeed), tx.object(PREDICT624.bsSpotFeed), tx.object(PREDICT624.bsForwardFeed),
-        tx.object(PREDICT624.bsSviFeed), tx.object(PREDICT624.clock),
-      ],
-    });
+    const pricer = appendLoadLivePricer(tx, p.marketId);
     const authMint = tx.moveCall({ target: `${PREDICT624.accountPackage}::account::generate_auth`, arguments: [] });
     tx.moveCall({
       target: `${PREDICT624.predictPackage}::expiry_market::mint_exact_quantity`,
@@ -656,14 +726,8 @@ export async function probeCombinedMint624(p: {
     tx.setSender(p.sender);
     if (p.gasOwner) tx.setGasOwner(p.gasOwner);
     tx.setGasBudget(120_000_000); // skip build's gas-estimation simulation (nothing executes here)
-    const bytes = await tx.build({ client: grpc });
-    const b64 = typeof Buffer !== 'undefined' ? Buffer.from(bytes).toString('base64') : btoa(String.fromCharCode(...bytes));
-    const r = await fetch(RPC_URL, {
-      method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'sui_dryRunTransactionBlock', params: [b64] }),
-    }).then((x) => x.json());
-    const ev = (r?.result?.events ?? []).find((e: { type?: string }) => String(e.type).includes('OrderMinted'))?.parsedJson as Record<string, string> | undefined;
-    if (!ev) return { error: String(r?.result?.effects?.status?.error ?? 'no OrderMinted in probe').slice(0, 160) };
+    const { event: ev, error } = await simulateOrderMinted624(tx);
+    if (!ev) return { error: error ?? 'no OrderMinted in probe' };
     const n = (k: string) => Number(ev[k] ?? 0);
     return {
       entryProb: n('entry_probability') / FLOAT_SCALING_624,
@@ -710,16 +774,9 @@ export async function quoteMint624(p: {
     // Without an explicit budget, tx.build() runs a FULL simulation just to estimate gas — a whole
     // extra network round on every quote. The number is irrelevant here (nothing executes).
     tx.setGasBudget(120_000_000);
-    const bytes = await tx.build({ client: grpc }); // resolution simulates; throws on protocol rejects
-    const b64 = typeof Buffer !== 'undefined' ? Buffer.from(bytes).toString('base64') : btoa(String.fromCharCode(...bytes));
-    const r = await fetch(RPC_URL, {
-      method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'sui_dryRunTransactionBlock', params: [b64] }),
-    }).then((x) => x.json());
-    const ev = (r?.result?.events ?? []).find((e: { type?: string }) => String(e.type).includes('OrderMinted'))?.parsedJson as Record<string, string> | undefined;
+    const { event: ev, error } = await simulateOrderMinted624(tx);
     if (!ev) {
-      const err = r?.result?.effects?.status?.error ?? 'no OrderMinted in dry run';
-      return { error: String(err).slice(0, 160) };
+      return { error: error ?? 'no OrderMinted in simulation' };
     }
     const n = (k: string) => Number(ev[k] ?? 0);
     const netPremium = n('net_premium');
@@ -733,6 +790,84 @@ export async function quoteMint624(p: {
     return { costMicro: netPremium + fee + penalty, winMicro, entryProb, netPremiumMicro: netPremium, feeMicro: fee, penaltyMicro: penalty };
   } catch (e) {
     return { error: String(e instanceof Error ? e.message : e).slice(0, 160) };
+  }
+}
+
+/**
+ * DISPLAY ODDS: cost per $1 of payout, quoted with the mint the venue will actually take.
+ *
+ * Two reasons this exists instead of calling quoteMint624.
+ *
+ * 1. mint_exact_quantity is refused. Measured on 2026-08-05 against every live market, at the
+ *    band the board asks for (spot−20 UP), 1x: mint_exact_quantity aborts
+ *    strike_exposure_config::assert_mint_probability_and_leverage_policy #6 on ALL of them,
+ *    while mint_exact_AMOUNT mints on the same market, same strike, same leverage, same funding.
+ *    Ruled out one variable at a time first: maxProb (0.99 → 1.0), qty (1.0 → 20.0), strike grid
+ *    ($1/$5/$10/$50/$100 snapping) and account funding all leave #6 unchanged. Only the FUNCTION
+ *    changes the outcome. Every odds quote therefore returned {error}, quoteSide mapped it to
+ *    null, and the board sat on "LOADING ODDS…" — a permanent failure worded as a wait.
+ *
+ * 2. The quote funds itself. devInspect runs against live chain state, so a dry run against an
+ *    empty betting account is asking about a bet nobody can place, and the house account is
+ *    empty (its 4 DUSDC sit in the WALLET; the mint debits the ACCOUNT). Carrying the deposit
+ *    inside the inspected transaction means the quote describes a placeable bet and cannot drift
+ *    out of funds later. Nothing is signed or executed; the deposit exists only in simulation.
+ *
+ * Cents come from the event itself: all-in cost ÷ contracts, which is exactly "what $1 of payout
+ * costs" and stays correct however the venue sizes the fill.
+ */
+export async function quoteOddsCents624(p: {
+  sender: string;
+  wrapperId: string;
+  marketId: string;
+  lowerTick: number | bigint;
+  higherTick: number | bigint;
+  /** Premium budget to price with. Must clear the venue's 1 DUSDC net-premium floor. */
+  amountMicro?: bigint;
+  /** Simulated top-up. Needs only to cover the budget plus fees. */
+  depositMicro?: bigint;
+}): Promise<{ cents: number; entryProb: number } | { error: string }> {
+  const amountMicro = p.amountMicro ?? 1_050_000n;
+  const depositMicro = p.depositMicro ?? 2_000_000n;
+  const lower = BigInt(p.lowerTick);
+  const higher = BigInt(p.higherTick);
+  if (lower === NEG_INF_TICK && higher === POS_INF_TICK) return { error: 'full open range prohibited' };
+  try {
+    const tx = new Transaction();
+    const pay = coinWithBalance({ type: PREDICT624.dusdcType, balance: depositMicro });
+    const authDep = tx.moveCall({ target: `${PREDICT624.accountPackage}::account::generate_auth`, arguments: [] });
+    tx.moveCall({
+      target: `${PREDICT624.accountPackage}::account::deposit_funds`,
+      typeArguments: [PREDICT624.dusdcType],
+      arguments: [tx.object(p.wrapperId), authDep, pay, tx.object(PREDICT624.accumulatorRoot), tx.object(PREDICT624.clock)],
+    });
+    const pricer = appendLoadLivePricer(tx, p.marketId);
+    const authMint = tx.moveCall({ target: `${PREDICT624.accountPackage}::account::generate_auth`, arguments: [] });
+    tx.moveCall({
+      target: `${PREDICT624.predictPackage}::expiry_market::mint_exact_amount`,
+      arguments: [
+        tx.object(p.marketId), tx.object(p.wrapperId), authMint, tx.object(PREDICT624.protocolConfig), pricer,
+        tx.pure.u64(lower), tx.pure.u64(higher), tx.pure.u64(amountMicro),
+        tx.pure.u64(0n), // no slippage floor: this is price discovery, not an order
+        tx.pure.u64(1_000_000_000n),
+        tx.object(PREDICT624.accumulatorRoot), tx.object(PREDICT624.clock),
+      ],
+    });
+    tx.setSender(p.sender);
+    tx.setGasBudget(120_000_000);
+    const { event: ev, error } = await simulateOrderMinted624(tx);
+    if (!ev) return { error: error ?? 'no OrderMinted in simulation' };
+    const n = (k: string) => Number(ev[k] ?? 0);
+    const netPremium = n('net_premium');
+    const fee = n('trading_fee') - n('fee_incentive_subsidy') + n('builder_fee');
+    const penalty = n('penalty_fee');
+    const entryProb = n('entry_probability') / FLOAT_SCALING_624;
+    const qty = n('quantity') || (entryProb > 0 ? Math.round(netPremium / entryProb) : 0);
+    if (!qty) return { error: 'no quantity in OrderMinted' };
+    const cents = Math.round(((netPremium + fee + penalty) / qty) * 100);
+    return { cents: Math.max(1, Math.min(99, cents)), entryProb };
+  } catch (e) {
+    return { error: String(e instanceof Error ? e.message : e) };
   }
 }
 
@@ -770,24 +905,22 @@ export function buildRedeemSettledTx(p: {
 
 // ─── reads ───
 
-const RPC_URL = process.env.NEXT_PUBLIC_SUI_RPC_URL || 'https://sui-testnet-rpc.publicnode.com'; // public fullnode JSON-RPC sunset
+const asFields = (value: any): Record<string, any> =>
+  (value?.fields && typeof value.fields === 'object' ? value.fields : value ?? {}) as Record<string, any>;
 
-/** The 6-24 money path's JSON-RPC reads. Routed through the shared multi-node failover client
- *  (lib/sui/jsonRpc.ts) instead of a single hardcoded node with no timeout and no retry — one
- *  node hiccup used to be indistinguishable from "you have no money". Still returns null on
- *  total failure; callers MUST treat null as "unknown", never as zero. */
-async function jsonRpc<T>(method: string, params: unknown[]): Promise<T | null> {
+const objectFields = async (objectId: string): Promise<Record<string, any> | null> => {
   try {
-    return ((await suiJsonRpc<T>(method, params)) ?? null) as T | null;
+    const obj = await readClient.getObject({ id: objectId, options: { showContent: true } });
+    return obj?.data?.content?.fields ?? null;
   } catch {
     return null;
   }
-}
+};
 
 /**
  * The account's STORED DUSDC balance as a display number, read from the wrapper's
- * `account.balances` Bag via raw JSON-RPC dynamic-field walk (getObject wrapper →
- * balances Bag id → getDynamicFields → CoinKey<DUSDC> entry → its `value` field) —
+ * `account.balances` Bag via the modern read client (getObject wrapper ->
+ * balances Bag id -> getDynamicFields -> CoinKey<DUSDC> entry -> its `value` field) -
  * the exact reader proven in predict624.mjs. Mint debits and redeem payouts are
  * synchronous stored-balance ops, so this is exact for the trade path (only async
  * LP fills lag until the next account-touching call sweeps the accumulator).
@@ -797,32 +930,31 @@ async function jsonRpc<T>(method: string, params: unknown[]): Promise<T | null> 
  * "balance below the live cost" (a single 429 was enough).
  */
 export async function fetchAccountBalanceMicro624(wrapperId: string): Promise<bigint | null> {
-  const obj = await jsonRpc<{ data?: { content?: { fields?: Record<string, any> } } }>('sui_getObject', [
-    wrapperId,
-    { showContent: true },
-  ]);
-  if (obj == null) return null; // read failed — do NOT report zero
-  const bagId = obj?.data?.content?.fields?.account?.fields?.balances?.fields?.id?.id;
+  const fields = await objectFields(wrapperId);
+  if (fields == null) return null; // read failed — do NOT report zero
+  const account = asFields(fields.account);
+  const balances = asFields(account.balances);
+  const bagId = asFields(balances.id).id ?? balances.id?.id ?? balances.id;
   if (!bagId) return BigInt(0); // account exists, no balances bag yet → genuinely zero
-  const dfs = await jsonRpc<{ data?: Array<Record<string, any>> }>('suix_getDynamicFields', [bagId, null, 50]);
-  if (dfs == null) return null; // read failed
-  const rows = dfs?.data ?? [];
+  let rows: Array<Record<string, any>>;
+  try {
+    rows = (await readClient.getDynamicFields({ parentId: String(bagId) })).data ?? [];
+  } catch {
+    return null;
+  }
   // STRICT: match only the DUSDC CoinKey. Never fall back to rows[0] — the bag can
   // also hold PLP/DEEP balances, and a wrong-coin figure passed to
   // withdraw_funds<DUSDC> would overshoot and abort with EBalanceTooLow.
   const hit = rows.find(
     (f) =>
       String(f.name?.type ?? '').includes('CoinKey') &&
-      String(f.objectType ?? f.name?.type ?? '').toLowerCase().includes('dusdc'),
+      String(f.objectType ?? f.type ?? f.valueType ?? f.name?.type ?? '').toLowerCase().includes('dusdc'),
   );
   if (!hit) return BigInt(0); // no DUSDC row in the bag → genuinely zero
-  const v = await jsonRpc<{ data?: { content?: { fields?: { value?: string | number } } } }>('sui_getObject', [
-    hit.objectId,
-    { showContent: true },
-  ]);
+  const v = await objectFields(String(hit.objectId));
   if (v == null) return null; // read failed
   try {
-    return BigInt(v?.data?.content?.fields?.value ?? 0);
+    return BigInt(v?.value ?? 0);
   } catch {
     return null;
   }
@@ -834,40 +966,29 @@ export async function fetchAccountBalance624(wrapperId: string): Promise<number 
   return micro == null ? null : Number(micro) / DUSDC_MULTIPLIER;
 }
 
-// ─── per-account order/position feeds (live beta indexer — routes VERIFIED 2026-07-03) ───
+// ─── per-account order/position feeds ───
 //
-// The deployed predict-server-beta keys every per-user feed by the wrapper's INNER
-// `account.account_id` field — NOT the AccountWrapper object id and NOT the owner
-// address (both 404/empty). Verified against the proven spike account:
-//   GET /accounts/{account_id}/orders?limit=N            → interleaved event feed
-//       (kinds: order_minted / settled_order_redeemed / live_order_redeemed /
-//        liquidated_order_redeemed), newest first
-//   GET /accounts/{account_id}/positions?status=<s>      → order_state rows
-//       (statuses: open | replaced | closed | liquidated | liquidated_redeemed |
-//        settled_redeemed; DEFAULT open when the param is omitted)
-//   GET /markets/{market_id}/state                        → { market, reference_tick,
-//        mint_paused, settlement } — `settlement.settlement_price` is 1e9-scaled USD
-// (The `/managers/…` routes in the predict-testnet-6-24 source are NOT deployed.)
+// 6-24 account events are keyed by the wrapper's INNER `account.account_id` field,
+// not the AccountWrapper object id and not the owner address. We derive the user's
+// open/history view from on-chain order events plus settlement state.
 
 /** Read the wrapper's INNER `account.account_id` — the id the indexer feeds key on. */
 export async function fetchInnerAccountId624(wrapperId: string): Promise<string | null> {
   return (await fetchAccountSnapshot624(wrapperId)).accountId;
 }
 
-/** ONE sui_getObject on the wrapper, returning BOTH the inner account id and the balances-bag id.
+/** ONE object read on the wrapper, returning BOTH the inner account id and the balances-bag id.
  *  Account discovery used to fetch this identical object twice (~811ms of pure duplicate), once
  *  for the account id and again as the first hop of the balance read. Null = read failed. */
 export async function fetchAccountSnapshot624(
   wrapperId: string,
 ): Promise<{ accountId: string | null; bagId: string | null; ok: boolean }> {
-  const obj = await jsonRpc<{ data?: { content?: { fields?: Record<string, any> } } }>('sui_getObject', [
-    wrapperId,
-    { showContent: true },
-  ]);
-  if (obj == null) return { accountId: null, bagId: null, ok: false };
-  const acct = obj?.data?.content?.fields?.account?.fields;
-  const id = acct?.account_id?.id;
-  const bag = acct?.balances?.fields?.id?.id;
+  const fields = await objectFields(wrapperId);
+  if (fields == null) return { accountId: null, bagId: null, ok: false };
+  const acct = asFields(fields.account);
+  const id = asFields(acct.account_id).id ?? acct.account_id?.id ?? acct.account_id;
+  const balances = asFields(acct.balances);
+  const bag = asFields(balances.id).id ?? balances.id?.id ?? balances.id;
   return {
     accountId: typeof id === 'string' && id.startsWith('0x') ? id : null,
     bagId: typeof bag === 'string' && bag.startsWith('0x') ? bag : null,
@@ -907,14 +1028,107 @@ function rowToPosition624(r: Record<string, any>): Position624 {
   };
 }
 
+const ACCOUNT_EVENT_SCAN_LIMIT = 500;
+
+async function queryRpcEvents624<T>(type: string, limit = ACCOUNT_EVENT_SCAN_LIMIT): Promise<Array<{
+  parsedJson?: T;
+  timestampMs?: string | number;
+  id?: { txDigest?: string; eventSeq?: string };
+}>> {
+  return (await queryEvents624<T & Record<string, unknown>>(type, limit)).map((parsedJson) => ({
+    parsedJson: parsedJson as T,
+  }));
+}
+
+function mintedEventToPosition624(j: Record<string, any>): Position624 {
+  return {
+    marketId: String(j.expiry_market_id ?? ''),
+    orderId: String(j.order_id ?? ''),
+    status: 'open',
+    lowerTick: Number(j.lower_tick ?? 0),
+    higherTick: Number(j.higher_tick ?? 0),
+    qtyMicro: BigInt(j.quantity ?? 0),
+    leverage1e9: Number(j.leverage ?? FLOAT_SCALING_624),
+    entryProb1e9: Number(j.entry_probability ?? 0),
+    netPremiumMicro: BigInt(j.net_premium ?? 0),
+    openedAtMs: Number(j.minted_at_ms ?? 0),
+  };
+}
+
+async function fetchAccountOrderEvents624(accountId: string, limit = ACCOUNT_EVENT_SCAN_LIMIT): Promise<OrderRow624[]> {
+  const want = accountId.toLowerCase();
+  const [minted, liveRedeemed, settledRedeemed, liquidatedRedeemed] = await Promise.all([
+    queryRpcEvents624<Record<string, any>>(PREDICT624.orderMintedEventType, limit),
+    queryRpcEvents624<Record<string, any>>(PREDICT624.liveOrderRedeemedEventType, limit),
+    queryRpcEvents624<Record<string, any>>(PREDICT624.settledOrderRedeemedEventType, limit),
+    queryRpcEvents624<Record<string, any>>(PREDICT624.liquidatedOrderRedeemedEventType, limit),
+  ]);
+
+  const mintedRows: OrderRow624[] = minted
+    .filter((e) => String(e.parsedJson?.account_id ?? '').toLowerCase() === want)
+    .map((e) => {
+      const r = e.parsedJson ?? {};
+      return {
+        kind: 'order_minted',
+        marketId: String(r.expiry_market_id ?? ''),
+        orderId: String(r.order_id ?? ''),
+        tsMs: Number(r.minted_at_ms ?? e.timestampMs ?? 0),
+        digest: String(e.id?.txDigest ?? ''),
+        lowerTick: r.lower_tick != null ? Number(r.lower_tick) : undefined,
+        higherTick: r.higher_tick != null ? Number(r.higher_tick) : undefined,
+        qtyMicro: r.quantity != null ? BigInt(r.quantity) : undefined,
+        leverage1e9: r.leverage != null ? Number(r.leverage) : undefined,
+        entryProb1e9: r.entry_probability != null ? Number(r.entry_probability) : undefined,
+        netPremiumMicro: r.net_premium != null ? BigInt(r.net_premium) : undefined,
+      };
+    });
+
+  const redeemedRows: OrderRow624[] = [
+    ...liveRedeemed.map((e) => ({ e, kind: 'live_order_redeemed' })),
+    ...settledRedeemed.map((e) => ({ e, kind: 'settled_order_redeemed' })),
+    ...liquidatedRedeemed.map((e) => ({ e, kind: 'liquidated_order_redeemed' })),
+  ]
+    .filter(({ e }) => String(e.parsedJson?.account_id ?? '').toLowerCase() === want)
+    .map(({ e, kind }) => {
+      const r = e.parsedJson ?? {};
+      return {
+        kind,
+        marketId: String(r.expiry_market_id ?? ''),
+        orderId: String(r.order_id ?? ''),
+        tsMs: Number(r.redeemed_at_ms ?? e.timestampMs ?? 0),
+        digest: String(e.id?.txDigest ?? ''),
+        payoutMicro: r.payout_amount != null ? BigInt(r.payout_amount) : undefined,
+        quantityClosedMicro: r.quantity_closed != null ? BigInt(r.quantity_closed) : undefined,
+        settlementUsd: r.settlement_price != null ? Number(r.settlement_price) / FLOAT_SCALING_624 : undefined,
+      };
+    });
+
+  return [...mintedRows, ...redeemedRows]
+    .filter((r) => r.marketId && r.orderId)
+    .sort((a, b) => b.tsMs - a.tsMs);
+}
+
 /** OPEN positions for one inner account id (indexer default status). */
 export async function fetchOpenPositions624(accountId: string): Promise<Position624[]> {
-  const res = await fetch(`${PREDICT624.indexer}/accounts/${accountId}/positions?status=open`, {
-    headers: { accept: 'application/json' },
-  });
-  if (!res.ok) throw new Error(`predict624 indexer /accounts/…/positions ${res.status}`);
-  const rows = (await res.json()) as Array<Record<string, any>>;
-  return (Array.isArray(rows) ? rows : []).map(rowToPosition624);
+  const orders = await fetchAccountOrderEvents624(accountId, ACCOUNT_EVENT_SCAN_LIMIT);
+  const closed = new Set(
+    orders
+      .filter((r) => r.kind !== 'order_minted')
+      .map((r) => `${r.marketId}:${r.orderId}`),
+  );
+  return orders
+    .filter((r) => r.kind === 'order_minted' && !closed.has(`${r.marketId}:${r.orderId}`))
+    .map((r) => mintedEventToPosition624({
+      expiry_market_id: r.marketId,
+      order_id: r.orderId,
+      lower_tick: r.lowerTick,
+      higher_tick: r.higherTick,
+      quantity: r.qtyMicro ?? 0n,
+      leverage: r.leverage1e9 ?? FLOAT_SCALING_624,
+      entry_probability: r.entryProb1e9 ?? 0,
+      net_premium: r.netPremiumMicro ?? 0n,
+      minted_at_ms: r.tsMs,
+    }));
 }
 
 /** One event row from the /accounts/{account_id}/orders interleaved feed. */
@@ -930,6 +1144,7 @@ export interface OrderRow624 {
   higherTick?: number;
   qtyMicro?: bigint;
   leverage1e9?: number;
+  entryProb1e9?: number;
   netPremiumMicro?: bigint;
   /** *_redeemed rows */
   payoutMicro?: bigint;
@@ -939,26 +1154,7 @@ export interface OrderRow624 {
 
 /** Newest-first order event feed for one inner account id. */
 export async function fetchAccountOrders624(accountId: string, limit = 40): Promise<OrderRow624[]> {
-  const res = await fetch(`${PREDICT624.indexer}/accounts/${accountId}/orders?limit=${limit}`, {
-    headers: { accept: 'application/json' },
-  });
-  if (!res.ok) throw new Error(`predict624 indexer /accounts/…/orders ${res.status}`);
-  const rows = (await res.json()) as Array<Record<string, any>>;
-  return (Array.isArray(rows) ? rows : []).map((r) => ({
-    kind: String(r.kind ?? ''),
-    marketId: String(r.expiry_market_id ?? ''),
-    orderId: String(r.order_id ?? ''),
-    tsMs: Number(r.checkpoint_timestamp_ms ?? 0),
-    digest: String(r.digest ?? ''),
-    lowerTick: r.lower_tick != null ? Number(r.lower_tick) : undefined,
-    higherTick: r.higher_tick != null ? Number(r.higher_tick) : undefined,
-    qtyMicro: r.quantity != null ? BigInt(r.quantity) : undefined,
-    leverage1e9: r.leverage != null ? Number(r.leverage) : undefined,
-    netPremiumMicro: r.net_premium != null ? BigInt(r.net_premium) : undefined,
-    payoutMicro: r.payout_amount != null ? BigInt(r.payout_amount) : undefined,
-    quantityClosedMicro: r.quantity_closed != null ? BigInt(r.quantity_closed) : undefined,
-    settlementUsd: r.settlement_price != null ? Number(r.settlement_price) / FLOAT_SCALING_624 : undefined,
-  }));
+  return (await fetchAccountOrderEvents624(accountId, ACCOUNT_EVENT_SCAN_LIMIT)).slice(0, limit);
 }
 
 /** Settlement snapshot for one market, from /markets/{id}/state. */
@@ -970,16 +1166,13 @@ export interface MarketState624 {
 }
 
 export async function fetchMarketState624(marketId: string): Promise<MarketState624> {
-  const res = await fetch(`${PREDICT624.indexer}/markets/${marketId}/state`, {
-    headers: { accept: 'application/json' },
-  });
-  if (!res.ok) throw new Error(`predict624 indexer /markets/…/state ${res.status}`);
-  const j = (await res.json()) as Record<string, any>;
-  const settlement = j?.settlement ?? null;
+  const fields = (await objectFields(marketId)) ?? {};
+  const exposure = asFields(fields.strike_exposure);
+  const settlement = exposure.settlement_price;
   return {
     settled: settlement != null,
-    settlementUsd: settlement?.settlement_price != null ? Number(settlement.settlement_price) / FLOAT_SCALING_624 : null,
-    expiry: Number(j?.market?.expiry ?? 0),
+    settlementUsd: settlement != null ? Number(settlement) / FLOAT_SCALING_624 : null,
+    expiry: Number(fields.expiry ?? exposure.expiry_ms ?? 0),
   };
 }
 
@@ -997,8 +1190,7 @@ const toHexAddress = (bytes: Uint8Array | number[]): string =>
  * Chosen over the AccountCreated-event scan because derivation is DETERMINISTIC:
  * no indexer lag right after account creation and no event-window pagination
  * fragility as usage grows (an owner's event can fall outside any fixed `last` N).
- * The event scan (GraphQL → JSON-RPC suix_queryEvents, strategyClient's exact
- * fallback dance) is kept only as a safety net for when simulation is unavailable.
+ * The event scan is kept only as a safety net for when simulation is unavailable.
  */
 export async function findWrapperId624(owner: string): Promise<string | null> {
   // 1) gRPC simulate the two registry view fns in one tx.
@@ -1023,7 +1215,7 @@ export async function findWrapperId624(owner: string): Promise<string | null> {
     /* fall through to events */
   }
 
-  // 2) AccountCreated events, owner-matched (newest first; GraphQL → JSON-RPC).
+  // 2) AccountCreated events, owner-matched (newest first).
   const type = `${PREDICT624.accountPackage}::account_events::AccountCreated`;
   const nodes = await queryEvents624(type, 200);
   const want = owner.toLowerCase();
@@ -1036,30 +1228,24 @@ export async function findWrapperId624(owner: string): Promise<string | null> {
   return null;
 }
 
-// GraphQL events with JSON-RPC fallback — same reliability dance as strategyClient
-// (testnet GraphQL event indexing lags/windows; suix_queryEvents is the safety net).
 const EVENTS_624_Q = `query Ev($t: String!, $last: Int!) {
   events(last: $last, filter: { type: $t }) {
     nodes { contents { json } }
   }
 }`;
 
-async function queryEvents624(type: string, last = 100): Promise<Array<Record<string, unknown>>> {
-  try {
-    const { data, errors } = await gql.query<{ events: { nodes: Array<{ contents: { json: Record<string, unknown> } }> } }>({
-      query: EVENTS_624_Q,
-      variables: { t: type, last },
-    });
-    const nodes = data?.events?.nodes ?? [];
-    if (!errors?.length && nodes.length) return nodes.map((n) => n.contents?.json ?? {}).reverse(); // newest first
-  } catch {
-    /* fall through */
-  }
-  const r = await jsonRpc<{ data?: Array<{ parsedJson?: Record<string, unknown> }> }>('suix_queryEvents', [
-    { MoveEventType: type },
-    null,
-    last,
-    true,
-  ]);
-  return (r?.data ?? []).map((e) => e.parsedJson ?? {});
+async function queryEvents624<T = Record<string, unknown>>(
+  type: string,
+  last = 50,
+): Promise<T[]> {
+  const clamped = Math.max(1, Math.min(last, 50));
+  const { data, errors } = await gql.query<{ events: { nodes: Array<{ contents: { json: T } }> } }>({
+    query: EVENTS_624_Q,
+    variables: { t: type, last: clamped },
+  });
+  if (errors?.length) throw new Error(errors[0].message);
+  return (data?.events?.nodes ?? [])
+    .map((n) => n.contents?.json)
+    .filter(Boolean)
+    .reverse(); // newest first
 }
