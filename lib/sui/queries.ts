@@ -48,6 +48,18 @@ export async function fetchDUSDCCoins(
   }));
 }
 
+/** What the wallet HOLDS in micro-DUSDC: coin objects AND the address balance.
+ *
+ *  fetchDUSDCCoins above returns coin OBJECTS only, because callers need object ids to merge
+ *  and split. That makes it the wrong thing to answer "does this person have enough money?"
+ *  with: DUSDC can sit in an address balance with no coin object to show for it, and a caller
+ *  summing getCoins then tells someone holding plenty that their wallet is empty. getBalance
+ *  counts both pools. Gate on this; spend with the coin list. */
+export async function fetchDUSDCHeldMicro(address: string): Promise<bigint> {
+  const b = await readClient.getBalance({ owner: address, coinType: DUSDC_TYPE });
+  return BigInt(b.totalBalance);
+}
+
 export async function fetchPLPBalance(_client: AnySuiClient, address: string): Promise<number> {
   const balance = await readClient.getBalance({ owner: address, coinType: PLP_TYPE });
   return Number(balance.totalBalance);
