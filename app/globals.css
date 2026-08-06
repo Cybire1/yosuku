@@ -183,9 +183,22 @@ body.urgent::before {
   font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.04em;
   padding: 0 12px; max-width: 100%;
 }
-.appstrip-dot {
-  width: 5px; height: 5px; border-radius: 50%; background: var(--vermilion); flex: none;
-  box-shadow: 0 0 0 0 rgba(224,77,38,0.55); animation: appstripPulse 3.6s ease-out infinite;
+/* Three chevrons, lit in sequence.
+   A dot said "a line starts here". Chevrons say "this way", which is the only thing this strip
+   is for. The cascade runs slowly and never reaches full contrast on all three at once: a fast
+   or fully-lit triple arrow is the blinking-banner reflex the rest of this strip was rebuilt to
+   avoid. Each stroke rests at a readable opacity and only briefly brightens as the wave passes. */
+.appstrip-lead {
+  width: 17px; height: 10px; flex: none;
+  fill: none; stroke: var(--vermilion); stroke-width: 2.1;
+  stroke-linecap: round; stroke-linejoin: round;
+}
+.appstrip-lead path { opacity: 0.34; animation: appstripLead 2.9s ease-in-out infinite; }
+.appstrip-lead path:nth-child(2) { animation-delay: 0.18s; }
+.appstrip-lead path:nth-child(3) { animation-delay: 0.36s; }
+@keyframes appstripLead {
+  0%, 62%, 100% { opacity: 0.34; }
+  22%           { opacity: 1; }
 }
 /* Sentence case, not caps. Caps at 11px across a full-width bar is shouting, and
    shouting is most of what made the first attempt read as spam. */
@@ -214,14 +227,9 @@ body.urgent::before {
 .appstrip-x:hover { color: var(--white); background: rgba(255,255,255,0.07); }
 
 @keyframes appstripIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
-@keyframes appstripPulse {
-  0%   { box-shadow: 0 0 0 0 rgba(224,77,38,0.5); }
-  70%  { box-shadow: 0 0 0 6px rgba(224,77,38,0); }
-  100% { box-shadow: 0 0 0 0 rgba(224,77,38,0); }
-}
 @media (prefers-reduced-motion: reduce) {
   .appstrip-line { animation: none; }
-  .appstrip-dot { animation: none; }
+  .appstrip-lead path { animation: none; opacity: 0.62; }
 }
 
 .marquee {
