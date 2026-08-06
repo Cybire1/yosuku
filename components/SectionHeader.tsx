@@ -1,7 +1,6 @@
 interface SectionHeaderProps {
   number: string;
   title: string;
-  jp?: string;
   desc?: string;
   count?: number;
   live?: boolean;
@@ -9,7 +8,7 @@ interface SectionHeaderProps {
   cadences?: string[];
 }
 
-export default function SectionHeader({ number, title, jp, desc, count, live, meta, cadences }: SectionHeaderProps) {
+export default function SectionHeader({ number, title, desc, count, live, meta, cadences }: SectionHeaderProps) {
   return (
     <div className="section-head">
       <div className="section-index">
@@ -19,7 +18,6 @@ export default function SectionHeader({ number, title, jp, desc, count, live, me
       <div className="section-head-mid">
         <div className="section-head-row">
           <h2 className="section-title-2">{title}</h2>
-          {jp && <span className="section-jp">{jp}</span>}
           {live && (
             <span className="live-pill">
               <span className="dot" />

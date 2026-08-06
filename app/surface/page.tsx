@@ -201,8 +201,7 @@ export default function SurfacePage() {
           <span className="text-white">Surface</span>
         </div>
 
-        <h1 className="font-display font-[800] text-4xl text-white tracking-tight mb-2">Volatility Surface</h1>
-        <p className="font-jp text-gray-500 text-sm mb-6">ボラティリティ・サーフェス</p>
+        <h1 className="font-display font-[800] text-4xl text-white tracking-tight mb-6">Volatility Surface</h1>
         <p className="text-gray-400 text-sm leading-relaxed max-w-2xl mb-8">
           Every Predict market is priced off a live, on-chain <span className="text-white">SVI volatility surface</span>.
           The trade flow uses one strike — here you can read the whole surface back: the smile across strikes, every
@@ -256,7 +255,7 @@ export default function SurfacePage() {
           <div className="space-y-8">
             {/* 01: surface readout */}
             <section>
-              <SectionHeader number="01" title="Surface" jp="サーフェス" live meta={focal ? `${asset} · ${days < 1 ? (days * 24).toFixed(0) + 'h' : days.toFixed(0) + 'd'}` : ''} />
+              <SectionHeader number="01" title="Surface" live meta={focal ? `${asset} · ${days < 1 ? (days * 24).toFixed(0) + 'h' : days.toFixed(0) + 'd'}` : ''} />
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 {[
                   ['Forward', forward > 0 ? usd(forward) : '—'],
@@ -274,7 +273,7 @@ export default function SurfacePage() {
 
             {/* 02: the smile */}
             <section>
-              <SectionHeader number="02" title="Volatility smile" jp="スマイル" desc="Implied vol across strikes for the selected round — the vermilion line marks the forward." />
+              <SectionHeader number="02" title="Volatility smile" desc="Implied vol across strikes for the selected round. The vermilion line marks the forward." />
               <div className="border border-white/[0.08] rounded bg-bg p-3" style={{ height: 220 }}>
                 {haveSurface ? <canvas ref={smileRef} className="w-full h-full" /> : <div className="flex items-center justify-center h-full font-mono text-xs text-gray-600">no SVI surface for this round yet</div>}
               </div>
@@ -289,7 +288,7 @@ export default function SurfacePage() {
 
             {/* 03: strike ladder */}
             <section>
-              <SectionHeader number="03" title="Strike ladder" jp="ストライク" desc="Every strike priced off the surface — the options chain Predict exposes, not a single bet." />
+              <SectionHeader number="03" title="Strike ladder" desc="Every strike priced off the surface: the options chain Predict exposes, not a single bet." />
               <div className="border border-white/[0.08] rounded bg-bg overflow-hidden">
                 <div className="grid grid-cols-4 gap-2 px-5 py-2.5 border-b border-white/[0.06] font-mono text-[9px] uppercase tracking-[0.16em] text-gray-500">
                   <span>Strike</span><span className="text-right">UP price</span><span className="text-right">DOWN price</span><span className="text-right">Implied vol</span>
@@ -312,7 +311,7 @@ export default function SurfacePage() {
 
             {/* 04: term structure */}
             <section>
-              <SectionHeader number="04" title="Term structure" jp="ターム" desc="At-the-money implied vol across the asset's live expiries." meta={`${termPoints.length} expir${termPoints.length === 1 ? 'y' : 'ies'}`} />
+              <SectionHeader number="04" title="Term structure" desc="At-the-money implied vol across the asset's live expiries." meta={`${termPoints.length} expir${termPoints.length === 1 ? 'y' : 'ies'}`} />
               <div className="border border-white/[0.08] rounded bg-bg p-3" style={{ height: 180 }}>
                 {termPoints.length >= 2 ? (
                   <canvas ref={termRef} className="w-full h-full" />

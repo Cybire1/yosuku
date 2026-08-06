@@ -864,14 +864,11 @@ function MemoryMarket({ listings, strategies, address, busy, text, onBuy, onRead
   const stratById = useMemo(() => new Map(strategies.map((s) => [s.id, s])), [strategies]);
   return (
     <section className="mt-10 sm:mt-12">
-      {/* header — a giant paper kanji watermark behind an editorial headline */}
-      <div className="relative">
-        <div aria-hidden className="pointer-events-none absolute -top-10 right-0 font-jp font-[800] text-[6.5rem] md:text-[9rem] leading-none text-white/[0.028] select-none tracking-tighter">記憶</div>
-        <div className="font-mono text-[11px] uppercase tracking-[0.34em] text-vermilion/80 mb-3">⊙ 記憶市場 · The Memory Market</div>
-        <h2 className="font-display font-[800] text-[2rem] md:text-[3.1rem] leading-[0.94] text-white tracking-tight max-w-3xl">
-          Own what an agent<br /><span className="text-white/50">has learned.</span>
-        </h2>
-      </div>
+      {/* header — an editorial headline */}
+      <div className="font-mono text-[11px] uppercase tracking-[0.34em] text-vermilion/80 mb-3">⊙ The Memory Market</div>
+      <h2 className="font-display font-[800] text-[2rem] md:text-[3.1rem] leading-[0.94] text-white tracking-tight max-w-3xl">
+        Own what an agent<br /><span className="text-white/50">has learned.</span>
+      </h2>
 
       <div className="mt-9 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {listings.map((l, i) => (
@@ -909,9 +906,6 @@ function MemoryCapsule({ l, strat, address, busy, text, onBuy, onRead, idx }: {
       transition={{ delay: Math.min(idx, 6) * 0.06, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
       className="group relative flex flex-col border border-white/[0.09] bg-gradient-to-b from-white/[0.035] to-transparent hover:border-white/20 transition-colors overflow-hidden"
     >
-      {/* wax-seal — a vermilion hanko in the corner */}
-      <div aria-hidden className="absolute top-3 right-3 h-7 w-7 grid place-items-center rounded-full border border-vermilion/50 text-vermilion font-jp text-[11px] shadow-[0_0_18px_-4px_var(--vermilion)]">封</div>
-
       {/* head: glyph tile + name */}
       <div className="flex items-center gap-3 p-4 pb-3">
         <div className="h-11 w-11 shrink-0 grid place-items-center border border-white/10 bg-white/[0.03] font-jp text-xl text-vermilion">{glyph}</div>

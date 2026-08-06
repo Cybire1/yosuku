@@ -2,8 +2,8 @@
 // portrait 1200×1500 (4:5) PNG of the OPEN, unresolved position — a bold public
 // declaration you can drop into a post. It is the live-call sibling of the
 // Settlement Receipt's "Earned Heat" (lib/shareCard.ts): same near-black ground,
-// same grain + registration ticks + JP hanko language, but the vermilion heat
-// here reads as CONVICTION (skin in the game), not a win.
+// same grain + registration ticks, but the vermilion heat here reads as
+// CONVICTION (skin in the game), not a win.
 //
 // HONESTY (hard rules — do not relax):
 //  · This is an OPEN position with NO result. Never imply an outcome. The return
@@ -40,7 +40,6 @@ const FALLBACK_VERMILION = '#E5431F';
 
 const DISPLAY_FALLBACK = "'Sora', system-ui, sans-serif";
 const MONO_FALLBACK = "'JetBrains Mono', ui-monospace, monospace";
-const JP_FALLBACK = "'Noto Serif JP', 'Hiragino Mincho ProN', 'Yu Mincho', serif";
 
 // ─── formatting (exported for the share button's tweet text) ───
 
@@ -231,7 +230,6 @@ export async function renderOpenBetShareCard(call: OpenBetCard): Promise<Blob> {
 
   const display = resolveFontFamily('--font-display', DISPLAY_FALLBACK);
   const mono = resolveFontFamily('--font-mono', MONO_FALLBACK);
-  const jp = resolveFontFamily('--font-jp', JP_FALLBACK);
 
   const vermilion = resolveVermilion();
   const [vr, vg, vb] = hexToRgb(vermilion);
@@ -249,7 +247,6 @@ export async function renderOpenBetShareCard(call: OpenBetCard): Promise<Blob> {
     ensureFont(`800 27px ${display}`, 'YOSUKU'),
     ensureFont(`600 22px ${mono}`),
     ensureFont(`500 26px ${mono}`),
-    ensureFont(`700 360px ${jp}`, '賭予'),
   ]);
 
   const big = document.createElement('canvas');
@@ -272,16 +269,6 @@ export async function renderOpenBetShareCard(call: OpenBetCard): Promise<Blob> {
   ctx.fillStyle = vig;
   ctx.fillRect(0, 0, W, H);
 
-  // ── ghost 賭 (wager) watermark — depth behind the wager, collision-free ──
-  ctx.save();
-  ctx.font = `700 380px ${jp}`;
-  ctx.fillStyle = 'rgba(255,255,255,0.028)';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText('賭', W / 2, 800);
-  ctx.restore();
-  ctx.textBaseline = 'alphabetic';
-
   // ── registration ticks at the four corners ──
   ctx.strokeStyle = 'rgba(255,255,255,0.18)';
   ctx.lineWidth = 1;
@@ -295,15 +282,12 @@ export async function renderOpenBetShareCard(call: OpenBetCard): Promise<Blob> {
     ctx.stroke();
   }
 
-  // ── masthead: 予 YOSUKU (left) · N° folio (right) ──
+  // ── masthead: YOSUKU (left) · N° folio (right) ──
   const mastY = 118;
-  ctx.font = `700 26px ${jp}`;
-  ctx.fillStyle = 'rgba(255,255,255,0.55)';
   ctx.textAlign = 'left';
-  ctx.fillText('予', MARGIN, mastY);
   ctx.font = `800 27px ${display}`;
   ctx.fillStyle = 'rgba(255,255,255,0.92)';
-  drawTracked(ctx, 'YOSUKU', MARGIN + 44, mastY - 1, 7, 'left');
+  drawTracked(ctx, 'YOSUKU', MARGIN, mastY - 1, 7, 'left');
   ctx.font = `600 18px ${mono}`;
   ctx.fillStyle = 'rgba(255,255,255,0.40)';
   drawTracked(ctx, `N° ${folio}`, W - MARGIN, mastY - 3, 3, 'right');
@@ -373,7 +357,7 @@ export async function renderOpenBetShareCard(call: OpenBetCard): Promise<Blob> {
     ctx.font = `500 20px ${mono}`;
     ctx.fillStyle = verm(0.85);
     ctx.textAlign = 'center';
-    ctx.fillText(`${fmtLeverage(call.lev)} LEVERAGE · CAN KNOCK OUT BEFORE THE BELL`, W / 2, infoY);
+    ctx.fillText(`${fmtLeverage(call.lev)} LEVERAGE · CAN KNOCK OUT BEFORE THE CLOSE`, W / 2, infoY);
     infoY += 46;
   }
 
@@ -381,7 +365,7 @@ export async function renderOpenBetShareCard(call: OpenBetCard): Promise<Blob> {
   ctx.font = `400 21px ${mono}`;
   ctx.fillStyle = 'rgba(255,255,255,0.55)';
   ctx.textAlign = 'center';
-  ctx.fillText(`SETTLES ${fmtSettleUtc(call.expiryMs)} · ORACLE-SETTLED AT THE BELL`, W / 2, infoY);
+  ctx.fillText(`SETTLES ${fmtSettleUtc(call.expiryMs)} · ORACLE-SETTLED AT THE CLOSE`, W / 2, infoY);
 
   // ── perforation ──
   ctx.save();
@@ -415,7 +399,7 @@ export async function renderOpenBetShareCard(call: OpenBetCard): Promise<Blob> {
   ctx.fillText('yosuku.xyz · @yosuku0', MARGIN, 1424);
   ctx.font = `500 17px ${mono}`;
   ctx.fillStyle = 'rgba(255,255,255,0.30)';
-  drawTracked(ctx, 'THE BELL · LIVE CALL', W - MARGIN, 1422, 3, 'right');
+  drawTracked(ctx, 'YOSUKU · LIVE CALL', W - MARGIN, 1422, 3, 'right');
 
   // hairline accent under the record — a single vermilion spark at the top edge
   ctx.strokeStyle = verm(0.5);

@@ -105,10 +105,8 @@ export default function FundPage() {
       <GrainOverlay />
 
       <main className="relative max-w-xl mx-auto px-5 sm:px-8 pt-28 sm:pt-32 pb-28">
-        <span aria-hidden className="pointer-events-none select-none absolute -right-6 top-24 font-jp font-black leading-[0.8] text-[clamp(9rem,26vw,15rem)] text-white/[0.035]" style={{ writingMode: 'vertical-rl' }}>入金</span>
-
         <div className="relative z-10">
-          <div className="font-mono text-[11px] tracking-[0.28em] uppercase text-vermilion mb-4">予測 · Add money</div>
+          <div className="font-mono text-[11px] tracking-[0.28em] uppercase text-vermilion mb-4">Add money</div>
           <h1 className="font-display font-[800] tracking-[-0.03em] leading-[0.98] text-[clamp(2.3rem,7vw,3.4rem)]">
             Fund your <span className="text-vermilion">wallet.</span>
           </h1>

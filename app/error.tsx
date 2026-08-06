@@ -36,18 +36,6 @@ export default function Error({
         color: 'var(--white)',
       }}
     >
-      <div
-        aria-hidden
-        style={{
-          fontFamily: 'var(--font-jp)',
-          fontSize: '64px',
-          lineHeight: 1,
-          color: 'var(--vermilion)',
-          opacity: 0.9,
-        }}
-      >
-        {'静'}
-      </div>
       <h1
         style={{
           fontFamily: 'var(--font-display)',

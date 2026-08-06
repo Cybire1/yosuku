@@ -80,25 +80,15 @@ export default function ProofRecord({
   return (
     <section
       ref={ref}
-      className="relative overflow-hidden px-6 py-24 md:py-28"
+      className="px-6 py-24 md:py-28"
       style={{ borderTop: '1px solid var(--hairline, rgba(120,110,95,0.16))', borderBottom: '1px solid var(--hairline, rgba(120,110,95,0.16))' }}
       aria-label="Live on-chain record"
     >
-      {/* ghost kanji — 数 (figures) */}
-      <span
-        aria-hidden="true"
-        className="pointer-events-none absolute -right-[3vw] top-1/2 -translate-y-1/2 select-none font-jp font-bold leading-[0.8]"
-        style={{ fontSize: '26vw', color: 'var(--gray-600)', opacity: 0.05 }}
-      >
-        数
-      </span>
-
-      <div className="relative z-10 mx-auto max-w-[1200px]">
+      <div className="mx-auto max-w-[1200px]">
         {/* masthead */}
         <div className="mb-12 flex items-center justify-between md:mb-16">
-          <div className="flex items-center gap-3 font-mono text-[11px] tracking-[0.28em]" style={{ color: 'var(--gray-500)' }}>
-            <span className="font-jp text-[15px] leading-none" style={{ color: 'var(--gray-400)' }}>数</span>
-            <span>THE RECORD</span>
+          <div className="font-mono text-[11px] tracking-[0.28em]" style={{ color: 'var(--gray-500)' }}>
+            THE RECORD
           </div>
           <div className="flex items-center gap-2 font-mono text-[10px] tracking-[0.24em]" style={{ color: 'var(--gray-500)' }}>
             <span className="relative flex h-2 w-2" aria-hidden="true">

@@ -37,7 +37,6 @@ interface FaqItem {
 
 interface HowStep {
   num: string;
-  jp: string;
   kicker: string;
   title: string;
   body: string;
@@ -51,7 +50,6 @@ interface FeatureItem {
   em: string;
   desc: string;
   keys: string[];
-  jp: string;
 }
 
 interface SpecRow {
@@ -84,17 +82,17 @@ const ASSET_GLYPH: Record<string, string> = {
 };
 
 const HOW_STEPS: HowStep[] = [
-  { num: '01', jp: '\u5E02\u5834', kicker: 'Choose', title: 'Pick a market.', body: 'Every BTC market has a strike price and a fixed window \u2014 1-minute, 5-minute, or hourly rounds. One question: above or below at close.', meta: 'Fast rounds \u00B7 continuous' },
-  { num: '02', jp: '\u53D6\u5F15', kicker: 'Commit', title: 'Take a side.', body: 'One press and your call is locked in. No order book, no haggling — just up or down before the clock runs out.', meta: 'One tap \u00B7 instant' },
-  { num: '03', jp: '\u6C7A\u6E08', kicker: 'Settle', title: 'Settle on-chain.', body: 'When the clock hits zero, the final price decides it automatically. Call it right and you get paid; call it wrong and your stake is gone. No waiting on anyone.', meta: 'Pays out on the price \u00B7 no waiting' },
+  { num: '01', kicker: 'Choose', title: 'Pick a market.', body: 'Every BTC market has a strike price and a fixed window: 1-minute, 5-minute, or hourly rounds. One question: above or below at close.', meta: 'Fast rounds \u00B7 continuous' },
+  { num: '02', kicker: 'Commit', title: 'Take a side.', body: 'One press and your call is locked in. No order book, no haggling. Just up or down before the clock runs out.', meta: 'One tap \u00B7 instant' },
+  { num: '03', kicker: 'Settle', title: 'Settle on-chain.', body: 'When the clock hits zero, the final price decides it automatically. Call it right and you get paid; call it wrong and your stake is gone. No waiting on anyone.', meta: 'Pays out on the price \u00B7 no waiting' },
 ];
 
 const FEATURES: FeatureItem[] = [
-  { act: '01', idx: 'I', title: 'Two sides. ', em: 'One press.', desc: 'Pick above or below. When the clock runs out, the live price decides — automatically, with no order books and no appeals.', keys: ['One-tap UP/DOWN', 'Fast rounds', 'Auto-paid'], jp: '\u53D6\u5F15' },
-  { act: '02', idx: 'II', title: 'Leave when ', em: 'you like.', desc: 'Change your mind? Cash out at the live price any time before the round closes \u2014 no lock-ins, no penalties.', keys: ['Cash out anytime', 'Live pricing', 'Always fair'], jp: '\u81EA\u7531' },
-  { act: '03', idx: 'III', title: 'A side, or ', em: 'a range.', desc: 'Bet on a single price, or on a range between two. However you read the market, there\u2019s a way to play it.', keys: ['Any price', 'Pick a range', 'Every angle'], jp: '\u7BC4\u56F2' },
-  { act: '04', idx: 'IV', title: 'Be the ', em: 'house.', desc: 'Put money into the pool that backs every market and earn a cut of every round. Here the house isn\u2019t a company \u2014 it\u2019s a pool anyone can join.', keys: ['Join the pool', 'Earn a cut', 'Open to all'], jp: '\u80F4\u5143' },
-  { act: '05', idx: 'V', title: 'A keeper with ', em: 'rules.', desc: 'Our Autopilot trades inside hard limits it can\u2019t break \u2014 spending caps, an approved list, and a daily stop. The rules are locked in, not up for negotiation.', keys: ['Runs on Autopilot', 'Hard limits', 'Every move logged'], jp: '\u756A\u4EBA' },
+  { act: '01', idx: 'I', title: 'Two sides. ', em: 'One press.', desc: 'Pick above or below. When the clock runs out, the live price decides automatically, with no order books and no appeals.', keys: ['One-tap UP/DOWN', 'Fast rounds', 'Auto-paid'] },
+  { act: '02', idx: 'II', title: 'Leave when ', em: 'you like.', desc: 'Change your mind? Cash out at the live price any time before the round closes. No lock-ins, no penalties.', keys: ['Cash out anytime', 'Live pricing', 'Always fair'] },
+  { act: '03', idx: 'III', title: 'A side, or ', em: 'a range.', desc: 'Bet on a single price, or on a range between two. However you read the market, there\u2019s a way to play it.', keys: ['Any price', 'Pick a range', 'Every angle'] },
+  { act: '04', idx: 'IV', title: 'Be the ', em: 'house.', desc: 'Put money into the pool that backs every market and earn a cut of every round. Here the house isn\u2019t a company, it\u2019s a pool anyone can join.', keys: ['Join the pool', 'Earn a cut', 'Open to all'] },
+  { act: '05', idx: 'V', title: 'A keeper with ', em: 'rules.', desc: 'Our Autopilot trades inside hard limits it can\u2019t break: spending caps, an approved list, and a daily stop. The rules are locked in, not up for negotiation.', keys: ['Runs on Autopilot', 'Hard limits', 'Every move logged'] },
 ];
 
 const FAQ_DATA: FaqItem[] = [
@@ -456,7 +454,6 @@ export default function HomePage() {
       {/* ═══════ HERO ═══════ */}
       <section className="hero">
         <div className="hero-grid-lines" />
-        <div className="hero-watermark">{'\u4E88\u6E2C'}</div>
         <div className="hero-cursor-glow" />
 
         {/* Award badge */}
@@ -466,7 +463,7 @@ export default function HomePage() {
             <b>Tokyo 2026</b>
           </div>
           <div className="seal">
-            <span className="seal-inner">{'\u4E88'}</span>
+            <YosukuMark className="seal-inner" />
           </div>
         </div>
 
@@ -479,7 +476,6 @@ export default function HomePage() {
         <div className="hero-left">
           <div className="hero-eyebrow">
             <span className="rule" />
-            <span className="jp">{'\u4E88\u6E2C'}</span>
             <span>Foresight, rendered on-chain</span>
           </div>
 
@@ -586,7 +582,7 @@ export default function HomePage() {
       <section className="how" id="how">
         <div className="section-eyebrow fade-up">
           <span>02 &mdash; How it works</span>
-          <span className="jp">{'\u4E09\u6B69'} &middot; three steps</span>
+          <span className="sub">three steps</span>
         </div>
         <h2 className="section-title fade-up">Three steps. Before the clock runs out.</h2>
 
@@ -596,7 +592,6 @@ export default function HomePage() {
               <div className="num-col">
                 <span className="dot" />
                 <span className="num">{step.num}</span>
-                <span className="jp">{step.jp}</span>
               </div>
               <div className="text-col">
                 <div className="kicker">{step.kicker}</div>
@@ -651,7 +646,7 @@ export default function HomePage() {
                   <span className="corner br" />
                 </div>
                 <div className="art-cap">
-                  <span>{step.jp} &middot; {step.kicker.toLowerCase()}</span>
+                  <span>{step.kicker.toLowerCase()}</span>
                 </div>
               </div>
             </div>
@@ -662,7 +657,6 @@ export default function HomePage() {
       {/* ═══════ STICKY FEATURES ═══════ */}
       <section className="features" ref={featuresRef}>
         <div className="features-rail">
-          <span className="vjp">{'\u6A5F\u80FD'}</span>
           <div className="progress-track">
             <div className="progress-fill" style={{ height: `${featureProgress * 100}%` }} />
           </div>
@@ -682,7 +676,6 @@ export default function HomePage() {
                   <div className="feature-index">
                     <span className="rule" />
                     <span>{f.idx}</span>
-                    <span className="jp">{f.jp}</span>
                   </div>
                   <h3>
                     {f.title}<em>{f.em}</em>
@@ -789,7 +782,7 @@ export default function HomePage() {
                       )}
                     </svg>
                     <span className="art-cap">
-                      <span>{f.jp} &middot; act {f.act}</span>
+                      <span>act {f.act}</span>
                     </span>
                   </div>
                 </div>
@@ -814,7 +807,6 @@ export default function HomePage() {
 
       {/* ═══════ MANIFESTO ═══════ */}
       <section className="manifesto fade-up">
-        <div className="manifesto-jp">{'\u9759'}</div>
         <div className="manifesto-vrule l" />
         <div className="manifesto-vrule r" />
         <div className="manifesto-runline tl" />
@@ -825,7 +817,7 @@ export default function HomePage() {
           &ldquo;The market is a room of opinions. We built a quieter room &mdash; pick a side, wait for the clock, get paid.&rdquo;
         </blockquote>
         <div className="manifesto-attr">
-          <span className="seal">{'\u4E88'}</span>
+          <span className="seal"><YosukuMark className="seal-mark" /></span>
         </div>
       </section>
 
@@ -849,7 +841,6 @@ export default function HomePage() {
           <div className="split-right">
             <div className="spec-head">
               <span>The basics</span>
-              <span>{'\u4ED5\u69D8'}</span>
             </div>
             {SPEC_ROWS.map((row, i) => (
               <div className="split-row" key={row.label}>
@@ -908,7 +899,6 @@ export default function HomePage() {
 
       {/* ═══════ FAQ ═══════ */}
       <section className="faq fade-up">
-        <div className="faq-jp">{'\u554F'}</div>
         <div className="faq-grid">
           <aside className="faq-aside">
             <div className="rule" />
@@ -975,7 +965,7 @@ export default function HomePage() {
             </div>
             <p className="tagline">Bet on Bitcoin in seconds. Runs on Sui, pays out automatically.</p>
             <div className="seal">
-              <span className="seal-dot">{'\u4E88\u6E2C'}</span>
+              <span className="seal-dot"><YosukuMark className="seal-dot-mark" /></span>
               <span>Tokyo &middot; 2026</span>
             </div>
           </div>
@@ -1044,7 +1034,6 @@ export default function HomePage() {
               </span>
             ))}
           </div>
-          <span className="footer-sayonara">{'\u307E\u305F\u3001\u6B21\u306E\u9418\u3067\u3002'}</span>
         </div>
 
         <div className="footer-watermark">

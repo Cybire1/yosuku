@@ -59,9 +59,8 @@ export default function DemoPage() {
 
       {/* hero */}
       <section className="relative max-w-5xl mx-auto px-6 pt-12 pb-16">
-        <div className="pointer-events-none absolute -right-24 top-0 font-jp font-bold text-vermilion/[0.06] text-[28rem] leading-none select-none hidden lg:block">予</div>
         <div className="relative">
-          <Eyebrow>予測 · live demo</Eyebrow>
+          <Eyebrow>live demo</Eyebrow>
           <motion.h1 variants={rise} initial="hidden" animate="show" className="mt-5 mb-2 font-display font-[800] tracking-tight text-[clamp(2.2rem,5vw,4rem)] leading-[0.95]">
             See Yosuku <Serif>work.</Serif>
           </motion.h1>
@@ -177,7 +176,6 @@ export default function DemoPage() {
       {/* footer cta */}
       <section className="max-w-6xl mx-auto px-6 py-24 text-center">
         <Reveal>
-          <div className="font-jp text-vermilion text-6xl mb-6">予</div>
           <h2 className="font-display font-[800] text-[clamp(2rem,5vw,3.5rem)] leading-[1.02]">The front door is <Serif>open.</Serif></h2>
           <div className="mt-8 flex flex-wrap gap-3 justify-center">
             <Link href="/markets" className="inline-flex items-center gap-2 bg-vermilion hover:bg-vermilion-d transition-colors rounded-full px-6 py-3.5 font-display font-bold">Open the app <ArrowRight className="w-4 h-4" /></Link>

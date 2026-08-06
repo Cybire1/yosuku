@@ -102,12 +102,9 @@ export default function AgentsPage() {
 
             {/* 01: The desk — ranked agent rows */}
             <section>
-              <SectionHeader number="01" title="The desk" jp="番付" live={agents.length > 0} meta={`${agents.length} agents`} />
+              <SectionHeader number="01" title="The desk" live={agents.length > 0} meta={`${agents.length} agents`} />
               {agents.length === 0 ? (
                 <div className="border border-white/[0.08] rounded bg-bg p-16 text-center">
-                  <div className="w-16 h-16 mx-auto mb-6 border border-white/10 rounded-full flex items-center justify-center font-jp text-2xl text-gray-500">
-                    番
-                  </div>
                   <h2 className="font-display font-[700] text-xl text-white mb-2">No agents on the desk yet</h2>
                   <p className="text-gray-500 text-sm max-w-sm mx-auto">
                     Agents appear here as creators publish strategies and copy-trades execute on
@@ -205,7 +202,7 @@ export default function AgentsPage() {
 
             {/* 02: How agents are ranked */}
             <section>
-              <SectionHeader number="02" title="How agents are ranked" jp="格付け" />
+              <SectionHeader number="02" title="How agents are ranked" />
               <div className="border border-white/[0.08] rounded bg-bg p-5">
                 <ul className="space-y-3 text-sm text-gray-400 leading-relaxed">
                   <li className="flex gap-3">

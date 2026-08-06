@@ -67,8 +67,7 @@ function positionLabel(t: SettledTrade): string {
 
 interface KindMeta {
   receipt: string;      // masthead line
-  stampWord: string;    // the seal's caption
-  stampKanji: string;   // ONE seal language with the share card: 済 settled · 引 cashed out · 切 knocked out · 了 redeemed
+  stampWord: string;    // the word pressed into the stamp
   heroLabel: string;    // what the big price IS
   settleTxLabel: string;
   settleWord: string;   // the proof-scale mark word
@@ -77,13 +76,13 @@ interface KindMeta {
 function kindMeta(kind: SettledTrade['kind']): KindMeta {
   switch (kind) {
     case 'settled_order_redeemed':
-      return { receipt: 'Settlement receipt', stampWord: 'Oracle-settled', stampKanji: '済', heroLabel: 'Oracle settlement price', settleTxLabel: 'Settle tx', settleWord: 'Settled' };
+      return { receipt: 'Settlement receipt', stampWord: 'Oracle-settled', heroLabel: 'Oracle settlement price', settleTxLabel: 'Settle tx', settleWord: 'Settled' };
     case 'live_order_redeemed':
-      return { receipt: 'Cash-out receipt', stampWord: 'Cashed out', stampKanji: '引', heroLabel: 'Live price at cash-out', settleTxLabel: 'Cash-out tx', settleWord: 'Print' };
+      return { receipt: 'Cash-out receipt', stampWord: 'Cashed out', heroLabel: 'Live price at cash-out', settleTxLabel: 'Cash-out tx', settleWord: 'Print' };
     case 'liquidated_order_redeemed':
-      return { receipt: 'Liquidation receipt', stampWord: 'Liquidated', stampKanji: '切', heroLabel: 'Price at liquidation', settleTxLabel: 'Liquidation tx', settleWord: 'Knockout' };
+      return { receipt: 'Liquidation receipt', stampWord: 'Liquidated', heroLabel: 'Price at liquidation', settleTxLabel: 'Liquidation tx', settleWord: 'Knockout' };
     default:
-      return { receipt: 'Trade receipt', stampWord: 'Redeemed', stampKanji: '了', heroLabel: 'Redemption price', settleTxLabel: 'Redeem tx', settleWord: 'Print' };
+      return { receipt: 'Trade receipt', stampWord: 'Redeemed', heroLabel: 'Redemption price', settleTxLabel: 'Redeem tx', settleWord: 'Print' };
   }
 }
 
@@ -215,17 +214,12 @@ export default function TradeReceipt({
         </button>
 
         <div className="relative overflow-y-auto overscroll-contain">
-          {/* ── masthead — seal · wordmark · record line ── */}
+          {/* ── masthead — wordmark · record line ── */}
           <header className="px-6 pt-6">
-            <div className="flex items-center gap-3.5 pr-10">
-              <div className={`grid h-11 w-11 shrink-0 -rotate-3 place-items-center border-[1.5px] font-jp text-[22px] leading-none ${heat ? 'border-vermilion/70 text-vermilion shadow-[inset_0_0_0_3px_rgba(224,77,38,0.12),0_0_24px_-6px_rgba(224,77,38,0.5)]' : 'border-white/20 text-white/50 shadow-[inset_0_0_0_3px_rgba(255,255,255,0.03)]'}`}>
-                予
-              </div>
-              <div className="min-w-0">
-                <div className="font-display text-[15px] font-[800] leading-none tracking-[0.26em] text-white">YOSUKU</div>
-                <div className="mt-2 font-mono text-[8px] uppercase tracking-[0.3em] text-white/40">
-                  Oracle-settled prediction markets
-                </div>
+            <div className="pr-10">
+              <div className="font-display text-[15px] font-[800] leading-none tracking-[0.26em] text-white">YOSUKU</div>
+              <div className="mt-2 font-mono text-[8px] uppercase tracking-[0.3em] text-white/40">
+                Oracle-settled prediction markets
               </div>
             </div>
             <div className="mt-5 flex items-baseline justify-between border-t border-white/[0.1] pt-3 font-mono text-[9px] uppercase">
@@ -258,10 +252,7 @@ export default function TradeReceipt({
 
           {/* ── the monument — the print at the exact second ── */}
           {settle != null ? (
-            <section className="relative px-6 pb-1 pt-5">
-              <span aria-hidden="true" className="pointer-events-none absolute -right-4 -top-7 select-none font-jp text-[120px] font-bold leading-none text-white/[0.03]">
-                {meta.stampKanji}
-              </span>
+            <section className="px-6 pb-1 pt-5">
               <div className="flex items-center gap-2.5">
                 <span aria-hidden="true" className={`h-3.5 w-[3px] ${heat ? 'bg-vermilion' : 'bg-white/30'}`} />
                 <span className="font-mono text-[9px] uppercase tracking-[0.3em] text-white/55">{meta.heroLabel}</span>
@@ -319,7 +310,7 @@ export default function TradeReceipt({
                   </div>
                 </div>
               </div>
-              <Stamp word={meta.stampWord} kanji={meta.stampKanji} heat={heat} />
+              <Stamp word={meta.stampWord} heat={heat} />
             </div>
           </section>
 
@@ -385,9 +376,9 @@ function Perforation() {
   );
 }
 
-/** The hanko. Celebration lives HERE and only here — vermilion press on a win,
+/** The stamp. Celebration lives HERE and only here — vermilion press on a win,
  *  drained ink on a loss or knockout. */
-function Stamp({ word, kanji, heat }: { word: string; kanji: string; heat: boolean }) {
+function Stamp({ word, heat }: { word: string; heat: boolean }) {
   return (
     <div className="relative shrink-0 select-none motion-safe:animate-[ykStampIn_.55s_var(--ease-bounce)_.3s_both]" style={{ transform: 'rotate(-8deg)' }}>
       <div
@@ -397,8 +388,7 @@ function Stamp({ word, kanji, heat }: { word: string; kanji: string; heat: boole
             : 'border-white/25 text-white/45'
         }`}
       >
-        <span className="block font-jp text-[30px] leading-none">{kanji}</span>
-        <span className="mt-2 block whitespace-nowrap font-mono text-[6.5px] font-bold uppercase tracking-[0.26em]">{word}</span>
+        <span className="block whitespace-nowrap font-mono text-[6.5px] font-bold uppercase tracking-[0.26em]">{word}</span>
       </div>
       {/* inner hairline ring — double-struck seal edge */}
       <span aria-hidden="true" className={`pointer-events-none absolute inset-[4px] rounded-[2px] border ${heat ? 'border-vermilion/40' : 'border-white/10'}`} />

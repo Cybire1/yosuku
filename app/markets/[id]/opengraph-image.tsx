@@ -91,7 +91,6 @@ export default async function OGImage({ params }: { params: Promise<{ id: string
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={markSrc(INK, VERMILION)} width={30} height={36} alt="" style={{ display: 'flex' }} />
             <div style={{ fontSize: 27, fontWeight: 800, color: INK, letterSpacing: '0.16em', display: 'flex' }}>YOSUKU</div>
-            <div style={{ fontSize: 16, color: VERMILION, letterSpacing: '0.22em', display: 'flex' }}>予測</div>
           </div>
           <div
             style={{

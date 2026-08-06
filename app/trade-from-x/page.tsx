@@ -106,10 +106,9 @@ export default function XTradePage() {
 
       {/* ── HERO — the un-drainable custody rail is the centerpiece ── */}
       <section className="relative max-w-6xl mx-auto px-5 sm:px-8 pt-16 sm:pt-24 pb-14">
-        <div className="xt-kanji hidden sm:block text-[clamp(9rem,20vw,17rem)]" style={{ top: '-4%', right: '-2%' }} aria-hidden>予測</div>
         <div className="grid lg:grid-cols-[minmax(0,1fr)_minmax(0,520px)] gap-10 lg:gap-8 items-center">
           <div className="relative z-10">
-            <div className="xt-boot font-mono text-[11px] tracking-[0.34em] text-vermilion/80 uppercase" style={{ animationDelay: '0ms' }}>予測 · X-trade</div>
+            <div className="xt-boot font-mono text-[11px] tracking-[0.34em] text-vermilion/80 uppercase" style={{ animationDelay: '0ms' }}>X-trade</div>
             <h1 className="mt-5 font-display font-[800] tracking-[-0.03em] leading-[0.96] text-[clamp(2.7rem,7vw,5rem)] [text-wrap:balance]">
               <span className="xt-boot block" style={{ animationDelay: '90ms' }}>Trade by tweeting.</span>
               <span className="xt-payoff relative inline-block mt-3 font-jp italic text-vermilion text-[1.04em]">

@@ -70,8 +70,6 @@ export default function DocsPage() {
           <aside className="hidden lg:block w-[224px] flex-shrink-0">
             <div className="sticky top-[120px]">
               <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.22em] text-gray-600 mb-6">
-                <span className="font-jp text-vermilion/80 text-[13px] not-italic">予測</span>
-                <span className="w-5 h-px bg-gray-800" />
                 Docs
               </div>
 
@@ -126,7 +124,6 @@ export default function DocsPage() {
           <div className="min-w-0 flex-1 max-w-2xl">
             {/* Editorial masthead */}
             <header className="relative mb-16 pb-12 border-b border-white/[0.07] overflow-hidden">
-              <span aria-hidden className="pointer-events-none select-none absolute -top-14 -right-6 font-jp font-bold leading-none text-[150px] md:text-[190px] text-white/[0.022]">予</span>
               {/* corner ticks */}
               <span aria-hidden className="absolute top-0 left-0 w-3.5 h-3.5 border-t border-l border-white/15" />
               <span aria-hidden className="absolute top-0 right-0 w-3.5 h-3.5 border-t border-r border-white/15" />
@@ -260,7 +257,7 @@ const quote   = await predict.quote(oracle.oracle_id, 63_000);  // SVI · N(d2)`
             <section id="honest" className="mb-16 scroll-mt-[120px]">
               <SectionHead num="09" eyebrow="Honest" title="What this is and isn’t" />
               <div className="ledger-plate mt-1">
-                <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-[#A8997D] mb-5">Disclosure · 予測</div>
+                <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-[#A8997D] mb-5">Disclosure</div>
                 <ul className="space-y-3.5">
                   {[
                     ['Testnet only.', 'DeepBook Predict is testnet today; mainnet IDs will change.'],

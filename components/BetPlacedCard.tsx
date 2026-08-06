@@ -2,8 +2,8 @@
 
 // The Call — the award-winning, shareable card shown the instant a bet lands.
 // The live-position sibling of the Settlement Receipt: same near-black ground,
-// grain, registration ticks and JP hanko language, but the vermilion heat here
-// reads as CONVICTION (skin in the game), not a win. The clock is alive — a
+// grain and registration ticks, but the vermilion heat here reads as
+// CONVICTION (skin in the game), not a win. The clock is alive — a
 // ticking countdown over a draining bar — because the call is still open.
 //
 // The PNG export (lib/openBetShareCard.ts) freezes this exact moment for sharing.
@@ -81,16 +81,11 @@ export default function BetPlacedCard({
         <span aria-hidden="true" className="pointer-events-none absolute right-2 top-2 z-20 h-2.5 w-2.5 border-r border-t border-white/20" />
         <span aria-hidden="true" className="pointer-events-none absolute bottom-2 left-2 z-20 h-2.5 w-2.5 border-b border-l border-white/20" />
         <span aria-hidden="true" className="pointer-events-none absolute bottom-2 right-2 z-20 h-2.5 w-2.5 border-b border-r border-white/20" />
-        {/* ghost hanko — 賭 (wager) */}
-        <span aria-hidden="true" className="pointer-events-none absolute -right-5 top-14 z-0 select-none font-jp text-[150px] leading-none text-white/[0.035]">賭</span>
 
         <div className="relative z-10 p-6">
           {/* masthead */}
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="font-jp text-[15px] leading-none text-white/55">予</span>
-              <span className="font-display text-[11px] font-extrabold tracking-[0.2em] text-white/90">YOSUKU</span>
-            </div>
+            <span className="font-display text-[11px] font-extrabold tracking-[0.2em] text-white/90">YOSUKU</span>
             <span className="font-mono text-[9px] tracking-[0.18em] text-white/40">N° {shortCallId(call)}</span>
           </div>
           <div className="mt-3 h-px bg-white/[0.08]" />

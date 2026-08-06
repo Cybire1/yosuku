@@ -2,9 +2,9 @@
 //
 // Renders one SettledTrade to a 1200×1500 (4:5) PNG on an offscreen canvas:
 // near-black ground, the realized P&L as the giant focal number (win = living
-// vermilion heat, loss = drained ash — never green, never red), a rotated kanji
-// hanko seal, and an honest record line. ONE-SPARK rule: vermilion appears only
-// on a win, and only in the P&L + stamp.
+// vermilion heat, loss = drained ash — never green, never red), and an honest
+// record line. ONE-SPARK rule: vermilion appears only on a win, and only in
+// the P&L.
 //
 // HONESTY (hard rules — do not relax):
 //  · kind 'settled_order_redeemed'   → "ORACLE-SETTLED", and the settlement
@@ -30,7 +30,6 @@ const ASH_DIM = 'rgba(143,138,130,0.55)';
 
 const DISPLAY_FALLBACK = "'Sora', system-ui, sans-serif";
 const MONO_FALLBACK = "'JetBrains Mono', ui-monospace, monospace";
-const JP_FALLBACK = "'Noto Serif JP', 'Hiragino Mincho ProN', 'Yu Mincho', serif";
 
 // ─── formatting helpers (exported for the share button's tweet text) ───
 
@@ -95,7 +94,6 @@ function shortDigest(d: string): string {
 
 interface TradeLook {
   won: boolean;      // carries the vermilion heat
-  kanji: string;     // hanko glyph
   recordType: string;   // masthead record line
   kindLine: string;  // honest settlement/kind line (empty if nothing truthful to say)
   footerKind: string;
@@ -111,7 +109,6 @@ function tradeLook(trade: SettledTrade): TradeLook {
   if (isLiq) {
     return {
       won: false,
-      kanji: '切', // 切 — one seal language with the receipt (了 stays generic-redeemed)
       recordType: 'LIQUIDATION RECORD',
       kindLine: `LIQUIDATED · ${when}`,
       footerKind: 'LIQUIDATED',
@@ -120,7 +117,6 @@ function tradeLook(trade: SettledTrade): TradeLook {
   if (isLive) {
     return {
       won,
-      kanji: '引', // 引
       recordType: 'CASH-OUT RECORD',
       kindLine: `CASHED OUT · LIVE PRICE · ${when}`,
       footerKind: 'CASHED OUT · LIVE PRICE',
@@ -137,7 +133,6 @@ function tradeLook(trade: SettledTrade): TradeLook {
       : `SETTLED · CLAIMED ${when}`;
     return {
       won,
-      kanji: won ? '勝' : '決', // 勝 / 決
       recordType: 'SETTLEMENT RECORD',
       kindLine,
       footerKind: 'ORACLE-SETTLED',
@@ -146,7 +141,6 @@ function tradeLook(trade: SettledTrade): TradeLook {
   // Unknown *_redeemed kind — record it plainly, claim nothing.
   return {
     won,
-    kanji: won ? '勝' : '決',
     recordType: 'TRADE RECORD',
     kindLine: `REDEEMED · ${when}`,
     footerKind: 'REDEEMED',
@@ -250,22 +244,6 @@ function fitFontPx(
   return Math.max(36, Math.floor((basePx * maxWidth) / w));
 }
 
-function roundedRectPath(
-  ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number,
-): void {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.lineTo(x + w - r, y);
-  ctx.arcTo(x + w, y, x + w, y + r, r);
-  ctx.lineTo(x + w, y + h - r);
-  ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
-  ctx.lineTo(x + r, y + h);
-  ctx.arcTo(x, y + h, x, y + h - r, r);
-  ctx.lineTo(x, y + r);
-  ctx.arcTo(x, y, x + r, y, r);
-  ctx.closePath();
-}
-
 /** Tiny noise tile → film grain pattern (alpha baked in, cheap to tile). */
 function makeGrainTile(size = 140): HTMLCanvasElement {
   const c = document.createElement('canvas');
@@ -311,7 +289,6 @@ export async function renderTradeShareCard(trade: SettledTrade): Promise<Blob> {
 
   const display = resolveFontFamily('--font-display', DISPLAY_FALLBACK);
   const mono = resolveFontFamily('--font-mono', MONO_FALLBACK);
-  const jp = resolveFontFamily('--font-jp', JP_FALLBACK);
 
   const look = tradeLook(trade);
   const vermilion = resolveVermilion();
@@ -328,7 +305,6 @@ export async function renderTradeShareCard(trade: SettledTrade): Promise<Blob> {
     ensureFont(`600 22px ${mono}`),
     ensureFont(`500 26px ${mono}`, subLine),
     ensureFont(`400 21px ${mono}`),
-    ensureFont(`700 108px ${jp}`, '勝決引了予'),
   ]);
 
   const big = document.createElement('canvas');
@@ -376,17 +352,12 @@ export async function renderTradeShareCard(trade: SettledTrade): Promise<Blob> {
     ctx.stroke();
   }
 
-  // ── masthead: seal glyph + YOSUKU (left) · folio (right) ──
+  // ── masthead: YOSUKU (left) · folio (right) ──
   const mastY = 118;
-  // 予 — the repo's brand glyph. Always neutral: on a win the vermilion heat
-  // lives ONLY in the P&L and the stamp (one-spark rule).
-  ctx.font = `700 26px ${jp}`;
-  ctx.fillStyle = 'rgba(255,255,255,0.55)';
   ctx.textAlign = 'left';
-  ctx.fillText('予', MARGIN, mastY);
   ctx.font = `800 27px ${display}`;
   ctx.fillStyle = 'rgba(255,255,255,0.92)';
-  drawTracked(ctx, 'YOSUKU', MARGIN + 44, mastY - 1, 7, 'left');
+  drawTracked(ctx, 'YOSUKU', MARGIN, mastY - 1, 7, 'left');
   ctx.font = `600 18px ${mono}`;
   ctx.fillStyle = 'rgba(255,255,255,0.40)';
   drawTracked(ctx, `N° ${folio}`, W - MARGIN, mastY - 3, 3, 'right');
@@ -427,37 +398,6 @@ export async function renderTradeShareCard(trade: SettledTrade): Promise<Blob> {
   } else {
     ctx.fillStyle = trade.kind === 'liquidated_order_redeemed' ? ASH_DIM : ASH;
     ctx.fillText(pnlText, W / 2, pnlY);
-  }
-
-  // ── hanko seal — rotated rounded-rect stamp over the record's upper right ──
-  {
-    const cx = 952;
-    const cy = 636;
-    const size = 168;
-    ctx.save();
-    ctx.translate(cx, cy);
-    ctx.rotate((-8 * Math.PI) / 180);
-    ctx.globalAlpha = 0.94;
-    const ink = look.won
-      ? vermilion
-      : trade.kind === 'liquidated_order_redeemed'
-        ? ASH_DIM
-        : 'rgba(160,155,146,0.8)';
-    if (look.won) {
-      ctx.shadowColor = verm(0.5);
-      ctx.shadowBlur = 26 * SCALE;
-    }
-    ctx.strokeStyle = ink;
-    ctx.lineWidth = 6;
-    roundedRectPath(ctx, -size / 2, -size / 2, size, size, 22);
-    ctx.stroke();
-    ctx.font = `700 104px ${jp}`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = ink;
-    ctx.fillText(look.kanji, 0, 8);
-    ctx.restore();
-    ctx.textBaseline = 'alphabetic';
   }
 
   // ── honest sub-line: market · band · leverage · stake→payout ──

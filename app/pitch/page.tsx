@@ -84,9 +84,6 @@ function Celebrant({ h = 46 }: { h?: number }) {
     </svg>
   );
 }
-const Kanji = ({ className = '', style }: { className?: string; style?: React.CSSProperties }) =>
-  <span className={`font-jp font-bold select-none ${className}`} style={style}>予</span>;
-
 /* ── product mockups (rich, on-brand, for the side visuals) ── */
 const SORA = 'var(--font-sora), ui-sans-serif, system-ui';
 const MONO = 'var(--font-mono), ui-monospace, monospace';
@@ -546,7 +543,6 @@ const SLIDES: { id: string; section: string; paper?: string; render: () => React
     id: 'why-sui', section: 'TECHNICAL · WHY SUI', paper: PAPER2,
     render: () => (
       <div className="relative w-full h-full flex items-center justify-between gap-12">
-        <Kanji className="absolute" style={{ bottom: '-30%', left: '-8%', fontSize: 'clamp(20rem,40vw,48rem)', color: 'rgba(20,18,16,0.04)', lineHeight: 1, zIndex: 0 }} />
         <div className="relative z-10" style={{ maxWidth: '44%' }}>
           <Kicker>Built on the Sui stack</Kicker>
           <M variants={rise} className={`${H1}`} style={ARTSIZE}>Only possible<br />on <Emph delay={0.7}>Sui</Emph>.</M>
@@ -565,7 +561,36 @@ const SLIDES: { id: string; section: string; paper?: string; render: () => React
     ),
   },
 
-  // 13 · ROADMAP
+  // 13 · TEAM
+  {
+    id: 'team', section: 'THE TEAM', paper: PAPER2,
+    render: () => (
+      <div className="w-full h-full flex flex-col justify-center">
+        <Kicker>The team</Kicker>
+        <M variants={rise} className={`${H1}`} style={DENSE}>Built by a team<br />that <Emph delay={0.85}>ships</Emph>.</M>
+        <M variants={rise} className="mt-8 flex items-center gap-5" style={{ maxWidth: 1020, background: CARD, border: `1px solid ${HAIR}`, borderLeft: `3px solid ${VERM}`, borderRadius: 12, padding: '20px 24px' }}>
+          <div style={{ width: 58, height: 58, borderRadius: '50%', background: PAPER2, border: `1px solid ${HAIR}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Celebrant h={30} /></div>
+          <div>
+            <div className="font-display font-[700]" style={{ fontSize: 22, color: INK }}>Cyber <span style={{ color: MUTE, fontSize: 15, fontWeight: 400 }}>· Founder &amp; full-stack builder</span></div>
+            <div className="mt-1.5 font-mono" style={{ fontSize: 13.5, color: BODY, lineHeight: 1.5, maxWidth: '72ch' }}>Move contracts, the attested TEE agent, the native iOS app, the 24/7 X relay, and the web. Product, protocol, and design, shipped to here.</div>
+          </div>
+        </M>
+        <div className="mt-4 flex gap-4" style={{ maxWidth: 1020 }}>
+          {[['Ariella', 'Social & growth'], ['Minting Ruru', 'Advisor'], ['Danladi', 'Advisor'], ['Sele', 'Advisor']].map(([n, r], i) => (
+            <M key={i} variants={rise} className="flex-1 flex items-center gap-3" style={{ background: CARD, border: `1px solid ${HAIR}`, borderRadius: 10, padding: '14px 16px' }}>
+              <div style={{ width: 38, height: 38, borderRadius: '50%', background: PAPER2, border: `1px solid ${HAIR}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontFamily: SORA, fontWeight: 800, fontSize: 15, color: INK }}>{n[0]}</div>
+              <div>
+                <div className="font-display font-[700]" style={{ fontSize: 15, color: INK, letterSpacing: '-0.01em' }}>{n}</div>
+                <div className="font-mono" style={{ fontSize: 11, color: MUTE }}>{r}</div>
+              </div>
+            </M>
+          ))}
+        </div>
+      </div>
+    ),
+  },
+
+  // 14 · ROADMAP
   {
     id: 'roadmap', section: 'ROADMAP',
     render: () => (

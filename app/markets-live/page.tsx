@@ -423,7 +423,7 @@ export default function MarketsLivePage() {
       <main className="container pt-[120px] pb-12">
         {/* masthead — dateline */}
         <div className="border-t border-white/10 pt-3 flex items-center justify-between gap-4 font-mono text-[10px] md:text-[11px] uppercase tracking-[0.28em] text-white/40">
-          <span><span className="text-vermilion">⊙</span> Yosuku Ledger · <span className="font-jp">予測</span> · Live markets</span>
+          <span><span className="text-vermilion">⊙</span> Yosuku Ledger · Live markets</span>
           <span className="tabular-nums flex items-center gap-2">
             <span className="hidden sm:inline">BTC ·</span>
             <span className="inline-flex items-center gap-1.5">

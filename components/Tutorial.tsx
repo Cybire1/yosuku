@@ -9,7 +9,6 @@ const STORAGE_KEY = 'yosuku_tutorial_seen';
 
 interface TutorialStep {
   title: string;
-  jp: string;
   description: string;
   actions?: { label: string; href: string }[];
   choice?: boolean; // final step: pick Simple/Pro trade view
@@ -20,27 +19,22 @@ interface TutorialStep {
 const steps: TutorialStep[] = [
   {
     title: 'Welcome to Yosuku',
-    jp: 'ようこそ',
     description: 'A prediction market on BTC. Pick a side, the oracle settles at close, the math decides. This is testnet — test funds only, no real money.',
   },
   {
     title: 'How a market works',
-    jp: '方向を選ぶ',
     description: 'Markets settle every 1, 5, or 60 minutes on the oracle print. Tap UP or DOWN — each side is its own question with its own line and its own live price from the venue, so the two sides don’t add up to $1. The ticket shows the exact cost before you sign.',
   },
   {
     title: 'Your trading account',
-    jp: '準備完了',
     description: 'Your bets settle into an on-chain trading account that only your wallet can withdraw from. Connect, create it in one tap, fund it with testnet DUSDC — then betting is one tap. You sign your own transactions on the new venue.',
   },
   {
     title: 'Your Trading Balance',
-    jp: '取引残高',
     description: 'Think of it as your Yosuku account, not a second wallet. You can place a normal trade without moving funds first, but funds kept in Trading make repeat bets, leverage, private bets, and agent strategies feel instant. Winnings and cashouts land there first, and idle funds can be withdrawn anytime.',
   },
   {
     title: 'Pick your view',
-    jp: 'はじめる',
     description: 'Switch anytime with the Simple / Pro toggle in the trade panel.',
     choice: true,
   },
@@ -113,12 +107,7 @@ export default function Tutorial() {
           className="w-full max-w-xl bg-neutral-900/95 border border-white/10 rounded-2xl overflow-hidden backdrop-blur-xl"
         >
           <div className="px-8 pt-8 pb-3 flex items-start justify-between">
-            <div>
-              <div className="font-mono text-[10px] tracking-[0.16em] uppercase text-gray-600 mb-1.5">
-                {current.jp}
-              </div>
-              <h3 className="font-display font-bold text-2xl text-white">{current.title}</h3>
-            </div>
+            <h3 className="font-display font-bold text-2xl text-white">{current.title}</h3>
             <button onClick={dismiss} className="p-1 text-gray-600 hover:text-white transition-colors">
               <X className="w-5 h-5" />
             </button>

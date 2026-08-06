@@ -26,7 +26,6 @@ export default function ParlayPage() {
           <h1 className="page-title">
             Parlay<span className="accent">.</span>
           </h1>
-          <p className="page-title-jp">連勝 · the close streak</p>
         </div>
 
         {/* Builder */}
@@ -34,7 +33,6 @@ export default function ParlayPage() {
           <SectionHeader
             number="01"
             title="Build the streak"
-            jp="連勝を組む"
             desc="Pick the markets, set the lines, watch the multiplier climb."
           />
           <div className="mt-6">
@@ -47,7 +45,6 @@ export default function ParlayPage() {
           <SectionHeader
             number="02"
             title="Your tickets"
-            jp="あなたの馬券"
             desc="Each leg ticks green as it settles. Claim the instant the streak lands."
           />
           <div className="mt-6">
@@ -60,7 +57,6 @@ export default function ParlayPage() {
           <SectionHeader
             number="03"
             title="How a parlay pays"
-            jp="配当の仕組み"
           />
           <div className="mt-6 grid sm:grid-cols-3 gap-4">
             {[

@@ -343,7 +343,7 @@ export default function ParlayBuilder() {
         <div className="rounded-2xl border border-white/[0.08] bg-neutral-900/60 overflow-hidden">
           <div className="px-5 py-4 border-b border-white/5 flex items-center justify-between">
             <span className="font-display font-bold text-sm tracking-wide text-white">Ticket</span>
-            <span className="font-mono text-[9px] tracking-[0.18em] uppercase text-gray-600">予測 · parlay</span>
+            <span className="font-mono text-[9px] tracking-[0.18em] uppercase text-gray-600">parlay</span>
           </div>
 
           <div className="p-5 space-y-4">
@@ -624,10 +624,9 @@ function LegRow({
       className={`rounded-xl border border-white/[0.06] bg-white/[0.015] relative ${menuOpen ? 'z-30 overflow-visible' : 'overflow-hidden'}`}
     >
       <div className="flex items-stretch">
-        {/* numbered stamp — editorial 予測 style */}
+        {/* numbered stamp */}
         <div className="flex flex-col items-center justify-center w-10 border-r border-white/[0.06] bg-white/[0.02]">
           <span className="font-display font-[800] text-base text-vermilion leading-none">{index + 1}</span>
-          <span className="font-mono text-[7px] text-gray-600 mt-0.5">脚</span>
         </div>
 
         <div className="flex-1 p-3 space-y-2.5 min-w-0">

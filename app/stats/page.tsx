@@ -119,7 +119,6 @@ export default function StatsPage() {
               <h1 className="page-title">
                 Proof of<br /><span className="accent">demand</span>.
               </h1>
-              <p className="page-title-jp">実需の証明</p>
               <p className="mt-6 max-w-md text-gray-400 leading-relaxed text-[15px]">
                 Real wallets, read straight from the chain. Yosuku <span className="text-gray-200">paid their gas</span>, so the chain itself
                 proves each one came through us, not the broader Predict network. Every number links to Suiscan.

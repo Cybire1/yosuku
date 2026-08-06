@@ -1,8 +1,8 @@
 'use client';
 
-// SettleClock — the branded settlement countdown. Speaks the Bell's ring language (a
-// draining arc that empties as the round closes, mono digits, a 締切 accent) so every
-// "settles in" moment across the app reads as one system instead of flat gray text.
+// SettleClock: the branded settlement countdown. A draining arc that empties as the
+// round closes, with mono digits, so every "settles in" moment across the app reads
+// as one system instead of flat gray text.
 // Drop-in: pass msLeft (+ optional totalMs for the ring to fill accurately).
 
 const TAU = 2 * Math.PI;
@@ -22,14 +22,12 @@ export function SettleClock({
   totalMs,
   label = 'Settles in',
   size = 132,
-  jp = '締切',
   className = '',
 }: {
   msLeft: number | null;
   totalMs?: number;
   label?: string;
   size?: number;
-  jp?: string | null;
   className?: string;
 }) {
   const ms = msLeft ?? 0;
@@ -87,11 +85,6 @@ export function SettleClock({
         >
           {known ? text : '—'}
         </span>
-        {jp && (
-          <span className="text-gray-600" style={{ fontFamily: 'var(--font-jp)', fontSize: Math.max(8, size * 0.072) }}>
-            {jp}
-          </span>
-        )}
       </div>
     </div>
   );

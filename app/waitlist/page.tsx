@@ -159,7 +159,6 @@ export default function WaitlistPage() {
 
                   <div className="flex items-center justify-between mb-6">
                     <span className="font-mono text-[10px] uppercase tracking-[0.24em] text-gray-500">{isFounder ? 'Founder pass' : state?.joined ? 'Early pass' : 'Founder pass'}</span>
-                    <span className="font-display font-bold text-vermilion text-lg">予</span>
                   </div>
 
                   {!address ? (

@@ -38,7 +38,7 @@ export default function StatusPage() {
       <GrainOverlay />
 
       <main className="container pt-[120px] pb-12">
-        <SectionHeader number="01" title="System Status" jp="システム状態" />
+        <SectionHeader number="01" title="System Status" />
 
         {loading && (
           <div className="text-center py-12">
