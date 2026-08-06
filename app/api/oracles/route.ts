@@ -1,9 +1,19 @@
 // Markets + spot for the web app.
 //
-// Reads the live 6-24 beta indexer, which is still the deployment currently
-// creating tradeable markets. Keep this route byte-compatible with the old
-// oracle response: `{ oracles: [...], prices: { [marketId]: { spot } } }`.
+// Keep this route byte-compatible with the old oracle response:
+// `{ oracles: [...], prices: { [marketId]: { spot } } }`.
+//
+// NEVER let this response be cached. Every row carries a `status` of active-or-settled that is
+// computed from Date.now() at render time, so a cached copy does not go stale gracefully — it
+// actively lies, labelling rounds that closed twenty minutes ago as live and inviting a bet on
+// them. Observed exactly that in production: `x-vercel-cache: HIT` serving 8 "active" markets of
+// which only 2 were still in the future. The in-process caches below (15s markets / 5s price) are
+// the right place to absorb load; the CDN is not.
 import { NextResponse } from 'next/server';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+const NO_STORE = { 'cache-control': 'no-store, max-age=0, must-revalidate' } as const;
 
 // predict-testnet-7-29 (migrated 2026-08-06). Neither the beta indexer nor propbook serves this
 // deployment, so markets come from MarketCreated events and spot comes off the PythFeed object.
@@ -174,11 +184,11 @@ export async function GET(request: Request) {
 
   try {
     const oracles = await getMarkets(now);
-    if (!withPrices) return NextResponse.json(oracles);
+    if (!withPrices) return NextResponse.json(oracles, { headers: NO_STORE });
     const spot = await getSpot(now);
     const prices: Record<string, { spot: number }> = {};
     if (spot != null) for (const o of oracles) if (o.status === 'active') prices[o.oracle_id] = { spot };
-    return NextResponse.json({ oracles, prices });
+    return NextResponse.json({ oracles, prices }, { headers: NO_STORE });
   } catch (err) {
     console.error('oracles route failed:', err);
     if (marketCache) {

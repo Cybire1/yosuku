@@ -284,6 +284,21 @@ function parsePythPrice(j: PythLatest | null | undefined): number {
  * (suioverflow/x-relay/predict624.mjs pythHistory), reversed for drawing.
  */
 export async function fetchPythHistory624(limit = 120): Promise<{ usd: number; tsMs: number }[]> {
+  // propbook indexes the 6-24 deployment only. For the 7-29 feed it returns 200 OK with an EMPTY
+  // array — not an error, so `res.ok` is true and every caller's catch is bypassed; spot, strike
+  // and the odds simply render blank forever. Go to our own on-chain route first and only fall
+  // back to propbook, rather than the other way round.
+  try {
+    const r = await fetch('/api/spot', { headers: { accept: 'application/json' } });
+    if (r.ok) {
+      const j = (await r.json()) as { usd: number | null; tsMs: number | null; history?: { usd: number; tsMs: number }[] };
+      const hist = Array.isArray(j.history) ? j.history : [];
+      // Callers expect NEWEST-LAST (they read .at(-1) for spot), which is how the buffer is kept.
+      if (hist.length >= 2) return hist.slice(-limit);
+      if (j.usd != null) return [{ usd: j.usd, tsMs: j.tsMs ?? Date.now() }];
+    }
+  } catch { /* fall through to propbook for the legacy 6-24 feed */ }
+
   const res = await fetch(
     `${PREDICT624.propbook}/oracles/${PREDICT624.pythFeed}/pyth?limit=${limit}`,
     { headers: { accept: 'application/json' } },
