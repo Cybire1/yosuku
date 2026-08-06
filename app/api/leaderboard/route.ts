@@ -73,7 +73,7 @@ interface EventNode { timestamp?: string; contents?: { json?: Record<string, unk
  */
 async function fetchTraderEvents(sender: string, sinceMs: number): Promise<Array<{ kind: string; tsMs: number; json: Record<string, unknown> }>> {
   const out: Array<{ kind: string; tsMs: number; json: Record<string, unknown> }> = [];
-  for (const { type, kind } of ORDER_EVENTS) {
+  for (const { type, kind } of ORDER_EVENTS.filter((e) => e.kind === 'order_minted' || e.kind === 'live_order_redeemed')) {
     let before: string | null = null;
     for (let page = 0; page < MAX_PAGES; page++) {
       const args = [`last: ${PAGE}`, `filter: { type: "${type}", sender: "${sender}" }`];
@@ -154,6 +154,7 @@ interface MintRef {
   marketId: string;
   lowerTick: bigint;
   higherTick: bigint;
+  quantity: string;
   tsMs: number;
 }
 
@@ -162,7 +163,7 @@ const POS_INF_TICK = (1n << 30n) - 1n;
 const TICK_SIZE = 10_000_000n;
 
 /**
- * Count losses, which are otherwise invisible.
+ * Resolve every settled position from chain state.
  *
  * The ranking engine only scores a position once it has been REDEEMED. A losing bet pays nothing,
  * so nobody ever redeems it — our own keeper skips losers deliberately, because redeeming one is
@@ -174,7 +175,7 @@ const TICK_SIZE = 10_000_000n;
  * chain will never emit. Unredeemed WINNERS are deliberately left out: they are still owed money
  * and will appear for real once cranked.
  */
-async function addSettledLosses(
+async function resolveSettled(
   byAccount: Map<string, AccountOrders624>,
   mints: MintRef[],
   windowStartMs: number,
@@ -196,7 +197,7 @@ async function addSettledLosses(
   for (const m of open) {
     const settled = settlements.get(m.marketId);
     if (settled == null) continue; // still live — genuinely open, not a loss
-    if (isWinningRange(settled, m.lowerTick, m.higherTick, TICK_SIZE, POS_INF_TICK)) continue; // owed a payout
+    const won = isWinningRange(settled, m.lowerTick, m.higherTick, TICK_SIZE, POS_INF_TICK);
     const acct = byAccount.get(m.accountId);
     if (!acct) continue;
     // Stamp at mint time: the close time is unknowable for something never cranked, and the mint
@@ -206,7 +207,11 @@ async function addSettledLosses(
       position_root_id: m.rootId,
       order_id: m.rootId,
       checkpoint_timestamp_ms: Math.min(Math.max(m.tsMs, windowStartMs), windowEndMs),
-      payout_amount: '0',
+      // A settled binary pays exactly its quantity when in range, and nothing when not —
+      // verified against live redemptions. So the outcome is fully derivable from chain state
+      // and never depends on WHO cranked the redemption, which matters because our keeper
+      // redeems on users' behalf and a sender-scoped query would miss every win it settles.
+      payout_amount: won ? m.quantity : '0',
     });
   }
 }
@@ -259,13 +264,14 @@ export async function GET() {
             marketId: String(json.expiry_market_id),
             lowerTick: BigInt(String(json.lower_tick ?? 0)),
             higherTick: BigInt(String(json.higher_tick ?? 0)),
+            quantity: String(json.quantity ?? '0'),
             tsMs,
           });
         }
       }
     });
 
-    await addSettledLosses(byAccount, mintIndex, windowStartMs, windowEndMs);
+    await resolveSettled(byAccount, mintIndex, windowStartMs, windowEndMs);
 
     // Newest-first per account, matching what the indexer feed used to return.
     const withOrders = [...byAccount.values()];
