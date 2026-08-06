@@ -41,40 +41,49 @@ export const NEG_INF_TICK = 0n;
 
 // ─── deployment constants (predict-testnet-6-24, deployment.testnet.json updatedAt 2026-06-25) ───
 
+// predict-testnet-7-29, addresses read from the upstream manifest on 2026-08-06. Migrated off
+// 6-24 that day because its Block Scholes feeds froze and it could no longer price a bet.
+// A branch is REDEPLOYED IN PLACE, so never copy these from an older note — re-read:
+//   gh api "repos/MystenLabs/deepbookv3/contents/packages/predict/deployment/deployment.testnet.json?ref=predict-testnet-7-29"
+const PREDICT_PKG = '0xfe742239a3b033f7d52ed5275f238c17d27498ca0ee5ea5672ea732eb3f4dbbb';
+
 export const PREDICT624 = {
   /** `predict` package — expiry_market / plp / registry / protocol_config. */
-  predictPackage: '0xdb3ef5a5129920e59c9b2ae25a77eddb48acd0e1c6307b97073f0e076016446e',
+  predictPackage: PREDICT_PKG,
   /** `account` package — custody (AccountWrapper + Auth). */
-  accountPackage: '0xb9389eac8d59170ffd1427c1a66e5c8306263464fcc6615e825c1f5b3e15da3b',
+  accountPackage: '0xbdbb60b00f2d4f30daeff62f2c642b18433a8fcdfbebccc808df578df2a0c203',
   /** predict::protocol_config::ProtocolConfig (shared). */
-  protocolConfig: '0x2325224629b4bd96d1f1d7ee937e07f8a06f861018a130bbb26db09cb0394cb6',
-  /** Yosuku's native BuilderCode (predict::builder_code, owner = treasury 0xaa50…),
-   *  created on-chain 2026-07-17 (tx HR2FoJ1z). Attached to the accounts we mint for so
-   *  their trades ride DeepBook Predict's OWN builder-fee rail. Pays 0 until the protocol
-   *  enables builder fees: wired now so revenue is a config flip, never a migration. */
-  builderCode: '0x3d02c41f853b6a62510a517b149ed44a1322476974e309c42d0c4ff99c0abb6a',
+  protocolConfig: '0x43703ceee4d5f5a9e8cbf728071c34dc65961dd6e878fafd9ac36d86a9a4ce5b',
+  /** Yosuku's native BuilderCode. EMPTY on 7-29 by design: a BuilderCode is a
+   *  `<predict pkg>::builder_code::BuilderCode`, so the 6-24 object (0x3d02c41f…, tx HR2FoJ1z)
+   *  is the WRONG TYPE here and passing it would abort the whole account-setup PTB. Every
+   *  call site already guards on this being falsy, so setup simply skips attaching one until a
+   *  fresh BuilderCode is created against the 7-29 package. Revenue stays a config flip. */
+  builderCode: '',
   /** account::account_registry::AccountRegistry (shared) — wrapper derivation root. */
-  accountRegistry: '0x3c54d5b8b6bca376fc289121838ad02f8a5b3843242b9ad7e8f8245720e685a2',
+  accountRegistry: '0x21a7ed28397363b5550853c1f08795731257de81028cd1bf87f20c0752c8ca2f',
   /** propbook::registry::OracleRegistry (shared). */
-  oracleRegistry: '0xf3deaff68cbd081a35ec21653af6f671d2ad5f012f3b4d817d81752843374136',
-  /** BTC_USD oracle feed objects — ALL FOUR feed the per-PTB Pricer. */
-  pythFeed: '0xc78d7de16217d46d21b92ae475da799448be30b71a758dc6d7bb3ac2f1c35afb',
-  bsSpotFeed: '0xcdc5fa7364e60fd2504aa96f65b707dc0734e507a919b1a7d7d63164fd67b745',
-  bsForwardFeed: '0xe72c734ea8d8dcbc9183d9d8f96f51aaa1fb5034d5ed33ac60d67d261e15b48a',
-  bsSviFeed: '0xdc2f8270676bd05fb28491e8d4a41a495722fda7a454926dd66dbba256a21c69',
+  oracleRegistry: '0xc1dffc5f7a5404cb002ba3bd7c50d6a2dbe8bb6afd40080cd663965deff9d577',
+  /** BTC_USD oracle feed objects. THREE now, not four: 7-29 collapsed the separate spot and
+   *  forward stores into one BlockScholesValueStore, which is why load_live_pricer lost an arg. */
+  pythFeed: '0xccafaa6c5a41f0493585cf268f2b4dc14c91ed798362444144cac2c745db8dde',
+  bsValuesFeed: '0x6d9de17954f4c1a2f01fdd97c0bb8a2e682c1fea0f8f048dcd127d543a6ac051',
+  bsSviFeed: '0x83c2d6307fd3591228052fc0d24c4f00a698b0eb4fef5e6083a213ca0d54bd35',
   /** Framework AccumulatorRoot (fund settlement) — required on every account-touching call. */
   accumulatorRoot: '0x0000000000000000000000000000000000000000000000000000000000000acc',
   clock: CLOCK_ID,
   dusdcType: DUSDC_TYPE,
-  /** Beta indexer for THIS deployment (the old predict-server is the 4-16 one). */
+  /** NO 7-29 INDEXER EXISTS. predict-server-beta serves 6-24 rows ONLY (every row it returns
+   *  carries package 0xdb3ef5a5…), and propbook returns null for the 7-29 pyth feed. Market
+   *  discovery and oracle reads therefore come from chain. Kept here only so legacy 6-24
+   *  read paths still resolve; do NOT point new code at them. */
   indexer: 'https://predict-server-beta.testnet.mystenlabs.com',
-  /** Oracle (propbook) indexer — off-chain pyth observations + feed discovery. */
   propbook: 'https://propbook.api.testnet.mystenlabs.com',
-  marketCreatedEventType: '0xdb3ef5a5129920e59c9b2ae25a77eddb48acd0e1c6307b97073f0e076016446e::config_events::MarketCreated',
-  orderMintedEventType: '0xdb3ef5a5129920e59c9b2ae25a77eddb48acd0e1c6307b97073f0e076016446e::order_events::OrderMinted',
-  liveOrderRedeemedEventType: '0xdb3ef5a5129920e59c9b2ae25a77eddb48acd0e1c6307b97073f0e076016446e::order_events::LiveOrderRedeemed',
-  settledOrderRedeemedEventType: '0xdb3ef5a5129920e59c9b2ae25a77eddb48acd0e1c6307b97073f0e076016446e::order_events::SettledOrderRedeemed',
-  liquidatedOrderRedeemedEventType: '0xdb3ef5a5129920e59c9b2ae25a77eddb48acd0e1c6307b97073f0e076016446e::order_events::LiquidatedOrderRedeemed',
+  marketCreatedEventType: `${PREDICT_PKG}::config_events::MarketCreated`,
+  orderMintedEventType: `${PREDICT_PKG}::order_events::OrderMinted`,
+  liveOrderRedeemedEventType: `${PREDICT_PKG}::order_events::LiveOrderRedeemed`,
+  settledOrderRedeemedEventType: `${PREDICT_PKG}::order_events::SettledOrderRedeemed`,
+  liquidatedOrderRedeemedEventType: `${PREDICT_PKG}::order_events::LiquidatedOrderRedeemed`,
   /** Open-ended range sentinels (tick indices): lower 0 = −inf, higher 2^30−1 = +inf. */
   POS_INF_TICK,
   NEG_INF_TICK,
@@ -386,8 +395,8 @@ function appendLoadLivePricer(tx: Transaction, market: TransactionObjectArgument
       tx.object(PREDICT624.protocolConfig),
       tx.object(PREDICT624.oracleRegistry),
       tx.object(PREDICT624.pythFeed),
-      tx.object(PREDICT624.bsSpotFeed),
-      tx.object(PREDICT624.bsForwardFeed),
+      // 7 objects, was 8: bsSpot + bsForward collapsed into one BlockScholesValueStore.
+      tx.object(PREDICT624.bsValuesFeed),
       tx.object(PREDICT624.bsSviFeed),
       tx.object(PREDICT624.clock),
     ],
@@ -886,14 +895,16 @@ export function buildRedeemSettledTx(p: {
 }): Transaction {
   const tx = new Transaction();
   tx.moveCall({
-    target: `${PREDICT624.predictPackage}::expiry_market::redeem_settled`,
+    // 7-29 split this: plain `redeem_settled` now REQUIRES an explicit Auth, and the app-authed
+    // form the app relies on (claim-all, and the keeper that redeems on a user's behalf) moved to
+    // `redeem_settled_permissionless`. It also dropped the oracleRegistry + pyth pair, since a
+    // settled arm pays a fixed terminal payout and reads no live price.
+    target: `${PREDICT624.predictPackage}::expiry_market::redeem_settled_permissionless`,
     arguments: [
       tx.object(p.marketId),
       tx.object(PREDICT624.accountRegistry),
       tx.object(p.wrapperId),
       tx.object(PREDICT624.protocolConfig),
-      tx.object(PREDICT624.oracleRegistry),
-      tx.object(PREDICT624.pythFeed),
       tx.pure.u256(p.orderId),
       tx.pure.u64(p.qty),
       tx.object(PREDICT624.accumulatorRoot),

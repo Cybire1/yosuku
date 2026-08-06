@@ -1,18 +1,17 @@
 // Markets + spot for the web app.
 //
-// This used to read `predict-server.testnet.mystenlabs.com`. That hostname no longer resolves
-// (NXDOMAIN — Mysten retired the pre-6-24 indexer), so every request threw, the route answered
-// 502, and the markets page went blank. It now reads the live beta indexer, which is the same
-// source the mobile app already uses, and keeps the OUTPUT shape byte-compatible so nothing
-// downstream has to change: `{ oracles: [{ oracle_id, expiry, status, ... }], prices: { id: { spot } } }`.
-//
-// The beta rows describe expiry markets, not the old "oracles", so status is derived from the
-// clock rather than read from a field: a market is active until its expiry passes.
+// Reads the live 6-24 beta indexer, which is still the deployment currently
+// creating tradeable markets. Keep this route byte-compatible with the old
+// oracle response: `{ oracles: [...], prices: { [marketId]: { spot } } }`.
 import { NextResponse } from 'next/server';
 
-const INDEXER = 'https://predict-server-beta.testnet.mystenlabs.com';
-const PROPBOOK = 'https://propbook.api.testnet.mystenlabs.com';
-const PYTH_FEED = '0xc78d7de16217d46d21b92ae475da799448be30b71a758dc6d7bb3ac2f1c35afb';
+// predict-testnet-7-29 (migrated 2026-08-06). Neither the beta indexer nor propbook serves this
+// deployment, so markets come from MarketCreated events and spot comes off the PythFeed object.
+const GRAPHQL_URL = 'https://graphql.testnet.sui.io/graphql';
+const GRPC_URL = 'https://fullnode.testnet.sui.io:443';
+const PREDICT_PKG = '0xfe742239a3b033f7d52ed5275f238c17d27498ca0ee5ea5672ea732eb3f4dbbb';
+const MARKET_CREATED_TYPE = `${PREDICT_PKG}::config_events::MarketCreated`;
+const PYTH_FEED = '0xccafaa6c5a41f0493585cf268f2b4dc14c91ed798362444144cac2c745db8dde';
 
 const MARKET_CACHE_TTL = 15_000;
 const PRICE_CACHE_TTL = 5_000;
@@ -34,54 +33,110 @@ let marketCache: Cached<OracleEntry[]> | null = null;
 let priceCache: Cached<number | null> | null = null;
 let marketInFlight: Promise<OracleEntry[]> | null = null;
 
-const j = async <T>(url: string): Promise<T> => {
-  const res = await fetch(url, { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(TIMEOUT_MS) });
-  if (!res.ok) throw new Error(`${url}: ${res.status}`);
-  return res.json() as Promise<T>;
-};
+/** MarketCreated straight off the chain. There is NO 7-29 indexer: predict-server-beta returns
+ *  6-24 rows only, so the old fetch would have quietly filled /markets with untradeable rounds.
+ *  The event carries every field this route used. GraphQL caps a page at 50, so page backwards. */
+async function fetchMarketRowsOnChain(): Promise<Array<Record<string, unknown>>> {
+  const rows: Array<Record<string, unknown>> = [];
+  let before: string | null = null;
+  for (let i = 0; i < 4; i++) {
+    const args = [`last: 50`, `filter: { type: "${MARKET_CREATED_TYPE}" }`];
+    if (before) args.push(`before: "${before}"`);
+    const q = `{ events(${args.join(', ')}) { pageInfo { hasPreviousPage startCursor } nodes { contents { json } } } }`;
+    const res = await fetch(GRAPHQL_URL, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ query: q }),
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+    const body = await res.json().catch(() => null);
+    // Surface a broken query instead of returning [] — "no markets" and "bad filter" look
+    // identical downstream, and one of them silently empties the markets page.
+    if (!body || body.errors) throw new Error(`market discovery failed: ${JSON.stringify(body?.errors ?? 'unparseable').slice(0, 160)}`);
+    const ev = body.data?.events;
+    for (const n of ev?.nodes ?? []) if (n?.contents?.json) rows.push(n.contents.json);
+    if (!ev?.pageInfo?.hasPreviousPage || !ev?.pageInfo?.startCursor) break;
+    before = ev.pageInfo.startCursor;
+  }
+  return rows;
+}
 
 async function fetchMarkets(): Promise<OracleEntry[]> {
-  const rows = await j<Array<Record<string, unknown>>>(`${INDEXER}/markets`);
+  const rows = await fetchMarketRowsOnChain();
   const now = Date.now();
   const seen = new Set<string>();
   const out: OracleEntry[] = [];
-  for (const m of Array.isArray(rows) ? rows : []) {
-    const id = String(m.expiry_market_id ?? '');
-    const expiry = Number(m.expiry);
+
+  for (const market of Array.isArray(rows) ? rows : []) {
+    const id = String(market.expiry_market_id ?? '');
+    const expiry = Number(market.expiry);
     if (!id || !Number.isFinite(expiry) || seen.has(id)) continue;
     seen.add(id);
-    // Keep recently-settled rounds around briefly so a just-closed market can still render.
+
+    // Keep recently-settled rounds around briefly so just-closed cards can
+    // still render while users move to the next round.
     if (expiry < now - 2 * 60 * 60 * 1000) continue;
+
     out.push({
       oracle_id: id,
       expiry,
       status: expiry > now ? 'active' : 'settled',
       settled_at: expiry > now ? null : expiry,
       min_strike: '0',
-      tick_size: String(m.tick_size ?? '1000000000'),
+      tick_size: String(market.tick_size ?? '1000000000'),
       underlying_asset: 'BTC',
-      max_admission_leverage: m.max_admission_leverage != null ? String(m.max_admission_leverage) : undefined,
+      max_admission_leverage: market.max_admission_leverage != null ? String(market.max_admission_leverage) : undefined,
     });
   }
+
   const rank = (s: string) => (s === 'active' ? 0 : 1);
-  out.sort((a, b) => rank(a.status) - rank(b.status) || (rank(a.status) === 0 ? a.expiry - b.expiry : b.expiry - a.expiry));
+  out.sort((a, b) =>
+    rank(a.status) - rank(b.status) || (rank(a.status) === 0 ? a.expiry - b.expiry : b.expiry - a.expiry),
+  );
+
   marketCache = { data: out, ts: Date.now() };
   return out;
 }
 
-/** Live BTC spot from the settlement feed's HISTORY.
+/** BTC spot straight off the PythFeed object.
  *
- *  Deliberately not `/pyth/latest`: that endpoint currently returns a row about a day old while
- *  the history beside it is seconds fresh, so reading "latest" would put a stale price on the
- *  screen. The newest history row is the actual latest observation. */
+ *  propbook returns null for the 7-29 feed (verified 2026-08-06), the same way the beta indexer
+ *  only knows 6-24. Reading the object is also the more honest number: it is the exact value the
+ *  market prices and settles against, with no indexer hop in between. */
 async function fetchSpot(): Promise<number | null> {
   try {
-    const rows = await j<Array<Record<string, unknown>>>(`${PROPBOOK}/oracles/${PYTH_FEED}/pyth?limit=1`);
-    const r = Array.isArray(rows) ? rows[0] : null;
-    if (!r) return null;
-    const exp = Number(r.exponent_magnitude);
-    const scale = r.exponent_is_negative === false ? 10 ** exp : 10 ** -exp;
-    const price = Number(r.price_magnitude) * scale * (r.price_is_negative ? -1 : 1);
+    const { SuiGrpcClient } = await import('@mysten/sui/grpc');
+    const client = new SuiGrpcClient({ network: 'testnet', baseUrl: GRPC_URL });
+    const res = await client.ledgerService.getObject({ objectId: PYTH_FEED, readMask: { paths: ['json'] } });
+
+    // gRPC returns Move contents as protobuf Value wrappers; unwrap to plain JS.
+    type PbValue = { kind?: { oneofKind?: string; [k: string]: unknown } };
+    const un = (v: PbValue | undefined): unknown => {
+      const k = v?.kind;
+      if (!k) return undefined;
+      switch (k.oneofKind) {
+        case 'stringValue': return k.stringValue;
+        case 'numberValue': return k.numberValue;
+        case 'boolValue': return k.boolValue;
+        case 'structValue': {
+          const out: Record<string, unknown> = {};
+          const fields = (k.structValue as { fields?: Record<string, PbValue> })?.fields ?? {};
+          for (const [a, b] of Object.entries(fields)) out[a] = un(b);
+          return out;
+        }
+        default: return undefined;
+      }
+    };
+
+    const root = un(res.response?.object?.json as PbValue | undefined) as
+      | { lane?: { latest?: { value?: Record<string, unknown> } } }
+      | undefined;
+    const v = root?.lane?.latest?.value;
+    if (!v) return null;
+
+    const exp = Number(v.exponent_magnitude);
+    const scale = v.exponent_is_negative === false ? 10 ** exp : 10 ** -exp;
+    const price = Number(v.price_magnitude) * scale * (v.price_is_negative ? -1 : 1);
     return Number.isFinite(price) && price > 0 ? price : null;
   } catch {
     return null;
@@ -110,8 +165,8 @@ async function getSpot(now: number): Promise<number | null> {
 }
 
 /**
- * ?prices=1 → { oracles, prices }
- * otherwise → oracle list
+ * ?prices=1 -> { oracles, prices }
+ * otherwise -> oracle list
  */
 export async function GET(request: Request) {
   const now = Date.now();

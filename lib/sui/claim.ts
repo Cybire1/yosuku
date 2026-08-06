@@ -14,9 +14,9 @@ import { fromHex } from '@mysten/sui/utils';
 export const SEAL_PKG = '0x4ade283c489af2d5bdb59cb142a8bf1c39b9000933f3b7d88cc55c12cf4b9440'; // yosuku_seal
 export const REGISTRY = '0xd6dc7eefb8538a602961fd64c2b4ea72fc9a5aae7d79a5f4adb16058aeec8562'; // HandleRegistry
 // vault624 — where tweet-bettors' funds actually live (the social_vault above is legacy).
-export const V624_PKG = '0x27931b561d585164fd843c4d58943281f0fcd1f9ca5db684f8fd47b5ee3791b3';
-export const V624_VAULT = '0x3f99ddeda9c1388b8c85777a4931f64143fb5fc70cacc6df132d607b08bb044d';
-export const V624_WRAPPER = '0xc526da75acf134b160a4c442fb0bacbcd95aeff6daf2be759b65d39ec64f6f51';
+export const V624_PKG = '0x3ba6f82ddea29023bbd433000a0374f004e6ce2225cd98a06a1d9bfa7ccb84e1';
+export const V624_VAULT = '0x85400f69518fb29d3f20e62afa0baff5e36b1dc34d70e660129fb9d660dd4451';
+export const V624_WRAPPER = '0xf1a1ca5a2abe197a662c28de028e3fb0f131b3cc67c8a6852795d25315a05536';
 export const ACCUM_ROOT = '0x0000000000000000000000000000000000000000000000000000000000000acc';
 export const CLOCK = '0x6';
 export const DUSDC = '0xe95040085976bfd54a1a07225cd46c8a2b4e8e2b6732f140a0fc49850ba73e1a::dusdc::DUSDC';

@@ -1,0 +1,39 @@
+{
+  "name": "yosuku-trading-729",
+  "gasBudgetMax": 100000000,
+  "allowedCommandKinds": ["MoveCall", "SplitCoins", "MergeCoins", "TransferObjects"],
+  "targets": [
+    "0xbdbb60b00f2d4f30daeff62f2c642b18433a8fcdfbebccc808df578df2a0c203::account_registry::new",
+    "0xbdbb60b00f2d4f30daeff62f2c642b18433a8fcdfbebccc808df578df2a0c203::account::share",
+    "0xbdbb60b00f2d4f30daeff62f2c642b18433a8fcdfbebccc808df578df2a0c203::account::generate_auth",
+    "0xbdbb60b00f2d4f30daeff62f2c642b18433a8fcdfbebccc808df578df2a0c203::account::deposit_funds",
+    "0xbdbb60b00f2d4f30daeff62f2c642b18433a8fcdfbebccc808df578df2a0c203::account::withdraw_funds",
+    "0x0000000000000000000000000000000000000000000000000000000000000002::coin::zero",
+    "0x0000000000000000000000000000000000000000000000000000000000000002::coin::destroy_zero",
+    "0x0000000000000000000000000000000000000000000000000000000000000002::coin::redeem_funds",
+    "0x0000000000000000000000000000000000000000000000000000000000000002::coin::send_funds",
+    "0xfe742239a3b033f7d52ed5275f238c17d27498ca0ee5ea5672ea732eb3f4dbbb::predict_account::set_builder_code",
+    "0xfe742239a3b033f7d52ed5275f238c17d27498ca0ee5ea5672ea732eb3f4dbbb::expiry_market::load_live_pricer",
+    "0xfe742239a3b033f7d52ed5275f238c17d27498ca0ee5ea5672ea732eb3f4dbbb::expiry_market::quote_mint",
+    "0xfe742239a3b033f7d52ed5275f238c17d27498ca0ee5ea5672ea732eb3f4dbbb::expiry_market::quote_mint_for_account",
+    "0xfe742239a3b033f7d52ed5275f238c17d27498ca0ee5ea5672ea732eb3f4dbbb::expiry_market::mint_exact_quantity",
+    "0xfe742239a3b033f7d52ed5275f238c17d27498ca0ee5ea5672ea732eb3f4dbbb::expiry_market::mint_exact_amount",
+    "0xfe742239a3b033f7d52ed5275f238c17d27498ca0ee5ea5672ea732eb3f4dbbb::expiry_market::redeem_settled",
+    "0xfe742239a3b033f7d52ed5275f238c17d27498ca0ee5ea5672ea732eb3f4dbbb::expiry_market::redeem_settled_permissionless",
+    "0x7d22915a2bc60c2dcdb7055f69debe9d41e759b3f4e212330c17380e6795a658::bet_registry::record"
+  ],
+  "typeArguments": {
+    "0x0000000000000000000000000000000000000000000000000000000000000002::coin::zero": {
+      "0": ["0xe95040085976bfd54a1a07225cd46c8a2b4e8e2b6732f140a0fc49850ba73e1a::dusdc::DUSDC"]
+    },
+    "0x0000000000000000000000000000000000000000000000000000000000000002::coin::destroy_zero": {
+      "0": ["0xe95040085976bfd54a1a07225cd46c8a2b4e8e2b6732f140a0fc49850ba73e1a::dusdc::DUSDC"]
+    },
+    "0x0000000000000000000000000000000000000000000000000000000000000002::coin::redeem_funds": {
+      "0": ["0xe95040085976bfd54a1a07225cd46c8a2b4e8e2b6732f140a0fc49850ba73e1a::dusdc::DUSDC"]
+    },
+    "0x0000000000000000000000000000000000000000000000000000000000000002::coin::send_funds": {
+      "0": ["0xe95040085976bfd54a1a07225cd46c8a2b4e8e2b6732f140a0fc49850ba73e1a::dusdc::DUSDC"]
+    }
+  }
+}

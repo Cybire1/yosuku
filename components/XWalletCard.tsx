@@ -340,7 +340,7 @@ export default function XWalletCard() {
               </a>
             </div>
           ) : (
-            <div className="text-xs text-gray-500">Reply YES or NO to a live line to place a bet. Minimum $1.40.</div>
+            <div className="text-xs text-gray-500">Reply YES or NO to a live line to place a bet. Minimum $1.15.</div>
           )}
         </div>
       </div>

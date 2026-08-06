@@ -336,12 +336,7 @@ export default function Portfolio624Section() {
 
   return (
     <section>
-      <SectionHeader
-        number="00"
-        title="New venue"
-        jp="新会場"
-        meta="DeepBook Predict 6-24 · testnet"
-      />
+      <SectionHeader number="00" title="New venue" />
 
       <div className="group relative border border-white/[0.08] rounded bg-bg">
         <Crosshairs />
@@ -371,10 +366,6 @@ export default function Portfolio624Section() {
           </>
         ) : !wrapperId ? (
           <div className="px-5 py-6">
-            <p className="text-[13px] text-gray-400 leading-snug max-w-lg">
-              No trading account on the new venue yet. Yosuku is moving to the rewritten
-              DeepBook Predict — minute-cadence BTC markets, native leverage, oracle-settled.
-            </p>
             <a
               href="/beta"
               className="inline-block mt-3 font-mono text-[11px] uppercase tracking-[0.14em] text-vermilion hover:text-white transition-colors"

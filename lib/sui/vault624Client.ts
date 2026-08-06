@@ -28,12 +28,13 @@ import { PREDICT624 } from './predict624Client';
 // ─── deployment constants (published + proven 2026-07-03) ───
 
 export const VAULT624 = {
-  /** yosuku_spike package carrying the vault624 module. */
-  pkg: '0x27931b561d585164fd843c4d58943281f0fcd1f9ca5db684f8fd47b5ee3791b3',
-  /** The shared Vault624 (ledger + subs + positions). */
-  vaultId: '0x0af6c6b0dd0628e6320832e3dfc20330da3c655f3193db6992f66b640c04bc95',
-  /** The vault's object-owned AccountWrapper on the 6-24 `account` package. */
-  wrapperId: '0x4714f527683cb6834b9a7c75df9144d4e554236cd1def8c1a70e2ce48f36a53d',
+  /** yosuku_spike package carrying the vault624 module, republished against
+   *  predict-testnet-7-29 on 2026-08-06. Superseded 6-24 package: 0x27931b56…. */
+  pkg: '0x3ba6f82ddea29023bbd433000a0374f004e6ce2225cd98a06a1d9bfa7ccb84e1',
+  /** The shared Vault624 (ledger + subs + positions) — copy-desk instance, 7-29. */
+  vaultId: '0x9968dbb655c5c4ddce692f31f3f65e3c94ed22b47ab070889e2f984793f8ba1b',
+  /** The vault's object-owned AccountWrapper on the 7-29 `account` package. */
+  wrapperId: '0x4be93e218ad6a3171baafcc72f535394346202ac1f3625096cb6b8cc345e8c0a',
   /** The attested enclave agent — the signing key lives inside an AWS Nitro enclave. */
   enclaveAgent: '0xd4428ac17dcd558bf8cf82a8aa8d9ca7d83c1c2fb19a5b91c297cf85d608d30d',
   /** Framework AccumulatorRoot — required on every account-touching call. */
@@ -46,8 +47,11 @@ export const VAULT624 = {
  *  user-directed (the tweet names the side), so it binds the PLAIN relay agent, not the enclave. */
 export const VAULT624_TWEET = {
   pkg: VAULT624.pkg,
-  vaultId: '0x3f99ddeda9c1388b8c85777a4931f64143fb5fc70cacc6df132d607b08bb044d',
-  wrapperId: '0xc526da75acf134b160a4c442fb0bacbcd95aeff6daf2be759b65d39ec64f6f51',
+  // 7-29 instance. These MUST match .vault624-tweets.json on the relay box: this is the vault
+  // "Fund X wallet" deposits into, and the relay only trades the one it is pointed at. If the two
+  // ever drift, a user funds a balance the relay cannot see and their tweets bounce as no-deposit.
+  vaultId: '0x85400f69518fb29d3f20e62afa0baff5e36b1dc34d70e660129fb9d660dd4451',
+  wrapperId: '0xf1a1ca5a2abe197a662c28de028e3fb0f131b3cc67c8a6852795d25315a05536',
   /** The bounded tweet relay agent (plain key, honors the tweeted direction — NOT the enclave). */
   tweetAgent: '0xaa50ec0fe985825bd45fcc65d301da096a487349d6993fe8f9305890284a7244',
   accumulatorRoot: PREDICT624.accumulatorRoot,

@@ -5020,18 +5020,16 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
 .words-sec-count { font-family: var(--font-mono); font-size: 12px; color: var(--gray-500); }
 
 .words-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; }
+/* Flat black. The warm radial wash and the vermilion hairline read as a glow on a dark page,
+   and the hover halo made whichever card the pointer happened to rest on look like a special
+   one. The odds bar and the Yes/No buttons already carry all the colour these need. */
 .wq-card {
   position: relative; display: flex; flex-direction: column; overflow: hidden;
   border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; padding: 22px 22px 18px;
-  background: radial-gradient(135% 100% at 50% -12%, #1b140e 0%, #100c09 55%, #0a0807 100%);
-  transition: border-color 220ms var(--ease), transform 220ms var(--ease), box-shadow 220ms var(--ease);
+  background: var(--black);
+  transition: border-color 220ms var(--ease), transform 220ms var(--ease);
 }
-.wq-card::before {
-  content: ''; position: absolute; left: 0; right: 0; top: 0; height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(224,77,38,0.6), transparent); opacity: .45;
-}
-.wq-card:hover { border-color: rgba(224,77,38,0.42); transform: translateY(-3px); box-shadow: 0 20px 44px -22px rgba(224,77,38,0.42); }
-.wq-card:hover::before { opacity: 1; }
+.wq-card:hover { border-color: rgba(255,255,255,0.22); transform: translateY(-3px); }
 .wq-top { display: flex; align-items: center; gap: 10px; }
 /* Bitcoin brand mark — orange disc + white ₿, the glyph tilted like the real logo */
 .wq-btc {
@@ -5098,8 +5096,8 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
 }
 .words-foot { margin-top: 44px; font-family: var(--font-mono); font-size: 11.5px; color: var(--gray-600); line-height: 1.6; max-width: 70ch; }
 
-[data-theme="light"] .wq-card { background: linear-gradient(180deg,#ffffff,#faf5ec); border-color: rgba(20,18,16,0.1); box-shadow: 0 1px 3px rgba(20,18,16,0.05); }
-[data-theme="light"] .wq-card:hover { box-shadow: 0 20px 44px -24px rgba(224,77,38,0.32); }
+[data-theme="light"] .wq-card { background: #ffffff; border-color: rgba(20,18,16,0.1); box-shadow: 0 1px 3px rgba(20,18,16,0.05); }
+[data-theme="light"] .wq-card:hover { border-color: rgba(20,18,16,0.22); }
 [data-theme="light"] .wq-card .wq-q, [data-theme="light"] .wq-clock { color: #141210; }
 [data-theme="light"] .wq-oddsbar { background: rgba(251,113,133,0.26); }
 

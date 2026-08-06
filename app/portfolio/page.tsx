@@ -445,7 +445,7 @@ export default function PortfolioPage() {
 
             {/* Equity Curve */}
             <section>
-              <SectionHeader number="01" title="Equity Curve" jp="損益曲線" />
+              <SectionHeader number="01" title="Equity Curve" />
               <div className="border border-white/[0.08] rounded bg-bg p-4">
                 <canvas ref={equityRef} className="w-full h-[200px]" />
               </div>
@@ -456,7 +456,6 @@ export default function PortfolioPage() {
                 <SectionHeader
                   number="02"
                   title="Leveraged Trades"
-                  jp="レバレッジ"
                   meta={`${leverageOrders.length + leveragePositions.length} item${leverageOrders.length + leveragePositions.length === 1 ? '' : 's'}`}
                 />
                 <LeveragePortfolioPanel
@@ -498,7 +497,7 @@ export default function PortfolioPage() {
             {/* Positions */}
             <section>
               <div className="flex items-center justify-between">
-                <SectionHeader number={leverageOrders.length || leveragePositions.length ? '03' : '02'} title="Your Positions" jp="ポジション" count={positions.length} />
+                <SectionHeader number={leverageOrders.length || leveragePositions.length ? '03' : '02'} title="Your Positions" count={positions.length} />
                 {manager?.manager_id && (
                   <button
                     onClick={async () => {
@@ -522,7 +521,7 @@ export default function PortfolioPage() {
             {/* Badges */}
             {address && (
               <section>
-                <SectionHeader number={leverageOrders.length || leveragePositions.length ? '04' : '03'} title="Achievements" jp="実績" />
+                <SectionHeader number={leverageOrders.length || leveragePositions.length ? '04' : '03'} title="Achievements" />
                 <div>
                   <BadgeDisplay badges={badges} />
                 </div>

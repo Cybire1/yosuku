@@ -416,7 +416,7 @@ const SLIDES: { id: string; section: string; paper?: string; render: () => React
           </div>
         </div>
         <M variants={rise} className="mt-8 flex items-center gap-3 flex-wrap">
-          <Mono className="text-[11px]" style={{ color: MUTE }}>PROVEN ON-CHAIN · vault624 0x27931b56</Mono>
+          <Mono className="text-[11px]" style={{ color: MUTE }}>PROVEN ON-CHAIN · vault624 0x3ba6f82d</Mono>
           <span style={{ color: FAINT }}>·</span>
           <span className="font-mono text-[11px]" style={{ color: VERM }}>close-loop tx BmuJroQS</span>
         </M>
@@ -549,8 +549,8 @@ const SLIDES: { id: string; section: string; paper?: string; render: () => React
           <M variants={rise} className="mt-6 font-mono" style={lead}>The venue, the un-drainable custody, the attestation, the private content, and gasless sign-in are all Sui-native, and all in our shipped code.</M>
         </div>
         <SpecPanel title="THE SUI STACK · IN CODE" badge="ALL NATIVE" w={440} rows={[
-          ['Venue', 'DeepBook Predict · 0xdb3ef5a5', true],
-          ['Custody', 'No-divert Move vault · 0x27931b56', true],
+          ['Venue', 'DeepBook Predict 7-29 · 0xfe742239', true],
+          ['Custody', 'No-divert Move vault · 0x3ba6f82d', true],
           ['Attestation', 'Nautilus TEE · 0x614a7412'],
           ['Private content', 'Seal · memory market'],
           ['Storage', 'Walrus · memwal, takes'],

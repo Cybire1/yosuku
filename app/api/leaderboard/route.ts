@@ -9,7 +9,10 @@ import { computeLeaderboard624, type AccountOrders624, type Order624Raw } from '
 // account's order feed. Constants mirror lib/sui/predict624Client.ts PREDICT624.
 const BETA_INDEXER = 'https://predict-server-beta.testnet.mystenlabs.com';
 const GRAPHQL_URL = 'https://graphql.testnet.sui.io/graphql';
-const ACCOUNT_PACKAGE = '0xb9389eac8d59170ffd1427c1a66e5c8306263464fcc6615e825c1f5b3e15da3b';
+// 7-29 account package (migrated 2026-08-06). Consequence worth knowing: accounts opened on
+// 6-24 are a DIFFERENT type and stop appearing here, so the board reflects the live venue only
+// rather than mixing two deployments into one ranking.
+const ACCOUNT_PACKAGE = '0xbdbb60b00f2d4f30daeff62f2c642b18433a8fcdfbebccc808df578df2a0c203';
 const ACCOUNT_CREATED_TYPE = `${ACCOUNT_PACKAGE}::account_events::AccountCreated`;
 
 const WINDOW_MS = 7 * 24 * 60 * 60 * 1000; // 7-day rolling window (testnet activity is sparse)
