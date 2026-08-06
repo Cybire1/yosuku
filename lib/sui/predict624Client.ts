@@ -356,6 +356,15 @@ export async function fetchRecentSettlements624(limit = 6): Promise<SettlementPr
   const rows = (await res.json()) as IndexerMarketRow[];
   const now = Date.now();
   const past = rows
+    // Only settlements from the venue we actually run on. This indexer knows 6-24 ONLY, so after
+    // the 7-29 cutover it kept feeding the ticker a "LAST CLOSE" from the dead deployment — a real
+    // BTC price from fifteen hours earlier, close enough to spot to look entirely correct. Showing
+    // nothing is honest; showing another venue's settlement as ours is not. Each row carries the
+    // package that emitted it, so this starts working by itself if a 7-29 indexer ever appears.
+    .filter((m) => {
+      const pkg = (m as unknown as { package?: string }).package;
+      return !pkg || pkg === PREDICT624.predictPackage;
+    })
     .map((m) => ({
       id: String(m.expiry_market_id ?? ''),
       expiry: Number(m.expiry),
