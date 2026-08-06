@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { computeLeaderboard624, type AccountOrders624, type Order624Raw } from '@/lib/leaderboard624';
+import { readSettlementPrice, isWinningRange } from '@/lib/sui/settlement';
 
 // ── Built from ON-CHAIN order events, not an indexer ──
 //
@@ -33,6 +34,7 @@ const PAGE = 50;          // GraphQL caps event pages at 50 — asking for more 
 const MAX_PAGES = 12;     // ≈600 events per type; well past a 7-day window on this venue
 const ACCOUNTS_PAGE = 50;
 const ACCOUNTS_MAX = 300;
+const TRADER_CONCURRENCY = 8;
 
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
@@ -57,55 +59,51 @@ let cache: { data: LeaderboardResponse; ts: number } | null = null;
 
 interface EventNode { timestamp?: string; contents?: { json?: Record<string, unknown> } }
 
-/** Page an event type backwards from newest, stopping once we pass the window. */
-async function fetchEvents(type: string, sinceMs: number): Promise<Array<{ tsMs: number; json: Record<string, unknown> }>> {
-  const query = `query Ev($t: String!, $last: Int!, $before: String) {
-    events(last: $last, before: $before, filter: { type: $t }) {
-      pageInfo { hasPreviousPage startCursor }
-      nodes { timestamp contents { json } }
+/**
+ * One trader's events, filtered server-side by sender.
+ *
+ * This is what makes a real time window affordable. Paging the global event stream is hopeless
+ * on a venue with a high-frequency bot: 600 events reached back only FOUR MINUTES, so a genuine
+ * user's bet from earlier the same hour fell off the end and the board silently omitted them.
+ * Filtering by sender bounds the work to one trader's own history, so a seven-day window costs a
+ * page or two per person instead of thousands globally.
+ *
+ * Sender is the right key: Sui sponsored transactions keep the USER as sender and only move gas
+ * payment to the sponsor, so a gas-free Yosuku bet still reports its owner here.
+ */
+async function fetchTraderEvents(sender: string, sinceMs: number): Promise<Array<{ kind: string; tsMs: number; json: Record<string, unknown> }>> {
+  const out: Array<{ kind: string; tsMs: number; json: Record<string, unknown> }> = [];
+  for (const { type, kind } of ORDER_EVENTS) {
+    let before: string | null = null;
+    for (let page = 0; page < MAX_PAGES; page++) {
+      const args = [`last: ${PAGE}`, `filter: { type: "${type}", sender: "${sender}" }`];
+      if (before) args.push(`before: "${before}"`);
+      const q = `{ events(${args.join(', ')}) { pageInfo { hasPreviousPage startCursor } nodes { timestamp contents { json } } } }`;
+      const res = await fetch(GRAPHQL_URL, {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ query: q }), cache: 'no-store',
+      });
+      if (!res.ok) break;
+      const json = (await res.json()) as { errors?: unknown; data?: { events?: { pageInfo?: { hasPreviousPage?: boolean; startCursor?: string }; nodes?: EventNode[] } } };
+      if (json.errors) throw new Error(`trader event query failed: ${JSON.stringify(json.errors).slice(0, 160)}`);
+      const conn = json.data?.events;
+      let passed = false;
+      for (const n of conn?.nodes ?? []) {
+        const j = n.contents?.json;
+        if (!j) continue;
+        const tsMs = n.timestamp ? Date.parse(n.timestamp) : NaN;
+        if (!Number.isFinite(tsMs)) continue;
+        if (tsMs < sinceMs) { passed = true; continue; }
+        out.push({ kind, tsMs, json: j });
+      }
+      if (passed || !conn?.pageInfo?.hasPreviousPage || !conn.pageInfo.startCursor) break;
+      before = conn.pageInfo.startCursor;
     }
-  }`;
-  const out: Array<{ tsMs: number; json: Record<string, unknown> }> = [];
-  let before: string | null = null;
-
-  for (let page = 0; page < MAX_PAGES; page++) {
-    const res = await fetch(GRAPHQL_URL, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ query, variables: { t: type, last: PAGE, before } }),
-      cache: 'no-store',
-    });
-    if (!res.ok) break;
-    const json = (await res.json()) as {
-      errors?: unknown;
-      data?: { events?: { pageInfo?: { hasPreviousPage?: boolean; startCursor?: string }; nodes?: EventNode[] } };
-    };
-    // A malformed query returns data:null with errors, which is indistinguishable downstream
-    // from "this venue has no trades". Fail loudly rather than silently rank nobody.
-    if (json.errors) throw new Error(`event query failed (${type.split('::').pop()}): ${JSON.stringify(json.errors).slice(0, 160)}`);
-    const conn = json.data?.events;
-    const nodes = conn?.nodes ?? [];
-
-    let passedWindow = false;
-    for (const n of nodes) {
-      const j = n.contents?.json;
-      if (!j) continue;
-      const tsMs = n.timestamp ? Date.parse(n.timestamp) : NaN;
-      if (!Number.isFinite(tsMs)) continue;
-      if (tsMs < sinceMs) { passedWindow = true; continue; }
-      out.push({ tsMs, json: j });
-    }
-    // Nodes come oldest-first within a backwards page, so once the OLDEST in a page predates the
-    // window there is nothing left to gain by paging further back.
-    if (passedWindow) break;
-    if (!conn?.pageInfo?.hasPreviousPage || !conn.pageInfo.startCursor) break;
-    before = conn.pageInfo.startCursor;
   }
   return out;
 }
 
-/** account_ids that belong to protocol-owned vaults, so our own desks never rank as traders. */
-async function fetchSelfOwnedAccounts(): Promise<Set<string>> {
+/** Every account and its owner, plus the protocol-owned ones so our desks never rank as traders. */
+async function fetchAccounts(): Promise<{ selfOwned: Set<string>; humans: Map<string, string> }> {
   const query = `query Ev($t: String!, $last: Int!, $before: String) {
     events(last: $last, before: $before, filter: { type: $t }) {
       pageInfo { hasPreviousPage startCursor }
@@ -113,6 +111,7 @@ async function fetchSelfOwnedAccounts(): Promise<Set<string>> {
     }
   }`;
   const selfOwned = new Set<string>();
+  const humans = new Map<string, string>(); // account_id -> owner
   let before: string | null = null;
   for (let page = 0; page < Math.ceil(ACCOUNTS_MAX / ACCOUNTS_PAGE); page++) {
     const res = await fetch(GRAPHQL_URL, {
@@ -127,13 +126,89 @@ async function fetchSelfOwnedAccounts(): Promise<Set<string>> {
     };
     const conn = json.data?.events;
     for (const n of conn?.nodes ?? []) {
-      const j = n.contents?.json as { account_id?: string; self_owned?: boolean } | undefined;
-      if (j?.account_id && j.self_owned === true) selfOwned.add(j.account_id);
+      const j = n.contents?.json as { account_id?: string; owner?: string; self_owned?: boolean } | undefined;
+      if (!j?.account_id) continue;
+      if (j.self_owned === true) selfOwned.add(j.account_id);
+      else if (j.owner) humans.set(j.account_id, j.owner);
     }
     if (!conn?.pageInfo?.hasPreviousPage || !conn.pageInfo.startCursor) break;
     before = conn.pageInfo.startCursor;
   }
-  return selfOwned;
+  return { selfOwned, humans };
+}
+
+/** Bounded-concurrency map, so a busy venue doesn't open one socket per trader at once. */
+async function mapPool<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(items.length);
+  let i = 0;
+  async function worker() {
+    while (i < items.length) { const idx = i++; out[idx] = await fn(items[idx]); }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return out;
+}
+
+interface MintRef {
+  accountId: string;
+  rootId: string;
+  marketId: string;
+  lowerTick: bigint;
+  higherTick: bigint;
+  tsMs: number;
+}
+
+const POS_INF_TICK = (1n << 30n) - 1n;
+// Every 7-29 BTC market ships this tick_size; MarketCreated carries it if that ever changes.
+const TICK_SIZE = 10_000_000n;
+
+/**
+ * Count losses, which are otherwise invisible.
+ *
+ * The ranking engine only scores a position once it has been REDEEMED. A losing bet pays nothing,
+ * so nobody ever redeems it — our own keeper skips losers deliberately, because redeeming one is
+ * a guarded no-op that just burns gas. Left alone, the board counts wins and silently drops
+ * losses, flattering exactly the people who bet through us while scoring anyone who redeems
+ * everything honestly.
+ *
+ * A settled loss is final and its payout can only ever be zero, so synthesise the redemption the
+ * chain will never emit. Unredeemed WINNERS are deliberately left out: they are still owed money
+ * and will appear for real once cranked.
+ */
+async function addSettledLosses(
+  byAccount: Map<string, AccountOrders624>,
+  mints: MintRef[],
+  windowStartMs: number,
+  windowEndMs: number,
+): Promise<void> {
+  const open = mints.filter((m) => {
+    const acct = byAccount.get(m.accountId);
+    if (!acct) return false;
+    // Already redeemed (win, early close or liquidation) → the chain stated the outcome.
+    return !acct.orders.some((o) => o.kind.endsWith('_redeemed') && o.position_root_id === m.rootId);
+  });
+  if (!open.length) return;
+
+  const settlements = new Map<string, bigint | null>();
+  for (const marketId of new Set(open.map((m) => m.marketId))) {
+    settlements.set(marketId, await readSettlementPrice(marketId));
+  }
+
+  for (const m of open) {
+    const settled = settlements.get(m.marketId);
+    if (settled == null) continue; // still live — genuinely open, not a loss
+    if (isWinningRange(settled, m.lowerTick, m.higherTick, TICK_SIZE, POS_INF_TICK)) continue; // owed a payout
+    const acct = byAccount.get(m.accountId);
+    if (!acct) continue;
+    // Stamp at mint time: the close time is unknowable for something never cranked, and the mint
+    // is the moment we can prove fell inside the window.
+    acct.orders.push({
+      kind: 'settled_order_redeemed',
+      position_root_id: m.rootId,
+      order_id: m.rootId,
+      checkpoint_timestamp_ms: Math.min(Math.max(m.tsMs, windowStartMs), windowEndMs),
+      payout_amount: '0',
+    });
+  }
 }
 
 export async function GET() {
@@ -143,16 +218,22 @@ export async function GET() {
     const windowEndMs = Date.now();
     const windowStartMs = windowEndMs - WINDOW_MS;
 
-    const [selfOwned, ...streams] = await Promise.all([
-      fetchSelfOwnedAccounts(),
-      ...ORDER_EVENTS.map((e) => fetchEvents(e.type, windowStartMs)),
-    ]);
+    const { selfOwned, humans } = await fetchAccounts();
+
+    // Per TRADER, not per global page. Filtering by sender keeps each query bounded to one
+    // person's own history, so the full window is affordable; paging the global stream reached
+    // back only four minutes on this venue because a single bot dominates it.
+    const traders = [...new Set(humans.values())];
+    const perTrader = await mapPool(traders, TRADER_CONCURRENCY, (t) => fetchTraderEvents(t, windowStartMs));
 
     // Fold every event stream into the per-account order lists the engine already understands.
     const byAccount = new Map<string, AccountOrders624>();
-    streams.forEach((events, i) => {
-      const kind = ORDER_EVENTS[i].kind;
-      for (const { tsMs, json } of events) {
+    const mintIndex: MintRef[] = [];
+    const covered = true;              // sender-scoped queries genuinely reach the window
+    const coveredFromMs = windowStartMs;
+
+    perTrader.forEach((events) => {
+      for (const { kind, tsMs, json } of events) {
         const accountId = String(json.account_id ?? '');
         const owner = String(json.owner ?? '');
         if (!accountId || !owner || selfOwned.has(accountId)) continue;
@@ -170,8 +251,21 @@ export async function GET() {
         if (json.payout_amount != null) order.payout_amount = String(json.payout_amount);
         if (json.redeem_amount != null) order.redeem_amount = String(json.redeem_amount);
         acct.orders.push(order);
+
+        if (kind === 'order_minted' && json.expiry_market_id) {
+          mintIndex.push({
+            accountId,
+            rootId: String(json.position_root_id ?? json.order_id ?? ''),
+            marketId: String(json.expiry_market_id),
+            lowerTick: BigInt(String(json.lower_tick ?? 0)),
+            higherTick: BigInt(String(json.higher_tick ?? 0)),
+            tsMs,
+          });
+        }
       }
     });
+
+    await addSettledLosses(byAccount, mintIndex, windowStartMs, windowEndMs);
 
     // Newest-first per account, matching what the indexer feed used to return.
     const withOrders = [...byAccount.values()];
@@ -187,13 +281,13 @@ export async function GET() {
       rankings: top,
       meta: {
         period: '7d',
-        windowStartMs,
+        windowStartMs: coveredFromMs,
         windowEndMs,
         rankedTraders,
         totalWallets: withOrders.length,
         closedCalls,
         totalVolume: Math.round(totalVolume * 100) / 100,
-        complete: true,
+        complete: covered,
         unmatchedRedemptions: 0,
       },
       records: [],

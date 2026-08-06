@@ -167,16 +167,35 @@ async function fetchSpot(): Promise<number | null> {
 
 async function getMarkets(now: number): Promise<OracleEntry[]> {
   if (marketCache && now - marketCache.ts < MARKET_CACHE_TTL) return marketCache.data;
-  // Stale-while-revalidate: a slow upstream never blanks a page that already has data.
+  // NO stale-while-revalidate here. A serverless instance is frozen the moment it responds, so a
+  // refresh kicked off in the background never runs: the first request warms the cache and every
+  // request after it serves that same snapshot forever, drifting further out of date. Observed in
+  // production serving eight "active" markets of which four had already expired, the oldest by
+  // seven minutes and growing. Await the refresh instead; the TTL keeps that rare.
   if (marketCache) {
     if (!marketInFlight) {
       marketInFlight = fetchMarkets().catch(() => marketCache!.data).finally(() => { marketInFlight = null; });
     }
-    return marketCache.data;
+    return marketInFlight;
   }
   if (marketInFlight) return marketInFlight;
   marketInFlight = fetchMarkets().finally(() => { marketInFlight = null; });
   return marketInFlight;
+}
+
+/**
+ * Re-derive active-vs-settled against THIS request's clock.
+ *
+ * `status` is a fact about time, not about the market, so it must never be served from whenever
+ * the list happened to be fetched. Baking it in at fetch time is what let a fifteen-second cache
+ * present rounds that had closed minutes earlier as live and invite bets on them.
+ */
+function restamp(rows: OracleEntry[], now: number): OracleEntry[] {
+  return rows.map((o) =>
+    o.expiry > now
+      ? (o.status === 'active' ? o : { ...o, status: 'active', settled_at: null })
+      : (o.status === 'settled' ? o : { ...o, status: 'settled', settled_at: o.expiry }),
+  );
 }
 
 async function getSpot(now: number): Promise<number | null> {
@@ -195,7 +214,7 @@ export async function GET(request: Request) {
   const withPrices = new URL(request.url).searchParams.get('prices') === '1';
 
   try {
-    const oracles = await getMarkets(now);
+    const oracles = restamp(await getMarkets(now), now);
     if (!withPrices) return NextResponse.json(oracles, { headers: NO_STORE });
     const spot = await getSpot(now);
     const prices: Record<string, { spot: number }> = {};
