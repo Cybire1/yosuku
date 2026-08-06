@@ -19,6 +19,10 @@ const GRAPHQL_URL = 'https://graphql.testnet.sui.io/graphql';
 const PREDICT_PACKAGE = '0xfe742239a3b033f7d52ed5275f238c17d27498ca0ee5ea5672ea732eb3f4dbbb';
 const ACCOUNT_PACKAGE = '0xbdbb60b00f2d4f30daeff62f2c642b18433a8fcdfbebccc808df578df2a0c203';
 const ACCOUNT_CREATED_TYPE = `${ACCOUNT_PACKAGE}::account_events::AccountCreated`;
+// Our Onara gas station. An account whose SETUP it paid for came through Yosuku; the venue is
+// shared with other teams, and their bots are not our community. Verified: the two high-volume
+// accounts on this venue self-funded their setup, while a real Yosuku user's was sponsored here.
+const YOSUKU_GAS_SPONSOR = '0xe26c11844116abb0d3d76fb88a25831f4a22cbbb3fee6bf096d779875a0c4c69';
 
 // Event type → the `kind` string computeLeaderboard624 switches on.
 const ORDER_EVENTS: Array<{ type: string; kind: string }> = [
@@ -57,7 +61,7 @@ interface LeaderboardResponse {
 
 let cache: { data: LeaderboardResponse; ts: number } | null = null;
 
-interface EventNode { timestamp?: string; contents?: { json?: Record<string, unknown> } }
+interface EventNode { timestamp?: string; contents?: { json?: Record<string, unknown> }; transaction?: { gasInput?: { gasSponsor?: { address?: string } } } }
 
 /**
  * One trader's events, filtered server-side by sender.
@@ -107,7 +111,7 @@ async function fetchAccounts(): Promise<{ selfOwned: Set<string>; humans: Map<st
   const query = `query Ev($t: String!, $last: Int!, $before: String) {
     events(last: $last, before: $before, filter: { type: $t }) {
       pageInfo { hasPreviousPage startCursor }
-      nodes { contents { json } }
+      nodes { transaction { gasInput { gasSponsor { address } } } contents { json } }
     }
   }`;
   const selfOwned = new Set<string>();
@@ -128,8 +132,13 @@ async function fetchAccounts(): Promise<{ selfOwned: Set<string>; humans: Map<st
     for (const n of conn?.nodes ?? []) {
       const j = n.contents?.json as { account_id?: string; owner?: string; self_owned?: boolean } | undefined;
       if (!j?.account_id) continue;
-      if (j.self_owned === true) selfOwned.add(j.account_id);
-      else if (j.owner) humans.set(j.account_id, j.owner);
+      if (j.self_owned === true) { selfOwned.add(j.account_id); continue; }
+      // Only accounts Yosuku onboarded. Without this the board ranks other teams' bots — one had
+      // 576 trades and would sit permanently at the top of a leaderboard our users read as theirs.
+      const sponsor = (n as { transaction?: { gasInput?: { gasSponsor?: { address?: string } } } })
+        .transaction?.gasInput?.gasSponsor?.address;
+      if (sponsor !== YOSUKU_GAS_SPONSOR) continue;
+      if (j.owner) humans.set(j.account_id, j.owner);
     }
     if (!conn?.pageInfo?.hasPreviousPage || !conn.pageInfo.startCursor) break;
     before = conn.pageInfo.startCursor;
