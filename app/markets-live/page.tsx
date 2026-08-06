@@ -52,6 +52,7 @@ import {
   winForQty,
   MIN_MINT_MS,
   friendlyMintAbort,
+  reloadIfStale,
   placeMint624,
   useAccount624,
   useMintQuote624,
@@ -386,7 +387,7 @@ export default function MarketsLivePage() {
       refreshAcctBalance();
       setTimeout(() => { loadPositions(); refreshAcctBalance(); }, 2_500);
     } catch (e) {
-      toast(`Bet failed: ${friendlyMintAbort(String(e instanceof Error ? e.message : e))}`, 'error');
+      { const raw = String(e instanceof Error ? e.message : e); toast(`Bet failed: ${friendlyMintAbort(raw)}`, 'error'); reloadIfStale(raw); }
     } finally { setBusy(null); }
   }
 

@@ -32,6 +32,7 @@ import {
   RANGE_CENTER_MAX,
   RANGE_PRESETS,
   friendlyMintAbort,
+  reloadIfStale,
   costCapBuffer,
   placeMint624,
   placeRangeMint624,
@@ -92,6 +93,7 @@ export default function Ticket624Drawer({
   spot,
   series,
   mobileOpen = false,
+  fundWith = null,
   onClose,
 }: {
   market: Market624 | null;
@@ -104,6 +106,9 @@ export default function Ticket624Drawer({
   series: number[];
   /** Mobile slide-in open state. On desktop the rail is ALWAYS docked/visible. */
   mobileOpen?: boolean;
+  /** Set to 'btc' when opened from a card's "Bet with Bitcoin" strip — the stake is
+   *  funded from the user's hBTC (via the on-ramp) instead of wallet DUSDC. */
+  fundWith?: 'btc' | null;
   onClose: () => void;
 }) {
   const chartRef = useRef<HTMLCanvasElement | null>(null);
@@ -417,7 +422,7 @@ export default function Ticket624Drawer({
       }
       acct.refreshAcctBalance();
     } catch (e) {
-      toast(`Bet failed: ${friendlyMintAbort(String(e instanceof Error ? e.message : e))}`, 'error');
+      { const raw = String(e instanceof Error ? e.message : e); toast(`Bet failed: ${friendlyMintAbort(raw)}`, 'error'); reloadIfStale(raw); }
     } finally {
       setBusy(null);
     }
@@ -454,7 +459,7 @@ export default function Ticket624Drawer({
       acct.refreshWallet();
       acct.refreshAcctBalance();
     } catch (e) {
-      toast(`Bet failed: ${friendlyMintAbort(String(e instanceof Error ? e.message : e))}`, 'error');
+      { const raw = String(e instanceof Error ? e.message : e); toast(`Bet failed: ${friendlyMintAbort(raw)}`, 'error'); reloadIfStale(raw); }
     } finally {
       setBusy(null);
     }
@@ -492,7 +497,7 @@ export default function Ticket624Drawer({
       acct.refreshWallet();
       acct.refreshAcctBalance();
     } catch (e) {
-      toast(`Bet failed: ${friendlyMintAbort(String(e instanceof Error ? e.message : e))}`, 'error');
+      { const raw = String(e instanceof Error ? e.message : e); toast(`Bet failed: ${friendlyMintAbort(raw)}`, 'error'); reloadIfStale(raw); }
     } finally {
       setBusy(null);
     }
@@ -780,6 +785,16 @@ export default function Ticket624Drawer({
                     </button>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* Funding from Bitcoin — set when opened from a card's "Bet with Bitcoin" strip. */}
+            {fundWith === 'btc' && (
+              <div className="mb-3 flex items-start gap-2.5 rounded-lg border border-[#F7931A]/30 bg-[#F7931A]/[0.07] px-3 py-2.5">
+                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#F7931A] font-sans text-[12px] font-extrabold leading-none text-white" aria-hidden>₿</span>
+                <span className="font-mono text-[10px] leading-relaxed text-[#F7931A]">
+                  Funding this bet with your Bitcoin. Your hBTC is swapped to cover the stake in the same signature, and only you can cash the position out.
+                </span>
               </div>
             )}
 

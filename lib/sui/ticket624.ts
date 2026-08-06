@@ -23,6 +23,7 @@ import {
   quantizePositionQuantity624,
 } from './predict624Math';
 import {
+  PREDICT624,
   NEG_INF_TICK,
   POS_INF_TICK,
   usdToTick,
@@ -61,7 +62,8 @@ export const estProb = (cadence?: string) => EST_PROB_BY_CADENCE[cadence ?? '5m'
 // have learned a user's ids they are true forever, and re-discovering them on every page load
 // was pure latency. Cache them per owner and hydrate on first render.
 type AccountCache = { wrapperId: string; innerAccountId: string | null };
-const ACCT_CACHE_KEY = (owner: string) => `yx_acct624_${owner}`;
+const DEPLOYMENT_CACHE_NS = PREDICT624.accountPackage.slice(2, 10);
+const ACCT_CACHE_KEY = (owner: string) => `yx_acct624_${DEPLOYMENT_CACHE_NS}_${owner}`;
 
 export function readAccountCache(owner: string | null): AccountCache | null {
   if (!owner || typeof window === 'undefined') return null;
@@ -82,7 +84,7 @@ export function writeAccountCache(owner: string, v: AccountCache): void {
 // The money figure users see is wallet + trading account. Those load independently, so during
 // the gap the UI used to render a PARTIAL sum (a real number, just not theirs) and then correct
 // itself. Remember the last confirmed total per owner and show that until both halves are in.
-const TOTAL_CACHE_KEY = (owner: string) => `yx_total624_${owner}`;
+const TOTAL_CACHE_KEY = (owner: string) => `yx_total624_${DEPLOYMENT_CACHE_NS}_${owner}`;
 
 export function readTotalCache(owner: string | null): number | null {
   if (!owner || typeof window === 'undefined') return null;
@@ -180,7 +182,28 @@ export function rangeTicks624(lowerUsd: number, higherUsd: number): { lowerTick:
 }
 
 /** Translate the venue's mint aborts into plain words (codes from expiry_market.move). */
+/** A tab left open across a deployment is running the OLD bundle, so it builds transactions
+ *  against whatever package it was compiled with. After the 7-29 migration that surfaces as a
+ *  type mismatch while the transaction is still being resolved, before any Move code runs, and
+ *  it will keep failing until the page reloads. Detect that shape specifically: a resolution
+ *  error is never a user error, and no amount of changing the stake will fix it. */
+export function isStaleBundleError(raw: string): boolean {
+  return /Transaction resolution failed|CommandArgumentError|TypeMismatch|package.*not found/i.test(raw);
+}
+
+/** A stale tab cannot recover on its own and will fail every retry, so reload it. Delayed so the
+ *  toast is readable first, and guarded so it can only ever fire once. */
+let reloadScheduled = false;
+export function reloadIfStale(raw: string): void {
+  if (typeof window === 'undefined' || reloadScheduled || !isStaleBundleError(raw)) return;
+  reloadScheduled = true;
+  window.setTimeout(() => window.location.reload(), 3500);
+}
+
 export function friendlyMintAbort(raw: string): string {
+  if (isStaleBundleError(raw)) {
+    return 'This tab is running an older version of Yosuku. Reload the page and place the bet again — nothing was charged.';
+  }
   return /::account::withdraw/i.test(raw)
     ? 'Your trading account can’t cover this yet — placing the bet tops it up automatically.'
     : /assert_mint_admission/i.test(raw)
