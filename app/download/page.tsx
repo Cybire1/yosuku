@@ -2,74 +2,42 @@
 
 // The page the app band lands on.
 //
-// Drawn, not screenshotted. A real screenshot dates the moment the UI changes and reads as a
-// stock asset at small sizes; a hand-built SVG of the one thing the app does (a question, a
-// live line, two answers) stays true and stays sharp at any width. Same palette as the site,
-// so this reads as another room in the same building rather than a landing page bolted on.
+// It shows a real capture of the app. The first version drew the screen as an SVG, on the theory
+// that a drawing stays sharp and never dates. Both true, and both beside the point: a drawing
+// shows the app as intended rather than as built, and the distance between those two is exactly
+// what someone arriving from this page will meet. Same palette as the site, so it still reads as
+// another room in the same building rather than a landing page bolted on.
 import Header from '@/components/Header';
 import YosukuMark from '@/components/YosukuMark';
 
 const TESTFLIGHT = 'https://testflight.apple.com/join/7AxcFCf5';
 
-/** The app, drawn: one question, the live price, two ways to answer. */
-function PhoneArt() {
+/** The app itself, captured on a phone.
+ *
+ *  This was a drawn SVG. A drawing is always a flattering guess: it shows the app as intended
+ *  rather than as built, and the gap between those two is exactly what someone downloading it
+ *  will find. A real capture cannot drift from the product.
+ *
+ *  Framed from the card down. The source capture came from a build where the back control
+ *  overlapped the question, which is fixed in the app but baked into that image, and shipping a
+ *  known bug as marketing art is worse than cropping past it.
+ *
+ *  TO REPLACE: drop a fresh screenshot at public/app/bet-screen.png. Nothing else needs to change.
+ */
+function PhoneShot() {
   return (
-    <svg className="dl-art" viewBox="0 0 320 620" role="img" aria-label="The Yosuku app on iPhone, showing a Bitcoin round with an up and a down button">
-      <defs>
-        <linearGradient id="dlGlow" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#E04D26" stopOpacity="0.20" />
-          <stop offset="100%" stopColor="#E04D26" stopOpacity="0" />
-        </linearGradient>
-        <linearGradient id="dlFill" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#34D399" stopOpacity="0.22" />
-          <stop offset="100%" stopColor="#34D399" stopOpacity="0" />
-        </linearGradient>
-        <clipPath id="dlScreen"><rect x="14" y="14" width="292" height="592" rx="38" /></clipPath>
-      </defs>
-
-      {/* device */}
-      <rect x="2" y="2" width="316" height="616" rx="50" fill="#0B0B0D" stroke="rgba(255,255,255,0.14)" strokeWidth="1.5" />
-      <rect x="14" y="14" width="292" height="592" rx="38" fill="#050505" />
-
-      <g clipPath="url(#dlScreen)">
-        <rect x="14" y="14" width="292" height="150" fill="url(#dlGlow)" />
-        {/* status + notch */}
-        <rect x="120" y="24" width="80" height="20" rx="10" fill="#000" />
-        <text x="38" y="40" className="dl-t-mono" fill="#8A8A8A">9:41</text>
-
-        {/* the question */}
-        <text x="38" y="96" className="dl-t-h">BTC above</text>
-        <text x="38" y="124" className="dl-t-h">$64,200<tspan fill="#E04D26">?</tspan></text>
-
-        {/* live price + countdown */}
-        <text x="38" y="160" className="dl-t-lbl" fill="#6E6E6E">BTC NOW</text>
-        <text x="38" y="184" className="dl-t-num" fill="#FAFAFA">$64,287</text>
-        <text x="282" y="160" className="dl-t-lbl" fill="#6E6E6E" textAnchor="end">CLOSES IN</text>
-        <text x="282" y="184" className="dl-t-num" fill="#E04D26" textAnchor="end">04:12</text>
-
-        {/* the line */}
-        <path d="M38 300 L64 292 L84 302 L104 286 L126 294 L148 268 L170 276 L192 252 L214 262 L238 240 L262 232 L282 226 L282 330 L38 330 Z" fill="url(#dlFill)" />
-        <path d="M38 300 L64 292 L84 302 L104 286 L126 294 L148 268 L170 276 L192 252 L214 262 L238 240 L262 232 L282 226" fill="none" stroke="#34D399" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-        <circle cx="282" cy="226" r="4.5" fill="#34D399" />
-        <circle cx="282" cy="226" r="10" fill="#34D399" opacity="0.18" />
-        <path d="M38 268 L282 268" stroke="#E04D26" strokeWidth="1.5" strokeDasharray="5 6" opacity="0.7" />
-
-        {/* two answers */}
-        <rect x="38" y="372" width="116" height="52" rx="26" fill="rgba(52,211,153,0.10)" stroke="#34D399" strokeWidth="1.5" />
-        <text x="96" y="404" className="dl-t-btn" fill="#34D399" textAnchor="middle">UP</text>
-        <rect x="166" y="372" width="116" height="52" rx="26" fill="rgba(251,113,133,0.08)" stroke="rgba(251,113,133,0.55)" strokeWidth="1.5" />
-        <text x="224" y="404" className="dl-t-btn" fill="#FB7185" textAnchor="middle">DOWN</text>
-
-        {/* stake → payout */}
-        <text x="38" y="470" className="dl-t-lbl" fill="#6E6E6E">YOU BET</text>
-        <text x="38" y="496" className="dl-t-num" fill="#FAFAFA">5.00</text>
-        <text x="282" y="470" className="dl-t-lbl" fill="#6E6E6E" textAnchor="end">COULD WIN</text>
-        <text x="282" y="496" className="dl-t-num" fill="#34D399" textAnchor="end">9.20</text>
-
-        <rect x="38" y="528" width="244" height="50" rx="25" fill="#E04D26" />
-        <text x="160" y="559" className="dl-t-btn" fill="#FFFFFF" textAnchor="middle">Place bet</text>
-      </g>
-    </svg>
+    <div className="dl-phone">
+      <div className="dl-phone-screen">
+        <img
+          src="/app/bet-screen.png"
+          alt="The Yosuku app on a phone: a Bitcoin round showing the live price, the time left, an up and a down button, and the payout."
+          // Intrinsic size of the asset: wrong values here reserve the wrong box and the
+          // page jumps when the image lands.
+          width={921}
+          height={1433}
+        />
+      </div>
+    </div>
   );
 }
 
@@ -80,7 +48,7 @@ export default function DownloadPage() {
       <main className="dl">
         <section className="dl-hero">
           <div className="dl-copy">
-            <div className="section-eyebrow">Yosuku for iPhone</div>
+            <div className="section-eyebrow dl-eyebrow">Yosuku for iOS</div>
             <h1 className="dl-title">
               Call it in <em>ten seconds.</em>
             </h1>
@@ -99,14 +67,13 @@ export default function DownloadPage() {
 
             <ul className="dl-meta">
               <li><b>TestFlight</b><span>Apple&rsquo;s beta app</span></li>
-              <li><b>iPhone</b><span>iOS 16 and up</span></li>
+              <li><b className="dl-nocaps">iOS</b><span>version 16 and up</span></li>
               <li><b>Testnet</b><span>practice money, real mechanics</span></li>
             </ul>
           </div>
 
           <div className="dl-stage" aria-hidden="false">
-            <div className="dl-halo" />
-            <PhoneArt />
+            <PhoneShot />
           </div>
         </section>
 

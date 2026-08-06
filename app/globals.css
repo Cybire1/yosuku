@@ -159,7 +159,8 @@ body.urgent::before {
 
    Every offset under it derives from --appstrip; change the height once and the
    ticker, header and sticky filter bar all follow. */
-:root { --appstrip: 34px; }
+:root { --appstrip: 0px; }            /* absent by default: nothing reserves space it does not use */
+[data-strip="on"] { --appstrip: 34px; }
 
 .appstrip {
   position: fixed; top: 0; left: 0; right: 0;
@@ -171,6 +172,10 @@ body.urgent::before {
   opacity: 0; transition: opacity 420ms var(--ease, cubic-bezier(0.2,0.7,0.3,1));
 }
 .appstrip.is-in { opacity: 1; }
+
+/* With no strip and no ticker above it, the header should sit at the top rather than float
+   below the space where they would have been. */
+[data-strip="off"] .header { top: 0; }
 
 .appstrip-msg {
   display: inline-flex; align-items: center; gap: 10px;
@@ -737,7 +742,6 @@ body.urgent::before {
 }
 .bell-label { font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.2em; color: var(--gray-500); text-transform: uppercase; }
 .bell-time { font-family: var(--font-mono); font-size: 14px; font-weight: 600; color: var(--white); letter-spacing: -0.02em; }
-.bell-jp { font-family: var(--font-jp); font-size: 9px; color: var(--gray-600); }
 .bell.urgent .bell-time { color: var(--vermilion); }
 
 /* SettleClock — the branded settlement ring. Under a minute it breathes a soft vermilion
@@ -784,18 +788,6 @@ body.urgent::before {
   position: relative;
   overflow: hidden;
 }
-.page-hero::before {
-  content: '予測';
-  position: absolute;
-  z-index: -1;
-  top: 50%; right: -2vw;
-  transform: translateY(-46%);
-  font-family: var(--font-jp); font-weight: 700;
-  font-size: 26vw; line-height: 0.85;
-  color: rgba(255,255,255,0.018);
-  pointer-events: none; user-select: none;
-}
-
 /* Crop marks at the corners */
 .crop {
   position: absolute; width: 18px; height: 18px;
@@ -858,13 +850,6 @@ body.urgent::before {
   color: var(--white);
 }
 .page-title .accent { color: var(--vermilion); }
-.page-title-jp {
-  font-family: var(--font-jp); font-weight: 700;
-  font-size: clamp(1rem, 1.6vw, 1.4rem);
-  color: var(--gray-500);
-  margin-top: 14px;
-  letter-spacing: 0.04em;
-}
 .page-subtitle {
   color: var(--gray-400);
   font-size: 16px; line-height: 1.55;
@@ -1418,10 +1403,6 @@ body.urgent::before {
   line-height: 1;
   color: var(--white);
 }
-.section-jp {
-  font-family: var(--font-jp); font-size: 14px; color: var(--gray-600);
-  letter-spacing: 0.04em;
-}
 .section-meta {
   font-family: var(--font-mono);
   font-size: 11px; color: var(--gray-500); letter-spacing: 0.06em;
@@ -1881,7 +1862,6 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
   font-family: var(--font-display); font-weight: 700;
   font-size: 30px; letter-spacing: -0.025em;
 }
-.floor-head .jp { font-family: var(--font-jp); font-size: 14px; color: var(--gray-600); margin-left: 12px; }
 .floor-head p { color: var(--gray-500); font-size: 13px; max-width: 50ch; }
 .floor-grid {
   display: grid;
@@ -1928,12 +1908,6 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
 .empty-state {
   text-align: center;
   padding: 120px 24px;
-}
-.empty-state .jp {
-  font-family: var(--font-jp); font-weight: 700;
-  font-size: clamp(8rem, 18vw, 14rem);
-  color: rgba(255,255,255,0.04);
-  line-height: 0.85;
 }
 .empty-state h3 {
   font-family: var(--font-display); font-weight: 700;
@@ -1998,11 +1972,6 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
   font-family: var(--font-display);
   font-weight: 700; font-size: 18px;
   color: var(--white); letter-spacing: -0.02em;
-}
-.torii-jp {
-  font-family: var(--font-jp);
-  font-size: 11px; color: var(--gray-500);
-  margin-left: 12px;
 }
 .torii-count {
   margin-left: auto;
@@ -2081,12 +2050,6 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
   letter-spacing: -0.05em;
 }
 .lb-hero-title .vermilion { color: var(--vermilion); }
-.lb-hero-jp {
-  font-family: var(--font-jp); font-weight: 900;
-  font-size: clamp(1.4rem, 2.4vw, 2rem);
-  color: var(--gray-500);
-  margin-top: 16px; letter-spacing: 0.06em;
-}
 .lb-hero-sub {
   color: var(--gray-400); font-size: 16px; line-height: 1.55;
   max-width: 44ch; margin-top: 22px;
@@ -2114,7 +2077,6 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
   text-align: center;
   line-height: 1.4;
 }
-.lb-meta-col .stamp .jp { font-family: var(--font-jp); font-size: 14px; display: block; margin-top: 2px; }
 
 /* Filter / period bar */
 .lb-filter-bar {
@@ -2267,12 +2229,6 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
   margin-top: 4px;
   position: relative; z-index: 2;
 }
-.podium-jp {
-  font-family: var(--font-jp); font-size: 13px;
-  color: var(--gray-600); margin-top: 2px;
-  position: relative; z-index: 2;
-}
-
 .podium-pnl {
   margin-top: 24px; position: relative; z-index: 2;
   font-family: var(--font-display); font-weight: 800;
@@ -2322,16 +2278,6 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
   grid-template-columns: 5fr 7fr;
   position: relative;
 }
-.yokozuna::before {
-  content: '横綱';
-  position: absolute;
-  top: -10px; right: 24px;
-  font-family: var(--font-jp); font-weight: 900;
-  font-size: 200px; line-height: 0.8;
-  color: rgba(224,77,38,0.05);
-  pointer-events: none; user-select: none;
-  letter-spacing: -0.02em;
-}
 .yoko-left {
   padding: 36px 36px 28px;
   border-right: 1px solid rgba(255,255,255,0.06);
@@ -2352,7 +2298,6 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
   letter-spacing: -0.04em; color: var(--white);
 }
 .yoko-name .accent { color: var(--vermilion); }
-.yoko-jp { font-family: var(--font-jp); font-size: 15px; color: var(--gray-500); margin-top: 8px; letter-spacing: 0.04em; }
 .yoko-meta {
   font-family: var(--font-mono); font-size: 11px;
   color: var(--gray-500); letter-spacing: 0.1em;
@@ -2574,7 +2519,6 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
   color: var(--gray-600); letter-spacing: 0.18em; text-transform: uppercase;
   text-align: center;
 }
-.bz-divider .jp { font-family: var(--font-jp); color: var(--vermilion); margin: 0 12px; font-size: 13px; }
 
 /* ───────── Sticky 'You' bar ───────── */
 .you-bar {
@@ -2874,16 +2818,6 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
   background-image: linear-gradient(to right, rgba(255,255,255,0.035) 1px, transparent 1px);
   background-size: calc((100% - 0px) / 12) 100%;
 }
-.hero-watermark {
-  position: absolute;
-  bottom: -8vw; left: -3vw;
-  font-family: var(--font-jp); font-weight: 700;
-  font-size: 46vw; line-height: 0.78;
-  color: var(--white); opacity: 0.03;
-  pointer-events: none; user-select: none;
-  letter-spacing: -0.05em; z-index: 0;
-  white-space: nowrap;
-}
 .hero-cursor-glow {
   position: fixed; top: 0; left: 0;
   width: 360px; height: 360px;
@@ -2918,7 +2852,6 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
   margin-bottom: 40px;
 }
 .hero-eyebrow .rule { width: 32px; height: 1px; background: rgba(255,255,255,0.3); }
-.hero-eyebrow .jp { font-family: var(--font-jp); font-size: 13px; color: var(--white); letter-spacing: 0; opacity: 0.7; }
 .hero-eyebrow .dot {
   width: 6px; height: 6px; border-radius: 50%;
   background: var(--white);
@@ -3111,13 +3044,12 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
   width: 56px; height: 56px; border-radius: 50%;
   border: 1px solid rgba(255,255,255,0.18);
   display: flex; align-items: center; justify-content: center;
-  font-family: var(--font-jp);
-  font-size: 22px; font-weight: 700; color: var(--white);
+  color: var(--white);
   flex-shrink: 0;
   animation: spin 24s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
-.hero-award .seal-inner { animation: spin 24s linear infinite reverse; }
+.hero-award .seal-inner { width: 22px; height: auto; display: block; animation: spin 24s linear infinite reverse; }
 .hero-award .meta { line-height: 1.5; }
 .hero-award .meta b { color: var(--white); font-weight: 500; }
 
@@ -3155,14 +3087,6 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
   font-family: var(--font-mono); font-size: 10px;
   color: var(--gray-600); letter-spacing: 0.3em;
   pointer-events: none;
-}
-.stats-jp {
-  position: absolute; top: 50%; right: -2vw;
-  transform: translateY(-50%);
-  font-family: var(--font-jp); font-weight: 700;
-  font-size: 24vw; line-height: 0.8;
-  color: rgba(255,255,255,0.022);
-  pointer-events: none; user-select: none;
 }
 .stats-grid {
   display: grid;
@@ -3204,9 +3128,9 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
   color: var(--gray-500); margin-bottom: 24px;
   display: flex; align-items: center; gap: 12px;
 }
-.section-eyebrow .jp {
-  font-family: var(--font-jp); font-size: 14px;
-  color: var(--gray-600); letter-spacing: 0;
+.section-eyebrow .sub {
+  font-size: 11px; color: var(--gray-600);
+  letter-spacing: 0.18em;
 }
 .section-title {
   font-family: var(--font-display); font-weight: 700;
@@ -3251,12 +3175,6 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
   font-family: var(--font-display); font-weight: 800;
   font-size: 64px; line-height: 0.9;
   letter-spacing: -0.045em; color: var(--white);
-}
-.step .num-col .jp {
-  position: absolute; top: 64px; left: 8px;
-  font-family: var(--font-jp); font-weight: 700;
-  font-size: 11px; color: var(--gray-600);
-  letter-spacing: 0.2em; writing-mode: vertical-rl;
 }
 .step .text-col { padding-left: 36px; padding-right: 36px; }
 .step .text-col .kicker {
@@ -3311,13 +3229,6 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
   left: 48px; width: 56px;
   border-right: 1px solid rgba(255,255,255,0.06);
   z-index: 4; pointer-events: none;
-}
-.features-rail .vjp {
-  position: sticky; top: 50%;
-  writing-mode: vertical-rl;
-  font-family: var(--font-jp); font-size: 14px;
-  color: var(--gray-600); letter-spacing: 0.4em;
-  transform: translateY(-50%); text-align: center;
 }
 .features-rail .progress-track {
   position: sticky; top: 30%;
@@ -3379,7 +3290,6 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
   display: flex; align-items: center; gap: 12px;
 }
 .feature-text .feature-index .rule { width: 32px; height: 1px; background: var(--white); opacity: 0.4; }
-.feature-text .feature-index .jp { font-family: var(--font-jp); color: var(--gray-500); letter-spacing: 0; font-size: 12px; }
 .feature-text h3 {
   position: relative; z-index: 1;
   font-family: var(--font-display); font-weight: 700;
@@ -3452,14 +3362,6 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
   position: relative; overflow: hidden;
   border-top: 1px solid rgba(255,255,255,0.04);
 }
-.manifesto-jp {
-  position: absolute; top: 50%; left: 50%;
-  transform: translate(-50%, -50%);
-  font-family: var(--font-jp); font-weight: 700;
-  font-size: 56vw; line-height: 0.78;
-  color: rgba(255,255,255,0.025);
-  pointer-events: none; user-select: none; z-index: 0;
-}
 .manifesto-runline {
   position: absolute;
   font-family: var(--font-mono); font-size: 10px;
@@ -3506,9 +3408,9 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
   width: 28px; height: 28px; border-radius: 50%;
   border: 1px solid rgba(255,255,255,0.18);
   display: inline-flex; align-items: center; justify-content: center;
-  font-family: var(--font-jp); font-size: 13px; color: var(--white);
-  letter-spacing: 0;
+  color: var(--white);
 }
+.manifesto-attr .seal-mark { width: 11px; height: auto; display: block; }
 .manifesto-attr::before, .manifesto-attr::after {
   content: ''; width: 40px; height: 1px;
   background: rgba(255,255,255,0.18);
@@ -3521,11 +3423,11 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
   position: relative; overflow: hidden;
 }
 .split::before {
-  content: '仕様 · SPECIFICATION'; position: absolute; top: 28px; left: 48px;
+  content: 'SPECIFICATION'; position: absolute; top: 28px; left: 48px;
   font-family: var(--font-mono); font-size: 10px; color: var(--gray-600); letter-spacing: 0.3em;
 }
 .split::after {
-  content: 'EDITION ONE · PP. 14–15'; position: absolute; top: 28px; right: 48px;
+  content: 'EDITION ONE · PP. 14-15'; position: absolute; top: 28px; right: 48px;
   font-family: var(--font-mono); font-size: 10px; color: var(--gray-600); letter-spacing: 0.3em;
 }
 .split-grid {
@@ -3738,13 +3640,6 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
   padding: 180px 0 160px;
   position: relative; overflow: hidden;
 }
-.faq-jp {
-  position: absolute; bottom: -5vw; left: -2vw;
-  font-family: var(--font-jp); font-weight: 700;
-  font-size: 32vw; line-height: 0.8;
-  color: rgba(255,255,255,0.018);
-  pointer-events: none; user-select: none;
-}
 .faq-grid {
   display: grid; grid-template-columns: 4fr 8fr;
   gap: 80px; position: relative; z-index: 1;
@@ -3878,8 +3773,9 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
   width: 32px; height: 32px; border-radius: 50%;
   border: 1px solid rgba(255,255,255,0.12);
   display: grid; place-items: center;
-  font-family: var(--font-jp); font-size: 14px; color: var(--white); flex-shrink: 0;
+  color: var(--white); flex-shrink: 0;
 }
+.footer-brand .seal-dot-mark { width: 13px; height: auto; display: block; }
 .footer-col { display: flex; flex-direction: column; gap: 14px; }
 .footer-col-head {
   display: flex; align-items: baseline; gap: 8px;
@@ -3931,7 +3827,7 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
 }
 
 .footer-bottom {
-  display: grid; grid-template-columns: auto 1fr auto;
+  display: flex; justify-content: space-between;
   align-items: center; gap: 24px; padding: 24px 0 28px;
 }
 .footer-meta {
@@ -3946,11 +3842,6 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
   transition: color 200ms var(--ease);
 }
 .footer-bottom .legal-links a:hover { color: var(--white); }
-.footer-sayonara {
-  text-align: right; font-family: var(--font-jp);
-  font-weight: 500; font-size: 14px;
-  color: var(--gray-400); letter-spacing: 0.04em;
-}
 .footer-watermark {
   pointer-events: none; user-select: none;
   text-align: center;
@@ -4603,7 +4494,7 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
   .logo { font-size: 14px; font-weight: 800; letter-spacing: 0.12em; gap: 8px; }
   .logo-mark { width: 15px; height: 18px; }
   /* slimmer top tape on phones; header hangs directly under it */
-  :root { --appstrip: 28px; }
+  [data-strip="on"] { --appstrip: 28px; }
   .appstrip-msg { font-size: 9.5px; gap: 7px; padding: 0 8px; }
   .appstrip-go { font-size: 10px; }
   .appstrip-x { right: 2px; width: 22px; height: 22px; }
@@ -4754,7 +4645,6 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
   .section-title { font-size: clamp(1.6rem, 7vw, 2.2rem); margin-bottom: 48px; }
   .how-steps { gap: 48px; }
   .step .num-col { font-size: 48px; }
-  .step .num-col .vjp { display: none; }
   .step .art-col { display: none; }
   .step-title { font-size: 22px; }
   .step-body { font-size: 14px; }
@@ -5126,7 +5016,6 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
   border-bottom: 1px solid rgba(255,255,255,0.08); position: relative;
 }
 .words-sechead::after { content: ''; position: absolute; left: 0; bottom: -1px; width: 40px; height: 2px; background: var(--vermilion); }
-.words-sec-jp { font-family: 'Noto Serif JP', serif; font-size: 15px; color: var(--gray-600); }
 .words-sec-label { font-family: var(--font-display); font-weight: 700; font-size: 22px; letter-spacing: -0.02em; color: var(--white); }
 .words-sec-count { font-family: var(--font-mono); font-size: 12px; color: var(--gray-500); }
 
@@ -5233,13 +5122,6 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
   opacity: 0.05; mix-blend-mode: soft-light;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
-.xt-kanji {
-  position: absolute; z-index: 0; pointer-events: none; user-select: none;
-  writing-mode: vertical-rl; font-family: var(--font-jp); font-weight: 900;
-  line-height: 0.86; color: transparent;
-  -webkit-text-stroke: 1px rgba(224, 77, 38, 0.10);
-}
-
 /* boot reveals */
 @keyframes xt-up { from { opacity: 0; transform: translateY(11px); } to { opacity: 1; transform: none; } }
 .xt-boot { opacity: 0; animation: xt-up 0.62s var(--e-out) both; }
@@ -5542,18 +5424,27 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
 
 .dl-meta { list-style: none; display: flex; flex-wrap: wrap; gap: clamp(20px, 3vw, 42px); margin: 40px 0 0; padding: 0; }
 .dl-meta li { display: flex; flex-direction: column; gap: 5px; }
+/* iOS is a proper noun with fixed casing. The surrounding labels are uppercased for rhythm,
+   but running that over "iOS" produces "IOS", which reads as a typo rather than a style. */
+.dl-eyebrow, .dl-nocaps { text-transform: none !important; }
 .dl-meta b { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--vermilion); font-weight: 500; }
 .dl-meta span { font-size: 0.86rem; color: var(--gray-500, #8A8A8A); }
 
 .dl-stage { position: relative; display: flex; justify-content: center; }
-.dl-art { width: 100%; max-width: 320px; height: auto; position: relative; z-index: 1; filter: drop-shadow(0 40px 80px rgba(0,0,0,0.6)); }
-/* One soft bloom behind the device instead of a glow on every element: the
-   screen is the brightest thing on the page and should stay that way. */
-.dl-halo {
-  position: absolute; inset: -12% -22%; z-index: 0; pointer-events: none;
-  background: radial-gradient(closest-side, rgba(224,77,38,0.20), transparent 72%);
-  filter: blur(14px);
+/* A frame, not a bezel illustration. The capture is the subject; the frame's only job is to
+   say "this is a phone" and then stop competing with what is inside it. No glow: the screen is
+   already the brightest thing on the page, and a coloured bloom behind it was doing the job the
+   screen does better, while tinting a product shot that should be shown as it actually looks. */
+.dl-phone {
+  position: relative; z-index: 1;
+  width: 100%; max-width: 312px;
+  padding: 10px;
+  border-radius: 44px;
+  background: linear-gradient(160deg, rgba(255,255,255,0.13), rgba(255,255,255,0.03));
+  box-shadow: 0 30px 70px -20px rgba(0,0,0,0.75), 0 0 0 1px rgba(255,255,255,0.06) inset;
 }
+.dl-phone-screen { border-radius: 35px; overflow: hidden; background: #050505; display: block; }
+.dl-phone-screen img { display: block; width: 100%; height: auto; }
 .dl-t-mono { font-family: var(--font-mono); font-size: 12px; }
 .dl-t-lbl  { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.16em; }
 .dl-t-num  { font-family: var(--font-mono); font-size: 21px; font-weight: 700; }
@@ -5577,5 +5468,6 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
 @media (max-width: 860px) {
   .dl-hero { grid-template-columns: 1fr; gap: 44px; }
   .dl-stage { order: -1; }
-  .dl-art { max-width: 260px; }
+  .dl-phone { max-width: 250px; padding: 8px; border-radius: 38px; }
+  .dl-phone-screen { border-radius: 31px; }
 }

@@ -46,7 +46,19 @@ export default function AppStrip() {
   }, [gone]);
 
   // A strip inviting you to the page you are already reading is noise.
-  if (gone || pathname?.startsWith('/download')) return null;
+  const hidden = gone || !!pathname?.startsWith('/download');
+
+  // Tell the stylesheet whether the strip is actually there. Every fixed offset on the site is
+  // computed off --appstrip, so when the strip is absent that height has to collapse or the
+  // header hangs in empty space with nothing above it. /download shows this worst: it has no
+  // strip AND no price ticker, so the bar was floating 62px down a blank page.
+  useEffect(() => {
+    const el = document.documentElement;
+    el.dataset.strip = hidden ? 'off' : 'on';
+    return () => { delete el.dataset.strip; };
+  }, [hidden]);
+
+  if (hidden) return null;
 
   return (
     <div className={`appstrip ${shown ? 'is-in' : ''}`} role="region" aria-label="Mobile app">
