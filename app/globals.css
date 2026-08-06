@@ -73,6 +73,11 @@
   --easeBounce: cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 /* Override font vars on body where Next.js font-loader variables are available */
+/* The strip is fixed, so nothing below it knows it exists. This gives every page
+   back exactly the height it takes, which preserves each section's existing
+   clearance under the ticker and header instead of eating 34px of it. */
+body { padding-top: var(--appstrip); }
+
 body {
   --font-display: var(--font-sora), 'Sora', system-ui, sans-serif;
   --font-body:    var(--font-inter), 'Inter', system-ui, sans-serif;
@@ -140,8 +145,57 @@ body.urgent::before {
 
 
 /* Marquee — top tape */
-.marquee {
+/* ══════════════════════════════════════════════════════════════════════════
+   APP STRIP  ·  the thin tape above everything
+   ══════════════════════════════════════════════════════════════════════════
+   Vermilion, so it never reads as another row of data. The ticker below it is
+   black and monospaced and is the product talking; this is the one line on the
+   page that is us talking, and separating those two voices by colour is what
+   keeps the promo from feeling like it is pretending to be information.
+
+   Every offset under it derives from --appstrip. Change the height in one
+   place and the ticker, the header and the sticky filter bar all follow. */
+:root { --appstrip: 34px; }
+
+.appstrip {
   position: fixed; top: 0; left: 0; right: 0;
+  height: var(--appstrip); z-index: 900;   /* above the ticker (850) and header (800) */
+  display: flex; align-items: center; overflow: hidden;
+  background: var(--vermilion);
+  color: #FFF6F2;
+  text-decoration: none;
+  font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.appstrip-track { display: flex; width: max-content; animation: appstripSlide 38s linear infinite; will-change: transform; }
+.appstrip:hover .appstrip-track { animation-play-state: paused; }
+.appstrip-half { display: flex; align-items: center; }
+.appstrip-cell { display: inline-flex; align-items: center; gap: 20px; padding-right: 20px; white-space: nowrap; }
+/* A dot, not a bullet character: at 11px a typographic bullet sits off the optical
+   centre and the line looks like it is sagging. */
+.appstrip-dot { width: 3px; height: 3px; border-radius: 50%; background: currentColor; opacity: 0.55; }
+
+/* The CTA is pinned, not part of the scroll: the one thing you might act on should
+   never be mid-journey off the side of the screen. */
+.appstrip-cta {
+  position: absolute; right: 0; top: 0; bottom: 0; z-index: 2;
+  display: flex; align-items: center; gap: 5px;
+  padding: 0 14px 0 64px;
+  font-family: var(--font-display); font-weight: 700; font-size: 11px;
+  letter-spacing: 0.04em; text-transform: none;
+  /* The runway matters more than it looks: at 26% the fade was ~20px and the
+     scrolling line collided with the word "Get" mid-glyph. The gradient needs
+     enough distance to actually finish before the label starts. */
+  background: linear-gradient(90deg, transparent, var(--vermilion) 62%);
+}
+.appstrip-cta svg { width: 13px; height: 13px; transition: transform 200ms var(--ease, ease); }
+.appstrip:hover .appstrip-cta svg { transform: translateX(3px); }
+
+@media (prefers-reduced-motion: reduce) { .appstrip-track { animation: none; } }
+@keyframes appstripSlide { 0% { transform: translate3d(0,0,0); } 100% { transform: translate3d(-50%,0,0); } }
+
+.marquee {
+  position: fixed; top: var(--appstrip); left: 0; right: 0;
   height: 28px; z-index: 850;
   display: flex; align-items: center; overflow: hidden;
   background: var(--black);
@@ -160,7 +214,7 @@ body.urgent::before {
 
 /* Header */
 .header {
-  position: fixed; top: 28px; left: 0; right: 0;
+  position: fixed; top: calc(var(--appstrip) + 28px); left: 0; right: 0;
   height: 64px; z-index: 800;
   display: flex; align-items: center; justify-content: space-between;
   padding: 0 32px;
@@ -966,7 +1020,7 @@ body.urgent::before {
 /* ───────── Sticky filter bar ───────── */
 .filter-bar {
   position: sticky;
-  top: 92px;
+  top: calc(var(--appstrip) + 92px);
   z-index: 600;
   background: rgba(5,5,5,0.85);
   backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
@@ -4524,10 +4578,14 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
   .logo { font-size: 14px; font-weight: 800; letter-spacing: 0.12em; gap: 8px; }
   .logo-mark { width: 15px; height: 18px; }
   /* slimmer top tape on phones; header hangs directly under it */
+  :root { --appstrip: 28px; }
+  .appstrip { font-size: 9px; letter-spacing: 0.06em; }
+  .appstrip-cell { gap: 14px; padding-right: 14px; }
+  .appstrip-cta { font-size: 10px; padding: 0 10px 0 18px; }
   .marquee { height: 20px; font-size: 7px; letter-spacing: 0.01em; }
   .marquee-track { gap: 28px; padding-left: 28px; }
   .marquee-cell { gap: 7px; }
-  .header { top: 20px; }
+  .header { top: calc(var(--appstrip) + 20px); }
   .wallet-pill { font-size: 10px; padding: 4px 9px 4px 4px; gap: 5px; }
   .wallet-pill .addr-dot { width: 14px; height: 14px; }
   .wallet-pill .addr-dot::after { inset: 4px; }
