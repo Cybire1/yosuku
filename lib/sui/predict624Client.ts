@@ -190,11 +190,22 @@ export function fetchMarkets624(): Promise<Market624[]> {
 }
 
 async function fetchMarkets624Uncached(): Promise<Market624[]> {
-  const res = await fetch(`${PREDICT624.indexer}/markets?limit=${MARKETS_FETCH_LIMIT}`, {
-    headers: { accept: 'application/json' },
-  });
-  if (!res.ok) throw new Error(`predict624 indexer /markets ${res.status}`);
-  const rows = (await res.json()) as IndexerMarketRow[];
+  // Via our own route, which discovers markets ON CHAIN. The beta indexer this used to hit
+  // serves 6-24 rows ONLY, so after the 7-29 cutover the board listed markets from the dead
+  // deployment while pricing them with live data. Betting one then failed at execution with
+  // `CommandArgumentError { arg_idx: 0, kind: TypeMismatch }` — arg 0 of mint_exact_quantity is
+  // the market, and a 6-24 ExpiryMarket is simply a different type to the 7-29 package.
+  const res = await fetch('/api/oracles', { headers: { accept: 'application/json' } });
+  if (!res.ok) throw new Error(`markets /api/oracles ${res.status}`);
+  const raw = (await res.json()) as Array<Record<string, unknown>>;
+  const rows = (Array.isArray(raw) ? raw : []).map((r) => ({
+    expiry_market_id: r.oracle_id,
+    expiry: r.expiry,
+    tick_size: r.tick_size,
+    admission_tick_size: r.admission_tick_size,
+    max_admission_leverage: r.max_admission_leverage,
+    checkpoint_timestamp_ms: r.created_ms,
+  })) as unknown as IndexerMarketRow[];
   const now = Date.now();
   const seen = new Set<string>();
   const out: Market624[] = [];

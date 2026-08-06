@@ -36,6 +36,10 @@ interface OracleEntry {
   tick_size: string;
   underlying_asset: string;
   max_admission_leverage?: string;
+  // Added for the browser market list, which used to read the 6-24 indexer directly and needs
+  // these two to snap mint ticks and show the real trading window.
+  admission_tick_size?: string;
+  created_ms?: number;
 }
 
 interface Cached<T> { data: T; ts: number }
@@ -52,7 +56,9 @@ async function fetchMarketRowsOnChain(): Promise<Array<Record<string, unknown>>>
   for (let i = 0; i < 4; i++) {
     const args = [`last: 50`, `filter: { type: "${MARKET_CREATED_TYPE}" }`];
     if (before) args.push(`before: "${before}"`);
-    const q = `{ events(${args.join(', ')}) { pageInfo { hasPreviousPage startCursor } nodes { contents { json } } } }`;
+    // `timestamp` is the creation time, which the browser needs to show a market's real trading
+    // window (expiry − created). The old 6-24 indexer row carried it as checkpoint_timestamp_ms.
+    const q = `{ events(${args.join(', ')}) { pageInfo { hasPreviousPage startCursor } nodes { timestamp contents { json } } } }`;
     const res = await fetch(GRAPHQL_URL, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -64,7 +70,11 @@ async function fetchMarketRowsOnChain(): Promise<Array<Record<string, unknown>>>
     // identical downstream, and one of them silently empties the markets page.
     if (!body || body.errors) throw new Error(`market discovery failed: ${JSON.stringify(body?.errors ?? 'unparseable').slice(0, 160)}`);
     const ev = body.data?.events;
-    for (const n of ev?.nodes ?? []) if (n?.contents?.json) rows.push(n.contents.json);
+    for (const n of ev?.nodes ?? []) {
+      if (!n?.contents?.json) continue;
+      const created = n.timestamp ? Date.parse(n.timestamp) : NaN;
+      rows.push({ ...n.contents.json, created_ms: Number.isFinite(created) ? created : undefined });
+    }
     if (!ev?.pageInfo?.hasPreviousPage || !ev?.pageInfo?.startCursor) break;
     before = ev.pageInfo.startCursor;
   }
@@ -96,6 +106,8 @@ async function fetchMarkets(): Promise<OracleEntry[]> {
       tick_size: String(market.tick_size ?? '1000000000'),
       underlying_asset: 'BTC',
       max_admission_leverage: market.max_admission_leverage != null ? String(market.max_admission_leverage) : undefined,
+      admission_tick_size: market.admission_tick_size != null ? String(market.admission_tick_size) : undefined,
+      created_ms: typeof market.created_ms === 'number' ? market.created_ms : undefined,
     });
   }
 
