@@ -155,7 +155,7 @@ function clamp(v: number, lo: number, hi: number): number {
 const APP_BAND_WORDS = [
   { lead: 'Try it on', tail: 'your phone' },
   { lead: 'Call the next round in', tail: 'ten seconds' },
-  { lead: 'Yosuku for', tail: 'iPhone' },
+  { lead: 'Yosuku for', tail: 'iOS' },
 ];
 
 export default function HomePage() {
@@ -858,7 +858,7 @@ export default function HomePage() {
       {/* ═══════ APP BAND ═══════ */}
       {/* Duplicated cell list: the track translates -50%, so the second copy is
           what makes the loop seamless. Keep the two halves identical. */}
-      <a className="appband" href="/download" aria-label="Try Yosuku on iPhone" data-cursor="hover">
+      <a className="appband" href="/download" aria-label="Try Yosuku on iOS" data-cursor="hover">
         <div className="appband-track">
           {[0, 1].map((half) => (
             <div key={half} className="appband-cell" aria-hidden={half === 1}>
@@ -887,11 +887,11 @@ export default function HomePage() {
             round closes.
           </p>
           <a href="/download" className="ios-cta" data-cursor="hover">
-            See it on iPhone <span className="arr">{'→'}</span>
+            See it on iOS <span className="arr">{'→'}</span>
           </a>
           <div className="ios-meta">
             <span>TestFlight</span>
-            <span>iPhone</span>
+            <span className="nocaps">iOS</span>
             <span>Testnet</span>
           </div>
         </div>

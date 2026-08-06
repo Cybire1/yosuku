@@ -19,7 +19,7 @@ const ROTATE_MS = 7000;
 
 // Statements, not slogans. Each is a fact that survives being read twice.
 const LINES = [
-  'Yosuku is on iPhone',
+  'Yosuku is on iOS',
   'Try our mobile app, limited slots',
 ];
 

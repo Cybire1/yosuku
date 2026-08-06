@@ -5424,7 +5424,10 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
 .dl-meta li { display: flex; flex-direction: column; gap: 5px; }
 /* iOS is a proper noun with fixed casing. The surrounding labels are uppercased for rhythm,
    but running that over "iOS" produces "IOS", which reads as a typo rather than a style. */
-.dl-eyebrow, .dl-nocaps { text-transform: none !important; }
+/* iOS is a proper noun with fixed casing. Several labels here are uppercased for rhythm, and
+   running that over "iOS" produces "IOS", which reads as a typo rather than a style. One class
+   for all of them, since this keeps coming up. */
+.dl-eyebrow, .dl-nocaps, .nocaps { text-transform: none !important; }
 .dl-meta b { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--vermilion); font-weight: 500; }
 .dl-meta span { font-size: 0.86rem; color: var(--gray-500, #8A8A8A); }
 
