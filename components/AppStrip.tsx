@@ -1,42 +1,75 @@
 'use client';
 
-// The thin promo tape above everything else.
+// The thin line above the page.
 //
-// It sits ABOVE the price ticker on purpose. The ticker is data and belongs next to the product;
-// this is an invitation and belongs at the edge of the page, where a reader's eye lands before
-// it starts working. Every fixed offset below it is driven off --appstrip so the stack stays
-// honest at any height, including the slimmer phone value.
+// The first version scrolled two phrases on an endless loop in saturated vermilion caps, which
+// is the visual grammar of an ad bar: repetition is what tells a reader "this is not
+// information, it is someone shouting". It also fought the price ticker directly beneath it,
+// so the top of the site had two moving strips competing.
 //
-// Hidden on /download, because a strip inviting you to the page you are already reading is noise.
+// This one says one thing at a time, quietly, and changes only occasionally. It borrows the
+// ticker's material rather than inventing a louder one, so it reads as part of the furniture,
+// and spends its single point of colour on the one word you might act on. It can be dismissed,
+// which is the difference between a message and a nag; the dismissal sticks.
+import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 
-const CELLS = ['Try our mobile app', 'Limited slots'];
+const KEY = 'yosuku.appstrip.dismissed';
+const ROTATE_MS = 7000;
+
+// Statements, not slogans. Each is a fact that survives being read twice.
+const LINES = [
+  'Yosuku is on iPhone',
+  'Try our mobile app, limited slots',
+];
 
 export default function AppStrip() {
   const pathname = usePathname();
-  if (pathname?.startsWith('/download')) return null;
+  const [gone, setGone] = useState(true); // assume dismissed until storage says otherwise: avoids a flash
+  const [i, setI] = useState(0);
+  const [shown, setShown] = useState(false);
+
+  useEffect(() => {
+    try { setGone(localStorage.getItem(KEY) === '1'); } catch { setGone(false); }
+  }, []);
+
+  useEffect(() => {
+    if (gone) return;
+    const t = setTimeout(() => setShown(true), 60); // let it arrive rather than snap in
+    return () => clearTimeout(t);
+  }, [gone]);
+
+  useEffect(() => {
+    if (gone || LINES.length < 2) return;
+    const id = setInterval(() => setI((n) => (n + 1) % LINES.length), ROTATE_MS);
+    return () => clearInterval(id);
+  }, [gone]);
+
+  // A strip inviting you to the page you are already reading is noise.
+  if (gone || pathname?.startsWith('/download')) return null;
 
   return (
-    <a className="appstrip" href="/download" aria-label="Try the Yosuku mobile app" data-cursor="hover">
-      {/* Two identical halves: the track travels -50%, so the second copy is what hides the seam. */}
-      <div className="appstrip-track">
-        {[0, 1].map((half) => (
-          <div className="appstrip-half" key={half} aria-hidden={half === 1}>
-            {Array.from({ length: 6 }).map((_, i) => (
-              <span className="appstrip-cell" key={i}>
-                <span>{CELLS[i % CELLS.length]}</span>
-                <i className="appstrip-dot" />
-              </span>
-            ))}
-          </div>
-        ))}
-      </div>
-      <span className="appstrip-cta">
-        Get it
+    <div className={`appstrip ${shown ? 'is-in' : ''}`} role="region" aria-label="Mobile app">
+      <a className="appstrip-msg" href="/download" data-cursor="hover">
+        <i className="appstrip-dot" aria-hidden="true" />
+        {/* Keyed so React swaps the node and the CSS animation re-runs on each change. */}
+        <span className="appstrip-line" key={i}>{LINES[i]}</span>
+        <span className="appstrip-go">
+          Get it
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </span>
+      </a>
+      <button
+        className="appstrip-x"
+        onClick={() => { try { localStorage.setItem(KEY, '1'); } catch {} setGone(true); }}
+        aria-label="Dismiss"
+      >
         <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
         </svg>
-      </span>
-    </a>
+      </button>
+    </div>
   );
 }
