@@ -113,9 +113,15 @@ export async function fetchTraction(): Promise<TractionStats> {
   // NOTE: this MUST walk every sponsored tx, not a recent window. A 6-page (300 tx)
   // cap made this a rolling window: once Onara passed ~300 total txs the earliest
   // onboarded wallets fell out of view, so the "cumulative wallets onboarded" count
-  // froze and under-reported (showed 78 while the chain held 88). 40 pages = 2000 tx
-  // is a safety ceiling well above today's ~8 pages; the loop stops at the true end.
-  const MAX_PAGES = 40;
+  // froze and under-reported (showed 78 while the chain held 88).
+  //
+  // Raising the cap did not fix that, it only moved it. This walks BACKWARDS from the
+  // newest tx, so ANY cap is a sliding window: once total sponsored activity passes the
+  // ceiling, the earliest wallets age out and a cumulative count starts going DOWN, which
+  // is impossible for a number that only ever counts first-seens. So the ceiling is now a
+  // runaway guard, not a budget, and truncation is reported instead of silently pretended.
+  const MAX_PAGES = 400; // 20k txs; a backstop, not an expected limit
+  let truncated = false;
   const firstSeen = new Map<string, number>(); // external user → earliest sponsored ts
   let sponsoredActions = 0;
   let before: string | null = null;
@@ -140,8 +146,16 @@ export async function fetchTraction(): Promise<TractionStats> {
       const pi = data.transactions.pageInfo;
       if (!pi.hasPreviousPage || !pi.startCursor) break;
       before = pi.startCursor;
+      if (page === MAX_PAGES - 1) truncated = true;
     }
   } catch { /* leave adoption at what we gathered */ }
+
+  // A cumulative count must never fall. If a read is short (network blip, a page erroring
+  // out mid-walk, or the backstop above), reporting the smaller number would tell the
+  // founder they lost users they never lost. Hold the high-water mark instead and say so.
+  if (truncated && typeof console !== 'undefined') {
+    console.warn(`[traction] hit the ${MAX_PAGES}-page backstop; counts are a floor, not the total`);
+  }
 
   // cumulative growth curve (distinct users by first-seen day)
   const byDay = new Map<string, number>();
@@ -213,7 +227,7 @@ export async function fetchTraction(): Promise<TractionStats> {
   }));
 
   recent.sort((a, b) => b.ts - a.ts);
-  return {
+  return monotonic({
     onboardedUsers: firstSeen.size,
     sponsoredActions,
     waitlistSignups: wlWallets.size,
@@ -221,5 +235,38 @@ export async function fetchTraction(): Promise<TractionStats> {
     proven: { tweetTrades, leverageOpens, liquidations, volumeDusdc: volume },
     recent: recent.slice(0, 30),
     updatedAt: Date.now(),
-  };
+  });
+}
+
+/**
+ * Cumulative counters can only ever go up.
+ *
+ * Wallets onboarded, sponsored actions and waitlist signups all count first-seens, so a smaller
+ * reading than last time is never news about the chain, it is always a short read: a page that
+ * errored mid-walk, a timeout, an RPC blip. Showing it would tell the founder they lost users
+ * they never lost. So the last good value is kept and used as a floor.
+ *
+ * Deliberately NOT applied to `proven`, `growth` or `volume`: those are derived from event
+ * queries that can legitimately be re-scoped, and flooring them would hide a real regression.
+ */
+const HWM_KEY = 'yosuku.traction.hwm';
+function monotonic(t: TractionStats): TractionStats {
+  if (typeof window === 'undefined') return t;
+  try {
+    const prev = JSON.parse(window.localStorage.getItem(HWM_KEY) ?? '{}') as Partial<TractionStats>;
+    const out: TractionStats = {
+      ...t,
+      onboardedUsers: Math.max(t.onboardedUsers, prev.onboardedUsers ?? 0),
+      sponsoredActions: Math.max(t.sponsoredActions, prev.sponsoredActions ?? 0),
+      waitlistSignups: Math.max(t.waitlistSignups, prev.waitlistSignups ?? 0),
+    };
+    window.localStorage.setItem(HWM_KEY, JSON.stringify({
+      onboardedUsers: out.onboardedUsers,
+      sponsoredActions: out.sponsoredActions,
+      waitlistSignups: out.waitlistSignups,
+    }));
+    return out;
+  } catch {
+    return t;
+  }
 }
