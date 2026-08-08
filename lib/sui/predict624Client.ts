@@ -45,6 +45,7 @@ export const NEG_INF_TICK = 0n;
 // 6-24 that day because its Block Scholes feeds froze and it could no longer price a bet.
 // A branch is REDEPLOYED IN PLACE, so never copy these from an older note — re-read:
 //   gh api "repos/MystenLabs/deepbookv3/contents/packages/predict/deployment/deployment.testnet.json?ref=predict-testnet-7-29"
+const MAX_U64 = 18_446_744_073_709_551_615n;
 const PREDICT_PKG = '0xfe742239a3b033f7d52ed5275f238c17d27498ca0ee5ea5672ea732eb3f4dbbb';
 
 export const PREDICT624 = {
@@ -891,9 +892,15 @@ export async function quoteOddsCents624(p: {
       target: `${PREDICT624.predictPackage}::expiry_market::mint_exact_amount`,
       arguments: [
         tx.object(p.marketId), tx.object(p.wrapperId), authMint, tx.object(PREDICT624.protocolConfig), pricer,
+        // 7-29 order (predict/sources/expiry_market.move):
+        //   lower_tick, higher_tick, max_premium, min_quantity, leverage, max_cost
+        // max_cost is NEW on this venue and was being omitted, so the call arrived with five
+        // u64s where six are required. The whole PTB failed to resolve, the quote returned
+        // nothing, and every price on the board fell back to a dash.
         tx.pure.u64(lower), tx.pure.u64(higher), tx.pure.u64(amountMicro),
         tx.pure.u64(0n), // no slippage floor: this is price discovery, not an order
         tx.pure.u64(1_000_000_000n),
+        tx.pure.u64(MAX_U64), // uncapped: a quote must never abort on cost, it is only reading a price
         tx.object(PREDICT624.accumulatorRoot), tx.object(PREDICT624.clock),
       ],
     });
