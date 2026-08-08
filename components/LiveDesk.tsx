@@ -398,7 +398,9 @@ export default function LiveDesk() {
   );
 
   return (
-    <section className="mt-2 mb-4">
+    // `live-desk` is the hook the light-mode overrides key off: this component is authored
+    // dark (white text on white/[0.0x] washes) and needs its tokens repointed on cream.
+    <section className="live-desk mt-2 mb-4">
 
       <div className="group/desk relative rounded-xl border border-white/[0.1] bg-bg overflow-hidden">
         <div className="grid">

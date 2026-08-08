@@ -4982,7 +4982,7 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
    card height = container height exactly and `scroll-snap-align: start`
    lands every swipe on a clean screen. */
 .feed-snap {
-  position: fixed; left: 0; right: 0; top: 92px; bottom: 0;
+  position: fixed; left: 0; right: 0; top: calc(92px + var(--appstrip)); bottom: 0;
   overflow-y: auto;
   scroll-snap-type: y mandatory;
   overscroll-behavior-y: contain;
@@ -4991,9 +4991,9 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
 .feed-snap::-webkit-scrollbar { display: none; }
 .feed-card { height: 100%; scroll-snap-align: start; scroll-snap-stop: always; }
 /* non-scrolling sibling overlay for progress ticks / hint / desktop vignette */
-.feed-chrome { position: fixed; left: 0; right: 0; top: 92px; bottom: 0; pointer-events: none; z-index: 10; }
+.feed-chrome { position: fixed; left: 0; right: 0; top: calc(92px + var(--appstrip)); bottom: 0; pointer-events: none; z-index: 10; }
 @media (max-width: 720px) {
-  .feed-snap, .feed-chrome { top: 66px; } /* slim mobile marquee (20) + header (46) */
+  .feed-snap, .feed-chrome { top: calc(66px + var(--appstrip)); } /* slim mobile marquee (20) + header (46) */
 }
 
 /* ───────── Word markets (/words) ───────── */
@@ -5480,3 +5480,18 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
   .dl-phone { max-width: 250px; padding: 8px; border-radius: 38px; }
   .dl-phone-screen { border-radius: 31px; }
 }
+
+
+/* ───────── Live Desk in light mode ─────────
+   The desk is authored dark: white text on bg-white/[0.0x] washes. On cream that produces a
+   grey slab with grey type (the stake box read as disabled). Re-point the tokens to ink so the
+   panel is paper with dark text, rather than a dark-theme panel dropped on a light page. */
+[data-theme="light"] .live-desk .text-white { color: #1A1613 !important; }
+[data-theme="light"] .live-desk .text-white\/85,
+[data-theme="light"] .live-desk .text-white\/80,
+[data-theme="light"] .live-desk .text-white\/70 { color: rgba(26,22,19,0.72) !important; }
+[data-theme="light"] .live-desk .text-white\/45,
+[data-theme="light"] .live-desk .text-white\/40,
+[data-theme="light"] .live-desk .text-white\/35 { color: rgba(26,22,19,0.5) !important; }
+[data-theme="light"] .live-desk [class*="bg-white/["] { background: rgba(20,18,16,0.035) !important; }
+[data-theme="light"] .live-desk [class*="border-white/["] { border-color: rgba(20,18,16,0.12) !important; }
