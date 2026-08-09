@@ -3,6 +3,8 @@
 import { useEffect, useState, useCallback, useMemo, type ReactNode } from 'react';
 import EquityCurve from '@/components/EquityCurve';
 import { useCurrentAccount, useSuiClient, useSignPersonalMessage, ConnectButton } from '@mysten/dapp-kit';
+import PlaybookVault from '@/components/PlaybookVault';
+import { blobIdFromU256 } from '@/lib/sui/strategySealClient';
 import { Share2, X, Lock, ArrowRight, Sparkles } from 'lucide-react';
 import { motion } from 'framer-motion';
 import Header from '@/components/Header';
@@ -44,7 +46,7 @@ import {
 } from '@/lib/sui/strategyClient';
 import { fetchMemoryMarket, fetchAllMemoryListings, buildBuyPassTx, readMemory, type MemoryMarketInfo, type MemoryListingCard } from '@/lib/sui/memoryMarketClient';
 import LiveDesk from '@/components/LiveDesk';
-import { DUSDC_MULTIPLIER } from '@/lib/sui/constants';
+import { DUSDC_MULTIPLIER, DUSDC_TYPE } from '@/lib/sui/constants';
 import { getSponsorStatus, type SponsorStatus } from '@/lib/sponsor';
 import { useSmartSubmit } from '@/lib/sui/useSmartSubmit';
 
@@ -1096,6 +1098,7 @@ function CopyDrawer(props: {
   readingMemory: boolean;
   memoryText: string | null;
 }) {
+  const { mutateAsync: signPersonalMessage } = useSignPersonalMessage();
   const { card, sub, address, sponsor, currentVaultDusdc, walletDusdcNum, budget, setBudget, busy, canceling, onConfirm, onPause, onShare, onClose, memoryInfo, onBuyMemory, buyingMemory, onReadMemory, readingMemory, memoryText } = props;
   const tier = tierOf(card);
   const maxTarget = currentVaultDusdc + Math.max(0, walletDusdcNum - card.subFee);
@@ -1172,8 +1175,23 @@ function CopyDrawer(props: {
               {card.hasMemory && (
                 <a href={SUISCAN_ACC(card.memoryAccount)} target="_blank" rel="noreferrer" className="font-mono text-[10px] text-white/40 hover:text-white transition-colors">verify memory ↗</a>
               )}
-              {card.hasCapsule && <span className="font-mono text-[10px] text-white/40">▤ Saved playbook</span>}
             </div>
+          </div>
+        )}
+        {/* The playbook was a dead label until the Seal gate shipped: it said a capsule existed
+            and gave nobody a way to open it. Now it is the actual vault. */}
+        {card.hasCapsule && (
+          <div className="mb-4">
+            <PlaybookVault
+              strategyId={card.id}
+              blobId={blobIdFromU256(card.capsuleBlob)}
+              subscriptionId={sub?.id ?? null}
+              coinType={DUSDC_TYPE}
+              role={address && address.toLowerCase() === card.creator.toLowerCase() ? 'creator' : sub ? 'subscriber' : 'visitor'}
+              walletAddress={address}
+              signPersonalMessage={(a) => signPersonalMessage(a)}
+              subFee={card.subFee}
+            />
           </div>
         )}
         {memoryInfo && (

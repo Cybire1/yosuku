@@ -16,7 +16,7 @@
 
 import { SealClient, SessionKey } from '@mysten/seal';
 import { Transaction } from '@mysten/sui/transactions';
-import { fromHex } from '@mysten/sui/utils';
+import { fromHex, toBase64, fromBase64 } from '@mysten/sui/utils';
 import { grpc } from './modernClients';
 
 /** The published gate. Seal derives the key namespace from THIS id, so re-publishing the policy
@@ -178,4 +178,31 @@ export async function readOwnPlaybook(opts: {
   const txBytes = await tx.build({ client: grpc, onlyTransactionKind: true });
   const dec = await sealClient().decrypt({ data: ct, sessionKey, txBytes });
   return new TextDecoder().decode(dec);
+}
+
+
+// ── blob id <-> u256 ──
+//
+// `Strategy.capsule_blob` is a u256 on chain; Walrus hands back a base64url string. Both are the
+// same 32 bytes, so they convert cleanly, but nothing did that conversion until now — which is
+// why the memory market carried a hardcoded listing-to-blob map instead of reading the chain.
+
+const b64url = (b: Uint8Array) => toBase64(b).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+/** u256 decimal string (as stored on the Strategy) -> Walrus blob id. "0" means none. */
+export function blobIdFromU256(dec: string): string | null {
+  if (!dec || dec === '0') return null;
+  let v = BigInt(dec);
+  const out = new Uint8Array(32);
+  for (let i = 31; i >= 0; i--) { out[i] = Number(v & 0xffn); v >>= 8n; }
+  return b64url(out);
+}
+
+/** Walrus blob id -> u256, for writing back via update_strategy. */
+export function u256FromBlobId(blobId: string): bigint {
+  const pad = blobId.replace(/-/g, '+').replace(/_/g, '/');
+  const bytes = fromBase64(pad + '='.repeat((4 - (pad.length % 4)) % 4));
+  let v = 0n;
+  for (const b of bytes) v = (v << 8n) | BigInt(b);
+  return v;
 }
