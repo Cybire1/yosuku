@@ -216,3 +216,37 @@ export async function readMemory(opts: {
   const dec = await sealClient.decrypt({ data: ct, sessionKey, txBytes });
   return new TextDecoder().decode(dec);
 }
+
+
+// ── Attested or not ──
+//
+// This is the whole difference between memory worth paying for and someone's JSON file. A
+// listing whose strategy runs under Yosuku's sealed enclave address has a track record that was
+// produced by attested code and cannot be quietly rewritten; anything else is an unverified
+// claim by a stranger. The check is a plain address comparison against a known constant, so a
+// buyer can confirm it themselves rather than trusting a badge we render.
+
+/** Yosuku's sealed Nitro enclave. Re-exported so the badge and the strategy layer can never
+ *  drift onto different addresses. */
+export { ATTESTED_AGENT } from './strategyClient';
+
+export type Provenance = 'attested' | 'unverified';
+
+/** Is this listing's memory produced by the attested enclave agent? */
+export function provenanceOf(agentAddress: string | null | undefined, attestedAgent: string): Provenance {
+  if (!agentAddress) return 'unverified';
+  return agentAddress.toLowerCase() === attestedAgent.toLowerCase() ? 'attested' : 'unverified';
+}
+
+/** What to tell a buyer, in their words rather than ours. */
+export function provenanceCopy(p: Provenance): { label: string; detail: string } {
+  return p === 'attested'
+    ? {
+        label: 'Attested agent',
+        detail: 'This memory was produced inside Yosuku\'s sealed enclave. The code that wrote it is measured on-chain, so the track record cannot be rewritten after the fact.',
+      }
+    : {
+        label: 'Unverified',
+        detail: 'Anyone can list memory. Nothing here proves who produced it or that the record is complete. Read it as a claim, not as a receipt.',
+      };
+}
