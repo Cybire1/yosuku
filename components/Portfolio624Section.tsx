@@ -336,7 +336,9 @@ export default function Portfolio624Section() {
 
   return (
     <section>
-      <SectionHeader number="00" title="New venue" />
+      {/* "Venue" is our word, not the user's. They have a betting account and some older money;
+          which on-chain deployment each sits on is our history, not their concern. */}
+      <SectionHeader number="00" title="Your betting account" />
 
       <div className="group relative border border-white/[0.08] rounded bg-bg">
         <Crosshairs />
@@ -419,7 +421,7 @@ export default function Portfolio624Section() {
             <div className="divide-y divide-white/[0.05]">
               {positions.length === 0 && history.length === 0 ? (
                 <div className="font-mono text-[11px] uppercase tracking-[0.2em] text-white/30 px-5 py-8 text-center">
-                  No activity on the new venue yet —{' '}
+                  No bets here yet —{' '}
                   <a href="/beta" className="text-vermilion hover:text-white transition-colors normal-case tracking-normal">make your first call →</a>
                 </div>
               ) : (
@@ -514,7 +516,7 @@ export default function Portfolio624Section() {
                 Winners are paid out automatically — no need to claim. Settled on-chain at close · payouts land in your trading account · testnet.
               </span>
               <a href="/beta" className="font-mono text-[10px] uppercase tracking-[0.14em] text-vermilion hover:text-white transition-colors" data-cursor="hover">
-                Trade on the new venue →
+                Place a bet →
               </a>
             </div>
           </>

@@ -27,7 +27,7 @@ const steps: TutorialStep[] = [
   },
   {
     title: 'Your trading account',
-    description: 'Your bets settle into an on-chain trading account that only your wallet can withdraw from. Connect, create it in one tap, fund it with testnet DUSDC — then betting is one tap. You sign your own transactions on the new venue.',
+    description: 'Your bets settle into an on-chain trading account that only your wallet can withdraw from. Connect, create it in one tap, fund it with testnet DUSDC — then betting is one tap. You sign every transaction yourself.',
   },
   {
     title: 'Your Trading Balance',

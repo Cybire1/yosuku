@@ -32,6 +32,7 @@ import { positionsToCSV, downloadCSV } from '@/lib/csvExport';
 import { computeBadges } from '@/lib/badges';
 import BadgeDisplay from '@/components/BadgeDisplay';
 import { loadPrivateBetTickets, privateBalanceDusdc, type PrivateBetTicket } from '@/lib/privateBet';
+import PrivateClaims from '@/components/PrivateClaims';
 import { computeTradingAccountSnapshot } from '@/lib/tradingAccount';
 
 export default function PortfolioPage() {
@@ -284,11 +285,13 @@ export default function PortfolioPage() {
             {/* ── New venue (DeepBook Predict 6-24) — balance, open positions, settled history ── */}
             <Portfolio624Section />
 
-            {/* ── Previous venue — everything below runs on the original deployment ── */}
+            {/* Everything below still lives on the original deployment. Users did not choose to
+                have two balances, so name the money and say plainly that it is reachable, rather
+                than labelling the split with our deployment history. */}
             <div className="flex items-center gap-3 pt-2">
-              <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/40">Previous venue</span>
+              <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/40">Earlier balance</span>
               <div className="h-px flex-1 bg-white/10" />
-              <span className="font-mono text-[10px] text-white/30">your earlier bets &amp; balances below</span>
+              <span className="font-mono text-[10px] text-white/30">from before the upgrade · withdraw anytime</span>
             </div>
 
             {/* Ledger Plate — stats overview */}
@@ -450,6 +453,13 @@ export default function PortfolioPage() {
                 <canvas ref={equityRef} className="w-full h-[200px]" />
               </div>
             </section>
+
+            {privateTickets.length > 0 && (
+              <section>
+                <SectionHeader number="02" title="Private Positions" />
+                <PrivateClaims claims={privateTickets} owner={address} />
+              </section>
+            )}
 
             {(leverageOrders.length > 0 || leveragePositions.length > 0) && (
               <section>
