@@ -6,15 +6,15 @@
 // the same no-divert guarantee as tweet-trades: every position the agent opens is owned
 // by the subscriber and force-pays them on exit, so the creator can never divert a cent.
 //
-// Reads run entirely off JSON-RPC via the GraphQL/gRPC backbone (see modernClients):
+// Reads use gRPC for state/simulation and cursor-paginated GraphQL for events
+// (Sui's core gRPC surface does not expose event discovery):
 //   • StrategyListed / StrategySubscribed events  → the catalogue + subscribe history
 //   • social_vault::CopyTraded events             → real executed copy-trades (volume,
 //                                                    distinct subscribers, last-active)
 //   • getObject(strategyId)                       → current on-chain state (subscribers,
 //                                                    fee, caps, capsule/memory pointers)
-import { suiJsonRpc } from './jsonRpc';
 import { Transaction } from '@mysten/sui/transactions';
-import { gql, readClient, simulateReturnU64s } from './modernClients';
+import { GRAPHQL_URL, readClient, simulateReturnU64s } from './modernClients';
 import { DUSDC_TYPE, DUSDC_MULTIPLIER, DUSDC_DECIMALS } from './constants';
 import { NET } from './network';
 
@@ -301,38 +301,49 @@ export interface AgentRow {
 
 // ─── event reads (timestamps + digests need the raw GraphQL surface) ───
 
-const EVENTS_Q = `query Ev($t: String!, $last: Int!) {
-  events(last: $last, filter: { type: $t }) {
+const EVENTS_Q = `query Ev($t: String!, $last: Int!, $before: String) {
+  events(last: $last, before: $before, filter: { type: $t }) {
+    pageInfo { hasPreviousPage startCursor }
     nodes { timestamp sender { address } contents { json } transaction { digest } }
   }
 }`;
 
 type EvNode = { timestamp: string | null; sender: { address: string }; contents: { json: Record<string, unknown> }; transaction: { digest: string } | null };
-
-
-// JSON-RPC fallback — testnet GraphQL event indexing lags/windows (returns 0 StrategyListed while
-// these events are live on-chain). suix_queryEvents is the reliable source. (JSON-RPC sunsets
-// ~Jul 2026; revisit once GraphQL event indexing is dependable.)
-async function jsonRpcEvents(type: string, last: number): Promise<EvNode[]> {
-  try {
-    const res = await suiJsonRpc<{ data?: Array<Record<string, any>> }>('suix_queryEvents', [{ MoveEventType: type }, null, Math.min(50, last), true]);
-    return ((res?.data ?? []) as Array<Record<string, any>>).map((e) => ({
-      timestamp: e.timestampMs ? new Date(Number(e.timestampMs)).toISOString() : null,
-      sender: { address: e.sender ?? '' },
-      contents: { json: e.parsedJson ?? {} },
-      transaction: { digest: e.id?.txDigest ?? null },
-    }));
-  } catch {
-    return [];
-  }
-}
+type EventPage = {
+  events: {
+    pageInfo?: { hasPreviousPage?: boolean; startCursor?: string | null };
+    nodes: EvNode[];
+  };
+};
 
 async function queryEvents(type: string, last = 100): Promise<EvNode[]> {
-  try {
-    const { data, errors } = await gql.query<{ events: { nodes: EvNode[] } }>({ query: EVENTS_Q, variables: { t: type, last: Math.min(last, 50) } });
-    if (!errors?.length && data?.events?.nodes?.length) return data.events.nodes.slice().reverse(); // newest first
-  } catch { /* fall through to JSON-RPC */ }
-  return jsonRpcEvents(type, last); // GraphQL empty/errored → reliable JSON-RPC
+  const out: EvNode[] = [];
+  let before: string | null = null;
+  const pages = Math.min(20, Math.max(1, Math.ceil(last / 50)));
+  for (let page = 0; page < pages && out.length < last; page++) {
+    try {
+      const response = await fetch(GRAPHQL_URL, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          query: EVENTS_Q,
+          variables: { t: type, last: Math.min(50, last - out.length), before },
+        }),
+      });
+      if (!response.ok) break;
+      const body = (await response.json()) as { data?: EventPage | null; errors?: unknown[] };
+      const data = body.data;
+      const errors = body.errors;
+      if (errors?.length || !data?.events) break;
+      out.push(...(data.events.nodes ?? []).slice().reverse());
+      const info: { hasPreviousPage?: boolean; startCursor?: string | null } | undefined = data.events.pageInfo;
+      if (!info?.hasPreviousPage || !info.startCursor) break;
+      before = info.startCursor;
+    } catch {
+      break;
+    }
+  }
+  return out.slice(0, last);
 }
 
 function num(v: unknown): number {
@@ -530,15 +541,68 @@ interface StrategyFields {
 const ZERO_ADDR = '0x0000000000000000000000000000000000000000000000000000000000000000';
 const isZeroAddr = (a: string) => !a || a === '0x0' || a === ZERO_ADDR;
 
+
+/**
+ * The catalogue, read from OBJECTS rather than events.
+ *
+ * This used to discover strategies from StrategyListed events, and that quietly broke the whole
+ * page. Sui's testnet GraphQL event index is a ROLLING WINDOW: it currently starts around
+ * 2026-07-14 and the floor advances in real time. Every strategy here was listed between
+ * 2026-06-16 and 2026-07-13, so the event query returns an empty page and `ids.length === 0`
+ * short-circuited the function to []. Meanwhile 11 Strategy objects sit on chain, four of them
+ * with subscribers.
+ *
+ * The events are not gone from the chain, only from the index (fetch the listing digest directly
+ * and the event is right there). But the object index is NOT windowed, so objects are the honest
+ * source of truth for "what exists". They also carry every field a card needs, which removes the
+ * per-id JSON-RPC getObject hydration this used to do afterwards.
+ */
+async function queryStrategyObjects(): Promise<Array<{ id: string; fields: StrategyFields }>> {
+  const QUERY = `query Strategies($t: String!, $after: String) {
+    objects(first: 50, after: $after, filter: { type: $t }) {
+      pageInfo { hasNextPage endCursor }
+      nodes { address asMoveObject { contents { json } } }
+    }
+  }`;
+  const out: Array<{ id: string; fields: StrategyFields }> = [];
+  let after: string | null = null;
+  // Paginate to the true end. A cap here would recreate the exact bug this replaces.
+  for (let page = 0; page < 40; page++) {
+    try {
+      const response = await fetch(GRAPHQL_URL, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ query: QUERY, variables: { t: `${STRATEGY_PKG}::strategy::Strategy`, after } }),
+      });
+      const json = (await response.json()) as {
+        data?: {
+          objects?: {
+            pageInfo?: { hasNextPage?: boolean; endCursor?: string | null };
+            nodes?: Array<{ address?: string; asMoveObject?: { contents?: { json?: StrategyFields } } }>;
+          };
+        };
+      };
+      const objs = json?.data?.objects;
+      if (!objs) break;
+      for (const n of objs.nodes ?? []) {
+        const f = n?.asMoveObject?.contents?.json;
+        if (f && n.address) out.push({ id: String(n.address), fields: f });
+      }
+      if (!objs.pageInfo?.hasNextPage || !objs.pageInfo.endCursor) break;
+      after = objs.pageInfo.endCursor;
+    } catch { break; }
+  }
+  return out;
+}
+
 /**
  * The full marketplace: every listed strategy, merged with its current on-chain state
  * and the live copy-trade performance derived from CopyTraded events.
  */
 export async function fetchStrategies(): Promise<StrategyCard[]> {
-  // 1. the catalogue — every StrategyListed event gives us a strategy id to hydrate.
-  const listed = await queryEvents(STRATEGY_LISTED, 100);
-  const ids = Array.from(new Set(listed.map((n) => String(n.contents?.json?.strategy ?? '')).filter(Boolean)));
-  if (ids.length === 0) return [];
+  // 1. the catalogue, from objects. See queryStrategyObjects for why not events.
+  const objs = await queryStrategyObjects();
+  if (objs.length === 0) return [];
 
   // 2. copy-trades, grouped by strategy, for live performance.
   const trades = await fetchCopyTrades(200);
@@ -550,10 +614,10 @@ export async function fetchStrategies(): Promise<StrategyCard[]> {
   }
 
   // 3. hydrate each strategy's current state and merge.
-  const cards = await Promise.all(ids.map(async (id): Promise<StrategyCard | null> => {
+  // The object query already returned every field, so there is nothing left to hydrate. That
+  // also drops a per-strategy JSON-RPC round trip on a deprecated surface.
+  const cards = await Promise.all(objs.map(async ({ id, fields: f }): Promise<StrategyCard | null> => {
     try {
-      const res = await readClient.getObject({ id, options: { showContent: true } });
-      const f = res.data?.content?.fields as unknown as StrategyFields | null;
       if (!f) return null;
       const ts = byStrategy.get(id) ?? [];
       const subs = new Set(ts.map((t) => t.subscriber));
