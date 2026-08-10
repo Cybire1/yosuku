@@ -124,6 +124,11 @@ type Tier = { key: 'new' | 'active' | 'settled'; label: string; tone: 'gray' | '
 function tierOf(c: StrategyCard): Tier {
   if (c.realizedTrades > 0) return { key: 'settled', label: `Settled · ${c.realizedTrades} closed`, tone: 'white' };
   if (c.copyTrades >= 1) return { key: 'active', label: `Active · ${c.copyTrades} copy-trades`, tone: 'vermilion' };
+  // An agent with copiers is not "new". Its trade history lives in CopyTraded events, and the
+  // testnet event index is a rolling window that has already pruned every one of them, so the
+  // record is unreadable rather than absent. Saying "no track record yet" to someone looking at
+  // six copiers claims nothing ever happened, which is the opposite of true.
+  if (c.subscribers > 0) return { key: 'new', label: `${c.subscribers} copying · history not indexed`, tone: 'gray' };
   return { key: 'new', label: 'New · no track record yet', tone: 'gray' };
 }
 
@@ -451,7 +456,7 @@ export default function StrategiesPage() {
           </h1>
         </div>
 
-        {/* ── THE LIVE DESK — copy-trading on the NEW venue (vault624 on predict-testnet-6-24) ── */}
+        {/* ── THE LIVE DESK — copy-trading on vault624 for predict-testnet-7-29 ── */}
         {/* pb keeps the manage chips clear of the fixed mobile bottom nav */}
         <div id="live-desk" className="pb-24 sm:pb-0">
           <LiveDesk />
@@ -559,7 +564,7 @@ export default function StrategiesPage() {
                             )}
                           </>
                         ) : (
-                          <div className="font-mono text-[11px] text-white/40 uppercase tracking-[0.14em] pt-2.5">New · no track record yet</div>
+                          <div className="font-mono text-[11px] text-white/40 uppercase tracking-[0.14em] pt-2.5">{tierOf(card).label}</div>
                         )}
                       </div>
 
