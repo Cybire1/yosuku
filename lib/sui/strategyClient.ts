@@ -168,6 +168,11 @@ export interface StrategySubscription {
 }
 
 const STRATEGIES_URL = 'https://yosuku.xyz/strategies';
+export const LIVE_STRATEGY_URL = `${STRATEGIES_URL}?copy=live&source=x`;
+
+export function strategyRecordUrl(strategyId: string): string {
+  return `${STRATEGIES_URL}?strategy=${encodeURIComponent(strategyId)}&source=x`;
+}
 
 export function strategyProofCount(card: StrategyCard): number {
   return card.copyTrades + (card.hasMemory ? 1 : 0) + (card.hasCapsule ? 1 : 0);

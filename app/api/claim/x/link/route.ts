@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { readSession } from '@/lib/claimOAuth';
+import { xLinkMessage } from '@/lib/xLink';
+import { verifyPersonalMessageSignature } from '@mysten/sui/verify';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,9 +23,16 @@ export async function POST(req: NextRequest) {
   const sess = readSession((await cookies()).get('x_sess')?.value);
   if (!sess?.authorId) return NextResponse.json({ ok: false, reason: 'sign in with X first' }, { status: 401 });
 
-  const { wallet } = await req.json().catch(() => ({}));
-  if (!/^0x[0-9a-fA-F]{6,66}$/.test(String(wallet || ''))) return NextResponse.json({ ok: false, reason: 'invalid wallet' }, { status: 400 });
+  const { wallet, signature } = await req.json().catch(() => ({}));
+  if (!/^0x[0-9a-fA-F]{64}$/.test(String(wallet || ''))) return NextResponse.json({ ok: false, reason: 'invalid wallet' }, { status: 400 });
+  if (typeof signature !== 'string' || !signature) return NextResponse.json({ ok: false, reason: 'wallet signature required' }, { status: 401 });
   if (!RELAY) return NextResponse.json({ ok: false, reason: 'relay not configured' }, { status: 500 });
+
+  try {
+    await verifyPersonalMessageSignature(xLinkMessage(sess.authorId, String(wallet)), signature, { address: String(wallet).toLowerCase() });
+  } catch {
+    return NextResponse.json({ ok: false, reason: 'wallet signature did not match' }, { status: 401 });
+  }
 
   try {
     const r = await fetch(`${RELAY}/claim/link`, {

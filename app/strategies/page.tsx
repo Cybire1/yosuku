@@ -47,6 +47,7 @@ import {
 } from '@/lib/sui/strategyClient';
 import { fetchMemoryMarket, fetchAllMemoryListings, buildBuyPassTx, readMemory, type MemoryMarketInfo, type MemoryListingCard } from '@/lib/sui/memoryMarketClient';
 import LiveDesk from '@/components/LiveDesk';
+import StrategyXBar from '@/components/StrategyXBar';
 import { DUSDC_MULTIPLIER, DUSDC_TYPE } from '@/lib/sui/constants';
 import { getSponsorStatus, type SponsorStatus } from '@/lib/sponsor';
 import { useSmartSubmit } from '@/lib/sui/useSmartSubmit';
@@ -463,6 +464,7 @@ export default function StrategiesPage() {
           <h1 className="font-display font-[800] text-[1.9rem] leading-[1.0] md:text-[2.6rem] xl:text-[3rem] text-white tracking-tight max-w-3xl">
             Copy a strategy.<br /><span className="text-white/60">Keep your money.</span>
           </h1>
+          <StrategyXBar />
         </div>
 
         {/* ── THE LIVE DESK — copy-trading on vault624 for predict-testnet-7-29 ── */}

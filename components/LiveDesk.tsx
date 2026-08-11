@@ -1,6 +1,6 @@
 'use client';
 
-// ── The Live Desk — join/copy flow for yosuku_spike::vault624 (DeepBook Predict 6-24) ──
+// ── The Live Desk — join/copy flow for yosuku_spike::vault624 (DeepBook Predict 7-29) ──
 //
 // One attested desk: the enclave agent trades subscribers' pooled-but-ledgered
 // DUSDC under per-user hard caps. Deposits credit YOUR ledger entry; the
@@ -14,8 +14,8 @@
 //   · The moment after — joining flips to a living "copying · watching" state.
 //   · Decision-moment honesty — wins AND losses, right next to the button.
 //
-// TX PATH: sponsored-first via useSmartSubmit — the yosuku-vault-624 Onara policy
-// allowlists vault624 deposit/withdraw/subscribe/cancel, so a zero-SUI wallet can
+// TX PATH: sponsored-first via useSmartSubmit — the yosuku-vault-729 Onara policy
+// allowlists deposit/withdraw/risk-bounded subscribe/cancel, so a zero-SUI wallet can
 // join gas-free; falls back to wallet payment only on a sponsor-side decline.
 
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
@@ -30,6 +30,8 @@ import {
   glyphFromAddress,
   SUISCAN_TX,
   SUISCAN_ACC,
+  LIVE_STRATEGY_URL,
+  xIntentUrl,
 } from '@/lib/sui/strategyClient';
 import {
   VAULT624,
@@ -41,15 +43,18 @@ import {
   buildJoinDesk624,
   fetchLedger624,
   fetchSub624,
+  fetchRisk624,
   fetchVaultTrades624,
   friendlyVault624Error,
   type Sub624,
+  type Risk624,
   type VaultEvent624,
 } from '@/lib/sui/vault624Client';
 import { grpc } from '@/lib/sui/modernClients';
 import { useSmartSubmit } from '@/lib/sui/useSmartSubmit';
 import { DUSDC_MULTIPLIER } from '@/lib/sui/constants';
 import EquitySparkline, { type EquityPoint } from '@/components/EquitySparkline';
+import { Share2 } from 'lucide-react';
 
 const M = DUSDC_MULTIPLIER;
 const DEFAULT_CAP = 2; // suggested per-fill guardrail — always user-editable
@@ -94,6 +99,7 @@ export default function LiveDesk() {
 
   const [ledger, setLedger] = useState(0);
   const [sub, setSub] = useState<Sub624 | null>(null);
+  const [risk, setRisk] = useState<Risk624 | null>(null);
   const [feed, setFeed] = useState<VaultEvent624[]>([]);
   const [feedLoaded, setFeedLoaded] = useState(false);
   const [history, setHistory] = useState<VaultEvent624[]>([]); // full event history — the ALL-TIME record
@@ -102,12 +108,31 @@ export default function LiveDesk() {
   const [withdrawStr, setWithdrawStr] = useState('');
   const [capStr, setCapStr] = useState('');           // guardrail — empty, placeholder suggests 2
   const [levCap, setLevCap] = useState(1);            // leverage ceiling the agent may use: 1× | 2×
+  const [riskPreset, setRiskPreset] = useState<'guarded' | 'balanced' | 'active'>('balanced');
   const [showGuardrails, setShowGuardrails] = useState(false);
   const [joinOpen, setJoinOpen] = useState(false); // pre-join footprint stays small until the user opts in
   const [manage, setManage] = useState<'add' | 'withdraw' | 'caps' | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [fauceting, setFauceting] = useState(false);
   const [joinedFlash, setJoinedFlash] = useState<{ digest: string | null } | null>(null);
+
+  // X links open the review state, never execute it. Copying still requires the connected
+  // wallet to review its amount and limits, then sign the join transaction.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('copy') !== 'live') return;
+    setJoinOpen(true);
+    requestAnimationFrame(() => document.getElementById('live-desk')?.scrollIntoView({ block: 'start' }));
+  }, []);
+
+  const shareOnX = useCallback(() => {
+    const text = [
+      `Copy ${deskName} on Yosuku.`,
+      '',
+      'Automated BTC strategy with risk limits enforced on Sui.',
+      'Your balance stays yours. Review the limits before signing.',
+    ].join('\n');
+    window.open(xIntentUrl(text, LIVE_STRATEGY_URL), '_blank', 'noopener,noreferrer');
+  }, [deskName]);
 
   const submitTx = useCallback(async (build: () => Transaction): Promise<string> => {
     const { digest } = await submit(build); // sponsored-first; wallet fallback rebuilds via the factory
@@ -123,9 +148,9 @@ export default function LiveDesk() {
     try { setHistory(await fetchVaultTrades624(600)); } catch { /* keep the last good history */ }
   }, []);
   const refreshUser = useCallback(async () => {
-    if (!address) { setLedger(0); setSub(null); return; }
-    const [l, s] = await Promise.all([fetchLedger624(address), fetchSub624(address)]);
-    setLedger(l); setSub(s);
+    if (!address) { setLedger(0); setSub(null); setRisk(null); return; }
+    const [l, s, r] = await Promise.all([fetchLedger624(address), fetchSub624(address), fetchRisk624(address)]);
+    setLedger(l); setSub(s); setRisk(r);
   }, [address]);
 
   useEffect(() => { refreshDesk(); const id = setInterval(refreshDesk, 20_000); return () => clearInterval(id); }, [refreshDesk]);
@@ -199,9 +224,24 @@ export default function LiveDesk() {
   const copying = !!sub?.active;
   const subCap = sub ? sub.maxMarginMicro / M : 0;
   const subLev = sub ? sub.maxLeverage1e9 / Number(LEV_1X_624) : 0;
+  const exposureUsed = (risk?.openExposureMicro ?? 0) / M;
+  const exposureLimit = (risk?.maxTotalExposureMicro ?? 0) / M;
+  const dailyUsed = (risk?.spentTodayMicro ?? 0) / M;
+  const dailyLimit = risk?.maxDailySpendMicro == null ? null : risk.maxDailySpendMicro / M;
   const capValue = (() => { const c = parseFloat(capStr.replace(',', '.')); return Number.isFinite(c) && c > 0 ? c : DEFAULT_CAP; })();
   const depositValue = (() => { const d = parseFloat(depositStr.replace(',', '.')); return Number.isFinite(d) && d > 0 ? d : 0; })();
   const effLedger = ledger + depositValue; // what the desk can actually trade with the moment you join
+  const riskTerms = useCallback((balance: number, requestedMargin = capValue) => {
+    const maxMargin = Math.min(requestedMargin, Math.max(balance, 0));
+    const leverage = riskPreset === 'guarded' ? 1 : 2;
+    return {
+      maxMarginMicro: BigInt(Math.round(maxMargin * M)),
+      maxLeverage1e9: BigInt(leverage) * LEV_1X_624,
+      maxTotalExposureMicro: BigInt(Math.round(Math.max(balance, maxMargin) * M)),
+      maxOpenPositions: BigInt(riskPreset === 'active' && balance >= maxMargin * 2 ? 2 : 1),
+      maxDailySpendMicro: BigInt(Math.round(Math.max(balance, maxMargin) * M)),
+    };
+  }, [capValue, riskPreset]);
   const belowFloor = effLedger < MIN_LEDGER; // too little for the keeper to ever place a trade
   const addChip = (set: (fn: (s: string) => string) => void) => (n: number) =>
     set((s) => String(Math.max(0, (parseFloat(s || '0') || 0) + n)));
@@ -244,12 +284,12 @@ export default function LiveDesk() {
     }
     setBusy('join');
     try {
+      const terms = riskTerms(effLedger);
       const digest = await submitTx(() => buildJoinDesk624({
         coinIds: dusdcCoins.map((c) => c.coinObjectId),
         amountMicro: BigInt(Math.floor(amt * M)),
         agent: VAULT624.enclaveAgent,
-        maxMarginMicro: BigInt(Math.round(capValue * M)),
-        maxLeverage1e9: BigInt(levCap) * LEV_1X_624,
+        ...terms,
       }));
       setJoinedFlash({ digest });
       setDepositStr(''); setCapStr(''); setShowGuardrails(false); setManage(null);
@@ -302,8 +342,7 @@ export default function LiveDesk() {
     try {
       await submitTx(() => buildSubscribe624({
         agent: VAULT624.enclaveAgent,
-        maxMarginMicro: BigInt(Math.round(capValue * M)),
-        maxLeverage1e9: BigInt(levCap) * LEV_1X_624,
+        ...riskTerms(ledger),
       }));
       toast(`Limits updated — at most ${fmtDusdc(capValue)} DUSDC per trade, ${levCap}×`, 'success');
       setCapStr(''); setManage(null);
@@ -321,6 +360,9 @@ export default function LiveDesk() {
         agent: VAULT624.enclaveAgent,
         maxMarginMicro: BigInt(sub.maxMarginMicro),
         maxLeverage1e9: BigInt(sub.maxLeverage1e9),
+        maxTotalExposureMicro: BigInt(risk?.maxTotalExposureMicro ?? sub.maxMarginMicro),
+        maxOpenPositions: BigInt(risk?.maxOpenPositions ?? 1),
+        maxDailySpendMicro: BigInt(risk?.maxDailySpendMicro ?? sub.maxMarginMicro),
       }));
       toast('Copying resumed — same limits as before', 'success');
       burst();
@@ -429,6 +471,15 @@ export default function LiveDesk() {
                   An automated strategy that follows Bitcoin&apos;s trend, up or down.
                 </p>
               </div>
+              <button
+                type="button"
+                onClick={shareOnX}
+                aria-label="Share this strategy on X"
+                title="Share on X"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/12 text-white/50 transition-colors hover:border-white/25 hover:text-white"
+              >
+                <Share2 className="h-4 w-4" />
+              </button>
             </div>
 
             {/* the record — a curve, not a log: the striking visual */}
@@ -475,9 +526,19 @@ export default function LiveDesk() {
                   <div className="px-3 py-3 border-l border-white/[0.06]">
                     <div className="font-mono text-[9px] uppercase tracking-[0.18em] text-white/40 mb-1">Your limits</div>
                     <div className="font-mono text-sm text-white tabular-nums">≤ {fmtDusdc(subCap)} / trade</div>
-                    <div className="font-mono text-[9px] text-white/30 mt-1">≤ {subLev}× · on-chain cap</div>
+                    <div className="font-mono text-[9px] text-white/30 mt-1">
+                      {risk ? `${risk.openPositions}/${risk.maxOpenPositions} open · ${fmtDusdc(exposureUsed)}/${fmtDusdc(exposureLimit)} exposed` : `≤ ${subLev}× · protected`}
+                    </div>
                   </div>
                 </div>
+
+                {risk && (
+                  <div className="max-w-md flex flex-wrap gap-x-4 gap-y-1 font-mono text-[9px] uppercase tracking-[0.12em] text-white/35">
+                    <span>{subLev}× max</span>
+                    <span>{dailyLimit == null ? `${fmtDusdc(dailyUsed)} used today` : `${fmtDusdc(dailyUsed)} / ${fmtDusdc(dailyLimit)} today`}</span>
+                    <span>enforced on Sui</span>
+                  </div>
+                )}
 
                 {/* truth-telling: "copying" while unaffordable is a lie — say so */}
                 {underfundedCap && (
@@ -525,9 +586,10 @@ export default function LiveDesk() {
                 )}
                 {manage === 'caps' && (
                   <div className="max-w-md space-y-3">
-                    <CapsEditor capStr={capStr} setCapStr={setCapStr} levCap={levCap} setLevCap={setLevCap} suggested={subCap || DEFAULT_CAP} />
+                    <RiskModePicker value={riskPreset} onChange={(mode) => { setRiskPreset(mode); setLevCap(mode === 'guarded' ? 1 : 2); }} />
+                    <CapsEditor capStr={capStr} setCapStr={setCapStr} suggested={subCap || DEFAULT_CAP} />
                     <button onClick={updateCaps} disabled={busy === 'caps'} className={BTN_PRIMARY}>
-                      {busy === 'caps' ? 'Signing…' : `Set limits — ≤ ${fmtDusdc(capValue)} / trade · ${levCap}×`}
+                      {busy === 'caps' ? 'Signing…' : `Save ${riskPreset} limits →`}
                     </button>
                   </div>
                 )}
@@ -609,18 +671,21 @@ export default function LiveDesk() {
                 </div>
 
                 {/* guardrails — defaulted safety, one quiet line + adjust */}
-                <div className="text-[12.5px] text-white/60 leading-snug max-w-md break-words">
-                  Risks at most <span className="text-white font-semibold">{fmtDusdc(capValue)} per trade</span> at{' '}
-                  <span className="text-white font-semibold">{levCap}×</span>, enforced on-chain.{' '}
+                <div className="max-w-md">
+                  <RiskModePicker value={riskPreset} onChange={(mode) => { setRiskPreset(mode); setLevCap(mode === 'guarded' ? 1 : 2); }} />
+                  <div className="mt-2 text-[12px] text-white/55 leading-snug break-words">
+                    <span className="text-white/80 font-semibold">{fmtDusdc(capValue)} per trade</span> ·{' '}
+                    {riskPreset === 'guarded' ? '1 open at 1×' : riskPreset === 'active' ? 'up to 2 open at 2×' : '1 open at 2×'} · daily limit {fmtDusdc(effLedger)}.{' '}
                   <button onClick={() => setShowGuardrails((v) => !v)}
                     className="font-mono text-[10px] uppercase tracking-[0.12em] text-white/40 hover:text-vermilion transition-colors underline decoration-white/20 underline-offset-2">
-                    {showGuardrails ? 'done' : 'adjust limits'}
+                    {showGuardrails ? 'done' : 'change per-trade limit'}
                   </button>
                   {showGuardrails && (
                     <div className="mt-3 max-w-md">
-                      <CapsEditor capStr={capStr} setCapStr={setCapStr} levCap={levCap} setLevCap={setLevCap} suggested={DEFAULT_CAP} />
+                      <CapsEditor capStr={capStr} setCapStr={setCapStr} suggested={DEFAULT_CAP} />
                     </div>
                   )}
+                  </div>
                 </div>
 
                 {/* one CTA, one signature */}
@@ -693,17 +758,42 @@ function AmountRow(props: {
   );
 }
 
-// The guardrail editor — suggested placeholder, user-owned value, plain-words leverage.
+type RiskMode = 'guarded' | 'balanced' | 'active';
+
+function RiskModePicker({ value, onChange }: { value: RiskMode; onChange: (mode: RiskMode) => void }) {
+  const modes: Array<{ id: RiskMode; label: string; detail: string }> = [
+    { id: 'guarded', label: 'Guarded', detail: '1× · 1 open' },
+    { id: 'balanced', label: 'Balanced', detail: '2× · 1 open' },
+    { id: 'active', label: 'Active', detail: '2× · up to 2' },
+  ];
+  return (
+    <div>
+      <div className="mb-1.5 font-mono text-[9px] uppercase tracking-[0.18em] text-white/35">Risk mode</div>
+      <div className="grid grid-cols-3 gap-1.5" role="radiogroup" aria-label="Copy trading risk mode">
+        {modes.map((mode) => {
+          const selected = mode.id === value;
+          return (
+            <button key={mode.id} type="button" role="radio" aria-checked={selected} onClick={() => onChange(mode.id)}
+              className={`min-w-0 rounded-md border px-2 py-2 text-left transition-colors ${selected ? 'border-vermilion/60 bg-vermilion/[0.08]' : 'border-white/[0.09] bg-white/[0.015] hover:border-white/20'}`}>
+              <span className={`block text-[11px] font-semibold ${selected ? 'text-white' : 'text-white/60'}`}>{mode.label}</span>
+              <span className="mt-0.5 block font-mono text-[8px] text-white/30">{mode.detail}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// The advanced guardrail editor only exposes the one value users may need to tune.
 function CapsEditor(props: {
   capStr: string;
   setCapStr: (s: string) => void;
-  levCap: number;
-  setLevCap: (n: number) => void;
   suggested: number;
 }) {
-  const { capStr, setCapStr, levCap, setLevCap, suggested } = props;
+  const { capStr, setCapStr, suggested } = props;
   return (
-    <div className="flex flex-wrap items-end gap-3">
+    <div>
       <label className="block">
         <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 block mb-1.5">Most it may risk per trade</span>
         <div className="w-44 rounded-xl border border-white/[0.08] bg-black/30 px-3 py-2 transition-colors focus-within:border-vermilion/50 flex items-center justify-between">
@@ -715,17 +805,6 @@ function CapsEditor(props: {
           <span className="font-mono text-[9px] text-gray-500 shrink-0 ml-1">USDC</span>
         </div>
       </label>
-      <div>
-        <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 block mb-1.5">Multiplier</span>
-        <div className="flex gap-1.5">
-          {[1, 2].map((v) => (
-            <button key={v} onClick={() => setLevCap(v)}
-              className={`px-3 py-2 rounded font-mono text-[11px] border transition-colors ${levCap === v ? 'border-vermilion text-vermilion bg-vermilion/[0.06]' : 'border-white/[0.08] text-white/50 hover:border-white/20'}`}>
-              {v === 1 ? '1× plain' : '2× doubled'}
-            </button>
-          ))}
-        </div>
-      </div>
     </div>
   );
 }

@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Twitter, ArrowUpRight } from 'lucide-react';
-import { useCurrentAccount } from '@mysten/dapp-kit';
+import { useCurrentAccount, useSignPersonalMessage } from '@mysten/dapp-kit';
 import { useSmartSubmit } from '@/lib/sui/useSmartSubmit';
 import { buildEnableTweetTrading624, buildTweetVaultWithdraw624, fetchTweetLedger624Micro } from '@/lib/sui/vault624Client';
 import { fetchDUSDCCoins, fetchDUSDCHeldMicro } from '@/lib/sui/queries';
+import { xLinkMessage } from '@/lib/xLink';
 
 type XMe = {
   handle: string | null;
@@ -36,6 +37,7 @@ export default function XWalletCard() {
   // answer is worse than no answer here, and every consumer below already guards on null.
   const address = account?.address ?? null;
   const { submit } = useSmartSubmit();
+  const { mutateAsync: signPersonalMessage } = useSignPersonalMessage();
 
   const [me, setMe] = useState<XMe | null>(null);
   const [loadingMe, setLoadingMe] = useState(true);
@@ -171,11 +173,14 @@ export default function XWalletCard() {
   const needsLink = !!address && !!me?.signedIn && !routed;
 
   const link = useCallback(async () => {
-    if (!address || busy) return;
+    if (!address || !me?.authorId || busy) return;
     setErr(''); setOk(''); setBusy('link');
     try {
+      const { signature } = await signPersonalMessage({
+        message: xLinkMessage(me.authorId, address),
+      });
       const r = await fetch('/api/claim/x/link', {
-        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ wallet: address }),
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ wallet: address, signature }),
       });
       const j = await r.json().catch(() => ({}));
       if (!r.ok || j?.ok === false) {
@@ -189,7 +194,7 @@ export default function XWalletCard() {
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
     } finally { setBusy(''); }
-  }, [address, busy, refreshMe]);
+  }, [address, busy, me?.authorId, refreshMe, signPersonalMessage]);
 
   // Finish the job the Connect X button started. OAuth bounces back here with ?x=1 having only set
   // a cookie; without this the user is signed in, funded, and still unroutable, with nothing on

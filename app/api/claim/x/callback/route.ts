@@ -14,7 +14,12 @@ export async function GET(req: NextRequest) {
   const state = req.nextUrl.searchParams.get('state');
   const verifier = jar.get('x_v')?.value;
   const savedState = jar.get('x_s')?.value;
-  if (!code || !state || !verifier || state !== savedState) return NextResponse.redirect(`${home}?x=err`);
+  const withResult = (result: '1' | 'err') => {
+    const url = new URL(home);
+    url.searchParams.set('x', result);
+    return url.toString();
+  };
+  if (!code || !state || !verifier || state !== savedState) return NextResponse.redirect(withResult('err'));
 
   const clientId = process.env.TWITTER_CLIENT_ID!;
   const clientSecret = process.env.TWITTER_CLIENT_SECRET!;
@@ -29,14 +34,14 @@ export async function GET(req: NextRequest) {
       },
       body: new URLSearchParams({ grant_type: 'authorization_code', code, redirect_uri: redirect, code_verifier: verifier, client_id: clientId }),
     }).then((r) => r.json());
-    if (!token?.access_token) return NextResponse.redirect(`${home}?x=err`);
+    if (!token?.access_token) return NextResponse.redirect(withResult('err'));
 
     const me = await fetch('https://api.twitter.com/2/users/me', { headers: { authorization: `Bearer ${token.access_token}` } }).then((r) => r.json());
     const id = me?.data?.id;
     const username = me?.data?.username;
-    if (!id) return NextResponse.redirect(`${home}?x=err`);
+    if (!id) return NextResponse.redirect(withResult('err'));
 
-    const res = NextResponse.redirect(`${home}?x=1`);
+    const res = NextResponse.redirect(withResult('1'));
     // 30 days, not 30 minutes, and read from the same constant readSession enforces so the two
     // can't drift apart (the shorter of the pair always wins). The old half-hour expiry meant the
     // portfolio told returning users "Connect X first" on nearly every visit, including people who
@@ -51,6 +56,6 @@ export async function GET(req: NextRequest) {
     res.cookies.delete('x_ret');
     return res;
   } catch {
-    return NextResponse.redirect(`${home}?x=err`);
+    return NextResponse.redirect(withResult('err'));
   }
 }
