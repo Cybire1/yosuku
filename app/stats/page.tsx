@@ -181,6 +181,18 @@ export default function StatsPage() {
               <div className="grid grid-cols-2 gap-3 mb-4">
                 <Stat label="Wallets onboarded" value={fmt(t.onboardedUsers)} sub="gas paid by Yosuku, provably ours" accent />
                 <Stat label="Gas-free actions" value={fmt(t.sponsoredActions)} sub="gas paid by Yosuku" />
+                {/* Bets are the point of the product, and until now no number on this page counted
+                    one. Same attribution as the two above: we read these off transactions Yosuku
+                    paid the gas for, so a bot trading the shared venue on its own gas is never
+                    counted as ours. Volume always ships next to the number of people behind it,
+                    because the staked total is concentrated in a few wallets and the dollar figure
+                    alone would imply a breadth of usage that is not there. */}
+                <Stat label="Bets placed" value={fmt(t.bets.count)} sub={`by ${fmt(t.bets.bettors)} people`} />
+                <Stat
+                  label="Staked"
+                  value={`$${t.bets.volumeDusdc.toLocaleString('en-US', { maximumFractionDigits: 0 })}`}
+                  sub={t.bets.truncated ? 'DUSDC · at least this much' : 'DUSDC placed on the line'}
+                />
               </div>
               <p className="font-mono text-[11px] text-gray-600 mb-10 leading-relaxed max-w-2xl">
                 Every wallet here had its gas <span className="text-gray-400">paid by Yosuku&apos;s sponsor</span>. The chain records us as sponsor,

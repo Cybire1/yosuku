@@ -21,6 +21,9 @@ const WAITLIST_PKG = '0x13d6dd6cb7effa390d60a259640d1640fda5d7b5be9f8c6019eaf7e3
 const MARGIN = '0xa3b75354df203da7b434efb55f6573f72fb656e3897082b575be86dc291cee44';
 const VAULTPKG = '0xf3c3c446d233c4371c0faa4bf7aa07f740e1c3eac7956e1d128bf6ead09d0706';
 const YOLEV = '0x75e00dc36b96cc4adafd4b180c791f7a0fb40aed92fd11c40968227fc6318a36';
+// Note that `proven.volumeDusdc` below counts only the legacy tweet-vault and leverage rails, so
+// until now the core product (placing a bet) contributed nothing to any volume figure on this
+// page. That is what `bets` further down fixes.
 
 // Our own infra/test wallets — excluded from REAL-USER counts (keeper, deployer, the
 // quirky-euclase test wallet, the enclave key, the bell agent, the faucet, Onara itself).
@@ -45,6 +48,17 @@ export interface TractionStats {
   growth: GrowthPoint[];      // cumulative onboarded users by day (the curve)
   // — Capability (engine proven on-chain; includes our demo runs) —
   proven: { tweetTrades: number; leverageOpens: number; liquidations: number; volumeDusdc: number };
+  // Bets actually placed through Yosuku
+  bets: {
+    /** Number of positions opened by wallets Yosuku onboarded. */
+    count: number;
+    /** DUSDC staked across them (net premium, what left the bettor's balance). */
+    volumeDusdc: number;
+    /** Distinct wallets behind those bets. Never render volume without it. */
+    bettors: number;
+    /** True when the scan hit its page ceiling, so the figures are a floor, not a total. */
+    truncated: boolean;
+  };
   // — Honest, labeled recent activity —
   recent: Interaction[];
   updatedAt: number;
@@ -54,7 +68,10 @@ type SponsoredTxNode = {
   digest: string;
   sender: { address: string } | null;
   gasInput: { gasSponsor: { address: string } | null } | null;
-  effects: { timestamp: string | null } | null;
+  effects: {
+    timestamp: string | null;
+    events?: { nodes: Array<{ contents: { type: { repr: string }; json: Record<string, unknown> } }> } | null;
+  } | null;
 };
 
 type SponsoredTxResponse = {
@@ -86,7 +103,12 @@ type GqlResult<T> = {
 const SPON_Q = `query Spon($a: SuiAddress!, $before: String) {
   transactions(last: 50, before: $before, filter: { affectedAddress: $a }) {
     pageInfo { hasPreviousPage startCursor }
-    nodes { digest sender { address } gasInput { gasSponsor { address } } effects { timestamp } }
+    nodes {
+      digest
+      sender { address }
+      gasInput { gasSponsor { address } }
+      effects { timestamp events { nodes { contents { type { repr } json } } } }
+    }
   }
 }`;
 
@@ -124,6 +146,28 @@ export async function fetchTraction(): Promise<TractionStats> {
   let truncated = false;
   const firstSeen = new Map<string, number>(); // external user → earliest sponsored ts
   let sponsoredActions = 0;
+
+  // Trading volume rides along on this same walk, rather than being its own scan.
+  //
+  // Two earlier designs failed. Reading the venue's global OrderMinted stream drowns in one
+  // high-frequency bot's events. Querying per wallet meant ~900 requests, which the public
+  // endpoint rate-limits, and the failures showed up as volume FALLING between runs ($572, then
+  // $479, then $175) while the bet count rose. Volume going down is impossible when bets only
+  // accumulate, so that number was simply wrong. Reading the events off transactions we are
+  // already paging through costs zero extra requests and cannot disagree with the adoption
+  // figures, because it is literally the same set of transactions.
+  //
+  // Matched by module path, NOT package id: pinning to the current package silently drops every
+  // bet placed before a venue migration, and DeepBook Predict redeploys its dated branches in
+  // place, so the address moves under us. There is no false-positive risk here because the
+  // transaction is one WE sponsored, so whatever it minted is a Yosuku bet by definition.
+  const MINTED = /::order_events::OrderMinted$/;
+  let betCount = 0;
+  let betVolume = 0;
+  // Carried so the page can never show volume alone. The staked total is concentrated in a couple
+  // of wallets, so a bare dollar figure would read as breadth of usage that is not there. The
+  // bettor count is the honest denominator that has to sit next to it.
+  const bettors = new Set<string>();
   let before: string | null = null;
   try {
     for (let page = 0; page < MAX_PAGES; page++) {
@@ -139,6 +183,14 @@ export async function fetchTraction(): Promise<TractionStats> {
         if (sponsor !== ONARA || !sender || sender === ONARA || isInternal(sender)) continue;
         const ts = n.effects?.timestamp ? Date.parse(n.effects.timestamp) : 0;
         sponsoredActions++;
+        for (const ev of n.effects?.events?.nodes ?? []) {
+          if (!MINTED.test(ev.contents?.type?.repr ?? '')) continue;
+          betCount++;
+          // net_premium is what actually left the bettor's balance, the same definition the
+          // leaderboard uses, so the two surfaces cannot report different volume.
+          betVolume += Number(ev.contents.json?.net_premium ?? 0) / 1e6;
+          bettors.add(sender);
+        }
         const prev = firstSeen.get(sender);
         if (prev == null || ts < prev) firstSeen.set(sender, ts);
         recent.push({ kind: 'onboard', user: sender, amount: 0, digest: n.digest, ts });
@@ -233,6 +285,7 @@ export async function fetchTraction(): Promise<TractionStats> {
     waitlistSignups: wlWallets.size,
     growth,
     proven: { tweetTrades, leverageOpens, liquidations, volumeDusdc: volume },
+    bets: { count: betCount, volumeDusdc: Math.round(betVolume * 100) / 100, bettors: bettors.size, truncated },
     recent: recent.slice(0, 30),
     updatedAt: Date.now(),
   });
@@ -259,11 +312,21 @@ function monotonic(t: TractionStats): TractionStats {
       onboardedUsers: Math.max(t.onboardedUsers, prev.onboardedUsers ?? 0),
       sponsoredActions: Math.max(t.sponsoredActions, prev.sponsoredActions ?? 0),
       waitlistSignups: Math.max(t.waitlistSignups, prev.waitlistSignups ?? 0),
+      // Bets and staked belong here for the same reason: they are counted off the same walk, so a
+      // short read shows fewer bets and LESS money than last time. Volume going down is impossible
+      // in reality (bets only accumulate) and reads as money leaving, which would be a lie.
+      bets: {
+        ...t.bets,
+        count: Math.max(t.bets.count, prev.bets?.count ?? 0),
+        volumeDusdc: Math.max(t.bets.volumeDusdc, prev.bets?.volumeDusdc ?? 0),
+        bettors: Math.max(t.bets.bettors, prev.bets?.bettors ?? 0),
+      },
     };
     window.localStorage.setItem(HWM_KEY, JSON.stringify({
       onboardedUsers: out.onboardedUsers,
       sponsoredActions: out.sponsoredActions,
       waitlistSignups: out.waitlistSignups,
+      bets: { count: out.bets.count, volumeDusdc: out.bets.volumeDusdc, bettors: out.bets.bettors },
     }));
     return out;
   } catch {
