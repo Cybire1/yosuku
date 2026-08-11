@@ -14,6 +14,7 @@ import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import Portfolio624Section from '@/components/Portfolio624Section';
 import XWalletCard from '@/components/XWalletCard';
+import CrossChainDeposit from '@/components/CrossChainDeposit';
 import Marquee from '@/components/Marquee';
 import GrainOverlay from '@/components/GrainOverlay';
 import CustomCursor from '@/components/CustomCursor';
@@ -253,8 +254,9 @@ export default function PortfolioPage() {
         </h1>
 
         {/* Trade-from-X account — shows whether or not a Sui wallet is connected */}
-        <div className="mb-10">
+        <div className="mb-10 space-y-4">
           <XWalletCard />
+          <CrossChainDeposit />
         </div>
 
         {!mounted ? (
