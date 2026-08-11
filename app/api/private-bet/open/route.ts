@@ -13,6 +13,10 @@ type PrivateBetOpenRequest = {
   stakeMicro?: unknown;
   quantity?: unknown;
   maxCostDusdc?: unknown;
+  // Proof the caller is the owner. The desk funds the mint, so without this the endpoint is a
+  // faucet: forwarded upstream with our own Bearer token and an attacker-chosen owner.
+  authSignature?: unknown;
+  issuedAtMs?: unknown;
 };
 
 const EXECUTOR_URL = process.env.PRIVATE_BET_EXECUTOR_URL?.replace(/\/$/, '') ?? '';
@@ -46,7 +50,14 @@ function validate(body: PrivateBetOpenRequest) {
   if (!/^\d+$/.test(stakeMicro)) throw new Error('stakeMicro must be an integer string');
   if (!/^\d+$/.test(quantity)) throw new Error('quantity must be an integer string');
 
-  return { owner, vortexPool, oracleId, expiry, strike, isUp: body.isUp, stakeMicro, quantity, maxCostDusdc };
+  const authSignature = asNonEmptyString(body.authSignature, 'authSignature');
+  const issuedAtMs = Number(body.issuedAtMs);
+  if (!Number.isFinite(issuedAtMs)) throw new Error('issuedAtMs must be a number');
+
+  return {
+    owner, vortexPool, oracleId, expiry, strike, isUp: body.isUp, stakeMicro, quantity, maxCostDusdc,
+    authSignature, issuedAtMs,
+  };
 }
 
 export async function POST(req: Request) {

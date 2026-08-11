@@ -3,20 +3,16 @@ import { NextResponse } from 'next/server';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+// Cashing out presents the enclave's signed claim, nothing more.
+//
+// The old shape took `owner` plus every bet parameter from the caller, which meant this proxy
+// forwarded an attacker-chosen owner upstream with the server's own Bearer token attached. Now
+// the owner and the parameters live INSIDE the signed bytes, so there is nothing here worth
+// lying about: a forged or edited claim fails the signature check at the desk.
 type PrivateCashoutRequest = {
-  owner?: unknown;
   vortexPool?: unknown;
-  ticket?: {
-    digest?: unknown;
-    sessionAddress?: unknown;
-    sessionManager?: unknown;
-    oracleId?: unknown;
-    expiry?: unknown;
-    strike?: unknown;
-    isUp?: unknown;
-    stakeMicro?: unknown;
-    quantity?: unknown;
-  };
+  ticketHex?: unknown;
+  signatureHex?: unknown;
 };
 
 const EXECUTOR_URL = process.env.PRIVATE_BET_EXECUTOR_URL?.replace(/\/$/, '') ?? '';
@@ -27,42 +23,20 @@ function asNonEmptyString(value: unknown, field: string): string {
   return value.trim();
 }
 
+function asHex(value: unknown, field: string, bytes: number): string {
+  const v = asNonEmptyString(value, field).replace(/^0x/, '');
+  if (!/^[a-fA-F0-9]+$/.test(v)) throw new Error(`${field} must be hex`);
+  if (v.length !== bytes * 2) throw new Error(`${field} must be ${bytes} bytes`);
+  return v;
+}
+
 function validate(body: PrivateCashoutRequest) {
-  const ticket = body.ticket;
-  if (!ticket || typeof ticket !== 'object') throw new Error('ticket required');
-
-  const owner = asNonEmptyString(body.owner, 'owner');
-  const vortexPool = asNonEmptyString(body.vortexPool, 'vortexPool');
-  const digest = asNonEmptyString(ticket.digest, 'ticket.digest');
-  const oracleId = asNonEmptyString(ticket.oracleId, 'ticket.oracleId');
-  const expiry = asNonEmptyString(ticket.expiry, 'ticket.expiry');
-  const strike = asNonEmptyString(ticket.strike, 'ticket.strike');
-  const stakeMicro = asNonEmptyString(ticket.stakeMicro, 'ticket.stakeMicro');
-  const quantity = asNonEmptyString(ticket.quantity, 'ticket.quantity');
-
-  if (!/^0x[a-fA-F0-9]+$/.test(owner)) throw new Error('owner must be a Sui address');
-  if (typeof ticket.isUp !== 'boolean') throw new Error('ticket.isUp must be boolean');
-  if (!/^\d+$/.test(expiry)) throw new Error('ticket.expiry must be an integer string');
-  if (!/^\d+$/.test(strike)) throw new Error('ticket.strike must be an integer string');
-  if (!/^\d+$/.test(stakeMicro)) throw new Error('ticket.stakeMicro must be an integer string');
-  if (!/^\d+$/.test(quantity)) throw new Error('ticket.quantity must be an integer string');
-
   return {
-    owner,
-    vortexPool,
-    ticket: {
-      digest,
-      sessionAddress:
-        typeof ticket.sessionAddress === 'string' && ticket.sessionAddress ? ticket.sessionAddress : undefined,
-      sessionManager:
-        typeof ticket.sessionManager === 'string' && ticket.sessionManager ? ticket.sessionManager : undefined,
-      oracleId,
-      expiry,
-      strike,
-      isUp: ticket.isUp,
-      stakeMicro,
-      quantity,
-    },
+    vortexPool: asNonEmptyString(body.vortexPool, 'vortexPool'),
+    // 146 = the BCS ticket layout; 64 = ed25519. Pinning the lengths here means a malformed
+    // claim is refused at the edge instead of travelling upstream to be parsed.
+    ticketHex: asHex(body.ticketHex, 'ticketHex', 146),
+    signatureHex: asHex(body.signatureHex, 'signatureHex', 64),
   };
 }
 

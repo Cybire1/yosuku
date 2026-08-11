@@ -6,6 +6,8 @@ import { SuiJsonRpcClient } from '@mysten/sui/jsonRpc';
 import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { Transaction } from '@mysten/sui/transactions';
+import { issueTicket, decodeTicket, verifyTicketSignature } from './enclaveTicket.mjs';
+import { verifyOpenAuthorization } from './openAuth.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -30,6 +32,11 @@ const cfg = {
   tradingVault: process.env.TRADING_VAULT_ID ?? '0xc04516b582bfe73c71325408bfb9e9a5a8fdcd54952a313a288a135e272fa1e6',
   vortexPool: process.env.PRIVATE_BET_DUSDC_POOL || '0x0',
   sharedSecret: process.env.PRIVATE_BET_SHARED_SECRET ?? '',
+  // The attested enclave that issues ticket signatures, and the public key we check them
+  // against. The key is pinned here AND on chain (ticket_seal::PrivateDesk.binder) so a user can
+  // verify a ticket without asking this box to be honest about which key it used.
+  enclaveCmd: process.env.PRIVATE_BET_ENCLAVE_CMD ?? '',
+  enclavePubkey: (process.env.PRIVATE_BET_ENCLAVE_PUBKEY ?? '').replace(/^0x/, ''),
   onaraUrl: (process.env.PRIVATE_BET_ONARA_URL ?? process.env.NEXT_PUBLIC_ONARA_URL ?? '').replace(/\/$/, ''),
   useOnara: process.env.PRIVATE_BET_USE_ONARA !== '0',
   privateKey: process.env.EXECUTOR_PRIVATE_KEY ?? process.env.PRIVATE_BET_EXECUTOR_PRIVATE_KEY ?? '',
@@ -118,6 +125,10 @@ function marketKey(tx, oracleId, expiry, strike, isUp) {
 }
 
 async function signAndExecute(tx, gasBudget = 120_000_000) {
+  // Say so plainly. Without this the first use of `signer` throws
+  // "Cannot read properties of null (reading 'toSuiAddress')", which sends whoever is on call
+  // hunting through the SDK instead of setting one env var.
+  if (!signer) throw new Error('EXECUTOR_PRIVATE_KEY is not configured');
   if (cfg.useOnara && cfg.onaraUrl) {
     // Sponsored-only. Do NOT fall back to a self-paid retry of the SAME tx: it still carries
     // gas owner = sponsor, so re-submitting it with a single signature throws the misleading
@@ -297,18 +308,32 @@ async function saveTickets(tickets) {
   await writeFile(cfg.ticketStore, JSON.stringify(tickets, null, 2));
 }
 
+// Serialize every read-modify-write of the store. Two cashouts landing together would both
+// load the same JSON, both mark their own position settled, and the second write would discard
+// the first, leaving a redeemed position still marked 'open' and replayable.
+let storeChain = Promise.resolve();
+function withStoreLock(fn) {
+  const next = storeChain.then(fn, fn);
+  storeChain = next.then(() => undefined, () => undefined);
+  return next;
+}
+
 async function recordTicket(ticket) {
-  const tickets = await loadTickets();
-  tickets[ticket.digest] = ticket;
-  await saveTickets(tickets);
+  return withStoreLock(async () => {
+    const tickets = await loadTickets();
+    tickets[ticket.digest] = ticket;
+    await saveTickets(tickets);
+  });
 }
 
 async function updateTicket(digest, patch) {
-  const tickets = await loadTickets();
-  if (!tickets[digest]) throw new Error('private ticket not found in executor store');
-  tickets[digest] = { ...tickets[digest], ...patch, updatedAt: Date.now() };
-  await saveTickets(tickets);
-  return tickets[digest];
+  return withStoreLock(async () => {
+    const tickets = await loadTickets();
+    if (!tickets[digest]) throw new Error('private ticket not found in executor store');
+    tickets[digest] = { ...tickets[digest], ...patch, updatedAt: Date.now() };
+    await saveTickets(tickets);
+    return tickets[digest];
+  });
 }
 
 async function openPrivateBet(body) {
@@ -320,6 +345,23 @@ async function openPrivateBet(body) {
   const stakeMicro = assertU64String(body.stakeMicro, 'stakeMicro');
   const quantity = assertU64String(body.quantity, 'quantity');
   if (typeof body.isUp !== 'boolean') throw new Error('isUp must be boolean');
+
+  // Prove the caller IS the owner before spending desk funds on their behalf. Without this the
+  // endpoint mints house-funded positions for anyone who can send a POST.
+  await verifyOpenAuthorization({
+    payload: {
+      owner,
+      oracleId,
+      expiry: expiry.toString(),
+      strike: strike.toString(),
+      isUp: body.isUp,
+      stakeMicro: stakeMicro.toString(),
+      quantity: quantity.toString(),
+      issuedAtMs: body.issuedAtMs,
+    },
+    signature: body.authSignature,
+    client,
+  });
 
   assertReadyForOpen(owner, stakeMicro);
 
@@ -335,24 +377,36 @@ async function openPrivateBet(body) {
   });
   const mint = await signAndExecute(tx, 100_000_000);
 
-  const ticket = {
+  // The enclave issues the only claim that counts. It runs its own guard, so a tampered host
+  // cannot raise the cap or backdate an expiry here; it can only be refused.
+  const issuedAtMs = Date.now();
+  const issued = await issueTicket(
+    {
+      owner,
+      sessionManager: managerId,
+      oracleId,
+      expiry: Number(expiry),
+      strike: Number(strike),
+      isUp: body.isUp,
+      stakeMicro: Number(stakeMicro),
+      quantity: Number(quantity),
+      nonce: Number(BigInt(`0x${mint.digest.replace(/^0x/, '').slice(0, 12)}`) % 1_000_000_007n),
+      issuedAtMs,
+    },
+    { command: cfg.enclaveCmd },
+  );
+
+  // What lands on disk deliberately does NOT include the owner. This file is the thing an
+  // operator (or anyone who takes the box) can read, so the mapping we are hiding must not be
+  // in it. All that is kept is enough to stop the same position being redeemed twice.
+  await recordTicket({
     digest: mint.digest,
-    owner,
-    sessionAddress,
     sessionManager: managerId,
-    oracleId,
-    expiry: expiry.toString(),
-    strike: strike.toString(),
-    isUp: body.isUp,
-    stakeMicro: stakeMicro.toString(),
-    quantity: quantity.toString(),
     status: 'open',
     entryDigest,
-    openedAt: Date.now(),
-    mode: 'sponsored-session-manager',
-    vortexPool: cfg.vortexPool,
-  };
-  await recordTicket(ticket);
+    openedAt: issuedAtMs,
+    mode: 'attested-session-manager',
+  });
 
   return {
     ok: true,
@@ -361,33 +415,50 @@ async function openPrivateBet(body) {
     sessionAddress,
     sessionManager: managerId,
     entryDigest,
-    mode: ticket.mode,
+    mode: 'attested-session-manager',
+    // The user's claim. Keep it: without it the position cannot be cashed out, and by design
+    // this desk cannot reconstruct it for you.
+    ticketHex: issued.ticketHex,
+    signatureHex: issued.signatureHex,
+    enclavePublicKey: issued.publicKeyHex,
+    attestationDocHex: issued.attestationDocHex,
   };
 }
 
 async function cashoutPrivateBet(body) {
-  const owner = assertAddress(body.owner, 'owner');
   assertObjectId(body.vortexPool, 'vortexPool');
-  const incoming = body.ticket;
-  if (!incoming || typeof incoming !== 'object') throw new Error('ticket required');
-  const digest = String(incoming.digest ?? '');
-  if (!digest) throw new Error('ticket.digest required');
 
+  // The claim is the enclave's signature, not the caller's word. `owner` is read OUT of the
+  // signed bytes and never off the request, so asking to cash out someone else's position
+  // requires forging an ed25519 signature from a key that only exists inside the enclave.
+  const ticketHex = String(body.ticketHex ?? '');
+  const signatureHex = String(body.signatureHex ?? '');
+  if (!ticketHex || !signatureHex) throw new Error('ticketHex and signatureHex required');
+  if (!cfg.enclavePubkey) throw new Error('executor has no pinned enclave key; refusing to cash out');
+  if (!verifyTicketSignature({ ticketHex, signatureHex, publicKeyHex: cfg.enclavePubkey })) {
+    throw new Error('ticket signature is not from the attested enclave');
+  }
+
+  const claim = decodeTicket(ticketHex);
+  const owner = assertAddress(claim.owner, 'ticket.owner');
+  const managerId = assertObjectId(claim.sessionManager, 'ticket.sessionManager');
+
+  // The on-disk record carries no owner; it exists only so a position cannot be redeemed twice.
   const tickets = await loadTickets();
+  const digest = Object.keys(tickets).find((d) => tickets[d].sessionManager === managerId);
+  if (!digest) throw new Error('position not known to this desk');
   const stored = tickets[digest];
-  if (!stored) throw new Error('private ticket not found in executor store');
-  if (stored.owner.toLowerCase() !== owner.toLowerCase()) throw new Error('ticket owner mismatch');
-  if (stored.status !== 'open') throw new Error(`ticket is ${stored.status}`);
-
-  const managerId = assertObjectId(stored.sessionManager, 'ticket.sessionManager');
+  if (stored.status !== 'open') throw new Error(`position is ${stored.status}`);
   const redeem = await signAndExecute(
     redeemTx({
       managerId,
-      oracleId: stored.oracleId,
-      expiry: BigInt(stored.expiry),
-      strike: BigInt(stored.strike),
-      isUp: stored.isUp,
-      quantity: BigInt(stored.quantity),
+      // every parameter comes from the signed claim, so the redeem cannot be steered by the
+      // caller or by anything an operator edited on disk
+      oracleId: claim.oracleId,
+      expiry: claim.expiry,
+      strike: claim.strike,
+      isUp: claim.isUp,
+      quantity: claim.quantity,
     }),
     140_000_000,
   );
@@ -433,24 +504,41 @@ async function cashoutPrivateBet(body) {
 }
 
 async function withdrawPrivateBalance(body) {
-  const owner = assertAddress(body.owner, 'owner');
   assertObjectId(body.vortexPool, 'vortexPool');
   const mode = body.mode === 'private' ? 'private' : 'fast';
-  const ticketDigests = Array.isArray(body.ticketDigests)
-    ? body.ticketDigests.filter((digest) => typeof digest === 'string' && digest.length > 0)
-    : [];
-  if (!ticketDigests.length) throw new Error('ticketDigests required');
 
+  // Same rule as cashout: the owner is read out of enclave-signed claims, never off the
+  // request. Previously this took `owner` and a list of digests from the caller, so anyone who
+  // could guess a digest could drain someone else's credited balance to their own address.
+  const claims = Array.isArray(body.claims) ? body.claims : [];
+  if (!claims.length) throw new Error('claims required');
+  if (!cfg.enclavePubkey) throw new Error('executor has no pinned enclave key; refusing to withdraw');
   if (!signer) throw new Error('EXECUTOR_PRIVATE_KEY is not configured');
+
+  const decoded = claims.map((c, i) => {
+    const ticketHex = String(c?.ticketHex ?? '');
+    const signatureHex = String(c?.signatureHex ?? '');
+    if (!ticketHex || !signatureHex) throw new Error(`claims[${i}] needs ticketHex and signatureHex`);
+    if (!verifyTicketSignature({ ticketHex, signatureHex, publicKeyHex: cfg.enclavePubkey })) {
+      throw new Error(`claims[${i}] was not signed by the attested enclave`);
+    }
+    return decodeTicket(ticketHex);
+  });
+
+  // One withdrawal pays one address, so a batch mixing owners has to be refused rather than
+  // silently paying whoever happens to be first.
+  const owner = assertAddress(decoded[0].owner, 'claim.owner');
+  if (decoded.some((d) => d.owner.toLowerCase() !== owner.toLowerCase())) {
+    throw new Error('every claim in a withdrawal must belong to the same owner');
+  }
 
   const tickets = await loadTickets();
   const selected = [];
-  for (const digest of ticketDigests) {
-    const ticket = tickets[digest];
-    if (!ticket) throw new Error(`private ticket not found: ${digest}`);
-    if (ticket.owner.toLowerCase() !== owner.toLowerCase()) throw new Error('ticket owner mismatch');
-    if (ticket.status !== 'credited') throw new Error(`ticket ${digest} is ${ticket.status}`);
-    const managerId = assertObjectId(ticket.sessionManager, 'ticket.sessionManager');
+  for (const claim of decoded) {
+    const managerId = assertObjectId(claim.sessionManager, 'claim.sessionManager');
+    const digest = Object.keys(tickets).find((d) => tickets[d].sessionManager === managerId);
+    if (!digest) throw new Error('position not known to this desk');
+    if (tickets[digest].status !== 'credited') throw new Error(`position is ${tickets[digest].status}`);
     const balance = await managerDusdcBalance(managerId);
     if (balance > 0n) selected.push({ digest, managerId, amount: balance });
   }

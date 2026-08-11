@@ -3,11 +3,13 @@ import { NextResponse } from 'next/server';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+// Withdrawing presents enclave-signed claims, same rule as cashout. The old shape took `owner`
+// and a list of digests from the caller, which meant guessing a digest was enough to drain
+// somebody else's credited balance to your own address.
 type PrivateWithdrawRequest = {
-  owner?: unknown;
   vortexPool?: unknown;
   mode?: unknown;
-  ticketDigests?: unknown;
+  claims?: unknown;
 };
 
 const EXECUTOR_URL = process.env.PRIVATE_BET_EXECUTOR_URL?.replace(/\/$/, '') ?? '';
@@ -18,18 +20,25 @@ function asNonEmptyString(value: unknown, field: string): string {
   return value.trim();
 }
 
+function asHex(value: unknown, field: string, bytes: number): string {
+  const v = asNonEmptyString(value, field).replace(/^0x/, '');
+  if (!/^[a-fA-F0-9]+$/.test(v)) throw new Error(`${field} must be hex`);
+  if (v.length !== bytes * 2) throw new Error(`${field} must be ${bytes} bytes`);
+  return v;
+}
+
 function validate(body: PrivateWithdrawRequest) {
-  const owner = asNonEmptyString(body.owner, 'owner');
   const vortexPool = asNonEmptyString(body.vortexPool, 'vortexPool');
   const mode = body.mode === 'private' ? 'private' : 'fast';
-  const ticketDigests = Array.isArray(body.ticketDigests)
-    ? body.ticketDigests.filter((digest): digest is string => typeof digest === 'string' && digest.length > 0)
-    : [];
+  const raw = Array.isArray(body.claims) ? body.claims : [];
+  if (raw.length === 0) throw new Error('claims required');
 
-  if (!/^0x[a-fA-F0-9]+$/.test(owner)) throw new Error('owner must be a Sui address');
-  if (ticketDigests.length === 0) throw new Error('ticketDigests required');
+  const claims = raw.map((c, i) => ({
+    ticketHex: asHex((c as { ticketHex?: unknown })?.ticketHex, `claims[${i}].ticketHex`, 146),
+    signatureHex: asHex((c as { signatureHex?: unknown })?.signatureHex, `claims[${i}].signatureHex`, 64),
+  }));
 
-  return { owner, vortexPool, mode, ticketDigests };
+  return { vortexPool, mode, claims };
 }
 
 export async function POST(req: Request) {

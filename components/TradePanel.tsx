@@ -15,7 +15,7 @@ import {
   LockKeyhole,
   LogOut,
 } from 'lucide-react';
-import { useCurrentAccount, ConnectButton } from '@mysten/dapp-kit';
+import { useCurrentAccount, ConnectButton, useSignPersonalMessage } from '@mysten/dapp-kit';
 import type { OracleData } from '@/lib/sui/predictApi';
 import { FLOAT_SCALING, DUSDC_MULTIPLIER } from '@/lib/sui/constants';
 import { useManager, useDUSDCBalance, useManagerBalance, useSviPricing, useVaultStats, useTradingVaultBalance } from '@/lib/sui/hooks';
@@ -124,6 +124,9 @@ export default function TradePanel({
   const [editingStop, setEditingStop] = useState(false);
   const [stopInput, setStopInput] = useState('');
   const [privacyMode, setPrivacyMode] = useState<PrivacyMode>('public');
+  // The private desk funds the mint, so it needs proof the person asking is the person it will
+  // belong to. This is the one prompt in the private flow, and it shows the actual bet.
+  const { mutateAsync: signPersonalMessage } = useSignPersonalMessage();
   const [privateStatus, setPrivateStatus] = useState<PrivateBetStatus>(EMPTY_PRIVATE_STATUS);
   const [privateTickets, setPrivateTickets] = useState<PrivateBetTicket[]>([]);
 
@@ -477,6 +480,7 @@ export default function TradePanel({
         setStep('minting');
         const ticket = await openPrivateBet({
           owner: address,
+          signPersonalMessage: (message) => signPersonalMessage({ message }),
           oracleId: oracle.oracle_id,
           expiry: oracle.expiry,
           strike: selectedStrike,
