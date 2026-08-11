@@ -46,3 +46,9 @@ next-env.d.ts
 /dart
 /deepbookv3
 /.playwright-mcp
+
+# Runtime ledger for the private-bet desk. This was TRACKED and published six tickets mapping
+# three real owner addresses to their positions — the exact mapping the feature exists to hide.
+# It is runtime state, never source.
+services/private-bet-executor/.private-bet-tickets.json
+**/.private-bet-tickets.json

@@ -3,7 +3,15 @@
 import { createHash, createHmac, randomBytes } from 'node:crypto';
 
 const b64url = (b: Buffer) => b.toString('base64url');
-const secret = () => process.env.CLAIM_SESSION_SECRET || 'dev-insecure-change-me';
+// This HMAC signs the session cookie carrying the X authorId, and app/api/claim/bind trusts that
+// authorId precisely BECAUSE it is signed. A fallback literal in a public repo therefore lets
+// anyone mint a session for any handle and bind someone else's tweet-funded account to their own
+// wallet. There is no safe default for a key whose whole job is being unguessable, so refuse.
+const secret = () => {
+  const s = process.env.CLAIM_SESSION_SECRET;
+  if (!s) throw new Error('CLAIM_SESSION_SECRET is not set');
+  return s;
+};
 
 export const genVerifier = () => b64url(randomBytes(32));
 export const codeChallenge = (v: string) => b64url(createHash('sha256').update(v).digest());
