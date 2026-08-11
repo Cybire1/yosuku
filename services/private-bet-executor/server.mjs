@@ -336,6 +336,46 @@ async function updateTicket(digest, patch) {
   });
 }
 
+/**
+ * Prove the enclave can sign BEFORE any money moves.
+ *
+ * The mint used to run first and the ticket second, so an unreachable or mis-keyed enclave meant
+ * the desk had already bought a position that nobody could ever claim. Funds spent, no proof of
+ * ownership, and the user has nothing to show for it. So the desk now proves it can produce a
+ * VERIFIABLE ticket, signed by the key we pin, before it opens anything.
+ *
+ * Probed once and cached: the answer only changes when the enclave is redeployed, and spawning it
+ * per bet would add a process launch to the critical path of every trade.
+ */
+let enclaveReady = null;
+async function assertEnclaveReady() {
+  if (enclaveReady === true) return;
+  if (!cfg.enclaveCmd) throw new Error('PRIVATE_BET_ENCLAVE_CMD is not set; refusing to open a bet nobody could claim');
+  if (!cfg.enclavePubkey) throw new Error('PRIVATE_BET_ENCLAVE_PUBKEY is not set; a ticket we cannot verify is not a claim');
+  if (enclaveReady instanceof Promise) return enclaveReady;
+
+  enclaveReady = (async () => {
+    const probe = await issueTicket(
+      {
+        owner: '0x' + '11'.repeat(32),
+        sessionManager: '0x' + '22'.repeat(32),
+        oracleId: '0x' + '33'.repeat(32),
+        expiry: Math.floor(Date.now() / 1000) + 3600,
+        strike: 1, isUp: true, stakeMicro: 1, quantity: 1,
+        nonce: 1, issuedAtMs: Date.now(),
+      },
+      { command: cfg.enclaveCmd },
+    );
+    // The enclave signing is not enough: it has to be THE enclave whose key we pin, or every
+    // ticket it issues would be rejected later at cashout, after the money was already spent.
+    if (probe.publicKeyHex.replace(/^0x/, '').toLowerCase() !== cfg.enclavePubkey.toLowerCase()) {
+      throw new Error('enclave public key does not match PRIVATE_BET_ENCLAVE_PUBKEY');
+    }
+    enclaveReady = true;
+  })();
+  return enclaveReady;
+}
+
 async function openPrivateBet(body) {
   const owner = assertAddress(body.owner, 'owner');
   assertObjectId(body.vortexPool, 'vortexPool');
@@ -364,6 +404,8 @@ async function openPrivateBet(body) {
   });
 
   assertReadyForOpen(owner, stakeMicro);
+  // before createManager, before the mint, before a cent moves
+  await assertEnclaveReady();
 
   const { digest: entryDigest, managerId } = await createManager();
   const tx = await buildFundAndMintTx({
