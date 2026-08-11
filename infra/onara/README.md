@@ -1,8 +1,22 @@
-# Onara gas station — sponsored account setup
+# Onara gas station — sponsored Yosuku actions
 
-Sponsors exactly one thing: `predict::create_manager` (the one-time trading
-account). The policy in `policies/` allowlists only that Move call with a
-1-call limit, so the sponsor wallet cannot be drained for anything else.
+Each file in `policies/` defines the exact Move targets and command kinds that
+one sponsored Yosuku flow may execute. Account setup remains separately
+restricted to one `predict::create_manager` call.
+
+`yosuku-vault-729` covers BOTH vault624 instances on package `0x51ed6dea`, because
+Onara matches on target (`pkg::module::function`), not on the object a call touches.
+That means it needs both subscription entrypoints, and dropping either one silently
+breaks a product:
+
+- `subscribe_with_risk` — the copy-desk join (`buildJoinDesk624`)
+- `subscribe` — trade-from-X "Fund X wallet" (`buildEnableTweetTrading624`)
+
+The 6-24 policy allowed `subscribe`; the 7-29 port carried over only
+`subscribe_with_risk`. Every Fund X wallet transaction bundles deposit + subscribe,
+and a PTB is declined unless EVERY call is allowlisted, so funding fell back to
+wallet-paid gas. For users we onboard without SUI, which is the entire premise of
+the X flow, that fallback cannot succeed. Restored 2026-08-11.
 
 ## Deploy (once)
 
@@ -23,15 +37,13 @@ The deploy script reads `policies/*.json` from this directory.
 NEXT_PUBLIC_ONARA_URL=https://<your-worker>.workers.dev
 ```
 
-`components/AccountSetup.tsx` checks `GET /status` on mount: if the station is
-reachable, the setup button reads "Set up account — free" and the sponsor pays
-gas; if not, it falls back to user-paid setup automatically. No env var, no
-behavior change — safe to ship before the worker exists.
+Clients check `GET /status` before asking Onara to sponsor an eligible action.
+When sponsorship is unavailable they surface the unavailable state or use the
+flow's explicit wallet-paid fallback; they must never silently broaden policy.
 
 ## Flow
 
-1. App builds `create_manager` tx with `setGasOwner(sponsor)` (gas coins
-   resolve from the sponsor's address — public data).
+1. App builds an allowlisted transaction with `setGasOwner(sponsor)`.
 2. User signs in their wallet (authorization only, pays nothing).
 3. `POST /sponsor` — Onara checks the policy, co-signs as gas owner, executes.
 

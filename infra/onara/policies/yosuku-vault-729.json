@@ -3,9 +3,10 @@
   "gasBudgetMax": 100000000,
   "allowedCommandKinds": ["MoveCall", "SplitCoins", "MergeCoins", "TransferObjects"],
   "targets": [
-    "0x3ba6f82ddea29023bbd433000a0374f004e6ce2225cd98a06a1d9bfa7ccb84e1::vault624::deposit",
-    "0x3ba6f82ddea29023bbd433000a0374f004e6ce2225cd98a06a1d9bfa7ccb84e1::vault624::withdraw",
-    "0x3ba6f82ddea29023bbd433000a0374f004e6ce2225cd98a06a1d9bfa7ccb84e1::vault624::subscribe",
-    "0x3ba6f82ddea29023bbd433000a0374f004e6ce2225cd98a06a1d9bfa7ccb84e1::vault624::cancel"
+    "0x51ed6dead94a7e9d799c8c245de041e8d82b0ec12d40996b7561522e3637179f::vault624::deposit",
+    "0x51ed6dead94a7e9d799c8c245de041e8d82b0ec12d40996b7561522e3637179f::vault624::withdraw",
+    "0x51ed6dead94a7e9d799c8c245de041e8d82b0ec12d40996b7561522e3637179f::vault624::subscribe_with_risk",
+    "0x51ed6dead94a7e9d799c8c245de041e8d82b0ec12d40996b7561522e3637179f::vault624::subscribe",
+    "0x51ed6dead94a7e9d799c8c245de041e8d82b0ec12d40996b7561522e3637179f::vault624::cancel"
   ]
 }
