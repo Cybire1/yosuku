@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useMemo, type ReactNode } from 'react
 import EquityCurve from '@/components/EquityCurve';
 import { useCurrentAccount, useSuiClient, useSignPersonalMessage, ConnectButton } from '@mysten/dapp-kit';
 import PlaybookVault from '@/components/PlaybookVault';
+import { resolveXHandles } from '@/lib/sui/xHandle';
 import { blobIdFromU256 } from '@/lib/sui/strategySealClient';
 import { Share2, X, Lock, ArrowRight, Sparkles } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -167,6 +168,10 @@ export default function StrategiesPage() {
   const { mutateAsync: signPersonalMessage } = useSignPersonalMessage();
 
   const [strategies, setStrategies] = useState<StrategyCard[]>([]);
+  // creator wallet -> bound X handle. An on-chain HandleRegistry already binds these; five of the
+  // live strategies resolve to a real account, so those cards can name a person instead of a
+  // codename we invented for an address.
+  const [xHandles, setXHandles] = useState<Map<string, string>>(new Map());
   const [copyTrades, setCopyTrades] = useState<CopyTrade[]>([]);
   const [subscriptions, setSubscriptions] = useState<StrategySubscription[]>([]);
   const [loading, setLoading] = useState(true);
@@ -177,6 +182,7 @@ export default function StrategiesPage() {
   const [socialVaultBalance, setSocialVaultBalance] = useState(0);
 
   const [tab, setTab] = useState<TabKey>('all');
+  const [showArchive, setShowArchive] = useState(false);
   const [drawerId, setDrawerId] = useState<string | null>(null);
   const [budget, setBudget] = useState(''); // copy-budget in the drawer (additive, never forced)
   const [memoryInfo, setMemoryInfo] = useState<MemoryMarketInfo | null>(null);
@@ -285,6 +291,9 @@ export default function StrategiesPage() {
     try {
       const [s, t] = await Promise.all([fetchStrategies(), fetchCopyTrades(50)]);
       setStrategies(s); setCopyTrades(t); setLoadError(null);
+    // Resolve after the cards are on screen: a name is an enhancement, and blocking the whole
+    // marketplace on an identity lookup would trade something real for something cosmetic.
+    resolveXHandles(s.map((c) => c.creator)).then(setXHandles).catch(() => {});
     } catch (e) {
       setLoadError(String(e instanceof Error ? e.message : e).slice(0, 160));
     } finally { setLoading(false); }
@@ -475,13 +484,25 @@ export default function StrategiesPage() {
 
         {/* the grid below is an archive from an earlier venue — the live action is the desk above.
             Framed honestly so archived cards don't read as an empty live catalogue. */}
-        <div className="mt-14 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <h2 className="font-display font-[800] text-[19px] text-white tracking-tight">Earlier agents</h2>
-          <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-white/35">archived · copying routes to the live desk above</p>
+        <div className="mt-12 flex items-center justify-between gap-4 border-t border-white/10 pt-6">
+          <div>
+            <h2 className="font-display font-[800] text-[19px] text-white tracking-tight">Earlier agents</h2>
+            <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.14em] text-white/35">
+              {strategies.length} archived editions
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowArchive((open) => !open)}
+            aria-expanded={showArchive}
+            className="shrink-0 rounded-full border border-white/12 px-4 py-2 font-mono text-[10px] uppercase tracking-[0.14em] text-white/65 transition-colors hover:border-white/25 hover:text-white"
+          >
+            {showArchive ? 'Hide archive' : `View archive · ${strategies.length}`}
+          </button>
         </div>
 
         {/* control bar — curated tabs (zero-count tabs hidden so the row never advertises emptiness) */}
-        <div className="sticky top-[64px] z-20 mt-5 -mx-4 px-4 py-3 mb-7 bg-bg/85 backdrop-blur-md border-b border-white/[0.06]">
+        {showArchive && <div className="sticky top-[64px] z-20 mt-5 -mx-4 px-4 py-3 mb-7 bg-bg/85 backdrop-blur-md border-b border-white/[0.06]">
           <div className="flex items-center gap-5 overflow-x-auto no-scrollbar">
             {TABS.filter((t) => t.key === 'all' || tabCount(t.key) > 0).map((t) => {
               const on = tab === t.key;
@@ -500,9 +521,9 @@ export default function StrategiesPage() {
               );
             })}
           </div>
-        </div>
+        </div>}
 
-        {loading && strategies.length === 0 ? (
+        {showArchive && (loading && strategies.length === 0 ? (
           <div className="font-mono text-sm text-gray-500 py-24 text-center">reading the chain…</div>
         ) : (
           <>
@@ -525,7 +546,10 @@ export default function StrategiesPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-5">
                 {visible.map((card) => {
                   const sub = subscriptionByStrategy.get(card.id);
-                  const agentName = codenameFromAddress(card.id);
+                  // A bound X account wins over the derived codename. No binding keeps the
+                  // codename rather than inventing a handle: unclaimed should look unclaimed.
+                  const xHandle = xHandles.get((card.creator || '').toLowerCase());
+                  const agentName = xHandle ? `@${xHandle}` : codenameFromAddress(card.id);
                   const accent = accentForAgent(card.agent || card.id);
                   const settled = card.realizedTrades > 0;
                   const pnl = card.realizedPnl ?? 0;
@@ -588,6 +612,9 @@ export default function StrategiesPage() {
                 })}
               </div>
             )}
+
+          </>
+        ))}
 
             {/* 02 — recent copy-trades (slimmed; liveness + on-chain proof) */}
             <section className="mt-14">
@@ -817,9 +844,6 @@ export default function StrategiesPage() {
               Agents trade DUSDC on Sui testnet, on fast Bitcoin up/down rounds (1-minute, 5-minute, and 1-hour). You can lose your full budget. The agent
               cannot withdraw or divert it — verify every position on Sui.
             </p>
-          </>
-        )}
-
         <Footer />
       </main>
 
@@ -908,11 +932,7 @@ function MemoryCapsule({ l, strat, address, busy, text, onBuy, onRead, idx }: {
   const settled = strat ? strat.wins + strat.losses : 0;
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 22 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: '-60px' }}
-      transition={{ delay: Math.min(idx, 6) * 0.06, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-      className="group relative flex flex-col border border-white/[0.09] bg-gradient-to-b from-white/[0.035] to-transparent hover:border-white/20 transition-colors overflow-hidden"
-    >
+    <div className="group relative flex flex-col border border-white/[0.09] bg-gradient-to-b from-white/[0.035] to-transparent hover:border-white/20 transition-colors overflow-hidden">
       {/* head: glyph tile + name */}
       <div className="flex items-center gap-3 p-4 pb-3">
         <div className="h-11 w-11 shrink-0 grid place-items-center border border-white/10 bg-white/[0.03] font-jp text-xl text-vermilion">{glyph}</div>
@@ -981,23 +1001,19 @@ function MemoryCapsule({ l, strat, address, busy, text, onBuy, onRead, idx }: {
           <div className="mt-2 text-center font-mono text-[9px] uppercase tracking-[0.16em] text-white/25">gas-free · yours to keep, forever</div>
         )}
       </div>
-    </motion.div>
+    </div>
   );
 }
 
 function ComingSoonCapsule({ idx }: { idx: number }) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 22 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: '-60px' }}
-      transition={{ delay: Math.min(idx, 6) * 0.06, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-      className="relative flex flex-col items-center justify-center gap-3 border border-dashed border-white/[0.09] bg-white/[0.01] p-6 min-h-[280px] text-center"
-    >
+    <div className="relative hidden sm:flex flex-col items-center justify-center gap-3 border border-dashed border-white/[0.09] bg-white/[0.01] p-6 min-h-[280px] text-center">
       <div className="h-10 w-10 grid place-items-center rounded-full border border-white/10 text-white/40"><Sparkles className="h-4 w-4" /></div>
       <div className="font-display font-[800] text-white/70">More minds soon</div>
       <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-white/30 leading-relaxed max-w-[180px]">
         Creators list their own agent&apos;s memory — self-serve, next
       </p>
-    </motion.div>
+    </div>
   );
 }
 
