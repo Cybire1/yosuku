@@ -18,24 +18,41 @@ const TESTFLIGHT = 'https://testflight.apple.com/join/7AxcFCf5';
  *  rather than as built, and the gap between those two is exactly what someone downloading it
  *  will find. A real capture cannot drift from the product.
  *
- *  Framed from the card down. The source capture came from a build where the back control
- *  overlapped the question, which is fixed in the app but baked into that image, and shipping a
- *  known bug as marketing art is worse than cropping past it.
+ *  FULL SCREEN, not a crop. The previous capture was framed from the card down to hide a back
+ *  control that overlapped the question. That bug is fixed, and the crop had a cost: at 921x1433
+ *  the image was 1:1.56, while a phone screen is 1:2.17. No amount of bezel makes a squat
+ *  rectangle read as a phone, which is why the frame around it never convinced. This is the whole
+ *  screen at 1170x2532, straight off the device.
  *
- *  TO REPLACE: drop a fresh screenshot at public/app/bet-screen.png. Nothing else needs to change.
+ *  TO REPLACE: capture at full device resolution and drop it at public/app/bet-screen.png. Set
+ *  the status bar first so it reads as a product shot rather than a debug capture:
+ *    xcrun simctl status_bar <device> override --time "9:41" --cellularBars 4 \
+ *      --wifiBars 3 --batteryState charged --batteryLevel 100
  */
 function PhoneShot() {
   return (
     <div className="dl-phone">
+      {/* The side controls. Three nubs on the left, one on the right, in the real proportions
+          and positions. They are what the eye actually uses to tell a phone from a rounded
+          rectangle, more than the corner radius does. */}
+      <span className="dl-phone-btn dl-btn-mute" aria-hidden="true" />
+      <span className="dl-phone-btn dl-btn-volup" aria-hidden="true" />
+      <span className="dl-phone-btn dl-btn-voldn" aria-hidden="true" />
+      <span className="dl-phone-btn dl-btn-power" aria-hidden="true" />
+
       <div className="dl-phone-screen">
         <img
           src="/app/bet-screen.png"
           alt="The Yosuku app on a phone: a Bitcoin round showing the live price, the time left, an up and a down button, and the payout."
           // Intrinsic size of the asset: wrong values here reserve the wrong box and the
           // page jumps when the image lands.
-          width={921}
-          height={1433}
+          width={1170}
+          height={2532}
         />
+        {/* The island sits in the gap the status bar already leaves for it. A device screenshot
+            has no cutout in it, so without this the top of the screen is a suspiciously empty
+            band with the time pushed to one side and no reason why. */}
+        <span className="dl-phone-island" aria-hidden="true" />
       </div>
     </div>
   );

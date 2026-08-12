@@ -5471,13 +5471,48 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
 .dl-phone {
   position: relative; z-index: 1;
   width: 100%; max-width: 312px;
-  padding: 10px;
-  border-radius: 44px;
-  background: linear-gradient(160deg, rgba(255,255,255,0.13), rgba(255,255,255,0.03));
-  box-shadow: 0 30px 70px -20px rgba(0,0,0,0.75), 0 0 0 1px rgba(255,255,255,0.06) inset;
+  /* A real bezel is thin and even. 10px of padding under a 44px radius left a fat grey margin
+     that read as a picture frame; 7px under a deeper radius reads as a rim. */
+  padding: 7px;
+  border-radius: 52px;
+  /* Titanium: a bright edge catching light at the top left, falling to near-black at the bottom
+     right, over a dark body. A flat grey gradient was the other reason this looked like a card. */
+  background:
+    linear-gradient(145deg, #6E6E73 0%, #2A2A2E 18%, #141416 46%, #37373B 78%, #0C0C0E 100%);
+  box-shadow:
+    0 30px 70px -20px rgba(0,0,0,0.8),
+    0 0 0 1px rgba(255,255,255,0.10) inset,
+    0 1px 2px rgba(255,255,255,0.22) inset;
 }
-.dl-phone-screen { border-radius: 35px; overflow: hidden; background: #050505; display: block; }
+.dl-phone-screen {
+  position: relative;
+  border-radius: 45px; overflow: hidden; background: #050505; display: block;
+  /* The black gap between rim and glass. Without it the image runs straight into the metal and
+     the whole thing flattens into one shape. */
+  box-shadow: 0 0 0 1px #000, 0 0 0 2px rgba(0,0,0,0.9);
+}
 .dl-phone-screen img { display: block; width: 100%; height: auto; }
+
+/* Dynamic Island. Sized off the phone's own width so it holds at any scale: 125x36pt on a
+   393pt-wide device is a 31.8% wide pill at a 125:36 ratio. */
+.dl-phone-island {
+  position: absolute; top: 1.55%; left: 50%; transform: translateX(-50%);
+  width: 31.8%; aspect-ratio: 125 / 36;
+  background: #000; border-radius: 999px;
+  pointer-events: none;
+}
+
+/* Side controls. Colour-matched to the rim so they read as machined out of the same block. */
+.dl-phone-btn {
+  position: absolute; width: 3px; border-radius: 3px;
+  background: linear-gradient(180deg, #4A4A4F, #232326 40%, #17171A);
+  box-shadow: 0 0 0 0.5px rgba(0,0,0,0.55);
+  pointer-events: none;
+}
+.dl-btn-mute  { left: -3px; top: 15.5%; height: 4.2%; }
+.dl-btn-volup { left: -3px; top: 23.0%; height: 7.4%; }
+.dl-btn-voldn { left: -3px; top: 32.4%; height: 7.4%; }
+.dl-btn-power { right: -3px; top: 26.5%; height: 11.2%; }
 .dl-t-mono { font-family: var(--font-mono); font-size: 12px; }
 .dl-t-lbl  { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.16em; }
 .dl-t-num  { font-family: var(--font-mono); font-size: 21px; font-weight: 700; }
@@ -5501,8 +5536,10 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
 @media (max-width: 860px) {
   .dl-hero { grid-template-columns: 1fr; gap: 44px; }
   .dl-stage { order: -1; }
-  .dl-phone { max-width: 250px; padding: 8px; border-radius: 38px; }
-  .dl-phone-screen { border-radius: 31px; }
+  .dl-phone { max-width: 250px; padding: 6px; border-radius: 42px; }
+  .dl-phone-screen { border-radius: 36px; }
+  /* The island and the buttons are all percentage-based, so they follow the smaller phone on
+     their own. Only the button WIDTH is absolute, and 3px on a 250px phone is still a nub. */
 }
 
 
