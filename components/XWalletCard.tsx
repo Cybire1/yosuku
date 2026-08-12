@@ -211,9 +211,18 @@ export default function XWalletCard() {
   }, [loadingMe, needsLink, link]);
 
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).get('x') === 'err') {
-      setErr('X authorization did not finish. Please try again.');
-    }
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('x') !== 'err') return;
+    const reason = params.get('x_reason');
+    const messages: Record<string, string> = {
+      denied: 'X authorization was cancelled. Please try again.',
+      state: 'Your X sign-in session expired. Please try again.',
+      token: 'X could not complete the connection. Please try again.',
+      profile: 'X connected, but your profile could not be read. Please try again.',
+      config: 'X connection is temporarily unavailable.',
+      server: 'X connection is temporarily unavailable. Please try again.',
+    };
+    setErr(messages[reason || ''] || 'X authorization did not finish. Please try again.');
   }, []);
 
   return (

@@ -14,32 +14,50 @@ export async function GET(req: NextRequest) {
   const state = req.nextUrl.searchParams.get('state');
   const verifier = jar.get('x_v')?.value;
   const savedState = jar.get('x_s')?.value;
-  const withResult = (result: '1' | 'err') => {
+  const withResult = (result: '1' | 'err', reason?: string) => {
     const url = new URL(home);
     url.searchParams.set('x', result);
+    if (reason) url.searchParams.set('x_reason', reason);
     return url.toString();
   };
-  if (!code || !state || !verifier || state !== savedState) return NextResponse.redirect(withResult('err'));
+  if (!code || !state) return NextResponse.redirect(withResult('err', 'denied'));
+  if (!verifier || !savedState || state !== savedState) return NextResponse.redirect(withResult('err', 'state'));
 
-  const clientId = process.env.TWITTER_CLIENT_ID!;
-  const clientSecret = process.env.TWITTER_CLIENT_SECRET!;
+  const clientId = process.env.TWITTER_CLIENT_ID;
+  const clientSecret = process.env.TWITTER_CLIENT_SECRET;
   const redirect = process.env.CLAIM_X_REDIRECT || 'https://yosuku.xyz/api/claim/x/callback';
+  if (!clientId) return NextResponse.redirect(withResult('err', 'config'));
 
   try {
-    const token = await fetch('https://api.twitter.com/2/oauth2/token', {
+    // X supports both confidential web clients (Basic client authentication) and public PKCE
+    // clients (client_id in the request body). Sending `Basic base64(clientId:undefined)` made a
+    // correctly configured public client fail only after the user had approved access.
+    const tokenResponse = await fetch('https://api.x.com/2/oauth2/token', {
       method: 'POST',
       headers: {
         'content-type': 'application/x-www-form-urlencoded',
-        authorization: 'Basic ' + Buffer.from(`${clientId}:${clientSecret}`).toString('base64'),
+        ...(clientSecret ? { authorization: 'Basic ' + Buffer.from(`${clientId}:${clientSecret}`).toString('base64') } : {}),
       },
       body: new URLSearchParams({ grant_type: 'authorization_code', code, redirect_uri: redirect, code_verifier: verifier, client_id: clientId }),
-    }).then((r) => r.json());
-    if (!token?.access_token) return NextResponse.redirect(withResult('err'));
+      cache: 'no-store',
+    });
+    const token = await tokenResponse.json().catch(() => ({}));
+    if (!tokenResponse.ok || !token?.access_token) {
+      console.error('X OAuth token exchange failed', { status: tokenResponse.status, code: token?.error || 'unknown' });
+      return NextResponse.redirect(withResult('err', 'token'));
+    }
 
-    const me = await fetch('https://api.twitter.com/2/users/me', { headers: { authorization: `Bearer ${token.access_token}` } }).then((r) => r.json());
+    const meResponse = await fetch('https://api.x.com/2/users/me', {
+      headers: { authorization: `Bearer ${token.access_token}` },
+      cache: 'no-store',
+    });
+    const me = await meResponse.json().catch(() => ({}));
     const id = me?.data?.id;
     const username = me?.data?.username;
-    if (!id) return NextResponse.redirect(withResult('err'));
+    if (!meResponse.ok || !id) {
+      console.error('X OAuth profile lookup failed', { status: meResponse.status });
+      return NextResponse.redirect(withResult('err', 'profile'));
+    }
 
     const res = NextResponse.redirect(withResult('1'));
     // 30 days, not 30 minutes, and read from the same constant readSession enforces so the two
@@ -55,7 +73,8 @@ export async function GET(req: NextRequest) {
     res.cookies.delete('x_s');
     res.cookies.delete('x_ret');
     return res;
-  } catch {
-    return NextResponse.redirect(withResult('err'));
+  } catch (error) {
+    console.error('X OAuth callback failed', error instanceof Error ? error.message : 'unknown');
+    return NextResponse.redirect(withResult('err', 'server'));
   }
 }

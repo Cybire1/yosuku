@@ -8,7 +8,13 @@ const b64url = (b: Buffer) => b.toString('base64url');
 // anyone mint a session for any handle and bind someone else's tweet-funded account to their own
 // wallet. There is no safe default for a key whose whole job is being unguessable, so refuse.
 const secret = () => {
-  const s = process.env.CLAIM_SESSION_SECRET;
+  // Prefer a dedicated session key. Existing deployments already need CLAIM_SHARED_SECRET to
+  // authenticate the private relay, so use a domain-separated derivative as a secure migration
+  // fallback rather than making X OAuth fail after the user has approved it. Never use a literal
+  // or public fallback here.
+  const s = process.env.CLAIM_SESSION_SECRET || (process.env.CLAIM_SHARED_SECRET
+    ? createHash('sha256').update(`yosuku:x-session:v1:${process.env.CLAIM_SHARED_SECRET}`).digest('hex')
+    : '');
   if (!s) throw new Error('CLAIM_SESSION_SECRET is not set');
   return s;
 };
