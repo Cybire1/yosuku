@@ -14,7 +14,6 @@ import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import Portfolio624Section from '@/components/Portfolio624Section';
 import XWalletCard from '@/components/XWalletCard';
-import CrossChainDeposit from '@/components/CrossChainDeposit';
 import Marquee from '@/components/Marquee';
 import GrainOverlay from '@/components/GrainOverlay';
 import CustomCursor from '@/components/CustomCursor';
@@ -263,12 +262,9 @@ export default function PortfolioPage() {
       <GrainOverlay />
 
       <main className="container pt-[92px] pb-10 sm:pt-[120px] sm:pb-32">
-        {/* Deposit sits on the title row: it is the one thing someone comes here to DO, and as a
-            button it costs a line instead of the card-with-a-paragraph it used to be. */}
-        <div className="mb-2 flex items-center justify-between gap-4">
-          <h1 className="font-display font-[800] text-4xl text-white tracking-tight">Portfolio</h1>
-          <CrossChainDeposit />
-        </div>
+        {/* No "Portfolio" headline. The nav already says where you are, and the thing people open
+            this page for is the number. The balance IS the header now, and Deposit sits beside it
+            inside the account plate. */}
 
         {!mounted ? (
           <div className="text-center py-20">

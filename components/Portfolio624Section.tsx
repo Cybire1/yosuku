@@ -26,6 +26,7 @@ import { joinSettledTrades, type SettledTrade } from '@/lib/sui/settledTrade';
 import { readAccountCache, writeAccountCache } from '@/lib/sui/ticket624';
 import { useSmartSubmit } from '@/lib/sui/useSmartSubmit';
 import { fetchDUSDCHeldMicro, fetchDUSDCCoins } from '@/lib/sui/queries';
+import CrossChainDeposit from '@/components/CrossChainDeposit';
 import { DUSDC_MULTIPLIER } from '@/lib/sui/constants';
 import {
   POS_INF_TICK,
@@ -422,32 +423,34 @@ export default function Portfolio624Section() {
                 money in/out on the same row. The live account had a four-cell strip with no way to
                 add money at all, so funding meant starting a bet. Same layout, live numbers. */}
             <div className="ledger-plate">
-              <div className="flex flex-wrap items-center justify-between gap-4 mb-4 sm:mb-6">
+              <div className="flex flex-wrap items-start justify-between gap-4 mb-4 sm:mb-6">
                 <div>
                   <span className="font-mono text-[9px] tracking-[0.16em] uppercase" style={{ color: '#6B6353' }}>
                     Your balance
                   </span>
-                  <div className="font-mono text-3xl font-semibold mt-1" style={{ color: '#1A1612' }}>
+                  {/* Page-headline size. This is what someone opened Portfolio to see. */}
+                  <div className="font-display text-5xl sm:text-6xl font-[800] tracking-tight tabular-nums mt-1" style={{ color: '#1A1612' }}>
                     {fmt2(acctBalance)}
-                    <span className="text-sm ml-2" style={{ color: '#6B6353' }}>DUSDC</span>
+                    <span className="font-mono text-base sm:text-lg font-normal ml-2" style={{ color: '#6B6353' }}>DUSDC</span>
                   </div>
-                  <p className="font-mono text-[10px] mt-1" style={{ color: '#6B6353' }}>
+                  <p className="font-mono text-[10px] mt-1.5" style={{ color: '#6B6353' }}>
                     {fmt2(acctBalance + walletDusdc)} total with your wallet
                   </p>
                 </div>
-                <div className="text-right">
-                  <div className="font-mono text-[9px] tracking-[0.16em] uppercase" style={{ color: '#6B6353' }}>Open</div>
-                  <div className="font-mono text-lg" style={{ color: '#1A1612' }}>{openCount}</div>
-                </div>
+                <CrossChainDeposit />
               </div>
 
               <div
-                className="grid grid-cols-3 gap-y-3 gap-x-6 pt-4 sm:gap-y-4 sm:pt-5"
+                className="grid grid-cols-2 sm:grid-cols-4 gap-y-3 gap-x-6 pt-4 sm:gap-y-4 sm:pt-5"
                 style={{ borderTop: '1px solid rgba(201,191,166,0.3)' }}
               >
                 <div>
                   <span className="font-mono text-[8px] tracking-[0.14em] uppercase" style={{ color: '#6B6353' }}>Wallet</span>
                   <div className="font-mono text-sm" style={{ color: '#1A1612' }}>{fmt2(walletDusdc)}</div>
+                </div>
+                <div>
+                  <span className="font-mono text-[8px] tracking-[0.14em] uppercase" style={{ color: '#6B6353' }}>Open</span>
+                  <div className="font-mono text-sm" style={{ color: '#1A1612' }}>{openCount}</div>
                 </div>
                 <div>
                   <span className="font-mono text-[8px] tracking-[0.14em] uppercase" style={{ color: '#6B6353' }}>Paying out</span>
