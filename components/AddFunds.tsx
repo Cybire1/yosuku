@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useCurrentAccount } from '@mysten/dapp-kit';
-import { X } from 'lucide-react';
+import { X, CreditCard } from 'lucide-react';
 import CrossChainDeposit from './CrossChainDeposit';
 
 const OFFICIAL_FAUCET = 'https://tally.so/r/Xx102L';
@@ -121,8 +121,10 @@ export default function AddFunds({ open, onClose, onFunded }: { open: boolean; o
                 <Link
                   href="/fund"
                   onClick={onClose}
-                  className="block w-full text-center rounded-full border border-white/15 py-3 font-semibold text-gray-200 hover:border-vermilion/50 hover:text-white transition-colors"
+                  className="flex w-full items-center justify-center gap-2 rounded-full border border-white/15 py-3 font-semibold hover:border-vermilion/50 transition-colors"
+                  style={{ color: 'var(--fund-row-ink)' }}
                 >
+                  <CreditCard className="h-4 w-4" />
                   Buy with a card →
                 </Link>
                 {/* Third way in: real USDC bridged from Solana or an EVM chain. Same component as
@@ -130,7 +132,7 @@ export default function AddFunds({ open, onClose, onFunded }: { open: boolean; o
                     than two that drift. It hides itself when the relayer is not reachable. */}
                 <CrossChainDeposit
                   triggerLabel="Deposit USDC from another chain →"
-                  triggerClassName="block w-full text-center rounded-full border border-white/15 py-3 font-semibold text-gray-200 hover:border-vermilion/50 hover:text-white transition-colors"
+                  triggerClassName="fund-row flex w-full items-center justify-center gap-2 rounded-full border border-white/15 py-3 font-semibold hover:border-vermilion/50 transition-colors"
                 />
               </div>
             )}

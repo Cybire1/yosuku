@@ -2024,6 +2024,12 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
 .plate-rows .bg-white\/\[0\.02\]:hover, .plate-rows .hover\:bg-white\/\[0\.02\]:hover { background-color: rgba(26,22,18,0.035); }
 .plate-rows .border-white\/\[0\.06\] { border-color: rgba(201,191,166,0.35); }
 
+/* Secondary rows in the Add money modal. Tailwind's text-gray-200 is NOT theme-remapped, so on the
+   cream modal these rendered as near-invisible pale text while the button beside them read fine. */
+:root { --fund-row-ink: #E8E6E3; }
+[data-theme="light"] { --fund-row-ink: #1A1612; }
+.fund-row { color: var(--fund-row-ink); }
+
 .ledger-plate::before {
   content: '';
   position: absolute; top: 0; left: 0; right: 0;

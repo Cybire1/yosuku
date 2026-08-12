@@ -314,12 +314,12 @@ export default function CrossChainDeposit({
 
       {open && (
         <div
-          className="fixed inset-0 z-[200] flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-6"
+          className="fixed inset-0 z-[200] flex items-center justify-center overflow-y-auto bg-black/60 p-4"
           onClick={() => setOpen(false)}
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-md rounded-t-2xl border border-white/[0.08] bg-[#0d0d10] p-5 sm:rounded-2xl"
+            className="my-auto w-full max-w-md rounded-2xl border border-white/[0.08] bg-[#0d0d10] p-5"
           >
             <div className="mb-4 flex items-center justify-between">
               <h3 className="font-display text-lg font-bold">Deposit USDC</h3>
