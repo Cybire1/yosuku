@@ -5080,10 +5080,15 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
 .wq-yeslead b { color: #34D399; font-weight: 700; }
 .wq-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: auto; }
 .wq-btn {
+  /* Sized and coloured to match .mc-side, the minute-card UP/DOWN pair. Two boards showing the
+     same BTC market should not have two different button languages: same padding, radius, mono
+     face, tracking and green/rose tints, so Yes/No and UP/DOWN read as one control. */
   position: relative; overflow: hidden;
-  display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  padding: 13px 16px; border-radius: 13px; cursor: pointer; border: 1px solid transparent;
-  font-family: var(--font-display); will-change: transform;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 8px 14px; border-radius: 10px; cursor: pointer; border: 1px solid transparent;
+  font-family: var(--font-mono); font-size: 12px; font-weight: 700;
+  letter-spacing: 0.08em; text-transform: uppercase; background: transparent;
+  will-change: transform;
   transition: transform 240ms cubic-bezier(.34,1.56,.64,1), box-shadow 220ms var(--ease),
               background 200ms var(--ease), border-color 200ms var(--ease);
 }
@@ -5098,31 +5103,24 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
 .wq-btn:hover { transform: translateY(-2px); }
 .wq-btn:active { transform: translateY(0) scale(0.972); transition-duration: 90ms; }
 .wq-btn:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
-.wq-btn .wq-side { font-weight: 700; font-size: 15px; transition: transform 220ms var(--ease); }
+.wq-btn .wq-side { font-weight: 700; font-size: 12px; transition: transform 220ms var(--ease); }
 .wq-btn .wq-cents {
-  font-family: var(--font-mono); font-weight: 600; font-size: 14px; opacity: 0.9;
+  font-family: var(--font-mono); font-weight: 800; font-size: 12px; opacity: 0.82;
+  letter-spacing: -0.02em; text-transform: none;
   transition: transform 220ms var(--ease), opacity 200ms var(--ease);
 }
 .wq-btn:hover .wq-side { transform: translateX(2px); }
 .wq-btn:hover .wq-cents { transform: scale(1.09); opacity: 1; }
-.wq-btn.yes { background: linear-gradient(180deg, rgba(52,211,153,0.15), rgba(52,211,153,0.05)); border-color: rgba(52,211,153,0.4); color: #34D399; }
+.wq-btn.yes { background: rgba(52,211,153,0.08); border-color: rgba(52,211,153,0.32); color: var(--profit); }
 .wq-btn.yes:hover { background: rgba(52,211,153,0.24); border-color: rgba(52,211,153,0.78);
   box-shadow: 0 10px 24px -12px rgba(52,211,153,0.6), inset 0 0 0 1px rgba(52,211,153,0.12); }
-.wq-btn.no { background: linear-gradient(180deg, rgba(251,113,133,0.13), rgba(251,113,133,0.05)); border-color: rgba(251,113,133,0.36); color: #FB7185; }
+.wq-btn.no { background: rgba(251,113,133,0.08); border-color: rgba(251,113,133,0.32); color: var(--loss); }
 .wq-btn.no:hover { background: rgba(251,113,133,0.22); border-color: rgba(251,113,133,0.7);
   box-shadow: 0 10px 24px -12px rgba(251,113,133,0.55), inset 0 0 0 1px rgba(251,113,133,0.12); }
 
-/* Phone sizing for the Yes/No pair. MUST live after the .wq-btn rules above: at equal
-   specificity the later declaration wins, so the same override placed with the other 720px
-   rules further up was silently ignored and the buttons stayed desktop-height.
-   On a phone the desktop 13px vertical padding plus a 15px label made each button as tall as
-   the question itself, so a card meant to read question-first read as two slabs. */
-@media (max-width: 720px) {
-  .wq-actions { gap: 8px; }
-  .wq-btn { padding: 6px 12px; border-radius: 10px; }
-  .wq-btn .wq-side { font-size: 13px; }
-  .wq-btn .wq-cents { font-size: 12px; }
-}
+/* No phone override any more: .wq-btn now inherits .mc-side's proportions, which are already
+   compact enough on a 390px screen and identical to the minute cards at every width. */
+@media (max-width: 720px) { .wq-actions { gap: 8px; } }
 @media (prefers-reduced-motion: reduce) {
   .wq-btn, .wq-btn::before, .wq-btn .wq-side, .wq-btn .wq-cents { transition-duration: 1ms; }
   .wq-btn:hover { transform: none; }
