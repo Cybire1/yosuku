@@ -306,6 +306,15 @@ export interface Sub624 {
   active: boolean;
 }
 
+export interface Risk624 {
+  maxTotalExposureMicro: number;
+  maxOpenPositions: number;
+  maxDailySpendMicro: number | null;
+  openExposureMicro: number;
+  openPositions: number;
+  spentTodayMicro: number;
+}
+
 const decodeU64 = (bytes: Uint8Array | number[]): bigint => {
   let v = 0n;
   Array.from(bytes).forEach((b, i) => (v |= BigInt(b) << (8n * BigInt(i))));
@@ -342,6 +351,32 @@ export async function fetchSub624(user: string): Promise<Sub624 | null> {
     };
   } catch {
     return null; // ENoSub abort (or transient RPC failure)
+  }
+}
+
+/** Aggregate copy-risk limits and current usage, enforced by Move on every fill. */
+export async function fetchRisk624(user: string): Promise<Risk624 | null> {
+  try {
+    const tx = new Transaction();
+    tx.moveCall({
+      target: `${VAULT624.pkg}::vault624::risk_of`,
+      arguments: [tx.object(VAULT624.vaultId), tx.pure.address(user)],
+    });
+    tx.setSenderIfNotSet(user);
+    const res = await grpc.simulateTransaction({ transaction: tx, include: { commandResults: true } });
+    const rvs = res.commandResults?.[0]?.returnValues ?? [];
+    if (rvs.length < 6 || rvs.some((rv) => !rv?.bcs)) return null;
+    const daily = decodeU64(rvs[2].bcs);
+    return {
+      maxTotalExposureMicro: Number(decodeU64(rvs[0].bcs)),
+      maxOpenPositions: Number(decodeU64(rvs[1].bcs)),
+      maxDailySpendMicro: daily === 18_446_744_073_709_551_615n ? null : Number(daily),
+      openExposureMicro: Number(decodeU64(rvs[3].bcs)),
+      openPositions: Number(decodeU64(rvs[4].bcs)),
+      spentTodayMicro: Number(decodeU64(rvs[5].bcs)),
+    };
+  } catch {
+    return null;
   }
 }
 
