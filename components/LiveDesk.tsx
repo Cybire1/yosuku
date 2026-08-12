@@ -279,7 +279,7 @@ export default function LiveDesk() {
     const amt = depositValue;
     if (amt <= 0 && ledger <= 0) { toast('Enter an amount to put on the desk', 'error'); return; }
     if (amt > walletDusdc) {
-      toast(`Your wallet holds ${fmtDusdc(walletDusdc)} DUSDC — tap “Get free DUSDC” or lower the amount`, 'error');
+      toast(`Your wallet holds ${fmtDusdc(walletDusdc)} DUSDC. Tap “Get free DUSDC” or lower the amount.`, 'error');
       return;
     }
     setBusy('join');
@@ -305,7 +305,7 @@ export default function LiveDesk() {
     const amt = parseFloat(depositStr.replace(',', '.'));
     if (!Number.isFinite(amt) || amt <= 0) { toast('Enter an amount above 0', 'error'); return; }
     if (amt > walletDusdc) { toast(`Your wallet holds ${fmtDusdc(walletDusdc)} DUSDC`, 'error'); return; }
-    if (dusdcCoins.length === 0) { toast('No DUSDC in this wallet yet — tap “Get free DUSDC”', 'error'); return; }
+    if (dusdcCoins.length === 0) { toast('No DUSDC in this wallet yet. Tap “Get free DUSDC”.', 'error'); return; }
     setBusy('deposit');
     try {
       await submitTx(() => buildVaultDeposit624({
@@ -344,7 +344,7 @@ export default function LiveDesk() {
         agent: VAULT624.enclaveAgent,
         ...riskTerms(ledger),
       }));
-      toast(`Limits updated — at most ${fmtDusdc(capValue)} DUSDC per trade, ${levCap}×`, 'success');
+      toast(`Limits updated: at most ${fmtDusdc(capValue)} DUSDC per trade, ${levCap}×`, 'success');
       setCapStr(''); setManage(null);
       burst();
     } catch (e) {
@@ -655,7 +655,7 @@ export default function LiveDesk() {
                     value={depositStr} onChange={setDepositStr}
                     hint={walletDusdc <= 0
                       ? <span className="inline-flex flex-wrap items-center gap-1.5">Wallet empty — no problem: {faucetChip}</span>
-                      : <span>Wallet: {fmtDusdc(walletDusdc)} DUSDC — edit freely.</span>}
+                      : <span>Wallet: {fmtDusdc(walletDusdc)} DUSDC</span>}
                     chips={[1, 5]} onChip={addDeposit} chipCls={chipCls}
                   />
                   {ledger > 0 && (
@@ -663,9 +663,9 @@ export default function LiveDesk() {
                       Already on the desk: {fmtDusdc(ledger)} — leave empty to copy with just that.
                     </p>
                   )}
-                  {stats.typicalCost > 0 && (
-                    <p className="font-mono text-[10px] text-white/30 mt-2 break-words">
-                      Recent trades cost ~{fmtDusdc(stats.typicalCost)} each — put on at least that or the strategy skips you.
+                  {stats.typicalCost > 0 && depositValue > 0 && depositValue < stats.typicalCost && (
+                    <p className="font-mono text-[10px] text-white/40 mt-2">
+                      Trades here cost about {fmtDusdc(stats.typicalCost)}. Below that you get skipped.
                     </p>
                   )}
                 </div>
@@ -673,9 +673,8 @@ export default function LiveDesk() {
                 {/* guardrails — defaulted safety, one quiet line + adjust */}
                 <div className="max-w-md">
                   <RiskModePicker value={riskPreset} onChange={(mode) => { setRiskPreset(mode); setLevCap(mode === 'guarded' ? 1 : 2); }} />
-                  <div className="mt-2 text-[12px] text-white/55 leading-snug break-words">
-                    <span className="text-white/80 font-semibold">{fmtDusdc(capValue)} per trade</span> ·{' '}
-                    {riskPreset === 'guarded' ? '1 open at 1×' : riskPreset === 'active' ? 'up to 2 open at 2×' : '1 open at 2×'} · daily limit {fmtDusdc(effLedger)}.{' '}
+                  <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-white/55 leading-snug">
+                    <span className="text-white/80 font-semibold">{fmtDusdc(capValue)} max per trade</span>
                   <button onClick={() => setShowGuardrails((v) => !v)}
                     className="font-mono text-[10px] uppercase tracking-[0.12em] text-white/40 hover:text-vermilion transition-colors underline decoration-white/20 underline-offset-2">
                     {showGuardrails ? 'done' : 'change per-trade limit'}
@@ -700,11 +699,11 @@ export default function LiveDesk() {
                           ? `Put ${fmtDusdc(depositValue)} on & copy →`
                           : `Copy with your ${fmtDusdc(ledger)} →`}
                   </button>
-                  <p className="font-mono text-[10px] text-white/30 mt-2">
-                    {belowFloor
-                      ? `The desk needs about ${fmtDusdc(MIN_LEDGER)} DUSDC on it to place a trade — anything less gets skipped.`
-                      : 'Deposit and copy-permission in one signature.'}
-                  </p>
+                  {belowFloor && (
+                    <p className="font-mono text-[10px] text-white/40 mt-2">
+                      Needs about {fmtDusdc(MIN_LEDGER)} DUSDC to place a trade.
+                    </p>
+                  )}
                 </div>
               </div>
             )}
@@ -741,7 +740,7 @@ function AmountRow(props: {
             onChange={(e) => onChange(e.target.value.replace(/[^0-9.]/g, ''))}
             className="w-full min-w-0 bg-transparent font-display text-xl font-bold text-white outline-none placeholder:text-gray-600"
           />
-          <span className="font-mono text-[10px] font-semibold text-gray-300 shrink-0">USDC</span>
+          <span className="font-mono text-[10px] font-semibold text-gray-300 shrink-0">DUSDC</span>
         </div>
         <div className="mt-1.5 flex items-center justify-between gap-2">
           <span className="font-mono text-[9px] text-gray-600 min-w-0">{hint}</span>
@@ -802,7 +801,7 @@ function CapsEditor(props: {
             onChange={(e) => setCapStr(e.target.value.replace(/[^0-9.]/g, ''))}
             className="w-full min-w-0 bg-transparent font-mono text-[13px] font-semibold text-white outline-none placeholder:text-gray-600"
           />
-          <span className="font-mono text-[9px] text-gray-500 shrink-0 ml-1">USDC</span>
+          <span className="font-mono text-[9px] text-gray-500 shrink-0 ml-1">DUSDC</span>
         </div>
       </label>
     </div>
