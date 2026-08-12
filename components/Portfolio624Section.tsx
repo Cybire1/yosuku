@@ -380,7 +380,7 @@ export default function Portfolio624Section() {
 
   return (
     <section>
-      <div className="group relative border border-white/[0.08] rounded bg-bg">
+      <div className="plate-rows group relative border border-white/[0.08] rounded overflow-hidden">
         <Crosshairs />
 
         {!checked ? (
@@ -435,12 +435,10 @@ export default function Portfolio624Section() {
                   </span>
                   {/* Page-headline size. This is what someone opened Portfolio to see. */}
                   <div className="font-display text-[34px] sm:text-6xl font-[800] tracking-tight tabular-nums mt-1" style={{ color: '#1A1612' }}>
-                    {fmt2(acctBalance)}
+                    {fmt2(acctBalance + walletDusdc)}
                     <span className="font-mono text-xs sm:text-lg font-normal ml-1.5 sm:ml-2" style={{ color: '#6B6353' }}>DUSDC</span>
                   </div>
-                  <p className="font-mono text-[10px] mt-1.5" style={{ color: '#6B6353' }}>
-                    {fmt2(acctBalance + walletDusdc)} total with your wallet
-                  </p>
+
                 </div>
                 <CrossChainDeposit />
               </div>
