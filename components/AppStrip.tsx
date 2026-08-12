@@ -63,13 +63,14 @@ export default function AppStrip() {
   return (
     <div className={`appstrip ${shown ? 'is-in' : ''}`} role="region" aria-label="Mobile app">
       <a className="appstrip-msg" href="/download" data-cursor="hover">
-        {/* Three chevrons instead of a dot. A dot marks a line; chevrons point along it, so the
-            eye is carried toward "Get it" rather than just told where the sentence starts.
-            Drawn as one SVG so the spacing is optical rather than whatever the font metrics give. */}
-        <svg className="appstrip-lead" viewBox="0 0 20 12" aria-hidden="true">
-          <path d="M2 2.5L6 6l-4 3.5" />
-          <path d="M8 2.5L12 6l-4 3.5" />
-          <path d="M14 2.5L18 6l-4 3.5" />
+        {/* A phone, not chevrons. The chevrons pointed the eye along the sentence but said
+            nothing; the strip is about an app, so the mark should be the thing itself. Drawn
+            rather than an emoji, per the icon rule. The pulse now lives on the screen fill so
+            it reads as a device waking up instead of three arrows blinking in sequence. */}
+        <svg className="appstrip-lead" viewBox="0 0 14 20" aria-hidden="true">
+          <rect x="1.2" y="1.2" width="11.6" height="17.6" rx="2.6" />
+          <path d="M5.6 3.6h2.8" />
+          <path d="M7 16.2h0.01" />
         </svg>
         {/* Keyed so React swaps the node and the CSS animation re-runs on each change. */}
         <span className="appstrip-line" key={i}>{LINES[i]}</span>

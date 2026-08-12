@@ -292,7 +292,13 @@ export default function FeedPage() {
     <>
       <Marquee />
       <Header />
-      <main className="feed-snap" style={{ outline: 'none' }} onScroll={() => setScrolled(true)}>
+      {/* Only count a REAL move as "they get it". This fired on every scroll event, so the hint
+          disappeared on the first stray pixel of momentum and never came back. */}
+      <main
+        className="feed-snap"
+        style={{ outline: 'none' }}
+        onScroll={(e) => { if (e.currentTarget.scrollTop > 60) setScrolled(true); }}
+      >
         {!loaded ? (
           <EmptyReel>reading the market…</EmptyReel>
         ) : reel.length === 0 ? (
@@ -324,11 +330,20 @@ export default function FeedPage() {
         </button>
       )}
 
-      {/* swipe-for-more hint — the reel is a snap scroll; nudge first-time viewers, then fade */}
+      {/* Swipe hint. The reel is a snap scroll and nothing else on screen says so, so a viewer who
+          does not swipe sees one market and assumes that is the whole app.
+          It was white/45 at 9px, which on the dark reel is effectively invisible, and it sat as
+          loose text directly under the DOWN button so it read as a stray label rather than an
+          affordance. Now a solid pill that says what actually happens. */}
       {hasReel && (
-        <div aria-hidden className={`pointer-events-none fixed inset-x-0 bottom-[100px] z-40 flex flex-col items-center gap-0.5 transition-opacity duration-500 ${scrolled ? 'opacity-0' : 'opacity-90'}`}>
-          <ChevronUp size={22} className="animate-bounce text-vermilion" strokeWidth={2.6} />
-          <span className="font-mono text-[9px] uppercase tracking-[0.24em] text-white/45">Swipe for more</span>
+        <div
+          aria-hidden
+          className={`pointer-events-none fixed inset-x-0 bottom-[86px] z-40 flex flex-col items-center gap-1.5 transition-opacity duration-500 ${scrolled ? 'opacity-0' : 'opacity-100'}`}
+        >
+          <ChevronUp size={20} className="animate-bounce text-white" strokeWidth={3} />
+          <span className="rounded-full bg-vermilion px-3.5 py-1.5 font-display text-[12px] font-bold leading-none text-white shadow-[0_8px_24px_-8px_rgba(224,77,38,0.7)]">
+            Swipe up for the next market
+          </span>
         </div>
       )}
 

@@ -118,7 +118,7 @@ const FOOTER_COLS: { title: string; links: { label: string; href: string; ext?: 
   { title: 'Product', links: [
     { label: 'Markets', href: '/markets' },
     { label: 'iOS app', href: 'https://testflight.apple.com/join/7AxcFCf5', ext: true },
-    { label: 'Sensei', href: '/sensei' },
+    { label: 'Sensei', href: '/markets?sensei=1' },
     { label: 'Reels', href: '/reels' },
     { label: 'Portfolio', href: '/portfolio' },
     { label: 'Leaderboard', href: '/leaderboard' },

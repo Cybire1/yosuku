@@ -686,7 +686,7 @@ export default function StrategiesPage() {
                     <span className="shrink-0 font-mono text-[9px] uppercase tracking-[0.16em] text-vermilion border border-vermilion/40 rounded-full px-2 py-0.5">Coming soon</span>
                   </div>
                 </div>
-                <a href="/sensei" data-cursor="hover" className="shrink-0 rounded-full border border-vermilion/40 bg-vermilion/[0.07] px-4 py-2 text-[12.5px] font-semibold text-vermilion hover:bg-vermilion/[0.14] transition-colors">Meet Sensei →</a>
+                <a href="/markets?sensei=1" data-cursor="hover" className="shrink-0 rounded-full border border-vermilion/40 bg-vermilion/[0.07] px-4 py-2 text-[12.5px] font-semibold text-vermilion hover:bg-vermilion/[0.14] transition-colors">Meet Sensei →</a>
               </div>
 
               {address && showList && (

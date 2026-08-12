@@ -249,9 +249,12 @@ export default function PortfolioPage() {
       <GrainOverlay />
 
       <main className="container pt-[120px] pb-32">
-        <h1 className="font-display font-[800] text-4xl text-white tracking-tight mb-2">
-          Portfolio
-        </h1>
+        {/* Deposit sits on the title row: it is the one thing someone comes here to DO, and as a
+            button it costs a line instead of the card-with-a-paragraph it used to be. */}
+        <div className="mb-2 flex items-center justify-between gap-4">
+          <h1 className="font-display font-[800] text-4xl text-white tracking-tight">Portfolio</h1>
+          <CrossChainDeposit />
+        </div>
 
         {!mounted ? (
           <div className="text-center py-20">
@@ -285,9 +288,8 @@ export default function PortfolioPage() {
             <Portfolio624Section />
 
             {/* Money-in sits under the positions. Leading with it meant a first-time visitor was
-                asked to link X and bridge USDC before they had connected anything. */}
+                asked to link X before they had connected anything. */}
             <XWalletCard />
-            <CrossChainDeposit />
 
             {/* Everything below still lives on the original deployment. Users did not choose to
                 have two balances, so name the money and say plainly that it is reachable, rather

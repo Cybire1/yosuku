@@ -71,6 +71,35 @@ export default function SenseiDock({ targetTime, now }: Props) {
   const account = useCurrentAccount();
   const [secsLeft, setSecsLeft] = useState(0);
   const [open, setOpen] = useState(false);
+
+  // Anything on the site can ask for Sensei by firing this event, so the nav does not need a
+  // route of its own. The dock only exists on market pages, so the nav sends people here first
+  // and ?sensei=1 opens the drawer on arrival.
+  useEffect(() => {
+    const onAsk = () => setOpen(true);
+    window.addEventListener('sensei:open', onAsk);
+    // Catch the nav link while we are ALREADY on a market page. It points at ?sensei=1, but a
+    // client-side nav to the page you are on does not remount this component, so the effect below
+    // would never re-run and the drawer would silently not open.
+    const onClick = (e: MouseEvent) => {
+      const a = (e.target as HTMLElement | null)?.closest?.('a');
+      if (a instanceof HTMLAnchorElement && a.getAttribute('href')?.includes('sensei=1')) {
+        e.preventDefault();
+        setOpen(true);
+      }
+    };
+    document.addEventListener('click', onClick);
+    if (new URLSearchParams(window.location.search).get('sensei') === '1') {
+      setOpen(true);
+      const url = new URL(window.location.href);
+      url.searchParams.delete('sensei');
+      window.history.replaceState({}, '', url.toString());
+    }
+    return () => {
+      window.removeEventListener('sensei:open', onAsk);
+      document.removeEventListener('click', onClick);
+    };
+  }, []);
   const [snapshot, setSnapshot] = useState<Snapshot>(null);
   const [msgs, setMsgs] = useState<Msg[]>([INTRO]);
   const [input, setInput] = useState('');

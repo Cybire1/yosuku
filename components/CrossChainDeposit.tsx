@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { ArrowUpRight } from 'lucide-react';
+import { ArrowUpRight, X } from 'lucide-react';
 import { useCurrentAccount } from '@mysten/dapp-kit';
 import { createPublicClient, createWalletClient, custom, http, formatUnits, parseUnits } from 'viem';
 import {
@@ -71,6 +71,7 @@ export default function CrossChainDeposit() {
   const [status, setStatus] = useState<DepositStatus>({ status: 'unknown' });
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [configured, setConfigured] = useState<boolean | null>(null);
+  const [open, setOpen] = useState(false);
 
   useEffect(() => { void cctpConfigured().then(setConfigured); }, []);
 
@@ -277,121 +278,125 @@ export default function CrossChainDeposit() {
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [pending]);
 
-  // Render nothing until we KNOW the rail is up, and never without a Sui address. Previously this
-  // rendered during the check and vanished when it resolved, which is the "shows then disconnects"
-  // flicker. It is also useless without a destination: the burn names a mint recipient, so with no
-  // Sui wallet connected there is nowhere to deliver and the button could only ever error.
+  // Render nothing until we KNOW the rail is up, and never without a Sui address. It mounted
+  // during the config check and vanished when it resolved, which is the flicker that read as
+  // "shows then disconnects", and it cannot work without a destination: the burn names a mint
+  // recipient, so with no Sui wallet there is nowhere to deliver.
   if (configured !== true || !suiAddress) return null;
 
   const pendingChain = pending ? SOURCE_CHAINS.find((c) => c.domain === pending.domain) : null;
+  const inFlight = !!pending && status.status !== 'delivered';
 
+  // One button, and the chains live behind it.
+  //
+  // This was a full-width card carrying a paragraph of explanation and a wait time under every
+  // chain. On the portfolio that is a wall of reading in front of a two-tap job, and the copy
+  // answered a question nobody had asked yet. Deposit is a button; picking where the money comes
+  // from is a choice you make after deciding to deposit, not before.
   return (
-    <div className="border border-white/[0.07] rounded-2xl p-5 bg-[#0d0d10]">
-      <div className="flex items-baseline justify-between mb-1">
-        <h3 className="font-display text-lg font-bold">Deposit from another chain</h3>
-        <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-gray-500">USDC</span>
-      </div>
-      <p className="font-mono text-[11px] text-gray-500 mb-4 leading-relaxed">
-        Your USDC is burned on the chain it sits on and minted on Sui at your own address. We pay the
-        Sui gas so you do not need any. Only you can spend it when it lands.
-      </p>
+    <>
+      <button
+        onClick={() => setOpen(true)}
+        className="inline-flex items-center gap-2 rounded-xl bg-[#E04D26] px-4 py-2.5 font-display text-sm font-bold text-white transition-colors hover:bg-[#B83A1B]"
+      >
+        Deposit
+        {inFlight && <span className="h-1.5 w-1.5 rounded-full bg-white/90 animate-pulse" />}
+      </button>
 
-      {/* Chain choice carries the wait time, because that is the thing that actually differs. */}
-      <div className="grid grid-cols-2 gap-2 mb-4">
-        {SOURCE_CHAINS.map((c) => (
-          <button
-            key={c.domain}
-            onClick={() => setChain(c)}
-            className={`rounded-xl border px-3 py-2 text-left transition ${
-              chain.domain === c.domain ? 'border-emerald-500/40 bg-emerald-500/[0.06]' : 'border-white/[0.07] hover:border-white/20'
-            }`}
-          >
-            <div className="font-mono text-[11px] font-semibold">{c.name}</div>
-            <div className={`font-mono text-[10px] ${c.seconds <= 30 ? 'text-emerald-400' : 'text-gray-500'}`}>
-              {humanWait(c.seconds)}
-            </div>
-          </button>
-        ))}
-      </div>
-
-      {/* NOT bg-white: the light theme remaps .bg-white to #141210, so a white button with dark
-          text renders dark-on-dark and the label vanishes. Vermilion is the app's primary fill and
-          globals.css explicitly pins its label light in BOTH themes, which is the guarantee needed
-          here. Same trap one button down, where .text-black would flip to cream on the green. */}
-      {!connected ? (
-        <button
-          onClick={connect}
-          disabled={busy === 'connect'}
-          className="w-full rounded-xl bg-[#E04D26] text-white font-bold py-2.5 text-sm transition-colors hover:bg-[#B83A1B] disabled:opacity-50"
+      {open && (
+        <div
+          className="fixed inset-0 z-[200] flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-6"
+          onClick={() => setOpen(false)}
         >
-          {busy === 'connect' ? 'Connecting…' : `Connect a wallet on ${chain.name}`}
-        </button>
-      ) : (
-        <>
-          <div className="flex items-center justify-between mb-2 font-mono text-[11px] text-gray-500">
-            <span>{chain.kind === 'solana' ? `${connected.slice(0, 4)}…${connected.slice(-4)}` : short(connected)}</span>
-            <span>{balance == null ? '—' : `${formatUnits(balance, 6)} USDC`}</span>
-          </div>
-          <div className="flex gap-2 mb-3">
-            <input
-              value={amount}
-              onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))}
-              inputMode="decimal"
-              className="flex-1 rounded-xl bg-white/[0.04] border border-white/[0.07] px-3 py-2 font-mono text-sm outline-none focus:border-white/25"
-              placeholder="Amount"
-            />
-            {balance != null && balance > 0n && (
-              <button
-                onClick={() => setAmount(formatUnits(balance, 6))}
-                className="rounded-xl border border-white/[0.07] px-3 font-mono text-[11px] text-gray-400 hover:border-white/20"
-              >
-                Max
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md rounded-t-2xl border border-white/[0.08] bg-[#0d0d10] p-5 sm:rounded-2xl"
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="font-display text-lg font-bold">Deposit USDC</h3>
+              <button onClick={() => setOpen(false)} aria-label="Close" className="text-gray-500 hover:text-white">
+                <X size={18} />
               </button>
+            </div>
+
+            {/* Chain names only. The wait differs a lot per chain, but it is not what someone is
+                deciding here: they deposit from wherever their USDC already is. */}
+            <div className="mb-4 grid grid-cols-2 gap-2">
+              {SOURCE_CHAINS.map((c) => (
+                <button
+                  key={c.domain}
+                  onClick={() => setChain(c)}
+                  className={`rounded-xl border px-3 py-2.5 text-left font-mono text-[12px] font-semibold transition ${
+                    chain.domain === c.domain
+                      ? 'border-emerald-500/45 bg-emerald-500/[0.07]'
+                      : 'border-white/[0.07] hover:border-white/25'
+                  }`}
+                >
+                  {c.name}
+                </button>
+              ))}
+            </div>
+
+            {!connected ? (
+              <button
+                onClick={connect}
+                disabled={busy === 'connect'}
+                className="w-full rounded-xl bg-[#E04D26] py-2.5 font-display text-sm font-bold text-white transition-colors hover:bg-[#B83A1B] disabled:opacity-50"
+              >
+                {busy === 'connect' ? 'Connecting…' : `Connect ${chain.name}`}
+              </button>
+            ) : (
+              <>
+                <div className="mb-2 flex items-center justify-between font-mono text-[11px] text-gray-500">
+                  <span>{chain.kind === 'solana' ? `${connected.slice(0, 4)}…${connected.slice(-4)}` : short(connected)}</span>
+                  <span>{balance == null ? '—' : `${formatUnits(balance, 6)} USDC`}</span>
+                </div>
+                <div className="mb-3 flex gap-2">
+                  <input
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))}
+                    inputMode="decimal"
+                    placeholder="Amount"
+                    className="flex-1 rounded-xl border border-white/[0.07] bg-white/[0.04] px-3 py-2 font-mono text-sm outline-none focus:border-white/25"
+                  />
+                  {balance != null && balance > 0n && (
+                    <button
+                      onClick={() => setAmount(formatUnits(balance, 6))}
+                      className="rounded-xl border border-white/[0.07] px-3 font-mono text-[11px] text-gray-400 hover:border-white/25"
+                    >
+                      Max
+                    </button>
+                  )}
+                </div>
+                <button
+                  onClick={deposit}
+                  disabled={!!busy}
+                  className="w-full rounded-xl bg-emerald-500 py-2.5 font-display text-sm font-bold text-[#0d0d10] transition-colors hover:bg-emerald-400 disabled:opacity-50"
+                >
+                  {busy === 'approve' ? 'Approving…' : busy === 'burn' ? 'Confirm in your wallet…' : 'Deposit'}
+                </button>
+              </>
+            )}
+
+            {err && <p className="mt-3 font-mono text-[11px] leading-relaxed text-red-400">{err}</p>}
+
+            {inFlight && (
+              <div className="mt-3 flex items-center justify-between font-mono text-[11px] text-gray-500">
+                <span>{status.status === 'failed' ? 'Needs attention' : 'On its way'}</span>
+                {pendingChain && (
+                  <a href={`${pendingChain.explorer}${pending!.txHash}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 hover:text-white">
+                    View <ArrowUpRight size={11} />
+                  </a>
+                )}
+              </div>
+            )}
+
+            {status.status === 'delivered' && (
+              <p className="mt-3 font-mono text-[11px] text-emerald-400">Landed on Sui.</p>
             )}
           </div>
-          <button
-            onClick={deposit}
-            disabled={!!busy}
-            className="w-full rounded-xl bg-emerald-500 text-[#0d0d10] font-bold py-2.5 text-sm transition-colors hover:bg-emerald-400 disabled:opacity-50"
-          >
-            {busy === 'approve' ? 'Approving…' : busy === 'burn' ? 'Confirm in your wallet…'
-              : `Deposit from ${chain.name} · ${humanWait(chain.seconds)}`}
-          </button>
-
-        </>
-      )}
-
-      {err && <p className="font-mono text-[11px] text-red-400 mt-3 leading-relaxed">{err}</p>}
-
-      {pending && status.status !== 'delivered' && (
-        <div className="mt-4 rounded-xl border border-white/[0.07] p-3">
-          <div className="font-mono text-[11px] font-semibold mb-1">
-            {status.status === 'failed' ? 'Deposit needs attention' : 'On its way'}
-          </div>
-          <p className="font-mono text-[10px] text-gray-500 leading-relaxed">
-            {status.status === 'failed'
-              ? (status as { dead: string }).dead
-              : `Waiting for ${pendingChain?.name ?? 'the source chain'} to finalise, ${humanWait(pendingChain?.seconds ?? 60)}. You can leave this page, it keeps going.`}
-          </p>
-          {pendingChain && (
-            <a href={`${pendingChain.explorer}${pending.txHash}`} target="_blank" rel="noreferrer"
-               className="font-mono text-[10px] text-gray-400 hover:text-white inline-flex items-center gap-1 mt-2">
-              View burn <ArrowUpRight size={11} />
-            </a>
-          )}
         </div>
       )}
-
-      {status.status === 'delivered' && (
-        <div className="mt-4 rounded-xl border border-emerald-500/25 bg-emerald-500/[0.05] p-3">
-          <div className="font-mono text-[11px] text-emerald-300">Landed on Sui</div>
-          <p className="font-mono text-[10px] text-gray-400 mt-1">
-            {(status as { amountMicro?: string }).amountMicro
-              ? `${formatUnits(BigInt((status as { amountMicro: string }).amountMicro), 6)} USDC is in your wallet.`
-              : 'Your USDC is in your wallet.'}
-          </p>
-        </div>
-      )}
-    </div>
+    </>
   );
 }

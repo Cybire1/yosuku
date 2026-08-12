@@ -45,7 +45,9 @@ const PRIMARY_NAV: NavLink[] = [
 ];
 
 const SECONDARY_NAV: NavLink[] = [
-  { name: 'Sensei', href: '/sensei', icon: MessageSquare },
+    // Opens the Sensei drawer rather than a page of its own. The page duplicated the dock's
+  // brain behind a second layout, so the same assistant existed twice and drifted.
+  { name: 'Sensei', href: '/markets?sensei=1', icon: MessageSquare },
   { name: 'X-trade', href: '/trade-from-x', icon: Twitter },
   { name: 'Parlay', href: '/parlay', icon: ChartNoAxesCombined },
   { name: 'Add money', href: '/fund', icon: BadgeDollarSign },

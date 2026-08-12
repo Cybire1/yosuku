@@ -189,13 +189,15 @@ body.urgent::before {
    or fully-lit triple arrow is the blinking-banner reflex the rest of this strip was rebuilt to
    avoid. Each stroke rests at a readable opacity and only briefly brightens as the wave passes. */
 .appstrip-lead {
-  width: 17px; height: 10px; flex: none;
-  fill: none; stroke: var(--vermilion); stroke-width: 2.1;
+  /* Portrait now that it is a phone, and sized to the cap height of the text beside it so it
+     sits on the same optical line rather than floating. */
+  width: 11px; height: 15px; flex: none;
+  fill: none; stroke: var(--vermilion); stroke-width: 1.7;
   stroke-linecap: round; stroke-linejoin: round;
 }
+.appstrip-lead rect { opacity: 0.85; }
 .appstrip-lead path { opacity: 0.34; animation: appstripLead 2.9s ease-in-out infinite; }
-.appstrip-lead path:nth-child(2) { animation-delay: 0.18s; }
-.appstrip-lead path:nth-child(3) { animation-delay: 0.36s; }
+.appstrip-lead path:nth-child(3) { animation-delay: 0.25s; }
 @keyframes appstripLead {
   0%, 62%, 100% { opacity: 0.34; }
   22%           { opacity: 1; }
