@@ -248,24 +248,18 @@ export default function PortfolioPage() {
       <CustomCursor />
       <GrainOverlay />
 
-      <main className="container pt-[120px] pb-12">
+      <main className="container pt-[120px] pb-32">
         <h1 className="font-display font-[800] text-4xl text-white tracking-tight mb-2">
           Portfolio
         </h1>
-
-        {/* Trade-from-X account — shows whether or not a Sui wallet is connected */}
-        <div className="mb-10 space-y-4">
-          <XWalletCard />
-          <CrossChainDeposit />
-        </div>
 
         {!mounted ? (
           <div className="text-center py-20">
             <div className="w-6 h-6 border border-gray-600 border-t-white rounded-full animate-spin mx-auto" />
           </div>
         ) : !address ? (
-          <div className="flex items-center justify-center min-h-[calc(100vh-360px)]">
-          <div className="w-full border border-white/[0.08] rounded bg-bg p-16 text-center">
+          <div className="space-y-4">
+          <div className="w-full border border-white/[0.08] rounded bg-bg p-10 text-center">
             <div className="w-16 h-16 mx-auto mb-6 border border-white/10 rounded-full flex items-center justify-center">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-gray-500">
                 <rect x="2" y="6" width="20" height="14" rx="2" />
@@ -278,14 +272,22 @@ export default function PortfolioPage() {
             </p>
             <div className="flex flex-col items-center gap-3">
               <ConnectButton />
-              <a href="/how-it-works" className="text-[11px] text-gray-600 hover:text-white transition-colors">New to Sui? Any wallet works — test funds are free →</a>
+              <a href="/how-it-works" className="text-[11px] text-gray-600 hover:text-white transition-colors">New to Sui? Any wallet works, test funds are free →</a>
             </div>
           </div>
+          {/* Kept below the primary action, not above it: someone landing here from a tweet still
+              needs to claim their X account, but connecting a wallet is what the page is FOR. */}
+          <XWalletCard />
           </div>
         ) : (
           <div className="space-y-8">
             {/* ── New venue (DeepBook Predict 6-24) — balance, open positions, settled history ── */}
             <Portfolio624Section />
+
+            {/* Money-in sits under the positions. Leading with it meant a first-time visitor was
+                asked to link X and bridge USDC before they had connected anything. */}
+            <XWalletCard />
+            <CrossChainDeposit />
 
             {/* Everything below still lives on the original deployment. Users did not choose to
                 have two balances, so name the money and say plainly that it is reachable, rather

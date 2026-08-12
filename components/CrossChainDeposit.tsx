@@ -277,7 +277,11 @@ export default function CrossChainDeposit() {
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [pending]);
 
-  if (configured === false) return null;
+  // Render nothing until we KNOW the rail is up, and never without a Sui address. Previously this
+  // rendered during the check and vanished when it resolved, which is the "shows then disconnects"
+  // flicker. It is also useless without a destination: the burn names a mint recipient, so with no
+  // Sui wallet connected there is nowhere to deliver and the button could only ever error.
+  if (configured !== true || !suiAddress) return null;
 
   const pendingChain = pending ? SOURCE_CHAINS.find((c) => c.domain === pending.domain) : null;
 
@@ -347,17 +351,13 @@ export default function CrossChainDeposit() {
           </div>
           <button
             onClick={deposit}
-            disabled={!!busy || !suiAddress}
+            disabled={!!busy}
             className="w-full rounded-xl bg-emerald-500 text-[#0d0d10] font-bold py-2.5 text-sm transition-colors hover:bg-emerald-400 disabled:opacity-50"
           >
             {busy === 'approve' ? 'Approving…' : busy === 'burn' ? 'Confirm in your wallet…'
               : `Deposit from ${chain.name} · ${humanWait(chain.seconds)}`}
           </button>
-          {!suiAddress && (
-            <p className="font-mono text-[10px] text-amber-400/80 mt-2">
-              Connect your Sui wallet so we know where to deliver.
-            </p>
-          )}
+
         </>
       )}
 
