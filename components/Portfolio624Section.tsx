@@ -442,16 +442,12 @@ export default function Portfolio624Section() {
               </div>
 
               <div
-                className="grid grid-cols-2 sm:grid-cols-4 gap-y-3 gap-x-6 pt-4 sm:gap-y-4 sm:pt-5"
+                className="grid grid-cols-3 gap-y-3 gap-x-6 pt-4 sm:gap-y-4 sm:pt-5"
                 style={{ borderTop: '1px solid rgba(201,191,166,0.3)' }}
               >
                 <div>
                   <span className="font-mono text-[8px] tracking-[0.14em] uppercase" style={{ color: '#6B6353' }}>Wallet</span>
                   <div className="font-mono text-sm" style={{ color: '#1A1612' }}>{fmt2(walletDusdc)}</div>
-                </div>
-                <div>
-                  <span className="font-mono text-[8px] tracking-[0.14em] uppercase" style={{ color: '#6B6353' }}>Available</span>
-                  <div className="font-mono text-sm" style={{ color: '#1A1612' }}>{fmt2(acctBalance)}</div>
                 </div>
                 <div>
                   <span className="font-mono text-[8px] tracking-[0.14em] uppercase" style={{ color: '#6B6353' }}>Paying out</span>
