@@ -5105,9 +5105,9 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
    the question itself, so a card meant to read question-first read as two slabs. */
 @media (max-width: 720px) {
   .wq-actions { gap: 8px; }
-  .wq-btn { padding: 9px 13px; border-radius: 11px; }
-  .wq-btn .wq-side { font-size: 14px; }
-  .wq-btn .wq-cents { font-size: 13px; }
+  .wq-btn { padding: 6px 12px; border-radius: 10px; }
+  .wq-btn .wq-side { font-size: 13px; }
+  .wq-btn .wq-cents { font-size: 12px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .wq-btn, .wq-btn::before, .wq-btn .wq-side, .wq-btn .wq-cents { transition-duration: 1ms; }
