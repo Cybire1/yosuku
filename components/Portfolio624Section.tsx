@@ -434,7 +434,7 @@ export default function Portfolio624Section() {
                     Your balance
                   </span>
                   {/* Page-headline size. This is what someone opened Portfolio to see. */}
-                  <div className="font-display text-[34px] sm:text-6xl font-[800] tracking-tight tabular-nums mt-1" style={{ color: '#1A1612' }}>
+                  <div className="font-display text-[34px] sm:text-6xl font-[800] tracking-tight tabular-nums mt-1" style={{ color: '#E04D26' }}>
                     {fmt2(acctBalance + walletDusdc)}
                     <span className="font-mono text-xs sm:text-lg font-normal ml-1.5 sm:ml-2" style={{ color: '#6B6353' }}>DUSDC</span>
                   </div>
