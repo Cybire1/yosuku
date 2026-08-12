@@ -48,7 +48,13 @@ import { BAND_USD, minMintMs, strike624, ticks624, type Dir624 } from '@/lib/sui
 // involved, and nothing is ever executed. The user's own bets quote with their
 // own account in the ticket drawer.
 const HOUSE_SENDER = '0x0099f97251af2d072fc492316ae30de3ab5639beb09073509d54bf49197513b4';
-const HOUSE_WRAPPER = '0xc820ff1e36d8810f29d80ad81415fd064e02b7f20c41a4469e2f4400d514e706';
+// Must be an AccountWrapper on the CURRENT account package and SELF-OWNED by HOUSE_SENDER.
+// The previous id was a wrapper from account package 0xb9389eac…, left behind when 7-29 was
+// redeployed in place and every address moved. Wrong type, so deposit_funds inside the quote died
+// with CommandArgumentError TypeMismatch, every quote returned an error and the board sat on
+// "LOADING ODDS…" forever. An object-owned wrapper does not work either: the quote carries the
+// user's own Auth, so it aborts. Created 2026-08-12, tx 687Vbyvwe3c8….
+const HOUSE_WRAPPER = '0xa626009e003ba8e9b36e92c1f29683629703e431074688a160252a309f5fa978';
 // 2 DUSDC payout @1× — the venue's smallest quotable ticket (min net premium is
 // 1 DUSDC; a 1 DUSDC quote aborts). Cents shown = cost per $1 of payout.
 const ODDS_STALE_MS = 18_000; // per-market cache — effective ~20s refresh
@@ -154,27 +160,45 @@ function useHouseOdds624(markets: Market624[], spot: number | null) {
       inflight.current = true;
       try {
         const nowMs = Date.now();
-        const list = marketsRef.current.filter((m) => m.expiry - nowMs > minMintMs(m.cadence));
-        for (const m of list) {
-          if (dead) break;
-          const cached = oddsRef.current[m.id];
-          if (cached && Date.now() - cached.at < ODDS_STALE_MS) continue;
-          const spotNow = spotRef.current;
-          if (spotNow == null) break;
-          const [up, down] = await Promise.all([quoteSide(m.id, 'up', spotNow), quoteSide(m.id, 'down', spotNow)]);
-          if (dead) break;
-          setOdds((o) => ({
-            ...o,
-            [m.id]: {
-              upCents: up ?? o[m.id]?.upCents ?? null,
-              downCents: down ?? o[m.id]?.downCents ?? null,
-              strikeUpUsd: up != null ? strike624(spotNow, 'up') : o[m.id]?.strikeUpUsd ?? null,
-              strikeDownUsd: down != null ? strike624(spotNow, 'down') : o[m.id]?.strikeDownUsd ?? null,
-              at: Date.now(),
-            },
-          }));
-          await new Promise((r) => setTimeout(r, ODDS_STAGGER_MS));
-        }
+        const list = marketsRef.current
+          .filter((m) => m.expiry - nowMs > minMintMs(m.cadence))
+          .filter((m) => {
+            const cached = oddsRef.current[m.id];
+            return !(cached && nowMs - cached.at < ODDS_STALE_MS);
+          });
+
+        // Quote markets CONCURRENTLY, a few at a time.
+        //
+        // This walked the list one market at a time with a 350ms gap between each, and every
+        // market costs two on-chain simulations. With six live markets a full pass ran longer
+        // than the 18s freshness window, so the sweep never caught up and the cards near the
+        // bottom sat on "LOADING ODDS…" through their whole first minute. A small pool gets every
+        // card priced in roughly one round-trip instead of N, and stays polite to the node: four
+        // in flight is eight simulations, not the twelve an unbounded Promise.all would fire.
+        const POOL = 4;
+        let next = 0;
+        const worker = async () => {
+          while (!dead) {
+            const m = list[next++];
+            if (!m) return;
+            const spotNow = spotRef.current;
+            if (spotNow == null) return;
+            const [up, down] = await Promise.all([quoteSide(m.id, 'up', spotNow), quoteSide(m.id, 'down', spotNow)]);
+            if (dead) return;
+            setOdds((o) => ({
+              ...o,
+              [m.id]: {
+                upCents: up ?? o[m.id]?.upCents ?? null,
+                downCents: down ?? o[m.id]?.downCents ?? null,
+                strikeUpUsd: up != null ? strike624(spotNow, 'up') : o[m.id]?.strikeUpUsd ?? null,
+                strikeDownUsd: down != null ? strike624(spotNow, 'down') : o[m.id]?.strikeDownUsd ?? null,
+                at: Date.now(),
+              },
+            }));
+            await new Promise((r) => setTimeout(r, ODDS_STAGGER_MS));
+          }
+        };
+        await Promise.all(Array.from({ length: Math.min(POOL, list.length) }, worker));
       } finally {
         inflight.current = false;
       }
