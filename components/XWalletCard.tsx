@@ -222,6 +222,13 @@ export default function XWalletCard() {
       config: 'X connection is temporarily unavailable.',
       server: 'X connection is temporarily unavailable. Please try again.',
     };
+    if (reason?.startsWith('token_')) {
+      const code = reason.slice('token_'.length);
+      setErr(code === 'invalid_grant'
+        ? 'Your X approval expired before it could finish. Please connect again.'
+        : `X rejected the connection (${code.replaceAll('_', ' ')}). Please try again.`);
+      return;
+    }
     setErr(messages[reason || ''] || 'X authorization did not finish. Please try again.');
   }, []);
 

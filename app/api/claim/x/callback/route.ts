@@ -4,6 +4,61 @@ import { signSession, SESSION_TTL_MS } from '@/lib/claimOAuth';
 
 export const dynamic = 'force-dynamic';
 
+type TokenResult = {
+  response: Response;
+  payload: Record<string, unknown>;
+  mode: 'confidential' | 'public';
+};
+
+async function exchangeCode(input: {
+  clientId: string;
+  clientSecret?: string;
+  code: string;
+  redirect: string;
+  verifier: string;
+}): Promise<TokenResult> {
+  const request = async (mode: TokenResult['mode']): Promise<TokenResult> => {
+    const confidential = mode === 'confidential';
+    const body = new URLSearchParams({
+      grant_type: 'authorization_code',
+      code: input.code,
+      redirect_uri: input.redirect,
+      code_verifier: input.verifier,
+    });
+    // X's confidential-client example authenticates only through Basic auth. Public PKCE clients
+    // authenticate by putting client_id in the body. Keep the request shapes distinct.
+    if (!confidential) body.set('client_id', input.clientId);
+
+    const response = await fetch('https://api.x.com/2/oauth2/token', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        ...(confidential
+          ? { authorization: 'Basic ' + Buffer.from(`${input.clientId}:${input.clientSecret}`).toString('base64') }
+          : {}),
+      },
+      body,
+      cache: 'no-store',
+    });
+    const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
+    return { response, payload, mode };
+  };
+
+  if (!input.clientSecret) return request('public');
+
+  const confidential = await request('confidential');
+  if (confidential.response.ok && confidential.payload.access_token) return confidential;
+
+  // A public X app can still have an unrelated/stale secret in deployment settings. Invalid
+  // client authentication does not authorize anything, so retry the same PKCE exchange using the
+  // public-client request shape before asking the user to start over.
+  const error = String(confidential.payload.error || '');
+  if (confidential.response.status === 401 || error === 'invalid_client' || error === 'unauthorized_client') {
+    return request('public');
+  }
+  return confidential;
+}
+
 // X redirects here with ?code&state. Exchange for a token, read the handle+id, stash a signed
 // session, and bounce back to /claim?x=1 where the page reveals what's waiting.
 export async function GET(req: NextRequest) {
@@ -29,26 +84,20 @@ export async function GET(req: NextRequest) {
   if (!clientId) return NextResponse.redirect(withResult('err', 'config'));
 
   try {
-    // X supports both confidential web clients (Basic client authentication) and public PKCE
-    // clients (client_id in the request body). Sending `Basic base64(clientId:undefined)` made a
-    // correctly configured public client fail only after the user had approved access.
-    const tokenResponse = await fetch('https://api.x.com/2/oauth2/token', {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/x-www-form-urlencoded',
-        ...(clientSecret ? { authorization: 'Basic ' + Buffer.from(`${clientId}:${clientSecret}`).toString('base64') } : {}),
-      },
-      body: new URLSearchParams({ grant_type: 'authorization_code', code, redirect_uri: redirect, code_verifier: verifier, client_id: clientId }),
-      cache: 'no-store',
-    });
-    const token = await tokenResponse.json().catch(() => ({}));
-    if (!tokenResponse.ok || !token?.access_token) {
-      console.error('X OAuth token exchange failed', { status: tokenResponse.status, code: token?.error || 'unknown' });
-      return NextResponse.redirect(withResult('err', 'token'));
+    const tokenResult = await exchangeCode({ clientId, clientSecret, code, redirect, verifier });
+    const token = tokenResult.payload;
+    if (!tokenResult.response.ok || !token.access_token) {
+      const errorCode = String(token.error || 'unknown').replace(/[^a-z0-9_-]/gi, '').slice(0, 48);
+      console.error('X OAuth token exchange failed', {
+        status: tokenResult.response.status,
+        code: errorCode,
+        mode: tokenResult.mode,
+      });
+      return NextResponse.redirect(withResult('err', `token_${errorCode || 'unknown'}`));
     }
 
     const meResponse = await fetch('https://api.x.com/2/users/me', {
-      headers: { authorization: `Bearer ${token.access_token}` },
+      headers: { authorization: `Bearer ${String(token.access_token)}` },
       cache: 'no-store',
     });
     const me = await meResponse.json().catch(() => ({}));
