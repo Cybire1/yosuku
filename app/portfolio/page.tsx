@@ -241,6 +241,20 @@ export default function PortfolioPage() {
 
   const badges = computeBadges(positionSummaries, plpBalance);
 
+  // Does this person have anything on the OLD deployment at all?
+  //
+  // Everything below the divider is pre-migration: a second balance, its own P&L columns, its own
+  // deposit box. It used to render for everyone, so a brand new wallet was shown two balances and
+  // a settlement history for a venue it had never touched. Nobody signing up today has money
+  // there, and the split is an artefact of our migration, not something they chose. So it only
+  // exists for the people who actually left something behind.
+  const hasEarlierFunds =
+    accountSnapshot.yosukuBalanceDusdc > 0.005 ||
+    positions.length > 0 ||
+    leverageOrders.length > 0 ||
+    leveragePositions.length > 0 ||
+    privateTickets.length > 0;
+
   return (
     <div className="min-h-screen relative">
       <Marquee />
@@ -291,13 +305,15 @@ export default function PortfolioPage() {
                 asked to link X before they had connected anything. */}
             <XWalletCard />
 
-            {/* Everything below still lives on the original deployment. Users did not choose to
-                have two balances, so name the money and say plainly that it is reachable, rather
-                than labelling the split with our deployment history. */}
+            {/* Only for people who actually have something on the old deployment. See
+                hasEarlierFunds: for everyone else this whole section does not exist, so the
+                product shows ONE balance. */}
+            {hasEarlierFunds && (
+            <>
             <div className="flex items-center gap-3 pt-2">
-              <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/40">Earlier balance</span>
+              <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/40">Money from the old version</span>
               <div className="h-px flex-1 bg-white/10" />
-              <span className="font-mono text-[10px] text-white/30">from before the upgrade · withdraw anytime</span>
+              <span className="font-mono text-[10px] text-white/30">yours to move out anytime</span>
             </div>
 
             {/* Ledger Plate — stats overview */}
@@ -305,7 +321,7 @@ export default function PortfolioPage() {
               <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
                 <div>
                   <span className="font-mono text-[9px] tracking-[0.16em] uppercase" style={{ color: '#6B6353' }}>
-                    Earlier balance
+                    From the old version
                   </span>
                   <div className="font-mono text-3xl font-semibold mt-1" style={{ color: '#1A1612' }}>
                     {accountSnapshot.yosukuBalanceDusdc.toFixed(2)}
@@ -405,8 +421,7 @@ export default function PortfolioPage() {
                         Trading balance
                       </span>
                       <p className="font-mono text-[10px] mt-1 max-w-2xl" style={{ color: '#6B6353' }}>
-                        Money left in the earlier version. New bets do not use it. Move it to your
-                        wallet whenever you want.
+                        Your new bets do not use this. Move it to your wallet whenever you want.
                       </p>
                     </div>
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -543,6 +558,9 @@ export default function PortfolioPage() {
                   <BadgeDisplay badges={badges} />
                 </div>
               </section>
+            )}
+
+            </>
             )}
 
             {/* CTA */}
