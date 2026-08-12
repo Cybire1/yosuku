@@ -473,15 +473,9 @@ export default function Portfolio624Section() {
               </div>
 
               <div className="mt-4 pt-4 sm:mt-6 sm:pt-5" style={{ borderTop: '1px solid rgba(201,191,166,0.3)' }}>
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-                  <div>
-                    <span className="font-mono text-[8px] tracking-[0.14em] uppercase" style={{ color: '#6B6353' }}>
-                      Your balance
-                    </span>
-                    <p className="font-mono text-[10px] mt-1 max-w-2xl" style={{ color: '#6B6353' }}>
-                      Every bet comes from here. Move it back to your wallet whenever you want.
-                    </p>
-                  </div>
+                {/* Just the controls. The label repeated the balance heading directly above it and
+                    the sentence explained a Deposit/Withdraw pair that needs no explaining. */}
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-end">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                     <input
                       value={depositAmt}
