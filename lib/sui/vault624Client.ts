@@ -1,4 +1,4 @@
-// The Live Desk — yosuku_spike::vault624 client (predict-testnet-6-24).
+// The Live Desk — yosuku_spike::vault624 client (predict-testnet-7-29).
 //
 // vault624 is the production multi-user copy-trading vault on the NEW DeepBook
 // Predict deployment: ONE shared Vault624 owns ONE object-owned AccountWrapper
@@ -15,13 +15,12 @@
 // ledger ↔ account reconciled to the micro, agent Δ 0.000000.
 //
 // Everything here mirrors predict624Client idioms: browser-safe (no keys, no
-// node imports), reads via gRPC simulation of the vault's view fns + the
-// GraphQL-events-with-JSON-RPC-fallback dance from strategyClient; writes are
+// node imports), reads via gRPC simulation of the vault's view fns plus
+// cursor-paginated GraphQL events; writes are
 // wallet-signed Transaction builders.
 
-import { suiJsonRpc } from './jsonRpc';
 import { Transaction } from '@mysten/sui/transactions';
-import { gql, grpc, simulateReturnU64s } from './modernClients';
+import { GRAPHQL_URL, grpc, simulateReturnU64s } from './modernClients';
 import { DUSDC_MULTIPLIER, CLOCK_ID } from './constants';
 import { PREDICT624 } from './predict624Client';
 
@@ -30,7 +29,8 @@ import { PREDICT624 } from './predict624Client';
 export const VAULT624 = {
   /** yosuku_spike package carrying the vault624 module, republished against
    *  predict-testnet-7-29 on 2026-08-06. Superseded 6-24 package: 0x27931b56…. */
-  pkg: '0x3ba6f82ddea29023bbd433000a0374f004e6ce2225cd98a06a1d9bfa7ccb84e1',
+  pkg: '0x51ed6dead94a7e9d799c8c245de041e8d82b0ec12d40996b7561522e3637179f',
+  originPkg: '0x3ba6f82ddea29023bbd433000a0374f004e6ce2225cd98a06a1d9bfa7ccb84e1',
   /** The shared Vault624 (ledger + subs + positions) — copy-desk instance, 7-29. */
   vaultId: '0x9968dbb655c5c4ddce692f31f3f65e3c94ed22b47ab070889e2f984793f8ba1b',
   /** The vault's object-owned AccountWrapper on the 7-29 `account` package. */
@@ -70,6 +70,10 @@ export const VAULT624_ERRORS: Record<number, string> = {
   4: 'balance too low',
   5: 'cost exceeded the cap',
   6: 'unknown position',
+  7: 'open-position limit reached',
+  8: 'total exposure limit reached',
+  9: 'daily spend limit reached',
+  10: 'invalid risk limits',
 };
 
 /** Map a raw failure string to the vault's plain-words meaning (falls back to the raw). */
@@ -135,15 +139,21 @@ export function buildSubscribe624(p: {
   agent?: string;
   maxMarginMicro: bigint;
   maxLeverage1e9: bigint;
+  maxTotalExposureMicro: bigint;
+  maxOpenPositions: bigint;
+  maxDailySpendMicro: bigint;
 }): Transaction {
   const tx = new Transaction();
   tx.moveCall({
-    target: `${VAULT624.pkg}::vault624::subscribe`,
+    target: `${VAULT624.pkg}::vault624::subscribe_with_risk`,
     arguments: [
       tx.object(VAULT624.vaultId),
       tx.pure.address(p.agent ?? VAULT624.enclaveAgent),
       tx.pure.u64(p.maxMarginMicro),
       tx.pure.u64(p.maxLeverage1e9),
+      tx.pure.u64(p.maxTotalExposureMicro),
+      tx.pure.u64(p.maxOpenPositions),
+      tx.pure.u64(p.maxDailySpendMicro),
     ],
   });
   return tx;
@@ -159,6 +169,9 @@ export function buildJoinDesk624(p: {
   agent?: string;
   maxMarginMicro: bigint;
   maxLeverage1e9: bigint;
+  maxTotalExposureMicro: bigint;
+  maxOpenPositions: bigint;
+  maxDailySpendMicro: bigint;
 }): Transaction {
   const tx = new Transaction();
   if (p.amountMicro > 0n) {
@@ -178,12 +191,15 @@ export function buildJoinDesk624(p: {
     });
   }
   tx.moveCall({
-    target: `${VAULT624.pkg}::vault624::subscribe`,
+    target: `${VAULT624.pkg}::vault624::subscribe_with_risk`,
     arguments: [
       tx.object(VAULT624.vaultId),
       tx.pure.address(p.agent ?? VAULT624.enclaveAgent),
       tx.pure.u64(p.maxMarginMicro),
       tx.pure.u64(p.maxLeverage1e9),
+      tx.pure.u64(p.maxTotalExposureMicro),
+      tx.pure.u64(p.maxOpenPositions),
+      tx.pure.u64(p.maxDailySpendMicro),
     ],
   });
   return tx;
@@ -405,8 +421,9 @@ export interface VaultEvent624 {
   ts: number; // ms epoch (0 when the indexer omitted it)
 }
 
-const EVENTS_Q = `query Ev($t: String!, $last: Int!) {
-  events(last: $last, filter: { type: $t }) {
+const EVENTS_Q = `query Ev($t: String!, $last: Int!, $before: String) {
+  events(last: $last, before: $before, filter: { type: $t }) {
+    pageInfo { hasPreviousPage startCursor }
     nodes { timestamp sender { address } contents { json } transaction { digest } }
   }
 }`;
@@ -417,44 +434,61 @@ type EvNode = {
   transaction: { digest: string } | null;
 };
 
+type EventPage = {
+  events: {
+    pageInfo?: { hasPreviousPage?: boolean; startCursor?: string | null };
+    nodes: EvNode[];
+  };
+};
 
-// Testnet GraphQL event indexing lags/windows — suix_queryEvents is the reliable net.
-// The fullnode clamps each page to 50 regardless of the requested limit, so walking the
-// cursor is the ONLY way to read a full history (the all-time desk record needs it).
-async function jsonRpcEvents(type: string, last: number): Promise<EvNode[]> {
-  type RpcEvent = { timestampMs?: string; parsedJson?: Record<string, unknown>; id?: { txDigest?: string } };
+// Events are not exposed by Sui's core gRPC API. Walk the supported GraphQL
+// connection backwards so the all-time desk record never depends on sunset JSON-RPC.
+async function queryEvents(type: string, last = 50): Promise<EvNode[]> {
   const out: EvNode[] = [];
-  let cursor: unknown = null;
-  try {
-    // ceil(last/50) pages, hard-capped — each page is ≤50 by node policy
-    for (let page = 0; page < Math.min(20, Math.ceil(last / 50)); page++) {
-      const res = await suiJsonRpc<{ data?: RpcEvent[]; hasNextPage?: boolean; nextCursor?: unknown }>(
-        'suix_queryEvents',
-        [{ MoveEventType: type }, cursor, Math.min(50, last - out.length), true],
-      );
-      const data = (res?.data ?? []) as RpcEvent[];
-      out.push(...data.map((e) => ({
-        timestamp: e.timestampMs ? new Date(Number(e.timestampMs)).toISOString() : null,
-        contents: { json: e.parsedJson ?? {} },
-        transaction: e.id?.txDigest ? { digest: e.id.txDigest } : null,
-      })));
-      if (!res?.hasNextPage || out.length >= last) break;
-      cursor = res.nextCursor;
+  let before: string | null = null;
+  const pages = Math.min(20, Math.max(1, Math.ceil(last / 50)));
+  for (let page = 0; page < pages && out.length < last; page++) {
+    try {
+      const response = await fetch(GRAPHQL_URL, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          query: EVENTS_Q,
+          variables: { t: type, last: Math.min(50, last - out.length), before },
+        }),
+      });
+      if (!response.ok) break;
+      const body = (await response.json()) as { data?: EventPage | null; errors?: unknown[] };
+      const data = body.data;
+      const errors = body.errors;
+      if (errors?.length || !data?.events) break;
+      out.push(...(data.events.nodes ?? []).slice().reverse());
+      const info: { hasPreviousPage?: boolean; startCursor?: string | null } | undefined = data.events.pageInfo;
+      if (!info?.hasPreviousPage || !info.startCursor) break;
+      before = info.startCursor;
+    } catch {
+      break;
     }
-  } catch { /* return what we have */ }
-  return out;
+  }
+  return out.slice(0, last);
 }
 
-async function queryEvents(type: string, last = 50): Promise<EvNode[]> {
-  if (last > 50) return jsonRpcEvents(type, last); // GraphQL pages cap at 50 — paginate via JSON-RPC
-  try {
-    const { data, errors } = await gql.query<{ events: { nodes: EvNode[] } }>({
-      query: EVENTS_Q,
-      variables: { t: type, last },
-    });
-    if (!errors?.length && data?.events?.nodes?.length) return data.events.nodes.slice().reverse(); // newest first
-  } catch { /* fall through to JSON-RPC */ }
-  return jsonRpcEvents(type, last);
+async function queryVaultEventLineage(name: string, last: number): Promise<EvNode[]> {
+  const packages = [...new Set([VAULT624.originPkg, VAULT624.pkg])];
+  const pages = await Promise.all(
+    packages.map((pkg) => queryEvents(`${pkg}::vault624::${name}`, last)),
+  );
+  const seen = new Set<string>();
+  return pages
+    .flat()
+    .filter((event) => {
+      const key = `${event.transaction?.digest ?? ''}:${event.timestamp ?? ''}:${JSON.stringify(event.contents?.json ?? {})}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort((a, b) => Date.parse(b.timestamp ?? '') - Date.parse(a.timestamp ?? ''))
+    .slice(0, last);
 }
 
 const num = (v: unknown): number => Number((v as string | number) ?? 0);
@@ -471,10 +505,10 @@ function baseRow(n: EvNode): Pick<VaultEvent624, 'digest' | 'ts'> {
  *  vault624 event streams. */
 export async function fetchVaultTrades624(limit = 40): Promise<VaultEvent624[]> {
   const [trades, settles, deposits, withdraws] = await Promise.all([
-    queryEvents(EV_AGENT_TRADED, limit),
-    queryEvents(EV_SETTLED, limit),
-    queryEvents(EV_DEPOSITED, limit),
-    queryEvents(EV_WITHDRAWN, limit),
+    queryVaultEventLineage('AgentTraded', limit),
+    queryVaultEventLineage('Settled', limit),
+    queryVaultEventLineage('Deposited', limit),
+    queryVaultEventLineage('Withdrawn', limit),
   ]);
   const rows: VaultEvent624[] = [
     ...trades.map((n): VaultEvent624 => {
