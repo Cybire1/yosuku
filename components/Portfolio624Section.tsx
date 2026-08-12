@@ -429,9 +429,9 @@ export default function Portfolio624Section() {
                     Your balance
                   </span>
                   {/* Page-headline size. This is what someone opened Portfolio to see. */}
-                  <div className="font-display text-5xl sm:text-6xl font-[800] tracking-tight tabular-nums mt-1" style={{ color: '#1A1612' }}>
+                  <div className="font-display text-[34px] sm:text-6xl font-[800] tracking-tight tabular-nums mt-1" style={{ color: '#1A1612' }}>
                     {fmt2(acctBalance)}
-                    <span className="font-mono text-base sm:text-lg font-normal ml-2" style={{ color: '#6B6353' }}>DUSDC</span>
+                    <span className="font-mono text-xs sm:text-lg font-normal ml-1.5 sm:ml-2" style={{ color: '#6B6353' }}>DUSDC</span>
                   </div>
                   <p className="font-mono text-[10px] mt-1.5" style={{ color: '#6B6353' }}>
                     {fmt2(acctBalance + walletDusdc)} total with your wallet
@@ -600,15 +600,6 @@ export default function Portfolio624Section() {
               )}
             </div>
 
-            {/* footer line — honest, exact */}
-            <div className="flex flex-wrap items-center justify-between gap-2 px-5 py-2.5 border-t border-white/[0.06]">
-              <span className="font-mono text-[9.5px] text-white/30">
-                Winners are paid out automatically — no need to claim. Settled on-chain at close · payouts land in your trading account · testnet.
-              </span>
-              <a href="/beta" className="font-mono text-[10px] uppercase tracking-[0.14em] text-vermilion hover:text-white transition-colors" data-cursor="hover">
-                Place a bet →
-              </a>
-            </div>
           </>
         )}
       </div>

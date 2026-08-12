@@ -2007,7 +2007,7 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
    padding and stacks two tall slabs, one for the account and one for the X wallet. Trimmed for
    phones, where the page was running 1.6 screens with almost nothing in it. */
 @media (max-width: 720px) {
-  .ledger-plate { padding: 20px 16px; border-radius: 5px; }
+  .ledger-plate { padding: 16px 14px; border-radius: 5px; }
 }
 
 .ledger-plate::before {
