@@ -5097,6 +5097,18 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
 .wq-btn.no { background: linear-gradient(180deg, rgba(251,113,133,0.13), rgba(251,113,133,0.05)); border-color: rgba(251,113,133,0.36); color: #FB7185; }
 .wq-btn.no:hover { background: rgba(251,113,133,0.22); border-color: rgba(251,113,133,0.7);
   box-shadow: 0 10px 24px -12px rgba(251,113,133,0.55), inset 0 0 0 1px rgba(251,113,133,0.12); }
+
+/* Phone sizing for the Yes/No pair. MUST live after the .wq-btn rules above: at equal
+   specificity the later declaration wins, so the same override placed with the other 720px
+   rules further up was silently ignored and the buttons stayed desktop-height.
+   On a phone the desktop 13px vertical padding plus a 15px label made each button as tall as
+   the question itself, so a card meant to read question-first read as two slabs. */
+@media (max-width: 720px) {
+  .wq-actions { gap: 8px; }
+  .wq-btn { padding: 9px 13px; border-radius: 11px; }
+  .wq-btn .wq-side { font-size: 14px; }
+  .wq-btn .wq-cents { font-size: 13px; }
+}
 @media (prefers-reduced-motion: reduce) {
   .wq-btn, .wq-btn::before, .wq-btn .wq-side, .wq-btn .wq-cents { transition-duration: 1ms; }
   .wq-btn:hover { transform: none; }

@@ -14,20 +14,20 @@ interface TutorialStep {
   choice?: boolean; // final step: pick Simple/Pro trade view
 }
 
-// A brief welcome that sets the mental model — sign in, get funds, take a side —
+// A brief welcome that sets the mental model: sign in, get funds, take a side.
 // kept short so it orients without becoming a wall of steps.
 const steps: TutorialStep[] = [
   {
     title: 'Welcome to Yosuku',
-    description: 'A prediction market on BTC. Pick a side, the oracle settles at close, the math decides. This is testnet — test funds only, no real money.',
+    description: 'A prediction market on BTC. Pick a side, the oracle settles at close, the math decides. This is testnet: test funds only, no real money.',
   },
   {
     title: 'How a market works',
-    description: 'Markets settle every 1, 5, or 60 minutes on the oracle print. Tap UP or DOWN — each side is its own question with its own line and its own live price from the venue, so the two sides don’t add up to $1. The ticket shows the exact cost before you sign.',
+    description: 'Markets settle every 1, 5, or 60 minutes on the oracle print. Tap UP or DOWN. Each side is its own question with its own line and its own live price from the venue, so the two sides don’t add up to $1. The ticket shows the exact cost before you sign.',
   },
   {
     title: 'Your trading account',
-    description: 'Your bets settle into an on-chain trading account that only your wallet can withdraw from. Connect, create it in one tap, fund it with testnet DUSDC — then betting is one tap. You sign every transaction yourself.',
+    description: 'Your bets settle into an on-chain trading account that only your wallet can withdraw from. Connect, create it in one tap, fund it with testnet DUSDC, then betting is one tap. You sign every transaction yourself.',
   },
   {
     title: 'Your Trading Balance',
@@ -61,7 +61,7 @@ export default function Tutorial() {
 
   // The final onboarding decision: set the trade view to match the user's level so
   // the whole panel opens right for them. TradePanel reads yosuku_trade_mode on mount.
-  // Picking does NOT close the tutorial — the last screen ends on the Connect Wallet
+  // Picking does NOT close the tutorial; the last screen ends on the Connect Wallet
   // step, so it stays open until they connect (or skip).
   const selectMode = (m: 'simple' | 'pro') => {
     setMode(m);
@@ -72,7 +72,7 @@ export default function Tutorial() {
   };
 
   // The tutorial ends by connecting a wallet. The moment that happens on the final
-  // step, onboarding is done — close so the user lands straight on the live markets.
+  // step, onboarding is done, so close and land the user straight on the live markets.
   useEffect(() => {
     if (visible && step === steps.length - 1 && account?.address) dismiss();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -120,17 +120,17 @@ export default function Tutorial() {
                 <div className="grid grid-cols-2 gap-3 mb-5">
                   <button onClick={() => selectMode('simple')} className={`rounded-xl border px-4 py-4 text-left transition-colors ${mode === 'simple' ? 'border-vermilion bg-vermilion/[0.1]' : 'border-white/[0.12] bg-white/[0.03] hover:border-vermilion/50 hover:bg-white/[0.06]'}`}>
                     <span className="block font-display font-bold text-white text-lg">New to this</span>
-                    <span className="block text-xs text-gray-500 mt-1 leading-snug">Plain questions — just tap Higher or Lower. We handle the rest.</span>
+                    <span className="block text-xs text-gray-500 mt-1 leading-snug">Plain questions. Just tap Higher or Lower. We handle the rest.</span>
                   </button>
                   <button onClick={() => selectMode('pro')} className={`rounded-xl border px-4 py-4 text-left transition-colors ${mode === 'pro' ? 'border-vermilion bg-vermilion/[0.1]' : 'border-white/[0.12] bg-white/[0.03] hover:border-vermilion/50 hover:bg-white/[0.06]'}`}>
                     <span className="block font-display font-bold text-white text-lg">I trade</span>
-                    <span className="block text-xs text-gray-500 mt-1 leading-snug">Strikes, leverage, range markets — the full panel.</span>
+                    <span className="block text-xs text-gray-500 mt-1 leading-snug">Strikes, leverage, range markets. The full panel.</span>
                   </button>
                 </div>
                 <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] px-4 py-4">
                   <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-gray-600 mb-1">Last step</div>
                   <p className="text-sm text-white font-semibold mb-0.5">Connect to start trading</p>
-                  <p className="text-xs text-gray-500 leading-snug mb-3">Google or any Sui wallet. We sponsor the gas and fund your testnet account automatically — no seed phrase, no real money.</p>
+                  <p className="text-xs text-gray-500 leading-snug mb-3">Google or any Sui wallet. We sponsor the gas and fund your testnet account automatically, no seed phrase, no real money.</p>
                   <div className="flex justify-center"><ConnectButton connectText="Connect Wallet" /></div>
                 </div>
                 <p className="text-[11px] text-gray-600 mt-3">{current.description}</p>
