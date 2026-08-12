@@ -305,7 +305,7 @@ export default function PortfolioPage() {
               <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
                 <div>
                   <span className="font-mono text-[9px] tracking-[0.16em] uppercase" style={{ color: '#6B6353' }}>
-                    Yosuku Balance
+                    Earlier balance
                   </span>
                   <div className="font-mono text-3xl font-semibold mt-1" style={{ color: '#1A1612' }}>
                     {accountSnapshot.yosukuBalanceDusdc.toFixed(2)}
@@ -405,7 +405,8 @@ export default function PortfolioPage() {
                         Trading balance
                       </span>
                       <p className="font-mono text-[10px] mt-1 max-w-2xl" style={{ color: '#6B6353' }}>
-                        One balance for every bet. Withdraw to your wallet anytime.
+                        Money left in the earlier version. New bets do not use it. Move it to your
+                        wallet whenever you want.
                       </p>
                     </div>
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
