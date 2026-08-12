@@ -25,6 +25,7 @@ import ShareTradeButton from '@/components/ShareTradeButton';
 import { joinSettledTrades, type SettledTrade } from '@/lib/sui/settledTrade';
 import { readAccountCache, writeAccountCache } from '@/lib/sui/ticket624';
 import { useSmartSubmit } from '@/lib/sui/useSmartSubmit';
+import { fetchDUSDCHeldMicro, fetchDUSDCCoins } from '@/lib/sui/queries';
 import { DUSDC_MULTIPLIER } from '@/lib/sui/constants';
 import {
   POS_INF_TICK,
@@ -39,6 +40,7 @@ import {
   fetchMarketState624,
   buildRedeemSettledTx,
   buildWithdrawTx,
+  buildDepositTx,
   type Position624,
   type OrderRow624,
   type MarketState624,
@@ -156,6 +158,8 @@ export default function Portfolio624Section() {
 
   // copy-trading desk (vault624) — independent of the personal wrapper: the desk
   // holds its own object-owned account, users only have a ledger entry + sub
+  const [walletDusdc, setWalletDusdc] = useState(0);
+  const [depositAmt, setDepositAmt] = useState('1');
   const [deskLedger, setDeskLedger] = useState(0);
   const [deskSub, setDeskSub] = useState<Sub624 | null>(null);
   const [deskRows, setDeskRows] = useState<VaultEvent624[]>([]);
@@ -328,6 +332,45 @@ export default function Portfolio624Section() {
 
   // settled wins the permissionless keeper is auto-collecting (verified live: it
   // redeem_settled's every winner ~every 2 min). Not "claimable chores" — money on its way.
+  useEffect(() => {
+    if (!address) { setWalletDusdc(0); return; }
+    let dead = false;
+    const read = async () => {
+      try {
+        const micro = await fetchDUSDCHeldMicro(address);
+        if (!dead) setWalletDusdc(Number(micro) / 1_000_000);
+      } catch { /* keep the last good number rather than flashing zero */ }
+    };
+    void read();
+    const id = setInterval(read, 15_000);
+    return () => { dead = true; clearInterval(id); };
+  }, [address, busy]);
+
+  // Money IN, next to the balance it lands in. Withdraw already lived here; deposit did not, so
+  // the only way to fund the account you actually bet from was to start a bet.
+  const depositToAccount = async () => {
+    if (!address || !wrapperId || busy) return;
+    const amt = Number(depositAmt);
+    if (!Number.isFinite(amt) || amt <= 0) { toast('Enter an amount to deposit.', 'error'); return; }
+    const amountMicro = BigInt(Math.round(amt * 1_000_000));
+    setBusy('deposit');
+    try {
+      const coins = await fetchDUSDCCoins(null as never, address);
+      if (!coins.length) throw new Error('No DUSDC in your wallet yet.');
+      await submitTx(() => buildDepositTx({
+        wrapperId,
+        coinIds: coins.map((c) => c.coinObjectId),
+        amountMicro,
+      }));
+      toast(`Deposited ${amt.toFixed(2)} DUSDC.`, 'success');
+      refreshBalance();
+    } catch (e) {
+      toast(e instanceof Error ? e.message.slice(0, 140) : 'Deposit failed.', 'error');
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const autoPaying = positions.filter((p) => isWonPos(p, mktStates[p.marketId])).length;
   // "Open" = not yet settled. Settled-but-uncleared positions (lost, awaiting Close) must not
   // inflate the open count — they are shown in the list but are not open.
@@ -336,10 +379,6 @@ export default function Portfolio624Section() {
 
   return (
     <section>
-      {/* "Venue" is our word, not the user's. They have a betting account and some older money;
-          which on-chain deployment each sits on is our history, not their concern. */}
-      <SectionHeader number="00" title="Your betting account" />
-
       <div className="group relative border border-white/[0.08] rounded bg-bg">
         <Crosshairs />
 
@@ -378,42 +417,100 @@ export default function Portfolio624Section() {
           </div>
         ) : (
           <>
-            {/* balance strip */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 border-b border-white/[0.06]">
-              <div className="px-4 py-3.5">
-                <div className="font-mono text-[9px] uppercase tracking-[0.18em] text-white/40 mb-1">Trading account</div>
-                <div className="font-mono text-lg text-white tabular-nums">
-                  {fmt2(acctBalance)} <span className="text-[11px] text-white/40">DUSDC</span>
+            {/* The account plate. Ported from the old-version card, which was the better piece of
+                design: one big number, the wallet total under it, the breakdown on one line, and
+                money in/out on the same row. The live account had a four-cell strip with no way to
+                add money at all, so funding meant starting a bet. Same layout, live numbers. */}
+            <div className="ledger-plate">
+              <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+                <div>
+                  <span className="font-mono text-[9px] tracking-[0.16em] uppercase" style={{ color: '#6B6353' }}>
+                    Your balance
+                  </span>
+                  <div className="font-mono text-3xl font-semibold mt-1" style={{ color: '#1A1612' }}>
+                    {fmt2(acctBalance)}
+                    <span className="text-sm ml-2" style={{ color: '#6B6353' }}>DUSDC</span>
+                  </div>
+                  <p className="font-mono text-[10px] mt-1" style={{ color: '#6B6353' }}>
+                    {fmt2(acctBalance + walletDusdc)} total with your wallet
+                  </p>
                 </div>
-                {acctBalance > 0 && (
-                  <button
-                    onClick={withdrawToWallet}
-                    disabled={busy !== null}
+                <div className="text-right">
+                  <div className="font-mono text-[9px] tracking-[0.16em] uppercase" style={{ color: '#6B6353' }}>Open</div>
+                  <div className="font-mono text-lg" style={{ color: '#1A1612' }}>{openCount}</div>
+                </div>
+              </div>
+
+              <div
+                className="grid grid-cols-2 sm:grid-cols-4 gap-y-4 gap-x-6 pt-5"
+                style={{ borderTop: '1px solid rgba(201,191,166,0.3)' }}
+              >
+                <div>
+                  <span className="font-mono text-[8px] tracking-[0.14em] uppercase" style={{ color: '#6B6353' }}>Wallet</span>
+                  <div className="font-mono text-sm" style={{ color: '#1A1612' }}>{fmt2(walletDusdc)}</div>
+                </div>
+                <div>
+                  <span className="font-mono text-[8px] tracking-[0.14em] uppercase" style={{ color: '#6B6353' }}>Available</span>
+                  <div className="font-mono text-sm" style={{ color: '#1A1612' }}>{fmt2(acctBalance)}</div>
+                </div>
+                <div>
+                  <span className="font-mono text-[8px] tracking-[0.14em] uppercase" style={{ color: '#6B6353' }}>Paying out</span>
+                  <div className="font-mono text-sm" style={{ color: autoPaying > 0 ? '#059669' : '#1A1612' }}>{autoPaying}</div>
+                </div>
+                <div>
+                  <span className="font-mono text-[8px] tracking-[0.14em] uppercase" style={{ color: '#6B6353' }}>Account</span>
+                  <a
+                    href={SUISCAN_OBJ(wrapperId)}
+                    target="_blank"
+                    rel="noreferrer"
                     data-cursor="hover"
-                    className="mt-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-vermilion hover:text-white transition-colors disabled:opacity-50"
+                    className="font-mono text-sm hover:underline"
+                    style={{ color: '#1A1612' }}
                   >
-                    {busy === 'withdraw' ? 'withdrawing…' : 'Withdraw to wallet →'}
-                  </button>
-                )}
+                    {fmtAddr(wrapperId)} ↗
+                  </a>
+                </div>
               </div>
-              <div className="px-4 py-3.5 border-l border-white/[0.06]">
-                <div className="font-mono text-[9px] uppercase tracking-[0.18em] text-white/40 mb-1">Open positions</div>
-                <div className="font-mono text-lg text-white tabular-nums">{openCount}</div>
-              </div>
-              <div className="px-4 py-3.5 border-l border-white/[0.06]">
-                <div className="font-mono text-[9px] uppercase tracking-[0.18em] text-white/40 mb-1">Auto-paying</div>
-                <div className={`font-mono text-lg tabular-nums ${autoPaying > 0 ? 'text-profit' : 'text-white'}`}>{autoPaying}</div>
-              </div>
-              <div className="px-4 py-3.5 border-l border-white/[0.06] hidden sm:block">
-                <div className="font-mono text-[9px] uppercase tracking-[0.18em] text-white/40 mb-1">Account</div>
-                <a
-                  href={SUISCAN_OBJ(wrapperId)}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="font-mono text-sm text-white/70 hover:text-white transition-colors"
-                >
-                  {fmtAddr(wrapperId)} ↗
-                </a>
+
+              <div className="mt-6 pt-5" style={{ borderTop: '1px solid rgba(201,191,166,0.3)' }}>
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                  <div>
+                    <span className="font-mono text-[8px] tracking-[0.14em] uppercase" style={{ color: '#6B6353' }}>
+                      Your balance
+                    </span>
+                    <p className="font-mono text-[10px] mt-1 max-w-2xl" style={{ color: '#6B6353' }}>
+                      Every bet comes from here. Move it back to your wallet whenever you want.
+                    </p>
+                  </div>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                    <input
+                      value={depositAmt}
+                      onChange={(e) => setDepositAmt(e.target.value.replace(/[^0-9.]/g, ''))}
+                      inputMode="decimal"
+                      aria-label="Amount to deposit"
+                      className="w-full sm:w-28 rounded-lg px-3 py-2 font-mono text-sm outline-none"
+                      style={{ background: '#FFFDF8', border: '1px solid rgba(201,191,166,0.6)', color: '#1A1612' }}
+                    />
+                    <button
+                      onClick={depositToAccount}
+                      disabled={busy !== null || !wrapperId}
+                      data-cursor="hover"
+                      className="rounded-lg px-5 py-2 font-display text-[12px] font-bold uppercase tracking-[0.1em] transition-opacity disabled:opacity-40"
+                      style={{ background: '#1A1612', color: '#FBF7EE' }}
+                    >
+                      {busy === 'deposit' ? 'Depositing' : 'Deposit'}
+                    </button>
+                    <button
+                      onClick={withdrawToWallet}
+                      disabled={busy !== null || acctBalance <= 0}
+                      data-cursor="hover"
+                      className="rounded-lg px-5 py-2 font-display text-[12px] font-bold uppercase tracking-[0.1em] transition-opacity disabled:opacity-40"
+                      style={{ background: 'transparent', border: '1px solid rgba(201,191,166,0.7)', color: '#1A1612' }}
+                    >
+                      {busy === 'withdraw' ? 'Withdrawing' : 'Withdraw'}
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
 

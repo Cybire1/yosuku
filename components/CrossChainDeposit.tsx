@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { ArrowUpRight, X } from 'lucide-react';
+import ChainIcon from '@/components/ChainIcon';
 import { useCurrentAccount } from '@mysten/dapp-kit';
 import { createPublicClient, createWalletClient, custom, http, formatUnits, parseUnits } from 'viem';
 import {
@@ -326,13 +327,14 @@ export default function CrossChainDeposit() {
                 <button
                   key={c.domain}
                   onClick={() => setChain(c)}
-                  className={`rounded-xl border px-3 py-2.5 text-left font-mono text-[12px] font-semibold transition ${
+                  className={`flex items-center gap-2 rounded-xl border px-3 py-2.5 text-left font-mono text-[12px] font-semibold transition ${
                     chain.domain === c.domain
                       ? 'border-emerald-500/45 bg-emerald-500/[0.07]'
                       : 'border-white/[0.07] hover:border-white/25'
                   }`}
                 >
-                  {c.name}
+                  <ChainIcon domain={c.domain} />
+                  <span className="truncate">{c.name}</span>
                 </button>
               ))}
             </div>

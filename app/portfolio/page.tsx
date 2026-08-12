@@ -519,13 +519,6 @@ export default function PortfolioPage() {
               </div>
             )}
 
-            {!manager && !managerLoading && (
-              <div className="border border-white/[0.06] rounded p-4 text-center">
-                <p className="text-sm text-gray-400 mb-1">No trading account yet</p>
-                <p className="text-xs text-gray-600 font-mono">Set up automatically on your first bet</p>
-              </div>
-            )}
-
             {/* Positions */}
             <section>
               <div className="flex items-center justify-between">
