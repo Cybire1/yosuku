@@ -450,7 +450,15 @@ async function simulateOrderMinted624(tx: Transaction): Promise<{ event?: Record
   // name past 248, so a 160-char cut lands inside the module ADDRESS and throws away the only
   // part that says what failed. That is exactly how the mobile client's abort dictionary became
   // unreachable in production while passing its own unit checks.
-  return { error: String(simulated?.status?.error ?? 'no OrderMinted in simulation').slice(0, 1024) };
+  // NOT String(): on this gRPC client `status.error` is a STRUCTURED OBJECT, so String() renders
+  // it "[object Object]" and throws away the abort code, module and function. That is how the
+  // markets board sat on "LOADING ODDS…" with no way to tell what was failing.
+  const raw = (simulated as { status?: { error?: unknown } } | undefined)?.status?.error;
+  const text =
+    raw == null ? 'no OrderMinted in simulation'
+    : typeof raw === 'string' ? raw
+    : (() => { try { return JSON.stringify(raw); } catch { return Object.prototype.toString.call(raw); } })();
+  return { error: text.slice(0, 1024) };
 }
 
 export function buildCreateAccountTx(): Transaction {

@@ -47,7 +47,14 @@ import { BAND_USD, minMintMs, strike624, ticks624, type Dir624 } from '@/lib/sui
 // involved, and nothing is ever executed. The user's own bets quote with their
 // own account in the ticket drawer.
 const HOUSE_SENDER = '0x0099f97251af2d072fc492316ae30de3ab5639beb09073509d54bf49197513b4';
-const HOUSE_WRAPPER = '0xc820ff1e36d8810f29d80ad81415fd064e02b7f20c41a4469e2f4400d514e706';
+// Must be an AccountWrapper on the CURRENT account package and SELF-OWNED by HOUSE_SENDER.
+// The previous id was a wrapper from account package 0xb9389eac…, left behind when 7-29 was
+// redeployed in place and every address moved. Its type no longer matched, so deposit_funds
+// failed with CommandArgumentError TypeMismatch, the quote returned an error object that
+// String() rendered as "[object Object]", and the board showed "LOADING ODDS…" forever.
+// An object-owned wrapper does not work either: the quote carries the user's own Auth, so it
+// aborts. Created 2026-08-12, tx 687Vbyvwe3c8….
+const HOUSE_WRAPPER = '0xa626009e003ba8e9b36e92c1f29683629703e431074688a160252a309f5fa978';
 // 2 DUSDC payout @1× — the venue's smallest quotable ticket (min net premium is
 // 1 DUSDC; a 1 DUSDC quote aborts). Cents shown = cost per $1 of payout.
 const ODDS_STALE_MS = 18_000; // per-market cache — effective ~20s refresh
