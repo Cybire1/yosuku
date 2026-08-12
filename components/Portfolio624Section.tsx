@@ -407,14 +407,19 @@ export default function Portfolio624Section() {
             </div>
           </>
         ) : !wrapperId ? (
-          <div className="px-5 py-6">
+          // No trading account yet. Deposit still belongs here: cross-chain USDC lands in your
+          // WALLET, not the account, so it needs no wrapper, and it is exactly what someone with
+          // no balance is here to do. Hiding it until an account exists put the one useful action
+          // behind the thing it helps you get.
+          <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-6">
             <a
               href="/beta"
-              className="inline-block mt-3 font-mono text-[11px] uppercase tracking-[0.14em] text-vermilion hover:text-white transition-colors"
+              className="font-mono text-[11px] uppercase tracking-[0.14em] text-vermilion hover:text-white transition-colors"
               data-cursor="hover"
             >
               Set it up on the beta wing →
             </a>
+            <CrossChainDeposit />
           </div>
         ) : (
           <>
