@@ -28,6 +28,21 @@ const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 // in one signature (deposit + keep the bounded agent authorized), and Cash out straight back to
 // your wallet — only you can, the agent has no withdraw path. Below that: Connect X to bind your
 // handle, and claim any sealed tweet-funded account we spun up for you.
+/** Wallet and RPC errors arrive as raw SDK strings. "Failed to open popup" is what the extension
+ *  says when the browser blocks its signing window: true, and useless to the person reading it,
+ *  who has no idea a popup was even involved. Translate the ones we know, pass anything else
+ *  through rather than swallowing a real failure behind a friendly guess. */
+function friendlyWalletError(raw: string): string {
+  const e = raw.toLowerCase();
+  if (/open popup|popup.*(block|fail)|window.*block/.test(e)) {
+    return 'Your browser blocked the wallet window. Allow pop-ups for this site, then try again.';
+  }
+  if (/user rejected|rejected the request|denied/.test(e)) return 'Cancelled.';
+  if (/insufficient|balance too low|ebalancetoolow/.test(e)) return 'Not enough DUSDC in your wallet.';
+  if (/no valid gas|gas coins|sponsor/.test(e)) return 'The gas sponsor is busy. Try again in a moment.';
+  return raw.slice(0, 160);
+}
+
 export default function XWalletCard() {
   const account = useCurrentAccount();
   // No fallback address. A hardcoded one was left here as an audit scaffold, and because it is
@@ -120,7 +135,7 @@ export default function XWalletCard() {
       );
       setOk(`Funded $${(Number(micro) / DUSDC_MUL).toFixed(2)}. Reply YES or NO to a live line to bet it.`);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
+      setErr(friendlyWalletError(e instanceof Error ? e.message : String(e)));
     } finally {
       setBusy('');
       void refreshBalance();
@@ -136,7 +151,7 @@ export default function XWalletCard() {
       await submit(() => buildTweetVaultWithdraw624({ amountMicro: exact }));
       setOk(`Cashed out $${(Number(exact) / DUSDC_MUL).toFixed(2)} to your wallet.`);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
+      setErr(friendlyWalletError(e instanceof Error ? e.message : String(e)));
     } finally {
       setBusy('');
       void refreshBalance();
@@ -154,7 +169,7 @@ export default function XWalletCard() {
       setOk('Test DUSDC on the way. Give it a few seconds, then Fund X wallet.');
       setNeedsFaucet(false);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
+      setErr(friendlyWalletError(e instanceof Error ? e.message : String(e)));
     } finally {
       setBusy('');
     }
@@ -195,7 +210,7 @@ export default function XWalletCard() {
       setOk('Linked. Your replies now bet from this balance.');
       await refreshMe();
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
+      setErr(friendlyWalletError(e instanceof Error ? e.message : String(e)));
     } finally { setBusy(''); }
   }, [address, busy, me?.authorId, refreshMe, signPersonalMessage]);
 
@@ -293,11 +308,11 @@ export default function XWalletCard() {
                 <span className="font-mono text-[9px] tracking-[0.16em] uppercase" style={{ color: '#6B6353' }}>
                   Your X betting balance
                 </span>
-                <div className="font-mono text-3xl font-semibold mt-1 tabular-nums" style={{ color: '#1A1612' }}>
+                <div className="font-mono text-3xl font-semibold mt-1 tabular-nums" style={{ color: '#E04D26' }}>
                   {balNum == null ? '0.00' : balNum.toFixed(2)}
                   <span className="text-sm ml-2" style={{ color: '#6B6353' }}>DUSDC</span>
                 </div>
-                <p className="font-mono text-[10px] mt-1" style={{ color: '#6B6353' }}>bet it by replying to a live line</p>
+
               </div>
               {balMicro != null && balMicro > 0n && (
                 <button
