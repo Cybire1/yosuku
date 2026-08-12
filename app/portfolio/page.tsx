@@ -262,7 +262,7 @@ export default function PortfolioPage() {
       <CustomCursor />
       <GrainOverlay />
 
-      <main className="container pt-[120px] pb-32">
+      <main className="container pt-[92px] pb-10 sm:pt-[120px] sm:pb-32">
         {/* Deposit sits on the title row: it is the one thing someone comes here to DO, and as a
             button it costs a line instead of the card-with-a-paragraph it used to be. */}
         <div className="mb-2 flex items-center justify-between gap-4">
@@ -297,7 +297,7 @@ export default function PortfolioPage() {
           <XWalletCard />
           </div>
         ) : (
-          <div className="space-y-8">
+          <div className="space-y-5 sm:space-y-8">
             {/* ── New venue (DeepBook Predict 6-24) — balance, open positions, settled history ── */}
             <Portfolio624Section />
 

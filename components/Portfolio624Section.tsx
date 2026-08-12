@@ -422,7 +422,7 @@ export default function Portfolio624Section() {
                 money in/out on the same row. The live account had a four-cell strip with no way to
                 add money at all, so funding meant starting a bet. Same layout, live numbers. */}
             <div className="ledger-plate">
-              <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+              <div className="flex flex-wrap items-center justify-between gap-4 mb-4 sm:mb-6">
                 <div>
                   <span className="font-mono text-[9px] tracking-[0.16em] uppercase" style={{ color: '#6B6353' }}>
                     Your balance
@@ -442,7 +442,7 @@ export default function Portfolio624Section() {
               </div>
 
               <div
-                className="grid grid-cols-2 sm:grid-cols-4 gap-y-4 gap-x-6 pt-5"
+                className="grid grid-cols-2 sm:grid-cols-4 gap-y-3 gap-x-6 pt-4 sm:gap-y-4 sm:pt-5"
                 style={{ borderTop: '1px solid rgba(201,191,166,0.3)' }}
               >
                 <div>
@@ -472,7 +472,7 @@ export default function Portfolio624Section() {
                 </div>
               </div>
 
-              <div className="mt-6 pt-5" style={{ borderTop: '1px solid rgba(201,191,166,0.3)' }}>
+              <div className="mt-4 pt-4 sm:mt-6 sm:pt-5" style={{ borderTop: '1px solid rgba(201,191,166,0.3)' }}>
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                   <div>
                     <span className="font-mono text-[8px] tracking-[0.14em] uppercase" style={{ color: '#6B6353' }}>

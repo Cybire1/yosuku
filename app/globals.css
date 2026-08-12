@@ -1935,6 +1935,11 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
   border-top: 1px solid rgba(255,255,255,0.06);
   padding: 64px 0 36px;
 }
+/* 120px of margin plus 64px of padding is a desktop rhythm. On a phone it wrapped a single
+   "Docs" line in ~220px of nothing, which was most of the empty screen at the end of Portfolio. */
+@media (max-width: 720px) {
+  .footer { margin-top: 44px; padding: 28px 0 24px; }
+}
 .footer-row {
   display: flex; justify-content: space-between; align-items: center; gap: 24px;
   flex-wrap: wrap;
@@ -1998,6 +2003,13 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
   position: relative;
   overflow: hidden;
 }
+/* The plate is desktop-proportioned: 36px/32px on a 390px screen burns a fifth of the width on
+   padding and stacks two tall slabs, one for the account and one for the X wallet. Trimmed for
+   phones, where the page was running 1.6 screens with almost nothing in it. */
+@media (max-width: 720px) {
+  .ledger-plate { padding: 20px 16px; border-radius: 5px; }
+}
+
 .ledger-plate::before {
   content: '';
   position: absolute; top: 0; left: 0; right: 0;
