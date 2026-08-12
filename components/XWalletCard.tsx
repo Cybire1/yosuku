@@ -160,7 +160,10 @@ export default function XWalletCard() {
     }
   }, [address, busy]);
 
-  const connected = !!me?.handle;
+  // A successful signed session or a durable relay binding means X is connected. The username is
+  // display metadata and can be absent during a transient X/relay lookup; it must not send the
+  // user back through OAuth after they already authorized it.
+  const connected = Boolean(me?.signedIn || me?.binding);
   const acct = me?.account ?? null;
   // a SEPARATE sealed auto-account (key held by us, cashed out via seal-decrypt at /claim) —
   // only surface it when it isn't the connected wallet itself (that balance already shows above).
@@ -207,6 +210,12 @@ export default function XWalletCard() {
     void link();
   }, [loadingMe, needsLink, link]);
 
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('x') === 'err') {
+      setErr('X authorization did not finish. Please try again.');
+    }
+  }, []);
+
   return (
     <section>
       <div className="mb-3 flex items-center gap-2">
@@ -237,7 +246,7 @@ export default function XWalletCard() {
         ) : connected ? (
           <div className="mb-4 flex flex-wrap items-center gap-x-2 gap-y-0.5 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2">
             <Twitter className="h-3.5 w-3.5 shrink-0 text-[#E04D26]" />
-            <span className="font-display text-sm font-[700] text-white">@{me!.handle}</span>
+            <span className="font-display text-sm font-[700] text-white">{me?.handle ? `@${me.handle}` : 'X connected'}</span>
             <span className="text-[12px] text-gray-500">{routed ? 'bets from this balance' : 'signed in'}</span>
           </div>
         ) : (
@@ -254,11 +263,12 @@ export default function XWalletCard() {
             >
               <Twitter className="h-4 w-4" /> Connect X
             </a>
+            {err && <div className="mt-2 text-[12px] text-[#E04D26]">{err}</div>}
           </div>
         ))}
 
         {!address ? (
-          <div className="text-sm text-gray-400">Connect a wallet above to fund your X betting balance.</div>
+          <div className="text-sm text-gray-400">Connect your Sui wallet to fund your X betting balance.</div>
         ) : (
           <>
             {/* balance + cash out */}

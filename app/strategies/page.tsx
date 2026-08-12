@@ -462,7 +462,7 @@ export default function StrategiesPage() {
             desk's own anchor line; no re-teaching here. */}
         <div className="mt-7 pb-7 border-b border-white/15">
           <h1 className="font-display font-[800] text-[1.9rem] leading-[1.0] md:text-[2.6rem] xl:text-[3rem] text-white tracking-tight max-w-3xl">
-            Copy a strategy.<br /><span className="text-white/60">Keep your money.</span>
+            AI strategies.
           </h1>
           <StrategyXBar />
         </div>

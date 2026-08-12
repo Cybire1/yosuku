@@ -12,6 +12,18 @@ export async function GET(req: NextRequest) {
   const redirect = process.env.CLAIM_X_REDIRECT || 'https://yosuku.xyz/api/claim/x/callback';
   if (!clientId) return NextResponse.json({ error: 'Sign in with X is not configured yet.' }, { status: 500 });
 
+  // PKCE/state cookies must be written on the same origin that receives the X callback. A user
+  // can enter through www, a Vercel preview, or localhost while X is registered to yosuku.xyz.
+  // Starting OAuth on that first host writes cookies the callback can never read, so X appears to
+  // authorize successfully and the portfolio immediately asks them to connect again. Move the
+  // start request to the registered callback origin before creating any OAuth state.
+  const callbackOrigin = new URL(redirect).origin;
+  if (req.nextUrl.origin !== callbackOrigin) {
+    const canonicalStart = new URL('/api/claim/x/start', callbackOrigin);
+    if (safeRet) canonicalStart.searchParams.set('return', safeRet);
+    return NextResponse.redirect(canonicalStart);
+  }
+
   const verifier = genVerifier();
   const state = genState();
   const url = new URL('https://twitter.com/i/oauth2/authorize');

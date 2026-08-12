@@ -119,7 +119,7 @@ export default function StrategyXBar() {
           href={DISCOVER_URL}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex h-9 items-center gap-2 rounded-full bg-white px-4 text-[12px] font-semibold text-black transition-colors hover:bg-white/85"
+          className="inline-flex h-9 items-center gap-2 rounded-full bg-vermilion px-4 text-[12px] font-semibold text-white transition-colors hover:bg-vermilion-d"
         >
           Browse on X <ArrowUpRight className="h-3.5 w-3.5" />
         </a>
