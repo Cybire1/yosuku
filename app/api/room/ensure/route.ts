@@ -5,9 +5,12 @@
 // proven keypair flow (createAndShareGroup + MarketRoomRule + grant admin), run
 // once per market. Idempotent: if the room already exists, we just return its ids.
 //
-// NOTE (testnet): the room-admin key is deterministic here for simplicity — it
-// only creates rooms and holds a little testnet SUI. For mainnet, load it from a
-// secret env var (ROOM_ADMIN_SECRET) instead.
+// The room-admin key comes from ROOM_ADMIN_SECRET and there is no fallback. An
+// earlier version defaulted to `new Uint8Array(32).fill(42)`, which is not a
+// private key so much as a shared one: it derives to 0x13054fec…, an address any
+// tutorial that fills a buffer with 42 also controls, and which had a year of
+// unrelated traffic on it. Rooms creation now refuses to run rather than sign
+// with a key the whole internet holds.
 
 import { NextResponse } from 'next/server';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
@@ -31,11 +34,15 @@ const BET_REGISTRY = '0xea58c10b34bbb90f226208c5895b8f159870a9f60d33bc5a11e19727
 const GROUPS_PKG = '0xba8a26d42bc8b5e5caf4dac2a0f7544128d5dd9b4614af88eec1311ade11de79';
 const EXT_ADMIN = `${GROUPS_PKG}::permissioned_group::ExtensionPermissionsAdmin`;
 
-/** testnet room-admin — creates rooms + pays their (tiny) gas. */
+/** Room-admin: creates rooms and pays their (tiny) gas. Required, never defaulted. */
 function roomAdmin() {
   const secret = process.env.ROOM_ADMIN_SECRET;
-  if (secret) return Ed25519Keypair.fromSecretKey(secret);
-  return Ed25519Keypair.fromSecretKey(new Uint8Array(32).fill(42));
+  if (!secret) throw new RoomAdminMissing();
+  return Ed25519Keypair.fromSecretKey(secret);
+}
+
+class RoomAdminMissing extends Error {
+  constructor() { super('ROOM_ADMIN_SECRET is not set, so rooms cannot be created.'); }
 }
 
 const RULES_BY_TYPE_Q = `query Rooms($type: String!, $first: Int!, $after: String) {
@@ -154,6 +161,11 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ ruleId, groupId });
   } catch (e) {
+    if (e instanceof RoomAdminMissing) {
+      // loud in the server log, vague to the caller: the fix is ops, not something a user did.
+      console.error('[room/ensure] ROOM_ADMIN_SECRET is not set. Refusing to create rooms.');
+      return NextResponse.json({ error: 'Rooms are unavailable right now.' }, { status: 503 });
+    }
     return NextResponse.json({ error: String((e as Error)?.message ?? e).slice(0, 300) }, { status: 500 });
   }
 }

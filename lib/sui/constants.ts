@@ -47,6 +47,23 @@ export const FLOAT_SCALING = 1_000_000_000;
 export const DUSDC_DECIMALS = 6;
 export const DUSDC_MULTIPLIER = 1_000_000;
 
+// hBTC — native Bitcoin bridged onto Sui by Hashi (testnet, 8 decimals). A bet can be
+// funded FROM this via the on-ramp shim below; we only surface "bet with BTC" to users
+// who actually hold some.
+export const HBTC_TYPE =
+  '0xfcea10cadbb553c4874201584abf68771592678952efd957b2e82c010c7f4360::btc::BTC';
+export const HBTC_DECIMALS = 8;
+export const HBTC_MULTIPLIER = 100_000_000;
+
+// yosuku BTC on-ramp shim (testnet): swaps hBTC -> DUSDC at the live oracle price so
+// native Bitcoin can fund a bet, since DUSDC has no spot market on testnet. Testnet
+// mechanism only (Yosuku seeds the DUSDC); at mainnet this becomes a real DEX swap.
+// Deployed + proven: see suioverflow/btc-onramp/DEPLOYED.md.
+export const ONRAMP_PACKAGE =
+  '0x6794caacfc8c4e88a8ff4cdf2f57169bf625bf345430a220683858d3184f72b0';
+export const ONRAMP_RAMP =
+  '0x5291d2fbd5a1aa335b3e43537637cfa22127d3ec6f7fecbee93b19f509a815a9';
+
 // Sentinel strike values for binary positions
 // neg_inf = 0, pos_inf = u64::MAX
 export const NEG_INF = '0';

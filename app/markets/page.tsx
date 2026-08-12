@@ -20,6 +20,7 @@ import { type PriceData } from '@/lib/sui/predictApi';
 import { getCanonicalMarketLine } from '@/lib/marketLine';
 import { useBtcPrice } from '@/lib/hooks/useBtcPrice';
 import { drawPriceLine } from '@/lib/charts/canvasChart';
+import { useLivePrice } from '@/lib/animation/useSpring';
 import { FLOAT_SCALING } from '@/lib/sui/constants';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
@@ -47,14 +48,7 @@ import { BAND_USD, minMintMs, strike624, ticks624, type Dir624 } from '@/lib/sui
 // involved, and nothing is ever executed. The user's own bets quote with their
 // own account in the ticket drawer.
 const HOUSE_SENDER = '0x0099f97251af2d072fc492316ae30de3ab5639beb09073509d54bf49197513b4';
-// Must be an AccountWrapper on the CURRENT account package and SELF-OWNED by HOUSE_SENDER.
-// The previous id was a wrapper from account package 0xb9389eac…, left behind when 7-29 was
-// redeployed in place and every address moved. Its type no longer matched, so deposit_funds
-// failed with CommandArgumentError TypeMismatch, the quote returned an error object that
-// String() rendered as "[object Object]", and the board showed "LOADING ODDS…" forever.
-// An object-owned wrapper does not work either: the quote carries the user's own Auth, so it
-// aborts. Created 2026-08-12, tx 687Vbyvwe3c8….
-const HOUSE_WRAPPER = '0xa626009e003ba8e9b36e92c1f29683629703e431074688a160252a309f5fa978';
+const HOUSE_WRAPPER = '0xc820ff1e36d8810f29d80ad81415fd064e02b7f20c41a4469e2f4400d514e706';
 // 2 DUSDC payout @1× — the venue's smallest quotable ticket (min net premium is
 // 1 DUSDC; a 1 DUSDC quote aborts). Cents shown = cost per $1 of payout.
 const ODDS_STALE_MS = 18_000; // per-market cache — effective ~20s refresh
@@ -548,15 +542,31 @@ export default function MarketsPage() {
 
   // hero chart — the same living chart treatment as before, on the settlement feed
   const heroCanvasRef = useRef<HTMLCanvasElement>(null);
+
+  // Spring only the LEADING EDGE. History is a record of what happened and must not wobble, so
+  // the spring drives the last point and nothing else. Speed comes out of the physics: a tick
+  // landing while momentum is still in the spring compounds, so a run accelerates and chop
+  // cancels itself. `clamp` keeps the line from ringing past the real price, which would draw a
+  // trade that never happened.
+  const liveTarget = liveSeries.length ? liveSeries[liveSeries.length - 1] : 0;
+  const { dot: springedLive, intensity } = useLivePrice(liveTarget);
+
+  const springSeries = useMemo(() => {
+    if (liveSeries.length < 2) return liveSeries;
+    const out = liveSeries.slice();
+    out[out.length - 1] = springedLive;
+    return out;
+  }, [liveSeries, springedLive]);
+
   useEffect(() => {
-    if (!heroCanvasRef.current || liveSeries.length < 2) return;
+    if (!heroCanvasRef.current || springSeries.length < 2) return;
     // Hide the strike pill on phones — it crowds the narrow chart and the strike
     // is already in the headline. Re-evaluated ~1/s as liveSeries updates.
     const narrow = typeof window !== 'undefined' && window.innerWidth <= 768;
     let raf = 0;
     const drawFrame = (t: number) => {
       if (!heroCanvasRef.current) return;
-      drawPriceLine(heroCanvasRef.current, liveSeries, {
+      drawPriceLine(heroCanvasRef.current, springSeries, {
         target: heroStrike ?? undefined,
         targetLabel: heroStrike != null && !narrow ? `UP line · $${Math.round(heroStrike).toLocaleString()}` : '',
         verdict: true,
@@ -573,7 +583,7 @@ export default function MarketsPage() {
     };
     raf = window.requestAnimationFrame(drawFrame);
     return () => window.cancelAnimationFrame(raf);
-  }, [liveSeries, heroStrike]);
+  }, [springSeries, heroStrike, intensity]);
 
   const nextExpiry = markets[0]?.expiry;
 

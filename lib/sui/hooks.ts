@@ -69,6 +69,8 @@ import {
 import {
   DUSDC_TYPE,
   PLP_TYPE,
+  HBTC_TYPE,
+  HBTC_MULTIPLIER,
   PREDICT_ID,
   FLOAT_SCALING,
   NEG_INF,
@@ -197,6 +199,51 @@ export function useDUSDCBalance(pollInterval = 30_000) {
   useVisibilityAwareInterval(refresh, pollInterval);
 
   return { balance, coins, loading, refresh };
+}
+
+/** Hook: hBTC (native Bitcoin via Hashi) balance in wallet. Same shape as
+ *  useDUSDCBalance, but 8 decimals. Used to gate the "bet with BTC" affordance:
+ *  it only appears when `balance > 0`. */
+export function useHbtcBalance(pollInterval = 30_000) {
+  const address = useWalletAddress();
+  const client = useSuiClient();
+  const [balance, setBalance] = useState(0);
+  const [coins, setCoins] = useState<{ coinObjectId: string; balance: bigint }[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const refresh = useCallback(async () => {
+    if (!address) {
+      setBalance(0);
+      setCoins([]);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    try {
+      const [bal, coinList] = await Promise.all([
+        client.getBalance({ owner: address, coinType: HBTC_TYPE }),
+        client.getCoins({ owner: address, coinType: HBTC_TYPE }),
+      ]);
+      setBalance(Number(bal.totalBalance));
+      setCoins(coinList.data.map(c => ({
+        coinObjectId: c.coinObjectId,
+        balance: BigInt(c.balance),
+      })));
+    } catch (err) {
+      // A brand-new coin type can 404 on some RPCs before the owner holds any; treat as zero.
+      setBalance(0);
+      setCoins([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [address, client]);
+
+  useEffect(() => { refresh(); }, [refresh]);
+  useVisibilityAwareInterval(refresh, pollInterval);
+
+  /** hBTC in whole BTC (8dp), for display. */
+  const btc = balance / HBTC_MULTIPLIER;
+  return { balance, btc, coins, loading, refresh, holdsBtc: balance > 0 };
 }
 
 export interface TradingVaultBalance {

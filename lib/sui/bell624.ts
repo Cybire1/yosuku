@@ -8,8 +8,8 @@
 
 import { useEffect, useState } from 'react';
 import {
-  PREDICT624,
-  FLOAT_SCALING_624,
+  fetchMarkets624,
+  fetchRecentSettlements624,
   inferCadence624,
   type Cadence624,
 } from './predict624Client';
@@ -24,72 +24,27 @@ export interface Print624 {
   settledAtMs: number;
 }
 
-interface RawRow {
-  expiry_market_id?: string;
-  expiry?: number | string;
-}
-
 /** One raw /markets read → deduped { id, expiry } rows (indexer order:
  *  newest-created first). 120 events ≈ 1.5–2 h of creations — plenty for both
  *  the soonest future bells and a screenful of recent prints. */
 async function rawMarkets624(limit = 120): Promise<{ id: string; expiry: number }[]> {
-  const res = await fetch(`${PREDICT624.indexer}/markets?limit=${limit}`, {
-    headers: { accept: 'application/json' },
-  });
-  if (!res.ok) throw new Error(`predict624 indexer /markets ${res.status}`);
-  const rows = (await res.json()) as RawRow[];
+  const rows = await fetchMarkets624();
   const seen = new Set<string>();
   const out: { id: string; expiry: number }[] = [];
   for (const r of Array.isArray(rows) ? rows : []) {
-    const id = String(r.expiry_market_id ?? '');
+    const id = String(r.id ?? '');
     const expiry = Number(r.expiry);
     if (!id || !Number.isFinite(expiry) || seen.has(id)) continue;
     seen.add(id);
     out.push({ id, expiry });
+    if (out.length >= limit) break;
   }
   return out;
 }
 
-// Settlements are immutable — cache each market's print for the session so a
-// poll only costs one /markets read plus at most a couple of state misses.
-const printCache = new Map<string, Print624>();
-
-async function loadPrint(id: string, expiry: number): Promise<Print624 | null> {
-  const cached = printCache.get(id);
-  if (cached) return cached;
-  try {
-    const res = await fetch(`${PREDICT624.indexer}/markets/${id}/state`, {
-      headers: { accept: 'application/json' },
-    });
-    if (!res.ok) return null;
-    const j = (await res.json()) as {
-      settlement?: { settlement_price?: string | number; settled_at_ms?: string | number } | null;
-    };
-    const s = j?.settlement;
-    if (s?.settlement_price == null) return null; // not settled yet — retry next poll
-    const print: Print624 = {
-      marketId: id,
-      cadence: inferCadence624(expiry),
-      expiry,
-      priceUsd: Number(s.settlement_price) / FLOAT_SCALING_624,
-      settledAtMs: Number(s.settled_at_ms ?? expiry),
-    };
-    printCache.set(id, print);
-    return print;
-  } catch {
-    return null;
-  }
-}
-
 /** The newest REAL settlement prints, newest first. */
 export async function fetchRecentPrints624(count = 6): Promise<Print624[]> {
-  const now = Date.now();
-  const past = (await rawMarkets624())
-    .filter((m) => m.expiry <= now)
-    .sort((a, b) => b.expiry - a.expiry)
-    .slice(0, count + 2); // headroom — the very newest bell may not have settled yet
-  const prints = await Promise.all(past.map((m) => loadPrint(m.id, m.expiry)));
-  return prints.filter((p): p is Print624 => p != null).slice(0, count);
+  return fetchRecentSettlements624(count);
 }
 
 /** mm:ss under an hour, h:mm over it (the venue's soonest bell is normally minutes out). */
@@ -117,12 +72,8 @@ export function useBell624(pollMs = 15_000): { nextBellMs: number | null; lastPr
         if (dead) return;
         const now = Date.now();
         setBells(rows.filter((m) => m.expiry > now).map((m) => m.expiry).sort((a, b) => a - b));
-        const past = rows.filter((m) => m.expiry <= now).sort((a, b) => b.expiry - a.expiry).slice(0, 3);
-        for (const m of past) {
-          const p = await loadPrint(m.id, m.expiry);
-          if (dead) return;
-          if (p) { setLastPrint(p); break; }
-        }
+        const latestPrint = (await fetchRecentSettlements624(1))[0] ?? null;
+        if (!dead && latestPrint) setLastPrint(latestPrint);
       } catch { /* keep last values */ }
     };
     load();
