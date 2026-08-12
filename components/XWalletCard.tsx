@@ -220,10 +220,10 @@ export default function XWalletCard() {
     <section>
       <div className="mb-3 flex items-center gap-2">
         <Twitter className="h-4 w-4 text-[#E04D26]" />
-        <h2 className="font-display text-sm font-[700] uppercase tracking-wide text-white">X wallet</h2>
+        <h2 className="font-display text-sm font-[700] uppercase tracking-wide text-[#1A1612]">X wallet</h2>
       </div>
 
-      <div className="rounded border border-white/[0.08] bg-bg p-5">
+      <div className="ledger-plate">
         {/* WHO this balance bets for. The relay routes a reply by X account, so the binding is the
             thing that makes a funded balance reachable from a tweet. It used to sit in small gray
             type UNDER the fund controls, which read as a footnote instead of the first step. */}
@@ -231,8 +231,8 @@ export default function XWalletCard() {
           // Signed in with X, but the relay does not route this wallet yet. The dangerous state:
           // funding here produces a balance no tweet can spend, and until now nothing said so.
           <div className="mb-4 rounded-lg border border-[#E04D26]/30 bg-[#E04D26]/[0.07] px-3.5 py-3">
-            <div className="text-[13px] font-bold text-white">One more step to bet from @{me!.handle}.</div>
-            <p className="mt-1 text-[12px] leading-snug text-gray-400">
+            <div className="text-[13px] font-bold text-[#1A1612]">One more step to bet from @{me!.handle}.</div>
+            <p className="mt-1 text-[12px] leading-snug text-[#6B6353]">
               Point that account at this wallet, so a reply you tweet spends this balance and not some other.
             </p>
             <button
@@ -246,16 +246,16 @@ export default function XWalletCard() {
         ) : connected ? (
           <div className="mb-4 flex flex-wrap items-center gap-x-2 gap-y-0.5 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2">
             <Twitter className="h-3.5 w-3.5 shrink-0 text-[#E04D26]" />
-            <span className="font-display text-sm font-[700] text-white">{me?.handle ? `@${me.handle}` : 'X connected'}</span>
-            <span className="text-[12px] text-gray-500">{routed ? 'bets from this balance' : 'signed in'}</span>
+            <span className="font-display text-sm font-[700] text-[#1A1612]">{me?.handle ? `@${me.handle}` : 'X connected'}</span>
+            <span className="text-[12px] text-[#6B6353]">{routed ? 'bets from this balance' : 'signed in'}</span>
           </div>
         ) : (
           <div className="mb-4 rounded-lg border border-[#E04D26]/30 bg-[#E04D26]/[0.07] px-3.5 py-3">
-            <div className="text-[13px] font-bold text-white">Connect X first, then fund.</div>
-            <p className="mt-1 text-[12px] leading-snug text-gray-400">
+            <div className="text-[13px] font-bold text-[#1A1612]">Connect X first, then fund.</div>
+            <p className="mt-1 text-[12px] leading-snug text-[#6B6353]">
               Your replies have to point at this balance. Until an X account is linked, a bet you tweet has nowhere to land.
             </p>
-            {/* explicit hex, not text-black/text-white: the theme maps those onto the foreground
+            {/* explicit hex, not text-black/text-[#1A1612]: the theme maps those onto the foreground
                 colour, which rendered this button white-on-white in dark mode. */}
             <a
               href="/api/claim/x/start?return=/portfolio"
@@ -268,69 +268,78 @@ export default function XWalletCard() {
         ))}
 
         {!address ? (
-          <div className="text-sm text-gray-400">Connect your Sui wallet to fund your X betting balance.</div>
+          <div className="text-sm text-[#6B6353]">Connect your Sui wallet to fund your X betting balance.</div>
         ) : (
           <>
             {/* balance + cash out */}
             <div className="flex items-end justify-between gap-4">
               <div>
-                <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-gray-500">Your X betting balance</div>
-                <div className="mt-1 flex items-baseline gap-2">
-                  <span className="font-display text-3xl font-[800] text-white tabular-nums">{balNum == null ? '$0.00' : `$${balNum.toFixed(2)}`}</span>
-                  <span className="text-[13px] text-gray-500">bet it from a reply</span>
+                <span className="font-mono text-[9px] tracking-[0.16em] uppercase" style={{ color: '#6B6353' }}>
+                  Your X betting balance
+                </span>
+                <div className="font-mono text-3xl font-semibold mt-1 tabular-nums" style={{ color: '#1A1612' }}>
+                  {balNum == null ? '0.00' : balNum.toFixed(2)}
+                  <span className="text-sm ml-2" style={{ color: '#6B6353' }}>DUSDC</span>
                 </div>
+                <p className="font-mono text-[10px] mt-1" style={{ color: '#6B6353' }}>bet it by replying to a live line</p>
               </div>
               {balMicro != null && balMicro > 0n && (
                 <button
                   onClick={cashOut}
                   disabled={!!busy}
-                  className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-xl border border-white/15 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-white/[0.06] disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg px-5 py-2 font-display text-[12px] font-bold uppercase tracking-[0.1em] transition-opacity disabled:opacity-40"
+                  style={{ background: 'transparent', border: '1px solid rgba(201,191,166,0.7)', color: '#1A1612' }}
                 >
-                  {busy === 'cashout' ? 'Cashing out…' : 'Cash out'} <ArrowUpRight className="h-4 w-4" />
+                  {busy === 'cashout' ? 'Cashing out' : 'Cash out'} <ArrowUpRight className="h-3.5 w-3.5" />
                 </button>
               )}
             </div>
 
             {/* fund controls */}
-            <div className="mt-4 flex flex-col gap-2.5 sm:flex-row sm:items-center">
+            <div className="mt-6 pt-5 flex flex-col gap-2.5 sm:flex-row sm:items-center" style={{ borderTop: '1px solid rgba(201,191,166,0.3)' }}>
               <div className="flex items-center gap-1.5">
                 {QUICK.map((v) => (
                   <button
                     key={v}
                     onClick={() => setAmount(v)}
-                    className={`rounded-lg border px-3 py-2 font-mono text-xs transition-colors ${amount === v ? 'border-[#E04D26] text-white' : 'border-white/10 text-gray-400 hover:text-white'}`}
+                    className="rounded-lg px-3 py-2 font-mono text-xs transition-colors"
+                    style={amount === v
+                      ? { border: '1px solid #1A1612', color: '#1A1612' }
+                      : { border: '1px solid rgba(201,191,166,0.6)', color: '#6B6353' }}
                   >${v}</button>
                 ))}
-                <div className="flex items-center gap-1 rounded-lg border border-white/10 px-3 py-2">
-                  <span className="text-sm text-gray-500">$</span>
+                <div className="flex items-center gap-1 rounded-lg px-3 py-2" style={{ border: '1px solid rgba(201,191,166,0.6)', background: '#FFFDF8' }}>
+                  <span className="text-sm" style={{ color: '#6B6353' }}>$</span>
                   <input
                     value={amount}
                     onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))}
                     inputMode="decimal"
                     aria-label="Amount to fund in DUSDC"
-                    className="w-14 bg-transparent text-sm text-white outline-none"
+                    className="w-14 bg-transparent text-sm outline-none"
+                    style={{ color: '#1A1612' }}
                   />
-                  <span className="font-mono text-[10px] text-gray-600">DUSDC</span>
+                  <span className="font-mono text-[10px]" style={{ color: '#6B6353' }}>DUSDC</span>
                 </div>
               </div>
               <button
                 onClick={fund}
                 disabled={!!busy}
-                className="inline-flex items-center justify-center whitespace-nowrap rounded-xl bg-[#E04D26] px-5 py-2.5 text-sm font-bold text-white transition-colors hover:bg-[#B83A1B] disabled:opacity-60"
+                className="inline-flex items-center justify-center whitespace-nowrap rounded-lg px-5 py-2 font-display text-[12px] font-bold uppercase tracking-[0.1em] transition-opacity disabled:opacity-40"
+                style={{ background: '#1A1612', color: '#FBF7EE' }}
               >
-                {busy === 'fund' ? 'Funding…' : 'Fund X wallet'}
+                {busy === 'fund' ? 'Funding' : 'Fund'}
               </button>
             </div>
 
-            <p className="mt-3 text-[11px] leading-snug text-gray-500">
-              Funds your trade-from-X account and keeps the bounded agent authorized, up to 3x a trade. It can open the bets you tweet, it can never withdraw. Only you can cash out.
+            <p className="mt-3 font-mono text-[10px] leading-snug" style={{ color: '#6B6353' }}>
+              The agent can open the bets you tweet. It can never withdraw. Only you can cash out.
             </p>
 
             {needsFaucet && (
               <button
                 onClick={getFaucet}
                 disabled={!!busy}
-                className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-white/15 px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-white/[0.06] disabled:opacity-50"
+                className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-white/15 px-3 py-1.5 text-xs font-bold text-[#1A1612] transition-colors hover:bg-white/[0.06] disabled:opacity-50"
               >
                 {busy === 'faucet' ? 'Requesting…' : 'Get test DUSDC'}
               </button>
@@ -344,18 +353,18 @@ export default function XWalletCard() {
             The connect CTA moved to the top of the card, so this block is only the follow-through. */}
         <div className="mt-4 border-t border-white/[0.06] pt-4">
           {loadingMe ? (
-            <div className="text-sm text-gray-500">Checking your X connection…</div>
+            <div className="text-sm text-[#6B6353]">Checking your X connection…</div>
           ) : !connected ? (
-            <div className="text-xs text-gray-500">Once X is linked, you bet by replying YES or NO to a live line.</div>
+            <div className="text-xs text-[#6B6353]">Once X is linked, you bet by replying YES or NO to a live line.</div>
           ) : sealed ? (
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div className="font-mono text-xs text-gray-400">tweet-funded account {short(sealed.address)} · <span className="text-white">${sealed.balanceDusdc.toFixed(2)}</span></div>
-              <a href="/claim" className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-xl border border-white/15 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-white/[0.06]">
+              <div className="font-mono text-xs text-[#6B6353]">tweet-funded account {short(sealed.address)} · <span className="text-[#1A1612]">${sealed.balanceDusdc.toFixed(2)}</span></div>
+              <a href="/claim" className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-xl border border-white/15 px-4 py-2 text-sm font-bold text-[#1A1612] transition-colors hover:bg-white/[0.06]">
                 Cash out <ArrowUpRight className="h-4 w-4" />
               </a>
             </div>
           ) : (
-            <div className="text-xs text-gray-500">Reply YES or NO to a live line to place a bet. Minimum $1.15.</div>
+            <div className="text-xs text-[#6B6353]">Reply YES or NO to a live line to place a bet. Minimum $1.15.</div>
           )}
         </div>
       </div>
