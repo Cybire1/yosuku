@@ -57,7 +57,15 @@ const solProvider = (): SolProvider | null => {
   return w.phantom?.solana ?? w.solana ?? null;
 };
 
-export default function CrossChainDeposit() {
+export default function CrossChainDeposit({
+  triggerClassName,
+  triggerLabel,
+}: {
+  /** Lets a host restyle the trigger (e.g. a full-width row inside the Add money modal) without
+   *  duplicating the sheet, so there is one deposit flow rather than two that can drift. */
+  triggerClassName?: string;
+  triggerLabel?: string;
+} = {}) {
   const account = useCurrentAccount();
   const suiAddress = account?.address ?? null;
 
@@ -298,9 +306,9 @@ export default function CrossChainDeposit() {
     <>
       <button
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-2 rounded-xl bg-[#E04D26] px-4 py-2.5 font-display text-sm font-bold text-white transition-colors hover:bg-[#B83A1B]"
+        className={triggerClassName ?? 'inline-flex items-center gap-2 rounded-xl bg-[#E04D26] px-4 py-2.5 font-display text-sm font-bold text-white transition-colors hover:bg-[#B83A1B]'}
       >
-        Deposit
+        {triggerLabel ?? 'Deposit'}
         {inFlight && <span className="h-1.5 w-1.5 rounded-full bg-white/90 animate-pulse" />}
       </button>
 

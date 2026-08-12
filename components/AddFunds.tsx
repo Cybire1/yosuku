@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useCurrentAccount } from '@mysten/dapp-kit';
 import { X } from 'lucide-react';
+import CrossChainDeposit from './CrossChainDeposit';
 
 const OFFICIAL_FAUCET = 'https://tally.so/r/Xx102L';
 const short = (a: string) => `${a.slice(0, 8)}…${a.slice(-6)}`;
@@ -124,6 +125,13 @@ export default function AddFunds({ open, onClose, onFunded }: { open: boolean; o
                 >
                   Buy with a card →
                 </Link>
+                {/* Third way in: real USDC bridged from Solana or an EVM chain. Same component as
+                    the Portfolio button, restyled as a row, so there is one deposit flow rather
+                    than two that drift. It hides itself when the relayer is not reachable. */}
+                <CrossChainDeposit
+                  triggerLabel="Deposit USDC from another chain →"
+                  triggerClassName="block w-full text-center rounded-full border border-white/15 py-3 font-semibold text-gray-200 hover:border-vermilion/50 hover:text-white transition-colors"
+                />
               </div>
             )}
 
