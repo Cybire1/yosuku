@@ -19,6 +19,9 @@ export const SUI_DOMAIN = 8;
 
 export type SourceChain = {
   domain: number;
+  /** Which machine this chain is. Decides the whole burn path: EVM does approve + contract call,
+   *  Solana does an Anchor instruction with PDAs and a fresh event-account keypair. */
+  kind: 'evm' | 'solana';
   chainId: number;
   name: string;
   rpc: string;
@@ -35,7 +38,18 @@ export type SourceChain = {
  *  slow chains the market a user was looking at will have settled before their money lands. */
 export const SOURCE_CHAINS: SourceChain[] = [
   {
-    domain: 1, chainId: 43113, name: 'Avalanche Fuji', nativeSymbol: 'AVAX',
+    domain: 5, kind: 'solana', chainId: 0, name: 'Solana', nativeSymbol: 'SOL',
+    rpc: process.env.NEXT_PUBLIC_SOLANA_RPC || 'https://api.devnet.solana.com',
+    explorer: 'https://explorer.solana.com/tx/',
+    // Not used on Solana: the programs and mint live in cctpSolana.ts because they are Pubkeys,
+    // not 0x addresses. Kept as zero rather than made optional so the EVM path cannot silently
+    // read an undefined address if someone adds a branch and forgets the kind check.
+    tokenMessenger: '0x0000000000000000000000000000000000000000',
+    usdc: '0x0000000000000000000000000000000000000000',
+    seconds: 25,
+  },
+  {
+    domain: 1, chainId: 43113, kind: 'evm', name: 'Avalanche Fuji', nativeSymbol: 'AVAX',
     rpc: 'https://api.avax-test.network/ext/bc/C/rpc',
     explorer: 'https://testnet.snowtrace.io/tx/',
     tokenMessenger: '0xeb08f243E5d3FCFF26A9E38Ae5520A669f4019d0',
@@ -43,7 +57,7 @@ export const SOURCE_CHAINS: SourceChain[] = [
     seconds: 8,
   },
   {
-    domain: 7, chainId: 80002, name: 'Polygon Amoy', nativeSymbol: 'POL',
+    domain: 7, chainId: 80002, kind: 'evm', name: 'Polygon Amoy', nativeSymbol: 'POL',
     rpc: 'https://polygon-amoy-bor-rpc.publicnode.com',
     explorer: 'https://amoy.polygonscan.com/tx/',
     tokenMessenger: '0x9f3B8679c73C2Fef8b59B4f3444d4e156fb70AA5',
@@ -51,7 +65,7 @@ export const SOURCE_CHAINS: SourceChain[] = [
     seconds: 8,
   },
   {
-    domain: 6, chainId: 84532, name: 'Base Sepolia', nativeSymbol: 'ETH',
+    domain: 6, chainId: 84532, kind: 'evm', name: 'Base Sepolia', nativeSymbol: 'ETH',
     rpc: 'https://sepolia.base.org',
     explorer: 'https://sepolia.basescan.org/tx/',
     tokenMessenger: '0x9f3B8679c73C2Fef8b59B4f3444d4e156fb70AA5',
@@ -59,7 +73,7 @@ export const SOURCE_CHAINS: SourceChain[] = [
     seconds: 19 * 60,
   },
   {
-    domain: 0, chainId: 11155111, name: 'Ethereum Sepolia', nativeSymbol: 'ETH',
+    domain: 0, chainId: 11155111, kind: 'evm', name: 'Ethereum Sepolia', nativeSymbol: 'ETH',
     rpc: 'https://ethereum-sepolia-rpc.publicnode.com',
     explorer: 'https://sepolia.etherscan.io/tx/',
     tokenMessenger: '0x9f3B8679c73C2Fef8b59B4f3444d4e156fb70AA5',
@@ -72,8 +86,11 @@ export const chainByDomain = (d: number) => SOURCE_CHAINS.find((c) => c.domain =
 
 /** "about 10 seconds" beats "8s" for a human, and the slow chains must never be rounded down into
  *  sounding quick. Users forgive a wait they were told about. */
-export const humanWait = (seconds: number) =>
-  seconds <= 30 ? 'about 10 seconds' : `about ${Math.round(seconds / 60)} minutes`;
+export const humanWait = (seconds: number) => {
+  if (seconds <= 10) return 'about 10 seconds';
+  if (seconds < 60) return `about ${Math.round(seconds / 5) * 5} seconds`;
+  return `about ${Math.round(seconds / 60)} minutes`;
+};
 
 /** A Sui address is already 32 bytes, which is exactly what CCTP's bytes32 mintRecipient wants, so
  *  this is a validation and pad rather than a conversion. EVM's 20-byte addresses need left
