@@ -2,7 +2,14 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Twitter, ArrowUpRight } from 'lucide-react';
-import { useCurrentAccount, useSignPersonalMessage } from '@mysten/dapp-kit';
+import {
+  useConnectWallet,
+  useCurrentAccount,
+  useCurrentWallet,
+  useDisconnectWallet,
+  useSignPersonalMessage,
+} from '@mysten/dapp-kit';
+import { getSession, isEnokiWallet } from '@mysten/enoki';
 import { useSmartSubmit } from '@/lib/sui/useSmartSubmit';
 import { buildEnableTweetTrading624, buildTweetVaultWithdraw624, fetchTweetLedger624Micro } from '@/lib/sui/vault624Client';
 import { fetchDUSDCCoins, fetchDUSDCHeldMicro } from '@/lib/sui/queries';
@@ -28,14 +35,12 @@ const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 // in one signature (deposit + keep the bounded agent authorized), and Cash out straight back to
 // your wallet — only you can, the agent has no withdraw path. Below that: Connect X to bind your
 // handle, and claim any sealed tweet-funded account we spun up for you.
-/** Wallet and RPC errors arrive as raw SDK strings. "Failed to open popup" is what the extension
- *  says when the browser blocks its signing window: true, and useless to the person reading it,
- *  who has no idea a popup was even involved. Translate the ones we know, pass anything else
- *  through rather than swallowing a real failure behind a friendly guess. */
+/** Wallet and RPC errors arrive as raw SDK strings. Translate the ones we know, pass anything
+ *  else through rather than swallowing a real failure behind a friendly guess. */
 function friendlyWalletError(raw: string): string {
   const e = raw.toLowerCase();
   if (/open popup|popup.*(block|fail)|window.*block/.test(e)) {
-    return 'Your browser blocked the wallet window. Allow pop-ups for this site, then try again.';
+    return 'Your Google wallet session expired. Reconnect it, then try again.';
   }
   if (/user rejected|rejected the request|denied/.test(e)) return 'Cancelled.';
   if (/insufficient|balance too low|ebalancetoolow/.test(e)) return 'Not enough DUSDC in your wallet.';
@@ -45,6 +50,9 @@ function friendlyWalletError(raw: string): string {
 
 export default function XWalletCard() {
   const account = useCurrentAccount();
+  const { currentWallet } = useCurrentWallet();
+  const { mutateAsync: disconnectWallet } = useDisconnectWallet();
+  const { mutateAsync: connectWallet } = useConnectWallet();
   // No fallback address. A hardcoded one was left here as an audit scaffold, and because it is
   // an address that exists but holds nothing, every read below silently answered about IT rather
   // than about the person looking at the screen: balance $0.00, no coins, and "Not enough DUSDC
@@ -58,10 +66,67 @@ export default function XWalletCard() {
   const [loadingMe, setLoadingMe] = useState(true);
   const [balMicro, setBalMicro] = useState<bigint | null>(null);
   const [amount, setAmount] = useState('5');
-  const [busy, setBusy] = useState<'' | 'fund' | 'cashout' | 'faucet' | 'link'>('');
+  const [busy, setBusy] = useState<'' | 'fund' | 'cashout' | 'faucet' | 'link' | 'reconnect'>('');
   const [err, setErr] = useState('');
   const [ok, setOk] = useState('');
   const [needsFaucet, setNeedsFaucet] = useState(false);
+  const [needsWalletReconnect, setNeedsWalletReconnect] = useState(false);
+  const reconnectWalletRef = useRef(currentWallet);
+
+  // Enoki keeps exposing the deterministic zkLogin address after its signing session expires.
+  // Reads still work, but a later write tries to open Google auth after transaction preparation,
+  // when browsers reject the popup. Detect that state before the user presses Fund or Cash out.
+  useEffect(() => {
+    let cancelled = false;
+    if (!currentWallet || !isEnokiWallet(currentWallet)) {
+      if (!reconnectWalletRef.current) setNeedsWalletReconnect(false);
+      return;
+    }
+    reconnectWalletRef.current = currentWallet;
+    getSession(currentWallet, { network: 'testnet' })
+      .then((session) => {
+        if (!cancelled) setNeedsWalletReconnect(!session?.jwt || Date.now() >= session.expiresAt);
+      })
+      .catch(() => {
+        if (!cancelled) setNeedsWalletReconnect(true);
+      });
+    return () => { cancelled = true; };
+  }, [currentWallet, account?.address]);
+
+  // Reauthentication is intentionally two explicit clicks. First clear the expired session;
+  // then "Continue with Google" runs directly from a fresh click, so the browser permits Enoki's
+  // authorization window. Chaining disconnect -> connect behind one click recreates the popup bug.
+  const startWalletReconnect = useCallback(async () => {
+    if (!currentWallet || busy) return;
+    reconnectWalletRef.current = currentWallet;
+    setErr(''); setOk(''); setBusy('reconnect');
+    try {
+      await disconnectWallet();
+      setNeedsWalletReconnect(true);
+      setOk('Continue with Google to authorize funding and cash-out.');
+    } catch (e) {
+      setErr(friendlyWalletError(e instanceof Error ? e.message : String(e)));
+    } finally {
+      setBusy('');
+    }
+  }, [busy, currentWallet, disconnectWallet]);
+
+  const finishWalletReconnect = useCallback(async () => {
+    const wallet = reconnectWalletRef.current;
+    if (!wallet || busy) return;
+    setErr(''); setOk(''); setBusy('reconnect');
+    try {
+      await connectWallet({ wallet });
+      setNeedsWalletReconnect(false);
+      reconnectWalletRef.current = null;
+      setOk('Wallet ready. You can fund or cash out now.');
+    } catch (e) {
+      setNeedsWalletReconnect(true);
+      setErr(friendlyWalletError(e instanceof Error ? e.message : String(e)));
+    } finally {
+      setBusy('');
+    }
+  }, [busy, connectWallet]);
 
   // Re-runs when the wallet changes: the binding is per-wallet, so switching accounts has to
   // re-ask, and passing ?wallet lets the answer come from the relay even with no session cookie.
@@ -87,6 +152,7 @@ export default function XWalletCard() {
     if (!address || busy) return;
     setErr(''); setOk(''); setNeedsFaucet(false); setBusy('fund');
     try {
+      if (needsWalletReconnect) throw new Error('Your Google wallet session expired. Reconnect it, then try again.');
       const n = parseFloat(amount || '0');
       if (!Number.isFinite(n) || n <= 0) throw new Error('Enter an amount to fund.');
       const micro = BigInt(Math.round(n * DUSDC_MUL));
@@ -135,28 +201,33 @@ export default function XWalletCard() {
       );
       setOk(`Funded $${(Number(micro) / DUSDC_MUL).toFixed(2)}. Reply YES or NO to a live line to bet it.`);
     } catch (e) {
-      setErr(friendlyWalletError(e instanceof Error ? e.message : String(e)));
+      const raw = e instanceof Error ? e.message : String(e);
+      if (/failed to open popup|session.*expired/i.test(raw)) setNeedsWalletReconnect(true);
+      setErr(friendlyWalletError(raw));
     } finally {
       setBusy('');
       void refreshBalance();
     }
-  }, [address, amount, busy, submit, refreshBalance]);
+  }, [address, amount, busy, needsWalletReconnect, submit, refreshBalance]);
 
   const cashOut = useCallback(async () => {
     if (!address || busy) return;
     setErr(''); setOk(''); setBusy('cashout');
     try {
+      if (needsWalletReconnect) throw new Error('Your Google wallet session expired. Reconnect it, then try again.');
       const exact = await fetchTweetLedger624Micro(address); // freshest exact micro — withdraw wants the precise integer
       if (exact <= 0n) throw new Error('Nothing to cash out yet.');
       await submit(() => buildTweetVaultWithdraw624({ amountMicro: exact }));
       setOk(`Cashed out $${(Number(exact) / DUSDC_MUL).toFixed(2)} to your wallet.`);
     } catch (e) {
-      setErr(friendlyWalletError(e instanceof Error ? e.message : String(e)));
+      const raw = e instanceof Error ? e.message : String(e);
+      if (/failed to open popup|session.*expired/i.test(raw)) setNeedsWalletReconnect(true);
+      setErr(friendlyWalletError(raw));
     } finally {
       setBusy('');
       void refreshBalance();
     }
-  }, [address, busy, submit, refreshBalance]);
+  }, [address, busy, needsWalletReconnect, submit, refreshBalance]);
 
   const getFaucet = useCallback(async () => {
     if (!address || busy) return;
@@ -298,8 +369,25 @@ export default function XWalletCard() {
           </div>
         ))}
 
+        {needsWalletReconnect && (
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#E04D26]/30 bg-[#E04D26]/[0.07] px-3.5 py-3">
+            <div>
+              <div className="text-[13px] font-bold text-[#1A1612]">Wallet authorization needed</div>
+              <p className="mt-0.5 text-[12px] text-[#6B6353]">Your X balance is safe. Reauthorize to move funds.</p>
+            </div>
+            <button
+              onClick={currentWallet ? startWalletReconnect : finishWalletReconnect}
+              disabled={!!busy}
+              className="inline-flex items-center justify-center whitespace-nowrap rounded-lg px-4 py-2 font-display text-[12px] font-bold transition-opacity disabled:opacity-40"
+              style={{ background: '#1A1612', color: '#FBF7EE' }}
+            >
+              {busy === 'reconnect' ? 'Opening…' : currentWallet ? 'Reconnect wallet' : 'Continue with Google'}
+            </button>
+          </div>
+        )}
+
         {!address ? (
-          <div className="text-sm text-[#6B6353]">Connect your Sui wallet to fund your X betting balance.</div>
+          !needsWalletReconnect && <div className="text-sm text-[#6B6353]">Connect your Sui wallet to fund your X betting balance.</div>
         ) : (
           <>
             {/* balance + cash out */}
