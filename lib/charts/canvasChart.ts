@@ -685,23 +685,20 @@ export function drawPriceLine(
   // hero size (≥220px) nothing changes, but on a short strip like the Sensei meter
   // a full-surge bloom would otherwise cover half the chart and the price axis.
   const headK = Math.min(1, h / 220);
-  if (motion && surge > 0.015) {
-    // momentum flare — the head blooms outward when the market surges
-    ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
-    ctx.fillStyle = hexA(dotCol, 0.12 + surge * 0.4);
-    ctx.beginPath(); ctx.arc(last.x, last.y, (10 + surge * 24) * headK, 0, Math.PI * 2); ctx.fill();
-    ctx.restore();
-  }
-  if (motion) {
-    ctx.strokeStyle = hexA(dotCol, 0.24 + pulse * 0.18);
-    ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.arc(last.x, last.y, (12 + pulse * 8) * headK, 0, Math.PI * 2); ctx.stroke();
-  }
-  ctx.fillStyle = hexA(dotCol, motion ? 0.2 + pulse * 0.08 : 0.18);
-  ctx.beginPath(); ctx.arc(last.x, last.y, (motion ? 9 + pulse * 4 : 9) * headK, 0, Math.PI * 2); ctx.fill();
+
+  // A fixed marker, not a bloom.
+  //
+  // This used to stack three halos that all grew: a surge flare to radius 34, a breathing ring to
+  // 20, and a base disc to 13. On a real move they compounded into a blob wider than the price
+  // gutter, sitting over the axis labels, and the size carried no information a reader could use.
+  // One small ring and one dot, same size at rest and mid-surge.
+  ctx.fillStyle = hexA(dotCol, 0.16);
+  ctx.beginPath(); ctx.arc(last.x, last.y, 6 * headK, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = hexA(dotCol, 0.32);
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.arc(last.x, last.y, 7.5 * headK, 0, Math.PI * 2); ctx.stroke();
   ctx.fillStyle = dotCol;
-  ctx.beginPath(); ctx.arc(last.x, last.y, motion ? 3.8 + pulse * 0.8 : 3.5, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(last.x, last.y, 3.2, 0, Math.PI * 2); ctx.fill();
 
   // The roaming UP-vs-DOWN stick duel, riding the price line end to end
   if (opts.fighters) {
