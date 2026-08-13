@@ -476,7 +476,7 @@ export default function Ticket624Drawer({
     } finally {
       setBusy(null);
     }
-  }, [blocker, address, wrapperId, market, dir, isRange, lowerUsd, higherUsd, spot, busy, quote, acct, sponsoredSubmit, payoutQty, winAmt, lev, acctBalance, toast]);
+  }, [blocker, address, wrapperId, market, dir, isRange, lowerUsd, higherUsd, spot, busy, quote, acct, sponsoredSubmit, payoutQty, winAmt, lev, acctBalance, toast, priv, privStatus, signPersonalMessage, strikeUsd, stake]);
 
   // First bet for a user with no account yet: create + fund + place in ONE signature, gas-free
   // via the sponsor (a new user has no SUI). No pre-quote — cost is bounded by the deposit.
@@ -554,7 +554,7 @@ export default function Ticket624Drawer({
     } finally {
       setBusy(null);
     }
-  }, [blocker, address, wrapperId, market, dir, isRange, lowerUsd, higherUsd, spot, busy, acct, sponsoredSubmit, payoutQty, winAmt, lev, stake, acctBalance, toast]);
+  }, [blocker, address, wrapperId, market, dir, isRange, lowerUsd, higherUsd, spot, busy, acct, sponsoredSubmit, payoutQty, winAmt, lev, stake, acctBalance, toast, priv, privStatus, signPersonalMessage, strikeUsd]);
 
   // draw the market's live price chart inside the ticket — strike line (verdict
   // colors) for a side bet, shaded band for a range bet.
