@@ -440,7 +440,7 @@ export default function Portfolio624Section() {
                   </div>
 
                 </div>
-                <CrossChainDeposit />
+                <CrossChainDeposit triggerLabel="Add money" />
               </div>
 
               <div
@@ -494,7 +494,7 @@ export default function Portfolio624Section() {
                       className="rounded-lg px-5 py-2 font-display text-[12px] font-bold uppercase tracking-[0.1em] transition-opacity disabled:opacity-40"
                       style={{ background: '#1A1612', color: '#FBF7EE' }}
                     >
-                      {busy === 'deposit' ? 'Depositing' : 'Deposit'}
+                      {busy === 'deposit' ? 'Moving' : 'To account'}
                     </button>
                     <button
                       onClick={withdrawToWallet}
@@ -503,7 +503,7 @@ export default function Portfolio624Section() {
                       className="rounded-lg px-5 py-2 font-display text-[12px] font-bold uppercase tracking-[0.1em] transition-opacity disabled:opacity-40"
                       style={{ background: 'transparent', border: '1px solid rgba(201,191,166,0.7)', color: '#1A1612' }}
                     >
-                      {busy === 'withdraw' ? 'Withdrawing' : 'Withdraw'}
+                      {busy === 'withdraw' ? 'Moving' : 'To wallet'}
                     </button>
                   </div>
                 </div>
