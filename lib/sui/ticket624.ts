@@ -188,7 +188,11 @@ export function rangeTicks624(lowerUsd: number, higherUsd: number): { lowerTick:
  *  it will keep failing until the page reloads. Detect that shape specifically: a resolution
  *  error is never a user error, and no amount of changing the stake will fix it. */
 export function isStaleBundleError(raw: string): boolean {
-  return /Transaction resolution failed|CommandArgumentError|TypeMismatch|package.*not found/i.test(raw);
+  // "Transaction resolution failed" is NOT evidence of a stale bundle: the venue prefixes
+  // ordinary MoveAborts with it, so matching on it swallowed every real abort behind a
+  // "reload the page" toast that reloading could never fix. Match only the shapes that
+  // genuinely mean the client is built against different code.
+  return /CommandArgumentError|TypeMismatch|package.*not found|Function not found|Module not found/i.test(raw);
 }
 
 /** A stale tab cannot recover on its own and will fail every retry, so reload it. Delayed so the
