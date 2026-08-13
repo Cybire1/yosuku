@@ -410,6 +410,14 @@ export default function Ticket624Drawer({
       // Private route: the desk opens the position through a fresh manager, so it is not tied
       // to this wallet's public history. Ranges are not supported by the desk, so the toggle is
       // hidden in range mode rather than failing here.
+      // Fail CLOSED. If the private route is on but cannot run, refuse — never quietly fall
+      // through to a public bet. The user asked for their position not to be tied to this
+      // wallet; placing it publicly anyway is the one outcome they would never have chosen.
+      if (priv) {
+        if (!privStatus?.ready) throw new Error('Private route is not available right now — turn Private off to bet publicly.');
+        if (isRange) throw new Error('The private desk does not take range bets — switch to Up/Down or turn Private off.');
+        if (!dir || strikeUsd == null) throw new Error('No strike yet — wait for the oracle price.');
+      }
       if (priv && privStatus && !isRange && dir && strikeUsd != null) {
         const stakeMicro = Math.round(stake * DUSDC_MULTIPLIER);
         const t = await openPrivateBet(
@@ -476,6 +484,9 @@ export default function Ticket624Drawer({
     if (blocker || !address || !market || spot == null || busy) return;
     setBusy('mint');
     try {
+      // The first-bet path creates and funds an account from the wallet, which is inherently
+      // public. Refuse rather than silently ignoring the toggle.
+      if (priv) throw new Error('Place one public bet first to open your account, then Private is available.');
       const coinIds = acct.dusdcCoins.map((c) => c.coinObjectId);
       const base = {
         submit: sponsoredSubmit,
