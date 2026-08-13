@@ -190,8 +190,15 @@ function useHouseOdds624(markets: Market624[], spot: number | null) {
               [m.id]: {
                 upCents: up ?? o[m.id]?.upCents ?? null,
                 downCents: down ?? o[m.id]?.downCents ?? null,
-                strikeUpUsd: up != null ? strike624(spotNow, 'up') : o[m.id]?.strikeUpUsd ?? null,
-                strikeDownUsd: down != null ? strike624(spotNow, 'down') : o[m.id]?.strikeDownUsd ?? null,
+                // Pinned on FIRST quote and never recomputed for this market.
+                //
+                // These were derived from live spot every sweep, so the headline question rewrote
+                // itself every ~20 seconds: "BTC holds above $63,323?" became a different number
+                // before you could decide. The price of a question is allowed to move; the
+                // question is not. A new market id gets a fresh line, which is the only time it
+                // should change.
+                strikeUpUsd: o[m.id]?.strikeUpUsd ?? (up != null ? strike624(spotNow, 'up') : null),
+                strikeDownUsd: o[m.id]?.strikeDownUsd ?? (down != null ? strike624(spotNow, 'down') : null),
                 at: Date.now(),
               },
             }));
