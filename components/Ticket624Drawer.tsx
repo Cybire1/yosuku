@@ -1000,7 +1000,7 @@ export default function Ticket624Drawer({
                 : blocker ??
                   (isRange
                     ? `Place RANGE — ${lowerUsd != null && higherUsd != null ? `${fmtUsd0(lowerUsd)}–${fmtUsd0(higherUsd)}` : ''} →`
-                    : `Bet ${dir === 'up' ? 'UP' : 'DOWN'} →`)}
+                    : `Bet ${dir === 'up' ? 'UP' : 'DOWN'}${priv ? ' privately' : ''} →`)}
             </button>
 
             {/* Private route. Hidden until the desk is ready and only for Up/Down, so it is
