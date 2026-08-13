@@ -168,6 +168,21 @@ export async function fetchTraction(): Promise<TractionStats> {
   // of wallets, so a bare dollar figure would read as breadth of usage that is not there. The
   // bettor count is the honest denominator that has to sit next to it.
   const bettors = new Set<string>();
+
+  // A "wallet onboarded" has to mean someone who used the APP, not any address whose gas we paid.
+  //
+  // Those are the same thing right up until they are not. A batch of wallets minted in Oct 2024 by
+  // 0xc75ff8f721 found that the pool policy sponsored predict::supply and cycled it at ~20/hour
+  // from hundreds of pre-generated addresses. 353 of the last 400 sponsored transactions were
+  // Supplied. Every one counted as a new onboarded wallet, which is what sent the growth curve
+  // vertical while the bettor count barely moved. The gas policy is closed now, but the history
+  // is on-chain forever, so the counter has to be able to tell them apart.
+  //
+  // Supplying PLP needs no account, no bet and no app: you hold DUSDC and call the pool. So a
+  // sender whose sponsored activity is ONLY pool traffic is not a user of anything we built.
+  const POOL_ONLY = /::predict::(Supplied|Withdrawn)$|::(Supplied|Withdrawn)$/;
+  const didAppAction = new Set<string>();
+
   let before: string | null = null;
   try {
     for (let page = 0; page < MAX_PAGES; page++) {
@@ -182,6 +197,13 @@ export async function fetchTraction(): Promise<TractionStats> {
         const sender = n.sender?.address ?? '';
         if (sponsor !== ONARA || !sender || sender === ONARA || isInternal(sender)) continue;
         const ts = n.effects?.timestamp ? Date.parse(n.effects.timestamp) : 0;
+
+        // Anything that is not bare pool traffic counts as using the app. A transaction with no
+        // events at all counts too: it did something, we just cannot name it, and guessing
+        // "farmer" on missing data would undercount real people.
+        const evTypes = (n.effects?.events?.nodes ?? []).map((e) => e.contents?.type?.repr ?? '');
+        if (evTypes.length === 0 || evTypes.some((t) => !POOL_ONLY.test(t))) didAppAction.add(sender);
+
         sponsoredActions++;
         for (const ev of n.effects?.events?.nodes ?? []) {
           if (!MINTED.test(ev.contents?.type?.repr ?? '')) continue;
@@ -278,6 +300,10 @@ export async function fetchTraction(): Promise<TractionStats> {
     }
   }));
 
+  // Drop the pool farm from the headline count. Kept out of `sponsoredActions` deliberately:
+  // that number says what we PAID FOR, and we did pay for those.
+  for (const addr of [...firstSeen.keys()]) if (!didAppAction.has(addr)) firstSeen.delete(addr);
+
   recent.sort((a, b) => b.ts - a.ts);
   return monotonic({
     onboardedUsers: firstSeen.size,
@@ -302,7 +328,11 @@ export async function fetchTraction(): Promise<TractionStats> {
  * Deliberately NOT applied to `proven`, `growth` or `volume`: those are derived from event
  * queries that can legitimately be re-scoped, and flooring them would hide a real regression.
  */
-const HWM_KEY = 'yosuku.traction.hwm';
+// Key bumped when "onboarded" stopped meaning "any address whose gas we paid" and started
+// meaning "used the app". The floor is a MAX, so a stored 1,135 from the old definition would
+// have overridden the corrected number forever and quietly undone the fix on every browser that
+// had already loaded this page. A changed definition needs a new high-water mark.
+const HWM_KEY = 'yosuku.traction.hwm.v2';
 function monotonic(t: TractionStats): TractionStats {
   if (typeof window === 'undefined') return t;
   try {

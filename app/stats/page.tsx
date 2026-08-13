@@ -77,7 +77,7 @@ function GrowthCurve({ points, height = 200 }: { points: GrowthPoint[]; height?:
       <polygon points={area} fill="url(#gc)" stroke="none" />
       {pts.length > 1 && <polyline points={line} fill="none" stroke="#34d399" strokeWidth={2.5} strokeLinejoin="round" style={{ filter: 'drop-shadow(0 0 6px rgba(52,211,153,0.55))' }} />}
       {pts.map((q, i) => <circle key={i} cx={q.x} cy={q.y} r={i === pts.length - 1 ? 5 : 3} fill="#34d399" style={i === pts.length - 1 ? { filter: 'drop-shadow(0 0 8px #34d399)' } : undefined} />)}
-      <text x={padX} y={14} className="fill-gray-600" style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: 2 }}>CUMULATIVE WALLETS ONBOARDED</text>
+      <text x={padX} y={14} className="fill-gray-600" style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: 2 }}>CUMULATIVE WALLETS THAT USED THE APP</text>
       <text x={W - padX} y={14} textAnchor="end" className="fill-emerald-300" style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700 }}>{max}</text>
     </svg>
   );
@@ -129,12 +129,16 @@ export default function StatsPage() {
             <div className="rounded-2xl border border-emerald-500/25 bg-gradient-to-b from-emerald-500/[0.07] to-transparent p-7 backdrop-blur-sm">
               <div className="flex items-center gap-2 mb-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" style={{ boxShadow: '0 0 10px #34d399' }} />
-                <span className="font-mono text-[10px] tracking-[0.22em] uppercase text-gray-500">Wallets onboarded</span>
+                <span className="font-mono text-[10px] tracking-[0.22em] uppercase text-gray-500">Wallets that used the app</span>
               </div>
               <div className="font-display text-[88px] leading-none font-extrabold tracking-tighter text-emerald-300 tabular-nums" style={{ textShadow: '0 0 40px rgba(52,211,153,0.35)' }}>
                 {t ? fmt(t.onboardedUsers) : '—'}
               </div>
-              <div className="font-mono text-[11px] text-emerald-400/80 mt-2 mb-5">gas paid by Yosuku · un-fakeable</div>
+              {/* "gas paid by Yosuku" was the DEFINITION of this number, and that is exactly how it
+                  broke: a batch of pre-generated wallets cycled predict::supply through the pool
+                  policy on our gas, and every one counted as an onboarded user. The count now
+                  requires an app action, so the caption says what it measures. */}
+              <div className="font-mono text-[11px] text-emerald-400/80 mt-2 mb-5">bet, funded, or opened an account · un-fakeable</div>
               <div className="border-t border-white/[0.07] pt-4">
                 <div className="font-mono text-[9px] uppercase tracking-[0.16em] text-gray-600">Gas-free actions</div>
                 <div className="font-mono text-lg font-bold tabular-nums">{t ? fmt(t.sponsoredActions) : '—'}</div>
@@ -179,8 +183,11 @@ export default function StatsPage() {
                 <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-gray-600">real users · attributable</span>
               </div>
               <div className="grid grid-cols-2 gap-3 mb-4">
-                <Stat label="Wallets onboarded" value={fmt(t.onboardedUsers)} sub="gas paid by Yosuku, provably ours" accent />
-                <Stat label="Gas-free actions" value={fmt(t.sponsoredActions)} sub="gas paid by Yosuku" />
+                <Stat label="Wallets that used the app" value={fmt(t.onboardedUsers)} sub="bet, funded, or opened an account" accent />
+                {/* Deliberately still counts everything we paid for, including the pool farm. It is
+                    what it says: transactions we sponsored. That is an infra number, not a user
+                    number, and it is a stronger builder claim than a wallet count anyway. */}
+                <Stat label="Gas-free transactions" value={fmt(t.sponsoredActions)} sub="sponsored by Yosuku" />
                 {/* Bets are the point of the product, and until now no number on this page counted
                     one. Same attribution as the two above: we read these off transactions Yosuku
                     paid the gas for, so a bot trading the shared venue on its own gas is never

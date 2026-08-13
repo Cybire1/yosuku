@@ -1,9 +1,14 @@
 {
   "name": "yosuku-pool",
   "gasBudgetMax": 150000000,
-  "allowedCommandKinds": ["MoveCall", "SplitCoins", "MergeCoins", "TransferObjects"],
+  "allowedCommandKinds": [
+    "MoveCall",
+    "SplitCoins",
+    "MergeCoins",
+    "TransferObjects"
+  ],
   "targets": [
-    "0xf5ea2b3749c65d6e56507cc35388719aadb28f9cab873696a2f8687f5c785138::predict::supply",
     "0xf5ea2b3749c65d6e56507cc35388719aadb28f9cab873696a2f8687f5c785138::predict::withdraw"
-  ]
+  ],
+  "_note": "supply is NOT sponsored. A batch of wallets minted in Oct 2024 by 0xc75ff8f721 was cycling predict::supply through this policy at ~20/hour on our gas, which drained the sponsor and inflated 'wallets onboarded' on /stats. Supplying PLP is a capital action by someone who already holds DUSDC, so it can pay its own gas. withdraw STAYS sponsored so no existing supplier's funds get stranded behind a gas requirement."
 }
