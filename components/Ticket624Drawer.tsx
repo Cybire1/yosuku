@@ -133,11 +133,23 @@ export default function Ticket624Drawer({
   const [priv, setPriv] = useState(false);
   const [privStatus, setPrivStatus] = useState<PrivateBetStatus | null>(null);
   const { mutateAsync: signPersonalMessage } = useSignPersonalMessage();
+  const [privErr, setPrivErr] = useState<string | null>(null);
   useEffect(() => {
     let live = true;
-    getPrivateBetStatus()
-      .then((st) => { if (live) setPrivStatus(st); })
-      .catch(() => { if (live) setPrivStatus(null); });
+    let tries = 0;
+    // Retry once. A single failed probe used to hide the control completely, which looks
+    // identical to "this feature does not exist" and is impossible to tell from a stale tab.
+    const probe = () => {
+      getPrivateBetStatus()
+        .then((st) => { if (!live) return; setPrivStatus(st); setPrivErr(st.ready ? null : (st.reasons?.[0] ?? 'Private desk is not ready.')); })
+        .catch((e) => {
+          if (!live) return;
+          if (tries++ < 1) { window.setTimeout(probe, 2500); return; }
+          setPrivStatus(null);
+          setPrivErr(e instanceof Error ? e.message : 'Could not reach the private desk.');
+        });
+    };
+    probe();
     return () => { live = false; };
   }, []);
   const privReady = !!privStatus?.ready;
@@ -1005,6 +1017,13 @@ export default function Ticket624Drawer({
 
             {/* Private route. Hidden until the desk is ready and only for Up/Down, so it is
                 never a control that looks available and then refuses. */}
+            {!privReady && !isRange && privErr && (
+              <div style={{}} className="mt-2.5 rounded-lg border border-white/[0.07] bg-white/[0.02] px-2.5 py-2">
+                <span className="font-mono text-[9px] uppercase tracking-[0.18em] text-white/25">
+                  Private unavailable — {privErr}
+                </span>
+              </div>
+            )}
             {privReady && !isRange && (
               <button
                 type="button"
