@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Twitter, ArrowUpRight } from 'lucide-react';
+import { Twitter, ArrowUpRight, ChevronDown, RefreshCw, Unlink } from 'lucide-react';
 import {
   useConnectWallet,
   useCurrentAccount,
@@ -13,7 +13,7 @@ import { getSession, isEnokiWallet } from '@mysten/enoki';
 import { useSmartSubmit } from '@/lib/sui/useSmartSubmit';
 import { buildEnableTweetTrading624, buildTweetVaultWithdraw624, fetchTweetLedger624Micro } from '@/lib/sui/vault624Client';
 import { fetchDUSDCCoins, fetchDUSDCHeldMicro } from '@/lib/sui/queries';
-import { xLinkMessage } from '@/lib/xLink';
+import { xLinkMessage, xUnlinkMessage } from '@/lib/xLink';
 
 type XMe = {
   handle: string | null;
@@ -66,7 +66,8 @@ export default function XWalletCard() {
   const [loadingMe, setLoadingMe] = useState(true);
   const [balMicro, setBalMicro] = useState<bigint | null>(null);
   const [amount, setAmount] = useState('5');
-  const [busy, setBusy] = useState<'' | 'fund' | 'cashout' | 'faucet' | 'link' | 'reconnect'>('');
+  const [busy, setBusy] = useState<'' | 'fund' | 'cashout' | 'faucet' | 'link' | 'unlink' | 'reconnect'>('');
+  const [manageX, setManageX] = useState(false);
   const [err, setErr] = useState('');
   const [ok, setOk] = useState('');
   const [needsFaucet, setNeedsFaucet] = useState(false);
@@ -259,7 +260,11 @@ export default function XWalletCard() {
   // this wallet to an X account? Signed in with X is NOT enough on its own, and treating the two as
   // the same is what let people fund a balance their replies could never reach.
   const routed = !!me?.binding;
-  const needsLink = !!address && !!me?.signedIn && !routed;
+  const sessionMatchesBinding = !!me?.signedIn && !!me?.authorId && me.authorId === me.binding?.authorId;
+  // A binding for the wallet is not enough after a fresh OAuth return. If that binding belongs to
+  // another immutable X user ID, the wallet must sign the replacement before the new account can
+  // touch the balance. Until then, the old route remains live and the funds remain unchanged.
+  const needsLink = !!address && !!me?.signedIn && (!routed || !sessionMatchesBinding);
 
   const link = useCallback(async () => {
     if (!address || !me?.authorId || busy) return;
@@ -284,6 +289,35 @@ export default function XWalletCard() {
       setErr(friendlyWalletError(e instanceof Error ? e.message : String(e)));
     } finally { setBusy(''); }
   }, [address, busy, me?.authorId, refreshMe, signPersonalMessage]);
+
+  const unlink = useCallback(async () => {
+    if (!address || !me?.authorId || !sessionMatchesBinding || busy) return;
+    setErr(''); setOk(''); setBusy('unlink');
+    try {
+      const { signature } = await signPersonalMessage({
+        message: xUnlinkMessage(me.authorId, address),
+      });
+      const response = await fetch('/api/claim/x/unlink', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ wallet: address, signature }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok || body?.ok === false) {
+        if (body?.reason === 'sealed_binding_cannot_disconnect') {
+          throw new Error('This X account secures a sealed recovery wallet and cannot be disconnected here.');
+        }
+        throw new Error(typeof body?.reason === 'string' && body.reason ? body.reason : 'Could not disconnect X.');
+      }
+      setManageX(false);
+      setOk(`X disconnected. Your ${balNum?.toFixed(2) ?? '0.00'} DUSDC remains in this wallet's betting balance.`);
+      await refreshMe();
+    } catch (cause) {
+      setErr(friendlyWalletError(cause instanceof Error ? cause.message : String(cause)));
+    } finally {
+      setBusy('');
+    }
+  }, [address, balNum, busy, me?.authorId, refreshMe, sessionMatchesBinding, signPersonalMessage]);
 
   // Finish the job the Connect X button started. OAuth bounces back here with ?x=1 having only set
   // a cookie; without this the user is signed in, funded, and still unroutable, with nothing on
@@ -319,7 +353,7 @@ export default function XWalletCard() {
   }, []);
 
   return (
-    <section>
+    <section id="x-wallet">
       <div className="mb-3 flex items-center gap-2">
         <Twitter className="h-4 w-4 text-[#E04D26]" />
         <h2 className="font-display text-sm font-[700] uppercase tracking-wide text-[#1A1612]">X wallet</h2>
@@ -333,23 +367,66 @@ export default function XWalletCard() {
           // Signed in with X, but the relay does not route this wallet yet. The dangerous state:
           // funding here produces a balance no tweet can spend, and until now nothing said so.
           <div className="mb-4 rounded-lg border border-[#E04D26]/30 bg-[#E04D26]/[0.07] px-3.5 py-3">
-            <div className="text-[13px] font-bold text-[#1A1612]">One more step to bet from @{me!.handle}.</div>
+            <div className="text-[13px] font-bold text-[#1A1612]">
+              {routed ? `Switch @${me?.binding?.handle || 'linked account'} to @${me!.handle}?` : `One more step to bet from @${me!.handle}.`}
+            </div>
             <p className="mt-1 text-[12px] leading-snug text-[#6B6353]">
-              Point that account at this wallet, so a reply you tweet spends this balance and not some other.
+              {routed
+                ? 'Your balance stays with this Sui wallet. Only the X account allowed to send bets changes.'
+                : 'Point that account at this wallet, so a reply you tweet spends this balance and not some other.'}
             </p>
             <button
               onClick={link}
               disabled={!!busy}
               className="mt-2.5 inline-flex items-center gap-2 whitespace-nowrap rounded-xl border border-[#E04D26]/45 px-4 py-2 text-sm font-bold text-[#E04D26] transition-colors hover:bg-[#E04D26]/10 disabled:opacity-60"
             >
-              <Twitter className="h-4 w-4" /> {busy === 'link' ? 'Linking…' : 'Link @' + me!.handle + ' to this wallet'}
+              <Twitter className="h-4 w-4" /> {busy === 'link' ? 'Linking…' : routed ? `Use @${me!.handle}` : `Link @${me!.handle} to this wallet`}
             </button>
           </div>
         ) : connected ? (
-          <div className="mb-4 flex flex-wrap items-center gap-x-2 gap-y-0.5 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2">
-            <Twitter className="h-3.5 w-3.5 shrink-0 text-[#E04D26]" />
-            <span className="font-display text-sm font-[700] text-[#1A1612]">{me?.handle ? `@${me.handle}` : 'X connected'}</span>
-            <span className="text-[12px] text-[#6B6353]">{routed ? 'bets from this balance' : 'signed in'}</span>
+          <div className="relative mb-4">
+            <button
+              type="button"
+              onClick={() => setManageX((value) => !value)}
+              aria-expanded={manageX}
+              className="flex w-full flex-wrap items-center gap-x-2 gap-y-0.5 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-left"
+            >
+              <Twitter className="h-3.5 w-3.5 shrink-0 text-[#E04D26]" />
+              <span className="font-display text-sm font-[700] text-[#1A1612]">{me?.binding?.handle ? `@${me.binding.handle}` : 'X connected'}</span>
+              <span className="text-[12px] text-[#6B6353]">bets from this balance</span>
+              <ChevronDown className={`ml-auto h-3.5 w-3.5 text-[#6B6353] transition-transform ${manageX ? 'rotate-180' : ''}`} />
+            </button>
+            {manageX && (
+              <div className="mt-2 grid gap-2 rounded-lg border border-[#C9BFA6]/50 bg-[#FFFDF8] p-2 sm:grid-cols-2">
+                <a
+                  href="/api/claim/x/start?return=/portfolio"
+                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#C9BFA6]/60 px-3 py-2 text-[12px] font-bold text-[#1A1612] transition-colors hover:bg-[#E04D26]/[0.06]"
+                >
+                  <RefreshCw className="h-3.5 w-3.5" /> Switch X account
+                </a>
+                {me?.binding?.sealed ? (
+                  <span className="inline-flex items-center justify-center px-3 py-2 text-center text-[11px] text-[#6B6353]">
+                    Recovery-protected link
+                  </span>
+                ) : sessionMatchesBinding ? (
+                  <button
+                    type="button"
+                    onClick={unlink}
+                    disabled={!!busy}
+                    className="inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-[12px] font-bold text-[#B53D30] transition-colors hover:bg-[#B53D30]/[0.06] disabled:opacity-50"
+                  >
+                    <Unlink className="h-3.5 w-3.5" /> {busy === 'unlink' ? 'Disconnecting…' : 'Disconnect X'}
+                  </button>
+                ) : (
+                  <a
+                    href="/api/claim/x/start?return=/portfolio"
+                    className="inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-[12px] font-bold text-[#6B6353]"
+                  >
+                    Verify to disconnect
+                  </a>
+                )}
+              </div>
+            )}
           </div>
         ) : (
           <div className="mb-4 rounded-lg border border-[#E04D26]/30 bg-[#E04D26]/[0.07] px-3.5 py-3">

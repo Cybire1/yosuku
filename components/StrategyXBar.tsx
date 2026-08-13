@@ -111,9 +111,9 @@ export default function StrategyXBar() {
           )
         )}
         {routed && (
-          <span className="hidden h-9 items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.12em] text-profit sm:inline-flex">
-            <Check className="h-3.5 w-3.5" /> linked
-          </span>
+          <a href="/portfolio#x-wallet" className="hidden h-9 items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.12em] text-profit sm:inline-flex">
+            <Check className="h-3.5 w-3.5" /> manage
+          </a>
         )}
         <a
           href={DISCOVER_URL}
