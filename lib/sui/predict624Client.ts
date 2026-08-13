@@ -55,12 +55,15 @@ export const PREDICT624 = {
   accountPackage: '0xbdbb60b00f2d4f30daeff62f2c642b18433a8fcdfbebccc808df578df2a0c203',
   /** predict::protocol_config::ProtocolConfig (shared). */
   protocolConfig: '0x43703ceee4d5f5a9e8cbf728071c34dc65961dd6e878fafd9ac36d86a9a4ce5b',
-  /** Yosuku's native BuilderCode. EMPTY on 7-29 by design: a BuilderCode is a
-   *  `<predict pkg>::builder_code::BuilderCode`, so the 6-24 object (0x3d02c41f…, tx HR2FoJ1z)
-   *  is the WRONG TYPE here and passing it would abort the whole account-setup PTB. Every
-   *  call site already guards on this being falsy, so setup simply skips attaching one until a
-   *  fresh BuilderCode is created against the 7-29 package. Revenue stays a config flip. */
-  builderCode: '',
+  /** Yosuku's native BuilderCode on 7-29. Created 2026-08-13, tx CwJwGmmMU27o…, index 0, owner
+   *  0xaa50ec0f. A BuilderCode is a `<predict pkg>::builder_code::BuilderCode`, so the 6-24
+   *  object (0x3d02c41f…) was the wrong type here and the redeploy orphaned it, leaving this
+   *  empty and every new account unattached. Note 7-29 renamed the entry:
+   *  registry::create_builder_code became registry::create_and_share_builder_code.
+   *  The protocol still caps the builder rate at 0, so this earns nothing today. It means we are
+   *  attached when Mysten enables it, instead of discovering later that months of accounts were
+   *  created without a code and cannot be retrofitted. */
+  builderCode: '0x4e424fb813cb6208b291ce4644e3c0b669d7c97a6fe882601242d209b41f159e',
   /** account::account_registry::AccountRegistry (shared) — wrapper derivation root. */
   accountRegistry: '0x21a7ed28397363b5550853c1f08795731257de81028cd1bf87f20c0752c8ca2f',
   /** propbook::registry::OracleRegistry (shared). */
