@@ -23,14 +23,17 @@ export const SOL = {
   explorer: 'https://explorer.solana.com/tx/',
 };
 
-const seed = (s: string) => Buffer.from(s);
-const pda = (seeds: Buffer[], program: PublicKey) => PublicKey.findProgramAddressSync(seeds, program)[0];
+// Uint8Array everywhere, never Buffer. Next does not polyfill Node's Buffer in the browser, so
+// Buffer.alloc returns something without writeBigUInt64LE and the instruction build throws
+// "s.writeBigUInt64LE is not a function" at the moment the user clicks Deposit.
+const seed = (s: string) => new TextEncoder().encode(s);
+const pda = (seeds: Uint8Array[], program: PublicKey) => PublicKey.findProgramAddressSync(seeds, program)[0];
 
 /** Anchor dispatches on the first 8 bytes of sha256("global:deposit_for_burn"). Hardcoded rather
  *  than hashed at runtime so this stays dependency-free and synchronous in the browser (Web Crypto
  *  is async, and @noble/hashes does not export the subpath under this package's export map).
  *  Value computed and checked against sha256("global:deposit_for_burn") = d73c3d2e723780b0…. */
-const DEPOSIT_FOR_BURN_IX = Buffer.from([215, 60, 61, 46, 114, 55, 128, 176]);
+const DEPOSIT_FOR_BURN_IX = new Uint8Array([215, 60, 61, 46, 114, 55, 128, 176]);
 
 export const solPdas = (mint: PublicKey, destinationDomain: number) => ({
   messageTransmitter: pda([seed('message_transmitter')], SOL.messageTransmitter),
@@ -59,7 +62,10 @@ export const associatedTokenAddress = (owner: PublicKey, mint: PublicKey) =>
 export function suiAddressToSolanaPubkey(addr: string): PublicKey {
   const hex = (addr || '').toLowerCase().replace(/^0x/, '');
   if (!/^[0-9a-f]{1,64}$/.test(hex)) throw new Error('Not a valid Sui address');
-  return new PublicKey(Buffer.from(hex.padStart(64, '0'), 'hex'));
+  const padded = hex.padStart(64, '0');
+  const bytes = new Uint8Array(32);
+  for (let i = 0; i < 32; i++) bytes[i] = parseInt(padded.slice(i * 2, i * 2 + 2), 16);
+  return new PublicKey(bytes);
 }
 
 /** depositForBurn. Account order matches Circle's DepositForBurnContext exactly; Anchor validates
@@ -75,16 +81,21 @@ export function buildDepositForBurnIx(p: {
 }): TransactionInstruction {
   const a = solPdas(p.mint, p.destinationDomain);
 
-  // Borsh: u64 amount, u32 destination_domain, 32-byte recipient.
-  const data = Buffer.alloc(8 + 8 + 4 + 32);
-  DEPOSIT_FOR_BURN_IX.copy(data, 0);
-  data.writeBigUInt64LE(p.amount, 8);
-  data.writeUInt32LE(p.destinationDomain, 16);
-  p.mintRecipient.toBuffer().copy(data, 20);
+  // Borsh: u64 amount, u32 destination_domain, 32-byte recipient. Written through a DataView so
+  // this does not depend on Buffer existing in the browser.
+  const data = new Uint8Array(8 + 8 + 4 + 32);
+  data.set(DEPOSIT_FOR_BURN_IX, 0);
+  const view = new DataView(data.buffer);
+  view.setBigUint64(8, p.amount, true);   // little-endian
+  view.setUint32(16, p.destinationDomain, true);
+  data.set(p.mintRecipient.toBytes(), 20);
 
   return new TransactionInstruction({
     programId: SOL.tokenMessengerMinter,
-    data,
+    // web3.js TYPES this as Buffer but only ever reads it as raw bytes, so a Uint8Array is correct
+    // at runtime. Casting here beats pulling Node's Buffer into the browser bundle just to satisfy
+    // a type, which is what caused the crash in the first place.
+    data: data as unknown as ConstructorParameters<typeof TransactionInstruction>[0]['data'],
     keys: [
       { pubkey: p.owner, isSigner: true, isWritable: false },
       { pubkey: p.owner, isSigner: true, isWritable: true },          // event_rent_payer

@@ -10,8 +10,9 @@
 import { NextResponse } from 'next/server';
 import { fetchTraction } from '@/lib/sui/traction';
 
-// Next requires this to be a literal, so the value is repeated in the header below.
-export const revalidate = 900;
+// Never prerendered. The walk takes ~20s of live GraphQL and the build tries to generate it
+// inside a 60s budget, which fails the whole build. It is a live counter; it belongs on request.
+export const dynamic = 'force-dynamic';
 // A cold call is ~20s of paging. It is cached for 15 minutes, but the cold path still has to be
 // allowed to finish rather than being killed at the platform default.
 export const maxDuration = 120;
