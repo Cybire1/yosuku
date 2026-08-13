@@ -50,6 +50,8 @@ import {
   type RangePresetKey,
 } from '@/lib/sui/ticket624';
 import { useSmartSubmit } from '@/lib/sui/useSmartSubmit';
+import { useSignPersonalMessage } from '@mysten/dapp-kit';
+import { getPrivateBetStatus, openPrivateBet, type PrivateBetStatus } from '@/lib/privateBet';
 import { buildDepositTx, probeCombinedMint624 } from '@/lib/sui/predict624Client';
 import type { Transaction } from '@mysten/sui/transactions';
 
@@ -124,6 +126,22 @@ export default function Ticket624Drawer({
     [smartSubmit],
   );
   const { address, wrapperId, wrapperChecked, acctBalance } = acct;
+
+  // Private route. Off by default: it is a deliberate choice, never a default someone discovers
+  // after the fact. The toggle only appears once the desk reports ready, so it is never a switch
+  // that silently does nothing.
+  const [priv, setPriv] = useState(false);
+  const [privStatus, setPrivStatus] = useState<PrivateBetStatus | null>(null);
+  const { mutateAsync: signPersonalMessage } = useSignPersonalMessage();
+  useEffect(() => {
+    let live = true;
+    getPrivateBetStatus()
+      .then((st) => { if (live) setPrivStatus(st); })
+      .catch(() => { if (live) setPrivStatus(null); });
+    return () => { live = false; };
+  }, []);
+  const privReady = !!privStatus?.ready;
+  useEffect(() => { if (!privReady && priv) setPriv(false); }, [privReady, priv]);
 
   const [dir, setDir] = useState<Dir624 | null>(side ?? 'up'); // a side is ALWAYS preselected — no dead "Call UP or DOWN" state
   const [mode, setMode] = useState<BetMode>('dir'); // Up/Down vs Range band
@@ -389,6 +407,30 @@ export default function Ticket624Drawer({
     if (blocker || !address || !wrapperId || !market || spot == null || busy || !quote) return;
     setBusy('mint');
     try {
+      // Private route: the desk opens the position through a fresh manager, so it is not tied
+      // to this wallet's public history. Ranges are not supported by the desk, so the toggle is
+      // hidden in range mode rather than failing here.
+      if (priv && privStatus && !isRange && dir && strikeUsd != null) {
+        const stakeMicro = Math.round(stake * DUSDC_MULTIPLIER);
+        const t = await openPrivateBet(
+          {
+            owner: address,
+            signPersonalMessage: (message) => signPersonalMessage({ message }),
+            oracleId: market.id,
+            expiry: Number(market.expiry),
+            strike: Math.round(strikeUsd),
+            side: dir === 'up' ? 'UP' : 'DOWN',
+            stakeMicro,
+            quantity: Math.round(payoutQty),
+            maxCostDusdc: stake,
+          },
+          privStatus,
+        );
+        setPlaced({ digest: t.digest, kind: 'dir', dir, strikeUsd, qty: winAmt, lev, costDusdc: stake,
+          expiry: Number(market.expiry), placedAtMs: Date.now() });
+        toast(`Private bet placed — ${dir.toUpperCase()} ${fmtUsd0(strikeUsd)}`);
+        return;
+      }
       if (isRange && lowerUsd != null && higherUsd != null) {
         const r = await placeRangeMint624({
           submit: sponsoredSubmit,
@@ -949,6 +991,31 @@ export default function Ticket624Drawer({
                     ? `Place RANGE — ${lowerUsd != null && higherUsd != null ? `${fmtUsd0(lowerUsd)}–${fmtUsd0(higherUsd)}` : ''} →`
                     : `Bet ${dir === 'up' ? 'UP' : 'DOWN'} →`)}
             </button>
+
+            {/* Private route. Hidden until the desk is ready and only for Up/Down, so it is
+                never a control that looks available and then refuses. */}
+            {privReady && !isRange && (
+              <button
+                type="button"
+                onClick={() => setPriv((v) => !v)}
+                className={`mt-2.5 flex w-full items-center justify-between rounded-lg border px-2.5 py-2 text-left transition-colors ${
+                  priv ? 'border-profit/30 bg-profit/[0.06]' : 'border-white/[0.07] bg-white/[0.02] hover:border-white/15'
+                }`}
+                data-cursor="hover"
+              >
+                <span className={`font-mono text-[9px] uppercase tracking-[0.18em] ${priv ? 'text-profit' : 'text-white/40'}`}>
+                  Private
+                </span>
+                <span className={`relative h-3.5 w-6 rounded-full transition-colors ${priv ? 'bg-profit/70' : 'bg-white/15'}`}>
+                  <span className={`absolute top-0.5 h-2.5 w-2.5 rounded-full bg-black transition-all ${priv ? 'left-3' : 'left-0.5'}`} />
+                </span>
+              </button>
+            )}
+            {priv && (
+              <p className="font-mono text-[8.5px] leading-relaxed text-white/35 mt-1.5">
+                Kept separate from this wallet, so it isn&apos;t tied to your public history.
+              </p>
+            )}
 
             <p className="font-mono text-[8.5px] leading-relaxed text-white/25 mt-2.5">
               Gas-free · settles on its own, right on the price.

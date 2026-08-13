@@ -37,6 +37,11 @@ const cfg = {
   // verify a ticket without asking this box to be honest about which key it used.
   enclaveCmd: process.env.PRIVATE_BET_ENCLAVE_CMD ?? '',
   enclavePubkey: (process.env.PRIVATE_BET_ENCLAVE_PUBKEY ?? '').replace(/^0x/, ''),
+  // The on-chain desk holding that same key. Published in /health because the guarantee only
+  // means something if a user can call ticket_seal::verify_ticket themselves — otherwise a
+  // ticket is just this box's word for it. Empty until a desk exists.
+  ticketSealPkg: process.env.PRIVATE_BET_TICKET_SEAL_PKG ?? '',
+  privateDeskId: process.env.PRIVATE_BET_DESK_ID ?? '',
   onaraUrl: (process.env.PRIVATE_BET_ONARA_URL ?? process.env.NEXT_PUBLIC_ONARA_URL ?? '').replace(/\/$/, ''),
   useOnara: process.env.PRIVATE_BET_USE_ONARA !== '0',
   privateKey: process.env.EXECUTOR_PRIVATE_KEY ?? process.env.PRIVATE_BET_EXECUTOR_PRIVATE_KEY ?? '',
@@ -630,6 +635,11 @@ function health() {
     privateBalanceEnabled: true,
     withdrawModes: ['fast', 'private'],
     ticketStore: cfg.ticketStore,
+    // Everything needed to check a ticket without trusting this box: the key it claims to sign
+    // with, and the on-chain desk that independently attests to the same key.
+    enclavePubkey: cfg.enclavePubkey ? `0x${cfg.enclavePubkey}` : '',
+    ticketSealPkg: cfg.ticketSealPkg,
+    privateDeskId: cfg.privateDeskId,
   };
 }
 

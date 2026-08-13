@@ -630,14 +630,29 @@ export function buildCreateFundAndMint624(p: {
   leverage1e9: bigint;
   maxCostMicro: bigint;
   maxProb1e9: bigint;
+  /**
+   * Continue an existing PTB instead of starting one. Only needed when an earlier command in
+   * the same transaction produces the funding coin — see `fundingCoin`.
+   */
+  tx?: Transaction;
+  /**
+   * Fund from a coin produced earlier IN THIS PTB rather than from the wallet, which is how
+   * "bet with your Bitcoin" works: the hBTC→DUSDC swap result is passed straight in.
+   *
+   * This exists so the Bitcoin path does not carry its own copy of the mint chain. It used to,
+   * and the copy silently rotted: it still called the 6-24 `load_live_pricer` with eight
+   * arguments after 7-29 collapsed two feeds into one, so it would have failed on the live
+   * venue. One builder, one ABI, no second place to forget.
+   */
+  fundingCoin?: TransactionObjectArgument;
 }): Transaction {
-  if (p.coinIds.length === 0) throw new Error('no DUSDC coins to fund the account');
+  if (!p.fundingCoin && p.coinIds.length === 0) throw new Error('no DUSDC coins to fund the account');
   const lower = BigInt(p.lowerTick);
   const higher = BigInt(p.higherTick);
   if (lower === NEG_INF_TICK && higher === POS_INF_TICK) {
     throw new Error('full open range (−inf, +inf) is prohibited on-chain (EInvalidRange)');
   }
-  const tx = new Transaction();
+  const tx = p.tx ?? new Transaction();
   // 1. create the account — `wrapper` is a PTB-local result, NOT yet shared
   const wrapper = tx.moveCall({
     target: `${PREDICT624.accountPackage}::account_registry::new`,
@@ -646,10 +661,17 @@ export function buildCreateFundAndMint624(p: {
   // 1b. ride DeepBook Predict's native builder rail — attach our BuilderCode while the
   //     account is fresh (gasless: set_builder_code is allowlisted in the Onara policy)
   appendSetBuilderCode(tx, wrapper);
-  // 2. fund it from the wallet's DUSDC
-  const primary = tx.object(p.coinIds[0]);
-  if (p.coinIds.length > 1) tx.mergeCoins(primary, p.coinIds.slice(1).map((id) => tx.object(id)));
-  const [pay] = tx.splitCoins(primary, [tx.pure.u64(p.depositMicro)]);
+  // 2. fund it — either from a coin an earlier command produced (the Bitcoin swap), or from
+  //    the wallet's DUSDC. The swapped coin is already the exact amount, so it is deposited
+  //    whole; splitting it would strand the remainder inside the PTB.
+  let pay: TransactionObjectArgument;
+  if (p.fundingCoin) {
+    pay = p.fundingCoin;
+  } else {
+    const primary = tx.object(p.coinIds[0]);
+    if (p.coinIds.length > 1) tx.mergeCoins(primary, p.coinIds.slice(1).map((id) => tx.object(id)));
+    [pay] = tx.splitCoins(primary, [tx.pure.u64(p.depositMicro)]);
+  }
   const authDep = tx.moveCall({ target: `${PREDICT624.accountPackage}::account::generate_auth`, arguments: [] });
   tx.moveCall({
     target: `${PREDICT624.accountPackage}::account::deposit_funds`,
