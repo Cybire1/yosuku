@@ -7,7 +7,7 @@
 // (1-minute / 5-minute / 1-hour; this deployment has NO 15-minute cadence, so we
 // don't show one), REAL odds from house dry-run quotes (unsigned simulations —
 // no keys), and a tap-to-bet TICKET DRAWER running the founder-validated
-// /markets-live machinery (shared lib/sui/ticket624 — one implementation).
+// shared ticket machinery (lib/sui/ticket624 — one implementation).
 //
 // The previous testnet's 15-minute rounds live under a collapsed "Previous venue"
 // section at the bottom — routes to /markets/[id] keep working.
@@ -533,6 +533,22 @@ export default function MarketsPage() {
     side: Dir624 | null;
     sessionId: number;
   } | null>(null);
+  // Deep link from the word market: ?m=<marketId>&dir=<up|down> preselects the round and side.
+  // /markets-live used to own this; when its links were repointed here the params had nowhere to
+  // land, which would have quietly turned every Yes/No tap into "browse the markets page".
+  const deepLinked = useRef(false);
+  useEffect(() => {
+    if (deepLinked.current || markets.length === 0) return;
+    const p = new URLSearchParams(window.location.search);
+    const m = p.get('m');
+    if (!m) return;
+    const found = markets.find((x) => x.id === m);
+    if (!found) return;
+    const d = p.get('dir');
+    deepLinked.current = true;
+    setTicket({ market: found, side: d === 'up' || d === 'down' ? d : null, sessionId: Date.now() });
+  }, [markets]);
+
   const openTicket = (market: Market624, side: Dir624 | null) => {
     setTicket({ market, side, sessionId: Date.now() });
     // desktop: the bet lives in the hero at the top — bring it into view

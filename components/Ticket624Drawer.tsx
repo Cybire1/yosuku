@@ -2,7 +2,7 @@
 
 // Ticket drawer for the 6-24 venue — the slide-over bet flow behind /markets.
 // Same idiom as the /strategies copy drawer (slide-over, Esc, scroll lock);
-// same MACHINERY as /markets-live (shared lib/sui/ticket624): account setup,
+// the shared ticket MACHINERY (lib/sui/ticket624): account setup,
 // inline deposit, REAL dry-run quote refreshed every 12s, fresh-quote-at-click
 // ×1.10 cost guard, friendly abort toasts. The tapped side arrives preselected —
 // the user's tap IS the choice. The amount is always theirs: empty + additive chips.

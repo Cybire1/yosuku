@@ -1,6 +1,6 @@
 'use client';
 
-// Shared 6-24 ticket machinery — ONE implementation behind BOTH /markets-live and
+// Shared 6-24 ticket machinery — ONE implementation behind
 // the /markets Ticket624Drawer. Founder-validated on-chain (bet placed + won +
 // claimed through it): REAL dry-run quoting via quoteMint624, ONE legible cost
 // guard (fresh-quote-at-click ×1.10 with maxProb left at the protocol max), and
@@ -258,7 +258,7 @@ export interface Account624 {
 
 /**
  * Wrapper discovery + balance polling + one-time setup + deposits — identical
- * behavior to the founder-validated /markets-live flow, hoisted so the ticket
+ * behavior to the founder-validated market flow, hoisted so the ticket
  * drawer and the page run the SAME code.
  */
 export function useAccount624(): Account624 {

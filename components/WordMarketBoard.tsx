@@ -81,7 +81,7 @@ export default function WordMarketBoard() {
     [questions, now],
   );
 
-  const go = (q: WordQ, side: 'yes' | 'no') => router.push(`/markets-live?m=${q.market.id}&dir=${side === 'yes' ? 'up' : 'down'}`);
+  const go = (q: WordQ, side: 'yes' | 'no') => router.push(`/markets?m=${q.market.id}&dir=${side === 'yes' ? 'up' : 'down'}`);
 
   if (!loaded) return <div className="words-empty">reading the board…</div>;
   if (grouped.length === 0) return <div className="words-empty">Between rounds — new questions open every minute.</div>;
