@@ -66,6 +66,8 @@ export const PREDICT624 = {
   builderCode: '0x4e424fb813cb6208b291ce4644e3c0b669d7c97a6fe882601242d209b41f159e',
   /** account::account_registry::AccountRegistry (shared) — wrapper derivation root. */
   accountRegistry: '0x21a7ed28397363b5550853c1f08795731257de81028cd1bf87f20c0752c8ca2f',
+  /** predict::registry::Registry (shared) — the derivation root for BuilderCodes. */
+  registry: '0x35970bfd0ff3703cb38b3fff3a3fbb0bc0e5638e7c747af3a8e42e2c95d353f0',
   /** propbook::registry::OracleRegistry (shared). */
   oracleRegistry: '0xc1dffc5f7a5404cb002ba3bd7c50d6a2dbe8bb6afd40080cd663965deff9d577',
   /** BTC_USD oracle feed objects. THREE now, not four: 7-29 collapsed the separate spot and
@@ -409,19 +411,32 @@ export async function fetchRecentSettlements624(limit = 6): Promise<SettlementPr
  * One-time: create the sender's canonical derived AccountWrapper and share it.
  * Aborts on-chain if the wrapper already exists (use findWrapperId624 first).
  */
-/** Attach Yosuku's native BuilderCode to a wrapper so this account's trades attribute
- *  builder fees to our treasury on DeepBook Predict's OWN rail (not a private wrapper).
- *  `wrapper` may be an object id (existing account) or a PTB-local result (a fresh
- *  account, before it is shared). Consumes a fresh owner Auth, so the account owner must
- *  be the tx sender. Pays 0 until the protocol enables the rail: wired now so revenue is
- *  a config flip, not a migration. */
-function appendSetBuilderCode(tx: Transaction, wrapper: TransactionObjectArgument | string): void {
-  if (!PREDICT624.builderCode) return;
+/** Stamp a BuilderCode onto a wrapper, so this account's builder fees settle to that code's
+ *  object address on DeepBook Predict's OWN rail.
+ *
+ *  `code` defaults to Yosuku's house code. Pass a creator's code to attribute the bet to them:
+ *  a BuilderCode is owned by whoever minted it and ONLY that owner can call
+ *  `claim_all_builder_fees`, so a creator's cut never passes through us and cannot be withheld.
+ *
+ *  The stamp lives on the ACCOUNT, not the bet, and it is rewritable. Setting it once at signup
+ *  would mean the first creator to recruit a user keeps every fee that user ever generates, and
+ *  the creator whose call actually prompted a given bet gets nothing. So this is called on every
+ *  bet, not just the first, and the last writer before the mint is the one who gets paid.
+ *
+ *  `wrapper` may be an object id or a PTB-local result. Consumes a fresh owner Auth, so the
+ *  account owner must be the tx sender. Allowlisted in the Onara policy, so it stays gas-free. */
+function appendSetBuilderCode(
+  tx: Transaction,
+  wrapper: TransactionObjectArgument | string,
+  code?: string,
+): void {
+  const id = code ?? PREDICT624.builderCode;
+  if (!id) return;
   const w = typeof wrapper === 'string' ? tx.object(wrapper) : wrapper;
   const auth = tx.moveCall({ target: `${PREDICT624.accountPackage}::account::generate_auth`, arguments: [] });
   tx.moveCall({
     target: `${PREDICT624.predictPackage}::predict_account::set_builder_code`,
-    arguments: [w, auth, tx.object(PREDICT624.builderCode)],
+    arguments: [w, auth, tx.object(id)],
   });
 }
 
@@ -563,6 +578,8 @@ function appendRecordBet(tx: Transaction, marketId: string): void {
 }
 
 export function buildMintTx(p: {
+  /** Creator's BuilderCode to attribute this bet to. Defaults to the house code. */
+  builderCode?: string;
   marketId: string;
   wrapperId: string;
   /** Tick indices on the $0.01 grid, $1-snapped (use usdToTick) or a sentinel. */
@@ -587,6 +604,9 @@ export function buildMintTx(p: {
     throw new Error('full open range (−inf, +inf) is prohibited on-chain (EInvalidRange)');
   }
   const tx = new Transaction();
+  // Re-stamp before every mint so the creator whose call prompted THIS bet is the one paid,
+  // not whoever recruited the user months ago. The stamp lives on the account and is rewritable.
+  appendSetBuilderCode(tx, p.wrapperId, p.builderCode);
   const pricer = appendLoadLivePricer(tx, p.marketId);
   const auth = tx.moveCall({
     target: `${PREDICT624.accountPackage}::account::generate_auth`,
@@ -624,6 +644,8 @@ export function buildMintTx(p: {
  * so cost is bounded by `maxCostMicro` (≤ the deposit) and the whole PTB reverts if it can't fit.
  */
 export function buildCreateFundAndMint624(p: {
+  /** Creator's BuilderCode to attribute this bet to. Defaults to the house code. */
+  builderCode?: string;
   coinIds: string[];
   depositMicro: bigint;
   marketId: string;
@@ -663,7 +685,7 @@ export function buildCreateFundAndMint624(p: {
   });
   // 1b. ride DeepBook Predict's native builder rail — attach our BuilderCode while the
   //     account is fresh (gasless: set_builder_code is allowlisted in the Onara policy)
-  appendSetBuilderCode(tx, wrapper);
+  appendSetBuilderCode(tx, wrapper, p.builderCode);
   // 2. fund it — either from a coin an earlier command produced (the Bitcoin swap), or from
   //    the wallet's DUSDC. The swapped coin is already the exact amount, so it is deposited
   //    whole; splitting it would strand the remainder inside the PTB.
@@ -707,6 +729,8 @@ export function buildCreateFundAndMint624(p: {
  * (≤ the post-deposit balance); the whole PTB reverts if it can't fit, so funds are never stranded.
  */
 export function buildTopUpAndMint624(p: {
+  /** Creator's BuilderCode to attribute this bet to. Defaults to the house code. */
+  builderCode?: string;
   wrapperId: string;
   coinIds: string[];
   depositMicro: bigint;
@@ -729,6 +753,9 @@ export function buildTopUpAndMint624(p: {
   const primary = tx.object(p.coinIds[0]);
   if (p.coinIds.length > 1) tx.mergeCoins(primary, p.coinIds.slice(1).map((id) => tx.object(id)));
   const [pay] = tx.splitCoins(primary, [tx.pure.u64(p.depositMicro)]);
+  // Re-stamp before every mint so the creator whose call prompted THIS bet is the one paid,
+  // not whoever recruited the user months ago. The stamp lives on the account and is rewritable.
+  appendSetBuilderCode(tx, p.wrapperId, p.builderCode);
   const authDep = tx.moveCall({ target: `${PREDICT624.accountPackage}::account::generate_auth`, arguments: [] });
   tx.moveCall({
     target: `${PREDICT624.accountPackage}::account::deposit_funds`,
