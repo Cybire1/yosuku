@@ -39,7 +39,7 @@ type TxFactory = () => Transaction | Promise<Transaction>;
 // what setGasPayment needs); POSTed to the same fullnode the gRPC client uses. Best-effort:
 // any failure returns null and we let the client resolve gas (serial fallback) rather than
 // block the bet. Returns null when the pool has < 2 usable coins so we never pin a lone coin.
-async function pickSponsorGasPayment(sponsor: string): Promise<{ objectId: string; version: string; digest: string }[] | null> {
+export async function pickSponsorGasPayment(sponsor: string): Promise<{ objectId: string; version: string; digest: string }[] | null> {
   try {
     // The public fullnode's JSON-RPC is sunset (404s) — this read silently failed, so every
     // sponsored tx fell back to locking the WHOLE sponsor pool (collisions + pool re-merge).

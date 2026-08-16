@@ -49,3 +49,9 @@ flow's explicit wallet-paid fallback; they must never silently broaden policy.
 
 Keep the sponsor wallet topped up with testnet SUI; check balances at
 `GET /status`.
+
+`yosuku-creator-recovery` sponsors the two-stage creator setup and later recovery claims. The
+first transaction is signed by zkLogin and registers a 1-of-2 zkLogin + passkey controller. The
+second is signed by that controller and atomically mints + attaches its DeepBook BuilderCode.
+Both targets are required: allowing mint without finalization would create an unindexed fee code,
+while allowing registration without the controller signature would not prove recoverability.
