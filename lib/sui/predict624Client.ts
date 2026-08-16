@@ -60,9 +60,9 @@ export const PREDICT624 = {
    *  object (0x3d02c41f…) was the wrong type here and the redeploy orphaned it, leaving this
    *  empty and every new account unattached. Note 7-29 renamed the entry:
    *  registry::create_builder_code became registry::create_and_share_builder_code.
-   *  The protocol still caps the builder rate at 0, so this earns nothing today. It means we are
-   *  attached when Mysten enables it, instead of discovering later that months of accounts were
-   *  created without a code and cannot be retrofitted. */
+   *  Live 7-29 mints pay the attached code 10% of the trading fee, capped at 0.5% of traded
+   *  quantity. This was verified again from nonzero OrderMinted.builder_fee events on 2026-08-17;
+   *  keeping the code attached is what makes those fees collectible by its owner. */
   builderCode: '0x4e424fb813cb6208b291ce4644e3c0b669d7c97a6fe882601242d209b41f159e',
   /** account::account_registry::AccountRegistry (shared) — wrapper derivation root. */
   accountRegistry: '0x21a7ed28397363b5550853c1f08795731257de81028cd1bf87f20c0752c8ca2f',
