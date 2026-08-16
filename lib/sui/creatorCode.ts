@@ -72,3 +72,29 @@ export function buildClaimCreatorFeesTx(codeId: string, to: string): Transaction
   tx.transferObjects([coin], to);
   return tx;
 }
+
+/**
+ * Find a wallet's BuilderCode.
+ *
+ * Codes are SHARED objects, so `getOwnedObjects` never sees them; ownership is a FIELD. Until
+ * there are enough codes to need an index, listing the type and matching the owner field is
+ * honest and exact. Returns null when the wallet has never minted one.
+ */
+export async function findCreatorCode(
+  client: { queryTransactionBlocks?: unknown },
+  owner: string,
+): Promise<string | null> {
+  const q = `{ objects(filter: {type: "${PREDICT624.predictPackage}::builder_code::BuilderCode"}, first: 50) { nodes { address asMoveObject { contents { json } } } } }`;
+  const res = await fetch('https://graphql.testnet.sui.io/graphql', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ query: q }),
+  }).then((r) => r.json());
+  const nodes = res?.data?.objects?.nodes ?? [];
+  const want = owner.toLowerCase();
+  for (const n of nodes) {
+    const j = n?.asMoveObject?.contents?.json ?? {};
+    if (String(j.owner ?? '').toLowerCase() === want) return n.address as string;
+  }
+  return null;
+}

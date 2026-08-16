@@ -19,6 +19,7 @@ import GrainOverlay from '@/components/GrainOverlay';
 import CustomCursor from '@/components/CustomCursor';
 import SectionHeader from '@/components/SectionHeader';
 import PortfolioTable from '@/components/PortfolioTable';
+import CreatorEarningsCard from '@/components/CreatorEarningsCard';
 import { useManager, useDUSDCBalance, useManagerBalance, usePositions, useManagerSummary, useManagerPnL, usePLPBalance, useTradingVaultBalance } from '@/lib/sui/hooks';
 import { DUSDC_MULTIPLIER, FLOAT_SCALING } from '@/lib/sui/constants';
 import { useLeverageHealth, useMyOrders, useMyPositions } from '@/lib/sui/leverageHooks';
