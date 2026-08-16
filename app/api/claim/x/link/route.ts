@@ -3,11 +3,16 @@ import { cookies } from 'next/headers';
 import { readSession } from '@/lib/claimOAuth';
 import { xLinkMessage } from '@/lib/xLink';
 import { verifyPersonalMessageSignature } from '@mysten/sui/verify';
+import { SuiGraphQLClient } from '@mysten/sui/graphql';
 
 export const dynamic = 'force-dynamic';
 
 const RELAY = process.env.CLAIM_EXECUTOR_URL;
 const SECRET = process.env.CLAIM_SHARED_SECRET || '';
+const SUI_GRAPHQL = new SuiGraphQLClient({
+  url: process.env.NEXT_PUBLIC_SUI_GRAPHQL_URL || 'https://graphql.testnet.sui.io/graphql',
+  network: 'testnet',
+});
 
 // Point the signed-in X account at the connected wallet, so a reply the relay reads actually
 // resolves to this person's own funded balance.
@@ -29,7 +34,13 @@ export async function POST(req: NextRequest) {
   if (!RELAY) return NextResponse.json({ ok: false, reason: 'relay not configured' }, { status: 500 });
 
   try {
-    await verifyPersonalMessageSignature(xLinkMessage(sess.authorId, String(wallet)), signature, { address: String(wallet).toLowerCase() });
+    // zkLogin personal-message signatures are verified by Sui's GraphQL API; unlike ordinary
+    // key signatures they cannot be checked locally. Passing only `address` made every Google
+    // wallet fail here even though the wallet had signed the exact link message.
+    await verifyPersonalMessageSignature(xLinkMessage(sess.authorId, String(wallet)), signature, {
+      address: String(wallet).toLowerCase(),
+      client: SUI_GRAPHQL,
+    });
   } catch {
     return NextResponse.json({ ok: false, reason: 'wallet signature did not match' }, { status: 401 });
   }

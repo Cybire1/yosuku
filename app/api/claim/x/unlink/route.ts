@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { verifyPersonalMessageSignature } from '@mysten/sui/verify';
+import { SuiGraphQLClient } from '@mysten/sui/graphql';
 import { readSession } from '@/lib/claimOAuth';
 import { xUnlinkMessage } from '@/lib/xLink';
 
 export const dynamic = 'force-dynamic';
+
+const SUI_GRAPHQL = new SuiGraphQLClient({
+  url: process.env.NEXT_PUBLIC_SUI_GRAPHQL_URL || 'https://graphql.testnet.sui.io/graphql',
+  network: 'testnet',
+});
 
 const RELAY = process.env.CLAIM_EXECUTOR_URL;
 const SECRET = process.env.CLAIM_SHARED_SECRET || '';
@@ -23,7 +29,7 @@ export async function POST(req: NextRequest) {
     await verifyPersonalMessageSignature(
       xUnlinkMessage(sess.authorId, String(wallet)),
       signature,
-      { address: String(wallet).toLowerCase() },
+      { address: String(wallet).toLowerCase(), client: SUI_GRAPHQL },
     );
   } catch {
     return NextResponse.json({ ok: false, reason: 'wallet signature did not match' }, { status: 401 });
