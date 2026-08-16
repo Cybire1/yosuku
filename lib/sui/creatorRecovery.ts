@@ -205,6 +205,19 @@ function parseProfile(value: unknown): CreatorRecoveryProfile | null {
   return profile;
 }
 
+/** Read one known recovery from live state. Used directly after a transaction so the UI does not
+ * wait for the global type index before showing that creator mode is ready. */
+export async function creatorRecoveryById(objectId: string): Promise<CreatorRecoveryProfile | null> {
+  if (!/^0x[0-9a-f]{64}$/i.test(objectId)) return null;
+  const response = await grpc.getObject({ objectId, include: { json: true } });
+  const object = response.object;
+  if (!object) return null;
+  return parseProfile({
+    address: object.objectId,
+    asMoveObject: { contents: { json: object.json as Record<string, unknown> } },
+  });
+}
+
 export async function listCreatorRecoveries(): Promise<CreatorRecoveryProfile[]> {
   const query = `query CreatorRecoveries($after: String) {
     objects(filter: {type: "${CREATOR_RECOVERY_TYPE}"}, first: 50, after: $after) {
@@ -269,13 +282,7 @@ export async function creatorRecoveryFromRegistration(
       && transaction.objectTypes?.[change.objectId] === CREATOR_RECOVERY_TYPE);
 
   for (const change of created) {
-    const response = await grpc.getObject({ objectId: change.objectId, include: { json: true } });
-    const object = response.object;
-    if (!object) continue;
-    const profile = parseProfile({
-      address: object.objectId,
-      asMoveObject: { contents: { json: object.json as Record<string, unknown> } },
-    });
+    const profile = await creatorRecoveryById(change.objectId);
     if (profile?.login === login.toLowerCase() && profile.controller === controller.toLowerCase()) return profile;
   }
   return null;

@@ -19,12 +19,14 @@ import {
   buildRegisterCreatorRecoveryTx,
   creatorController,
   creatorPasskeyProvider,
+  creatorRecoveryById,
   creatorRecoveryFromRegistration,
   findCreatorRecoveryForLogin,
   loadCreatorPasskey,
   passkeyFromStored,
   storeCreatorPasskey,
   waitForCreatorRecovery,
+  zkLoginPublicIdentifierForAddress,
   type CreatorRecoveryProfile,
 } from '@/lib/sui/creatorRecovery';
 import { useCreatorMultisigSubmit } from '@/lib/sui/useCreatorMultisigSubmit';
@@ -124,6 +126,29 @@ export default function CreatorEarningsCard() {
           passkeyPublicKey: passkey.getPublicKey().toRawBytes(),
         };
         const registration = buildRegisterCreatorRecoveryTx(registrationArgs);
+        // Setup is idempotent. A previous finalization may already have succeeded while the
+        // global recovery index was still stale; in that case its derived BuilderCode exists and
+        // a second create would abort with EObjectAlreadyExists. Detect it before asking for
+        // another signature and reconstruct enough of the verified profile to render/claim now.
+        const existingCode = await findCreatorCode(client, registration.controller.toSuiAddress());
+        if (existingCode) {
+          profile = {
+            objectId: '',
+            controller: registration.controller.toSuiAddress().toLowerCase(),
+            login: account.address.toLowerCase(),
+            builderCode: existingCode,
+            zkLoginPublicIdentifier: zkLoginPublicIdentifierForAddress(
+              registrationArgs.zkLoginPublicIdentifier,
+              account.address,
+            ),
+            passkeyPublicKey: registrationArgs.passkeyPublicKey,
+          };
+          setRecovery(profile);
+          setCodeId(existingCode);
+          setMicro(await claimableFeesMicro(client, existingCode));
+          toast('Creator mode is already ready');
+          return;
+        }
         // useSmartSubmit may rebuild after a sponsor failure; return a clean transaction each time.
         const registered = await submit(() => buildRegisterCreatorRecoveryTx(registrationArgs).transaction);
         storeCreatorPasskey(account.address, registration.controller.toSuiAddress(), passkey);
@@ -148,9 +173,17 @@ export default function CreatorEarningsCard() {
           buildFinalizeRecoverableCreatorCodeTx({ recoveryId: profile.objectId, controller }),
           controller,
         );
+        const liveProfile = await creatorRecoveryById(profile.objectId);
+        if (liveProfile?.builderCode) profile = liveProfile;
       }
       toast(legacyCodeId ? 'Creator earnings secured with a recovery passkey' : 'Creator mode ready with passkey recovery');
-      await refresh();
+      if (profile.builderCode) {
+        setRecovery(profile);
+        setCodeId(profile.builderCode);
+        setMicro(await claimableFeesMicro(client, profile.builderCode));
+      } else {
+        await refresh();
+      }
     } catch (e) {
       toast(`Could not mint: ${e instanceof Error ? e.message : String(e)}`.slice(0, 140), 'error');
     } finally {
