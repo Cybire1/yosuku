@@ -21,6 +21,8 @@ import {
   creatorPasskeyProvider,
   creatorRecoveryFromRegistration,
   findCreatorRecoveryForLogin,
+  loadCreatorPasskey,
+  passkeyFromStored,
   storeCreatorPasskey,
   waitForCreatorRecovery,
   type CreatorRecoveryProfile,
@@ -109,7 +111,13 @@ export default function CreatorEarningsCard() {
       if (!profile) {
         // One native Face ID / Touch ID / Windows Hello prompt. This passkey is an independent
         // 1-of-2 recovery signer; it never leaves the user's password manager/device ecosystem.
-        const passkey = await PasskeyKeypair.getPasskeyInstance(creatorPasskeyProvider());
+        // If an older setup attempt registered with malformed zkLogin bytes, reuse its saved
+        // credential rather than asking the user to create yet another passkey. The corrected
+        // controller below is derived from that same passkey plus the verified zkLogin key.
+        const stored = loadCreatorPasskey(account.address);
+        const passkey = stored?.login === account.address.toLowerCase()
+          ? passkeyFromStored(stored)
+          : await PasskeyKeypair.getPasskeyInstance(creatorPasskeyProvider());
         const registrationArgs = {
           login: account.address,
           zkLoginPublicIdentifier: Uint8Array.from(account.publicKey),

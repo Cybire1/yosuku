@@ -47,6 +47,20 @@ export function creatorPasskeyProvider(): BrowserPasskeyProvider {
   });
 }
 
+/** dapp-kit WalletAccount.publicKey includes Sui's one-byte signature-scheme flag for zkLogin,
+ * while ZkLoginPublicIdentifier expects the raw bytes after that flag. Accept either shape, but
+ * only return a candidate that cryptographically derives the connected address. This avoids
+ * hard-coding the flag value and makes a future wallet-adapter shape change fail closed. */
+export function zkLoginPublicIdentifierForAddress(value: Uint8Array, address: string): Uint8Array {
+  const candidates = value.length > 1 ? [value, value.slice(1)] : [value];
+  for (const candidate of candidates) {
+    try {
+      if (publicKeyFromRawBytes('ZkLogin', candidate).verifyAddress(address)) return candidate;
+    } catch { /* try the next supported representation */ }
+  }
+  throw new Error('Google wallet public key does not match the connected address');
+}
+
 export function creatorController(
   zkLoginPublicIdentifier: Uint8Array,
   passkeyPublicKey: Uint8Array,
@@ -68,13 +82,14 @@ export function buildRegisterCreatorRecoveryTx(args: {
   zkLoginPublicIdentifier: Uint8Array;
   passkeyPublicKey: Uint8Array;
 }): { transaction: Transaction; controller: MultiSigPublicKey } {
-  const controller = creatorController(args.zkLoginPublicIdentifier, args.passkeyPublicKey);
+  const zkLoginPublicIdentifier = zkLoginPublicIdentifierForAddress(args.zkLoginPublicIdentifier, args.login);
+  const controller = creatorController(zkLoginPublicIdentifier, args.passkeyPublicKey);
   const tx = new Transaction();
   tx.moveCall({
     target: `${CREATOR_RECOVERY_PACKAGE}::creator_recovery::register`,
     arguments: [
       tx.pure.address(controller.toSuiAddress()),
-      tx.pure.vector('u8', [...args.zkLoginPublicIdentifier]),
+      tx.pure.vector('u8', [...zkLoginPublicIdentifier]),
       tx.pure.vector('u8', [...args.passkeyPublicKey]),
     ],
   });
@@ -180,8 +195,10 @@ function parseProfile(value: unknown): CreatorRecoveryProfile | null {
     || (profile.builderCode != null && !/^0x[0-9a-f]{64}$/.test(profile.builderCode))
     || profile.passkeyPublicKey.length !== 33 || !profile.zkLoginPublicIdentifier.length) return null;
   try {
-    const zk = publicKeyFromRawBytes('ZkLogin', profile.zkLoginPublicIdentifier);
-    if (!zk.verifyAddress(profile.login)) return null;
+    profile.zkLoginPublicIdentifier = zkLoginPublicIdentifierForAddress(
+      profile.zkLoginPublicIdentifier,
+      profile.login,
+    );
     if (creatorController(profile.zkLoginPublicIdentifier, profile.passkeyPublicKey).toSuiAddress().toLowerCase()
       !== profile.controller) return null;
   } catch { return null; }
