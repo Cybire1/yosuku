@@ -202,19 +202,17 @@ export default function CreatorEarningsCard() {
               Creator mode
             </div>
             <h2 id="creator-mode-title" className="max-w-xl text-balance font-display text-xl font-[750] leading-[1.15] tracking-[-0.035em] text-white sm:text-[26px]">
-              Your call. Your code. Your earnings.
+              Make the call. Earn when people act.
             </h2>
             <p className="mt-2 max-w-[62ch] text-pretty text-[12px] leading-relaxed text-gray-400 sm:text-[13px]">
-              When someone bets from your card, protocol fees accrue directly to a creator code you own.
-              Yosuku never holds the payout.
+              Share a prediction card. When someone bets from it, your creator fee lands in a balance
+              only you control.
             </p>
-            <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1.5 font-mono text-[9px] uppercase tracking-[0.12em] text-gray-500">
-              <span>Paid on-chain</span>
-              <span aria-hidden="true" className="text-vermilion/50">/</span>
-              <span>Claim anytime</span>
-              <span aria-hidden="true" className="text-vermilion/50">/</span>
-              <span>{socialWallet ? 'Passkey recovery' : 'Wallet owned'}</span>
-            </div>
+            <ul className="mt-4 flex flex-col gap-2 font-mono text-[9px] uppercase tracking-[0.11em] text-gray-500 min-[540px]:flex-row min-[540px]:flex-wrap min-[540px]:gap-x-5">
+              <li className="flex items-center gap-2"><span aria-hidden="true" className="h-1 w-1 bg-vermilion/70" />Earn per attributed bet</li>
+              <li className="flex items-center gap-2"><span aria-hidden="true" className="h-1 w-1 bg-vermilion/70" />Claim to your wallet</li>
+              <li className="flex items-center gap-2"><span aria-hidden="true" className="h-1 w-1 bg-vermilion/70" />{socialWallet ? 'Recover with Face ID' : 'Owned by your wallet'}</li>
+            </ul>
           </div>
 
           <div className="relative sm:min-w-[220px]">
@@ -224,11 +222,11 @@ export default function CreatorEarningsCard() {
               className="btn btn-primary min-h-12 w-full px-6 text-[13px] shadow-[0_12px_32px_-16px_rgba(224,77,38,0.9)] disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto sm:min-w-[220px]"
               data-cursor="hover"
             >
-              <span>{busy ? 'Setting up…' : socialWallet ? 'Set up creator mode' : 'Become a creator'}</span>
+              <span>{busy ? 'Setting up…' : 'Turn on creator mode'}</span>
               {!busy && <span aria-hidden="true">→</span>}
             </button>
             <p className="mt-2 text-center font-mono text-[9px] leading-relaxed text-gray-500">
-              {socialWallet ? 'One Face ID or passkey prompt' : 'One wallet signature'}
+              {socialWallet ? 'One-time setup · Face ID protected' : 'One-time setup · wallet owned'}
             </p>
           </div>
         </div>
