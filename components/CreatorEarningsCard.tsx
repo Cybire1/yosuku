@@ -12,7 +12,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClient } from '@mysten/dapp-kit';
 import { PREDICT624 } from '@/lib/sui/predict624Client';
-import { buildClaimCreatorFeesTx, claimableFeesMicro, findCreatorCode } from '@/lib/sui/creatorCode';
+import { buildClaimCreatorFeesTx, buildCreateCreatorCodeTx, claimableFeesMicro, findCreatorCode } from '@/lib/sui/creatorCode';
 import { useToast } from '@/components/Toast';
 
 const money = (micro: bigint) => (Number(micro) / 1e6).toFixed(4);
@@ -53,8 +53,47 @@ export default function CreatorEarningsCard() {
     }
   };
 
-  // No code, no card. A creator surface for someone who is not a creator is just clutter.
-  if (!codeId) return null;
+  const mint = async () => {
+    if (busy || !account?.address) return;
+    setBusy(true);
+    try {
+      // MUST be signed by the creator: create_and_share reads ctx.sender() as the owner, and
+      // that owner is immutable. If Yosuku signed this, Yosuku would own their fees forever.
+      await signAndExecute({ transaction: buildCreateCreatorCodeTx() });
+      toast('Creator code minted — it is yours, not ours');
+      await refresh();
+    } catch (e) {
+      toast(`Could not mint: ${e instanceof Error ? e.message : String(e)}`.slice(0, 140), 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Not a creator yet: offer it once, quietly, rather than hiding the whole programme behind
+  // a link nobody finds.
+  if (!codeId) {
+    return (
+      <div className="rounded-2xl border border-white/[0.07] bg-white/[0.02] p-4">
+        <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-gray-500 mb-2">
+          Post calls, get paid
+        </div>
+        <div className="flex items-end justify-between gap-4">
+          <p className="text-[12px] text-gray-400 leading-relaxed max-w-[380px]">
+            Mint a creator code and every bet placed off your calls pays you. It belongs to your
+            wallet, so only you can claim it.
+          </p>
+          <button
+            onClick={mint}
+            disabled={busy}
+            className="btn btn-secondary shrink-0 disabled:opacity-40"
+            data-cursor="hover"
+          >
+            {busy ? 'Minting…' : 'Become a creator'}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const nothingYet = micro != null && micro === 0n;
 
