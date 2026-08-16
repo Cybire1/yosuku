@@ -22,7 +22,13 @@ const DRIP = BigInt(2_000_000);          // 2 DUSDC — the open web claim
 const ONBOARD_DRIP = BigInt(5_000_000);  // 5 DUSDC — X-Predict auto-onboard only (key-gated)
 const FUND_CAP = BigInt(3_000_000);      // already holds more than 3 DUSDC → don't fund
 // shared secret: only the X-Predict relay knows this, so the open button can't pull the 5 DUSDC drip.
-const ONBOARD_KEY = process.env.FAUCET_ONBOARD_KEY || 'yx_onbk_9f4c2e7a13b6d805e2a4c1';
+// Both the deployment override AND the built-in are accepted. The relay is a separate machine with
+// its own env, so a key set here but not there silently downgrades every X onboard to the $2 web
+// claim, which is exactly what happened: accounts opened with $2 and the first bet filled small.
+// Accepting either value means the two sides cannot drift apart again.
+const ONBOARD_KEYS = new Set(
+  [process.env.FAUCET_ONBOARD_KEY, 'yx_onbk_9f4c2e7a13b6d805e2a4c1'].filter(Boolean) as string[],
+);
 const DAY_MS = 24 * 60 * 60 * 1000;
 const FAUCET_ADDR = '0x7c89c67ca62eca789d2247d4168edc3dded1d93ec2706119e861f128ef212fab';
 const OFFICIAL_FAUCET = 'https://tally.so/r/Xx102L';
@@ -66,7 +72,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid address.' }, { status: 400 });
   }
   // the X-Predict relay pulls the larger drip; the open web button gets the standard 2 DUSDC.
-  const amount = onboardKey && onboardKey === ONBOARD_KEY ? ONBOARD_DRIP : DRIP;
+  const amount = onboardKey && ONBOARD_KEYS.has(onboardKey) ? ONBOARD_DRIP : DRIP;
 
   // 1. per-device cookie gate
   const claimedAt = Number(req.cookies.get(COOKIE)?.value ?? 0);
