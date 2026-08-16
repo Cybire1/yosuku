@@ -303,6 +303,10 @@ export default function PortfolioPage() {
                 asked to link X before they had connected anything. */}
             <XWalletCard />
 
+            {/* Creator onboarding and earnings live beside the linked X identity they accrue
+                from. The card handles both states: mint a code, then view and claim fees. */}
+            <CreatorEarningsCard />
+
             {/* Only for people who actually have something on the old deployment. See
                 hasEarlierFunds: for everyone else this whole section does not exist, so the
                 product shows ONE balance. */}
