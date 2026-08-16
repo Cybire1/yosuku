@@ -296,16 +296,17 @@ export default function PortfolioPage() {
           </div>
         ) : (
           <div className="space-y-5 sm:space-y-8">
+            {/* Creator mode is a first-class account mode, not a footnote to X-wallet funding.
+                Keep its setup/earnings surface at the top so it stays visible even when a trader
+                has a long position history below. */}
+            <CreatorEarningsCard />
+
             {/* ── New venue (DeepBook Predict 6-24) — balance, open positions, settled history ── */}
             <Portfolio624Section />
 
             {/* Money-in sits under the positions. Leading with it meant a first-time visitor was
                 asked to link X before they had connected anything. */}
             <XWalletCard />
-
-            {/* Creator onboarding and earnings live beside the linked X identity they accrue
-                from. The card handles both states: mint a code, then view and claim fees. */}
-            <CreatorEarningsCard />
 
             {/* Only for people who actually have something on the old deployment. See
                 hasEarlierFunds: for everyone else this whole section does not exist, so the
