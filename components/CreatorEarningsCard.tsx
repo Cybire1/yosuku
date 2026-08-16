@@ -297,15 +297,24 @@ export default function CreatorEarningsCard() {
               <p className="font-mono text-[8px] uppercase tracking-[0.18em] text-white/35">Protocol-paid · owner controlled</p>
             </div>
           </div>
-          <a
-            href={`https://suiscan.xyz/testnet/object/${codeId}`}
-            target="_blank"
-            rel="noreferrer"
-            className="group/code inline-flex items-center gap-2 rounded-full bg-white/[0.045] py-1.5 pl-3 pr-1.5 font-mono text-[9px] text-white/45 ring-1 ring-inset ring-white/[0.07] transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] hover:bg-white/[0.08] hover:text-white/75"
-          >
-            <span>{codeId.slice(0, 8)}…{codeId.slice(-4)}</span>
-            <span aria-hidden="true" className="grid h-6 w-6 place-items-center rounded-full bg-white/[0.07] text-[10px] transition-transform duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] group-hover/code:-translate-y-px group-hover/code:translate-x-px">↗</span>
-          </a>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <a
+              href="/creator/studio"
+              className="group/studio inline-flex min-h-9 items-center gap-2 rounded-full bg-vermilion py-2 pl-4 pr-2 font-display text-[10px] font-[650] text-white shadow-[0_12px_28px_-16px_rgba(224,77,38,0.95)] transition-[background-color,transform] duration-300 hover:bg-vermilion-d active:scale-[0.98]"
+            >
+              <span>Create a card</span>
+              <span aria-hidden="true" className="grid h-5 w-5 place-items-center rounded-full bg-white/15 transition-transform duration-300 group-hover/studio:translate-x-0.5">→</span>
+            </a>
+            <a
+              href={`https://suiscan.xyz/testnet/object/${codeId}`}
+              target="_blank"
+              rel="noreferrer"
+              className="group/code inline-flex items-center gap-2 rounded-full bg-white/[0.045] py-1.5 pl-3 pr-1.5 font-mono text-[9px] text-white/45 ring-1 ring-inset ring-white/[0.07] transition-[background-color,color] duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] hover:bg-white/[0.08] hover:text-white/75"
+            >
+              <span>{codeId.slice(0, 8)}…{codeId.slice(-4)}</span>
+              <span aria-hidden="true" className="grid h-6 w-6 place-items-center rounded-full bg-white/[0.07] text-[10px] transition-transform duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] group-hover/code:-translate-y-px group-hover/code:translate-x-px">↗</span>
+            </a>
+          </div>
         </header>
 
         <div className="relative grid gap-6 py-6 md:grid-cols-[minmax(0,1.45fr)_minmax(270px,0.65fr)] md:items-stretch md:gap-8 sm:py-8">
