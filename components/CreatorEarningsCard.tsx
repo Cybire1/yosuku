@@ -19,6 +19,7 @@ import {
   buildRegisterCreatorRecoveryTx,
   creatorController,
   creatorPasskeyProvider,
+  creatorRecoveryFromRegistration,
   findCreatorRecoveryForLogin,
   storeCreatorPasskey,
   waitForCreatorRecovery,
@@ -116,9 +117,16 @@ export default function CreatorEarningsCard() {
         };
         const registration = buildRegisterCreatorRecoveryTx(registrationArgs);
         // useSmartSubmit may rebuild after a sponsor failure; return a clean transaction each time.
-        await submit(() => buildRegisterCreatorRecoveryTx(registrationArgs).transaction);
+        const registered = await submit(() => buildRegisterCreatorRecoveryTx(registrationArgs).transaction);
         storeCreatorPasskey(account.address, registration.controller.toSuiAddress(), passkey);
-        profile = await waitForCreatorRecovery(account.address, registration.controller.toSuiAddress());
+        // Read the created object from the confirmed transaction first. Unlike the global type
+        // index, transaction effects are available immediately and cannot turn a successful
+        // wallet signature into a misleading "still indexing" failure.
+        profile = await creatorRecoveryFromRegistration(
+          registered.digest,
+          account.address,
+          registration.controller.toSuiAddress(),
+        ) ?? await waitForCreatorRecovery(account.address, registration.controller.toSuiAddress());
       }
 
       if (!profile.builderCode) {

@@ -4,6 +4,7 @@ import { publicKeyFromRawBytes } from '@mysten/sui/verify';
 import { Transaction } from '@mysten/sui/transactions';
 import { fromBase64, toBase64 } from '@mysten/sui/utils';
 import { PREDICT624 } from './predict624Client';
+import { grpc } from './modernClients';
 
 export const CREATOR_RECOVERY_PACKAGE =
   '0xbda838f23b7035f7372c5a6984f26dadef10c1c70a7c64701e71554abc3e2d32';
@@ -217,7 +218,50 @@ export async function listCreatorRecoveries(): Promise<CreatorRecoveryProfile[]>
 export async function findCreatorRecoveryForLogin(login: string): Promise<CreatorRecoveryProfile | null> {
   const want = login.toLowerCase();
   const matches = (await listCreatorRecoveries()).filter((profile) => profile.login === want);
-  return matches.find((profile) => profile.builderCode != null) ?? matches[0] ?? null;
+  // A timed-out registration can become visible after the UI has already returned control. If
+  // the user retries, prefer the controller whose passkey we saved in this browser rather than
+  // whichever same-login object the global type index happens to return first. That makes retries
+  // resume the exact recovery they created instead of registering another credential.
+  const stored = loadCreatorPasskey(login);
+  return matches.find((profile) => profile.builderCode != null)
+    ?? (stored ? matches.find((profile) => profile.controller === stored.controller.toLowerCase()) : null)
+    ?? matches[0]
+    ?? null;
+}
+
+/** Resolve the recovery object directly from the confirmed registration transaction.
+ *
+ * The transaction service exposes created object IDs immediately. The global GraphQL type index
+ * can lag for tens of seconds, so using it as the hand-off between registration and finalization
+ * produced a false failure after the wallet had already committed successfully.
+ */
+export async function creatorRecoveryFromRegistration(
+  digest: string,
+  login: string,
+  controller: string,
+): Promise<CreatorRecoveryProfile | null> {
+  const result = await grpc.getTransaction({
+    digest,
+    include: { effects: true, objectTypes: true },
+  });
+  const transaction = result.Transaction ?? result.FailedTransaction;
+  if (!transaction?.status.success) return null;
+
+  const created = (transaction.effects?.changedObjects ?? []).filter((change) =>
+    change.idOperation === 'Created'
+      && transaction.objectTypes?.[change.objectId] === CREATOR_RECOVERY_TYPE);
+
+  for (const change of created) {
+    const response = await grpc.getObject({ objectId: change.objectId, include: { json: true } });
+    const object = response.object;
+    if (!object) continue;
+    const profile = parseProfile({
+      address: object.objectId,
+      asMoveObject: { contents: { json: object.json as Record<string, unknown> } },
+    });
+    if (profile?.login === login.toLowerCase() && profile.controller === controller.toLowerCase()) return profile;
+  }
+  return null;
 }
 
 export async function waitForCreatorRecovery(
