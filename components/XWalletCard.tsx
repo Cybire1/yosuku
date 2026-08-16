@@ -283,6 +283,19 @@ export default function XWalletCard() {
         }
         throw new Error(typeof j?.reason === 'string' && j.reason ? j.reason : 'Could not link this wallet. Please try again.');
       }
+      // The relay has already committed the route when this response arrives. Reflect that fact
+      // locally before re-reading it: otherwise the success message renders for a network round
+      // trip beside the stale "One more step" card, which makes a completed link look unfinished.
+      // The background refresh remains the source of truth and fills in any relay-side metadata.
+      setMe((current) => current ? {
+        ...current,
+        binding: {
+          authorId: me.authorId!,
+          handle: current.handle,
+          address: typeof j?.address === 'string' ? j.address : address,
+          sealed: j?.mode === 'claimed',
+        },
+      } : current);
       setOk('Linked. Your replies now bet from this balance.');
       await refreshMe();
     } catch (e) {
