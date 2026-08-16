@@ -26,7 +26,7 @@ export default function StudioPage() {
   const [preview, setPreview] = useState<Preview | null>(null);
   const [previewing, setPreviewing] = useState(false);
   const [posting, setPosting] = useState<'' | 'bot' | 'hand'>('');
-  const [result, setResult] = useState<{ tweetUrl?: string; mode: string; caption: string } | null>(null);
+  const [result, setResult] = useState<{ tweetUrl?: string; mode: string; caption: string; hint?: string } | null>(null);
   const [lines, setLines] = useState<Line[]>([]);
   const [err, setErr] = useState('');
 
@@ -81,13 +81,46 @@ export default function StudioPage() {
     return () => { if (previewTimer.current) clearTimeout(previewTimer.current); };
   }, [unlocked, marketId, strike, api]);
 
+  // Post from the operator's OWN X account, with the card and text already prepared.
+  //
+  // Not a token flow. Uploading an image AS a user needs that user's own media credentials, and
+  // this X app has no media.write scope (which is why the bot posts pictures over OAuth 1.0a).
+  // Storing write-tokens for other people to work around that is custody of their account, and
+  // the whole product promise is the opposite of that.
+  //
+  // So: put the rendered PNG on the clipboard and open X's composer with the caption already in
+  // it. The poster pastes once and hits Post. No tokens stored, works for any account, and the
+  // relay still auto-registers the card from its text within ~60s.
+  const postFromMyX = useCallback(async () => {
+    if (!preview) return;
+    setErr('');
+    let copied = false;
+    try {
+      const bytes = Uint8Array.from(atob(preview.cardPngBase64), (c) => c.charCodeAt(0));
+      const blob = new Blob([bytes], { type: 'image/png' });
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+      copied = true;
+    } catch {
+      // Clipboard image write needs a secure context and a user gesture, and Safari refuses it
+      // outright. Fall back to a download so the card is never stranded.
+      try {
+        const a = document.createElement('a');
+        a.href = `data:image/png;base64,${preview.cardPngBase64}`;
+        a.download = `yosuku-line-${preview.strikeUsd}.png`;
+        a.click();
+      } catch { /* nothing else to try */ }
+    }
+    window.open(`https://x.com/intent/post?text=${encodeURIComponent(preview.caption)}`, '_blank', 'noopener,noreferrer');
+    setResult({ tweetUrl: '', mode: 'hand', caption: preview.caption, hint: copied ? 'card copied. Paste it in the composer and post.' : 'card downloaded. Attach it in the composer and post.' });
+  }, [preview]);
+
   const post = useCallback(async (mode: 'bot' | 'hand') => {
     if (!marketId || !strike || posting) return;
     setPosting(mode); setErr(''); setResult(null);
     try {
       const r = await api('post', 'POST', { marketId, strikeUsd: Number(strike), mode });
       if (mode === 'hand') { try { await navigator.clipboard.writeText(r.caption); } catch { /* clipboard may be blocked */ } }
-      setResult({ tweetUrl: r.tweetUrl, mode, caption: r.caption });
+      setResult({ tweetUrl: r.tweetUrl, mode, caption: r.caption, hint: '' });
       loadLines();
     } catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
     finally { setPosting(''); }
@@ -200,9 +233,13 @@ export default function StudioPage() {
             className="flex-1 rounded-xl px-4 py-3 text-sm font-bold text-[#f5f2ec] disabled:opacity-50" style={{ background: VERM }}>
             {posting === 'bot' ? 'Posting…' : 'Post from bot'}
           </button>
+          <button onClick={postFromMyX} disabled={!preview || !!posting}
+            className="flex-1 rounded-xl border border-white/15 px-4 py-3 text-sm font-bold text-[#f5f2ec] hover:bg-white/[0.06] disabled:opacity-50">
+            Post from my X
+          </button>
           <button onClick={() => post('hand')} disabled={!preview || !!posting}
             className="rounded-xl border border-white/15 px-4 py-3 text-sm font-bold text-[#f5f2ec] hover:bg-white/[0.06] disabled:opacity-50">
-            {posting === 'hand' ? 'Arming…' : 'Copy for hand-post'}
+            {posting === 'hand' ? 'Arming…' : 'Copy text'}
           </button>
         </div>
 
@@ -210,6 +247,7 @@ export default function StudioPage() {
 
         {result && (
           <div className="mt-4 rounded-xl border border-emerald-500/25 bg-emerald-500/[0.06] p-4">
+            {result.hint && <div className="mb-2 text-[12px] font-semibold text-emerald-300">{result.hint}</div>}
             {result.mode === 'bot' ? (
               <>
                 <div className="text-sm font-bold text-emerald-300">Line is live.</div>
