@@ -383,11 +383,11 @@ export default function XWalletCard() {
             <div className="text-[13px] font-bold text-[#1A1612]">
               {routed ? `Switch @${me?.binding?.handle || 'linked account'} to @${me!.handle}?` : `One more step to bet from @${me!.handle}.`}
             </div>
-            <p className="mt-1 text-[12px] leading-snug text-[#6B6353]">
-              {routed
-                ? 'Your balance stays with this Sui wallet. Only the X account allowed to send bets changes.'
-                : 'Point that account at this wallet, so a reply you tweet spends this balance and not some other.'}
-            </p>
+            {routed && (
+              <p className="mt-1 text-[12px] leading-snug text-[#6B6353]">
+                Your balance stays here. Only which X account can bet changes.
+              </p>
+            )}
             <button
               onClick={link}
               disabled={!!busy}
@@ -406,22 +406,17 @@ export default function XWalletCard() {
             >
               <Twitter className="h-3.5 w-3.5 shrink-0 text-[#E04D26]" />
               <span className="font-display text-sm font-[700] text-[#1A1612]">{me?.binding?.handle ? `@${me.binding.handle}` : 'X connected'}</span>
-              <span className="text-[12px] text-[#6B6353]">bets from this balance</span>
               <ChevronDown className={`ml-auto h-3.5 w-3.5 text-[#6B6353] transition-transform ${manageX ? 'rotate-180' : ''}`} />
             </button>
             {manageX && (
-              <div className="mt-2 grid gap-2 rounded-lg border border-[#C9BFA6]/50 bg-[#FFFDF8] p-2 sm:grid-cols-2">
+              <div className={`mt-2 grid gap-2 rounded-lg border border-[#C9BFA6]/50 bg-[#FFFDF8] p-2 ${me?.binding?.sealed ? '' : 'sm:grid-cols-2'}`}>
                 <a
                   href="/api/claim/x/start?return=/portfolio"
                   className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#C9BFA6]/60 px-3 py-2 text-[12px] font-bold text-[#1A1612] transition-colors hover:bg-[#E04D26]/[0.06]"
                 >
                   <RefreshCw className="h-3.5 w-3.5" /> Switch X account
                 </a>
-                {me?.binding?.sealed ? (
-                  <span className="inline-flex items-center justify-center px-3 py-2 text-center text-[11px] text-[#6B6353]">
-                    Recovery-protected link
-                  </span>
-                ) : sessionMatchesBinding ? (
+                {me?.binding?.sealed ? null : sessionMatchesBinding ? (
                   <button
                     type="button"
                     onClick={unlink}
@@ -444,9 +439,6 @@ export default function XWalletCard() {
         ) : (
           <div className="mb-4 rounded-lg border border-[#E04D26]/30 bg-[#E04D26]/[0.07] px-3.5 py-3">
             <div className="text-[13px] font-bold text-[#1A1612]">Connect X first, then fund.</div>
-            <p className="mt-1 text-[12px] leading-snug text-[#6B6353]">
-              Your replies have to point at this balance. Until an X account is linked, a bet you tweet has nowhere to land.
-            </p>
             {/* explicit hex, not text-black/text-[#1A1612]: the theme maps those onto the foreground
                 colour, which rendered this button white-on-white in dark mode. */}
             <a
@@ -463,7 +455,7 @@ export default function XWalletCard() {
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#E04D26]/30 bg-[#E04D26]/[0.07] px-3.5 py-3">
             <div>
               <div className="text-[13px] font-bold text-[#1A1612]">Wallet authorization needed</div>
-              <p className="mt-0.5 text-[12px] text-[#6B6353]">Your X balance is safe. Reauthorize to move funds.</p>
+              <p className="mt-0.5 text-[12px] text-[#6B6353]">Your balance is safe.</p>
             </div>
             <button
               onClick={currentWallet ? startWalletReconnect : finishWalletReconnect}
@@ -541,7 +533,7 @@ export default function XWalletCard() {
             </div>
 
             <p className="mt-3 font-mono text-[10px] leading-snug" style={{ color: '#6B6353' }}>
-              The agent can open the bets you tweet. It can never withdraw. Only you can cash out.
+              The agent can bet from this balance. Only you can cash out.
             </p>
 
             {needsFaucet && (
@@ -562,18 +554,16 @@ export default function XWalletCard() {
             The connect CTA moved to the top of the card, so this block is only the follow-through. */}
         <div className="mt-4 border-t border-white/[0.06] pt-4">
           {loadingMe ? (
-            <div className="text-sm text-[#6B6353]">Checking your X connection…</div>
-          ) : !connected ? (
-            <div className="text-xs text-[#6B6353]">Once X is linked, you bet by replying YES or NO to a live line.</div>
-          ) : sealed ? (
+            <div className="text-sm text-[#6B6353]">Checking…</div>
+          ) : !connected ? null : sealed ? (
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div className="font-mono text-xs text-[#6B6353]">tweet-funded account {short(sealed.address)} · <span className="text-[#1A1612]">${sealed.balanceDusdc.toFixed(2)}</span></div>
+              <div className="font-mono text-xs text-[#6B6353]"><span className="text-[#1A1612]">${sealed.balanceDusdc.toFixed(2)}</span> in your tweet-funded account</div>
               <a href="/claim" className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-xl border border-white/15 px-4 py-2 text-sm font-bold text-[#1A1612] transition-colors hover:bg-white/[0.06]">
                 Cash out <ArrowUpRight className="h-4 w-4" />
               </a>
             </div>
           ) : (
-            <div className="text-xs text-[#6B6353]">Reply YES or NO to a live line to place a bet. Minimum $1.15.</div>
+            <div className="text-xs text-[#6B6353]">Reply YES or NO to a live line. Minimum $1.15.</div>
           )}
         </div>
       </div>

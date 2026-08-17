@@ -18,9 +18,7 @@ import Marquee from '@/components/Marquee';
 import GrainOverlay from '@/components/GrainOverlay';
 import CustomCursor from '@/components/CustomCursor';
 import SectionHeader from '@/components/SectionHeader';
-import PortfolioTable from '@/components/PortfolioTable';
 import CreatorEarningsCard from '@/components/CreatorEarningsCard';
-import BetHistory729 from '@/components/BetHistory729';
 import { useManager, useDUSDCBalance, useManagerBalance, usePositions, useManagerSummary, useManagerPnL, usePLPBalance, useTradingVaultBalance } from '@/lib/sui/hooks';
 import { DUSDC_MULTIPLIER, FLOAT_SCALING } from '@/lib/sui/constants';
 import { useLeverageHealth, useMyOrders, useMyPositions } from '@/lib/sui/leverageHooks';
@@ -32,9 +30,7 @@ import { Download } from 'lucide-react';
 import { fetchManagerPositionsSummary } from '@/lib/sui/predictApi';
 import { positionsToCSV, downloadCSV } from '@/lib/csvExport';
 import { computeBadges } from '@/lib/badges';
-import BadgeDisplay from '@/components/BadgeDisplay';
 import { loadPrivateBetTickets, privateBalanceDusdc, type PrivateBetTicket } from '@/lib/privateBet';
-import PrivateClaims from '@/components/PrivateClaims';
 import { computeTradingAccountSnapshot } from '@/lib/tradingAccount';
 
 export default function PortfolioPage() {
@@ -242,20 +238,6 @@ export default function PortfolioPage() {
 
   const badges = computeBadges(positionSummaries, plpBalance);
 
-  // Does this person have anything on the OLD deployment at all?
-  //
-  // Everything below the divider is pre-migration: a second balance, its own P&L columns, its own
-  // deposit box. It used to render for everyone, so a brand new wallet was shown two balances and
-  // a settlement history for a venue it had never touched. Nobody signing up today has money
-  // there, and the split is an artefact of our migration, not something they chose. So it only
-  // exists for the people who actually left something behind.
-  const hasEarlierFunds =
-    accountSnapshot.yosukuBalanceDusdc > 0.005 ||
-    positions.length > 0 ||
-    leverageOrders.length > 0 ||
-    leveragePositions.length > 0 ||
-    privateTickets.length > 0;
-
   return (
     <div className="min-h-screen relative">
       <Marquee />
@@ -281,13 +263,10 @@ export default function PortfolioPage() {
                 <path d="M22 10H2" />
               </svg>
             </div>
-            <h2 className="font-display font-[700] text-xl text-white mb-2">Connect Wallet</h2>
-            <p className="text-gray-500 text-sm max-w-sm mx-auto mb-6">
-              Connect your Sui wallet to view positions, balances, and trade history.
-            </p>
+            <h2 className="font-display font-[700] text-xl text-white mb-6">Connect Wallet</h2>
             <div className="flex flex-col items-center gap-3">
               <ConnectButton />
-              <a href="/how-it-works" className="text-[11px] text-gray-600 hover:text-white transition-colors">New to Sui? Any wallet works, test funds are free →</a>
+              <a href="/how-it-works" className="text-[11px] text-gray-600 hover:text-white transition-colors">New to Sui? Test funds are free →</a>
             </div>
           </div>
           {/* Kept below the primary action, not above it: someone landing here from a tweet still
@@ -308,9 +287,6 @@ export default function PortfolioPage() {
                 asked to link X before they had connected anything. */}
             <XWalletCard />
 
-            {/* Only for people who actually have something on the old deployment. See
-                hasEarlierFunds: for everyone else this whole section does not exist, so the
-                product shows ONE balance. */}
             {/* The old-deployment section lived here: its own balance card, equity curve,
                 private positions, leveraged trades, positions and achievements. Removed as
                 dead weight. Anything still sitting on that deployment is untouched on-chain

@@ -514,7 +514,7 @@ export default function Portfolio624Section() {
             <div className="divide-y divide-white/[0.05]">
               {positions.length === 0 && history.length === 0 ? (
                 <div className="font-mono text-[11px] uppercase tracking-[0.2em] text-white/30 px-5 py-8 text-center">
-                  No bets here yet —{' '}
+                  No bets yet.{' '}
                   <a href="/beta" className="text-vermilion hover:text-white transition-colors normal-case tracking-normal">make your first call →</a>
                 </div>
               ) : (
@@ -527,15 +527,17 @@ export default function Portfolio624Section() {
                     const levX = pos.leverage1e9 / FLOAT_SCALING_624;
                     const claiming = busy === `claim:${pos.orderId}`;
                     const payout = fmt2(micro(pos.qtyMicro) - micro(pos.netPremiumMicro) * (levX - 1));
-                    const status = settled ? (won ? 'Won · paying out' : 'Settled · no payout') : expired ? 'Awaiting settle' : 'Open';
+                    // No word for the live case. The pulsing dot, the countdown beside it and the
+                    // "Open" counter in the strip above already say it three times over.
+                    const status = settled ? (won ? 'Paying out' : 'Lost') : expired ? 'Settling' : '';
                     return (
                       <div key={`${pos.marketId}:${pos.orderId}`} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3 hover:bg-white/[0.02] transition-colors">
-                        <span className={`font-mono text-[10px] uppercase tracking-[0.18em] w-40 shrink-0 ${settled ? 'text-white' : 'text-white/50'}`}>
+                        <span className={`font-mono text-[10px] uppercase tracking-[0.18em] shrink-0 ${settled ? 'text-white' : 'text-white/50'}`}>
                           {!settled && <span className="text-vermilion mr-1.5">●</span>}{status}
                         </span>
                         <span className="font-display font-[700] text-[13px] text-white">BTC {bandLabel(pos.lowerTick, pos.higherTick)}</span>
                         {st && !settled && !expired && now > 0 && (
-                          <span className="font-mono text-[10px] text-white/40">settles in {fmtCountdown(st.expiry - now)}</span>
+                          <span className="font-mono text-[10px] text-white/40">{fmtCountdown(st.expiry - now)} left</span>
                         )}
                         <span className="flex-1" />
                         <span className="font-mono text-[11px] text-white/70 tabular-nums">{fmt2(micro(pos.qtyMicro))} DUSDC</span>
@@ -549,7 +551,7 @@ export default function Portfolio624Section() {
                               <button
                                 onClick={() => claim(pos)}
                                 disabled={claiming}
-                                title="Winners are paid out automatically — this just collects it instantly"
+                                title="Paid out automatically. This collects it now."
                                 className="font-mono text-[10px] uppercase tracking-[0.12em] text-white/40 hover:text-vermilion transition-colors disabled:opacity-60"
                               >
                                 {claiming ? 'collecting…' : 'collect now'}
@@ -576,8 +578,8 @@ export default function Portfolio624Section() {
                     const receipt = h.orderId ? tradeByOrderId.get(h.orderId) : undefined;
                     return (
                       <div key={`h-${h.orderId}-${i}`} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-5 py-3 hover:bg-white/[0.02] transition-colors">
-                        <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/30 w-40 shrink-0">
-                          {h.kind === 'settled_order_redeemed' ? 'Claimed' : h.kind === 'liquidated_order_redeemed' ? 'Knocked out' : 'Closed early'}
+                        <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/30 shrink-0">
+                          {h.kind === 'settled_order_redeemed' ? '' : h.kind === 'liquidated_order_redeemed' ? 'Knocked out' : 'Closed early'}
                         </span>
                         <span className="font-display font-[700] text-[13px] text-white/60 tabular-nums">
                           paid {h.payoutMicro != null ? fmt2(micro(h.payoutMicro)) : '—'} DUSDC
@@ -613,12 +615,12 @@ export default function Portfolio624Section() {
           <Crosshairs />
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-5 py-3 border-b border-white/[0.06]">
             <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-vermilion">Copy-trading desk</span>
-            <span className="font-mono text-[11px] text-white tabular-nums">ledger {fmt2(deskLedger)} DUSDC</span>
+            <span className="font-mono text-[11px] text-white tabular-nums">{fmt2(deskLedger)} DUSDC</span>
             {deskSub && (
               <span className="font-mono text-[10px] text-white/40">
                 {deskSub.active
-                  ? `agent ${fmtAddr(deskSub.agent)} · caps ${fmt2(deskSub.maxMarginMicro / DUSDC_MULTIPLIER)} DUSDC / ${(deskSub.maxLeverage1e9 / FLOAT_SCALING_624).toFixed(0)}× per trade`
-                  : 'subscription paused'}
+                  ? `up to ${fmt2(deskSub.maxMarginMicro / DUSDC_MULTIPLIER)} DUSDC per trade`
+                  : 'paused'}
               </span>
             )}
             <span className="flex-1" />
@@ -628,21 +630,15 @@ export default function Portfolio624Section() {
           </div>
           <div className="divide-y divide-white/[0.05]">
             {deskRows.length === 0 ? (
-              <div className="font-mono text-[10px] text-white/30 px-5 py-3">No desk trades for your address yet — the agent trades within your caps only.</div>
+              <div className="font-mono text-[10px] text-white/30 px-5 py-3">No desk trades yet.</div>
             ) : (
               deskRows.map((r, i) => (
                 <div key={`d-${r.orderId ?? r.digest}-${i}`} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-5 py-2.5 hover:bg-white/[0.02] transition-colors">
-                  <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/30 w-40 shrink-0">
-                    {r.kind === 'trade' ? 'Agent traded' : 'Desk settled'}
-                  </span>
                   <span className="font-display font-[700] text-[13px] text-white/60 tabular-nums">
                     {r.kind === 'trade'
                       ? `cost ${fmt2(r.costMicro / DUSDC_MULTIPLIER)} DUSDC`
                       : `paid ${fmt2(r.payoutMicro / DUSDC_MULTIPLIER)} DUSDC`}
                   </span>
-                  {r.kind === 'trade' && r.leverage1e9 > 0 && (
-                    <span className="font-mono text-[10px] text-white/35">{(r.leverage1e9 / FLOAT_SCALING_624).toFixed(0)}× · pays up to {fmt2(r.qtyMicro / DUSDC_MULTIPLIER)}</span>
-                  )}
                   <span className="flex-1" />
                   <span className="font-mono text-[11px] text-white/30 tabular-nums">{r.ts > 0 && now > 0 ? ago(r.ts, now) : ''}</span>
                   {r.digest && (
