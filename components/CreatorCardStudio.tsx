@@ -204,27 +204,38 @@ export default function CreatorCardStudio() {
     [marketId, options?.markets],
   );
 
+  const hasFreshPreview = useCallback(() => {
+    if (!preview) return false;
+    if (Date.now() < preview.cutoffMs) return true;
+    setComposeUrl('');
+    setError('That line just closed. Loading the next live market…');
+    void loadOptions().then(() => {
+      setNotice('A fresh line is ready. Review it, then share again.');
+    });
+    return false;
+  }, [loadOptions, preview]);
+
   const downloadCard = useCallback(() => {
-    if (!preview) return;
+    if (!preview || !hasFreshPreview()) return;
     const link = document.createElement('a');
     link.href = `data:image/png;base64,${preview.cardPngBase64}`;
     link.download = cardFilename(preview);
     link.click();
     setNotice('Card downloaded. Attach it to the matching post copy.');
-  }, [preview]);
+  }, [hasFreshPreview, preview]);
 
   const copyPost = useCallback(async () => {
-    if (!preview) return;
+    if (!preview || !hasFreshPreview()) return;
     try {
       await navigator.clipboard.writeText(preview.caption);
       setNotice('Post copy saved to your clipboard.');
     } catch {
       setNotice('Copy was blocked. Select the post text below and copy it manually.');
     }
-  }, [preview]);
+  }, [hasFreshPreview, preview]);
 
   const openX = useCallback(async () => {
-    if (!preview) return;
+    if (!preview || !hasFreshPreview()) return;
     const url = `https://x.com/intent/post?text=${encodeURIComponent(preview.caption)}`;
     setComposeUrl(url);
     let copied = false;
@@ -246,10 +257,10 @@ export default function CreatorCardStudio() {
         : 'Card downloaded. Attach it in the X composer, then post.',
     );
     if (!opened) setNotice('Your browser blocked X. Use the Open X link below.');
-  }, [preview]);
+  }, [hasFreshPreview, preview]);
 
   const shareCard = useCallback(async () => {
-    if (!preview) return;
+    if (!preview || !hasFreshPreview()) return;
     const file = new File([base64Blob(preview.cardPngBase64)], cardFilename(preview), { type: 'image/png' });
     if (navigator.share && (!navigator.canShare || navigator.canShare({ files: [file] }))) {
       try {
@@ -261,7 +272,7 @@ export default function CreatorCardStudio() {
       }
     }
     await openX();
-  }, [openX, preview]);
+  }, [hasFreshPreview, openX, preview]);
 
   if (!account?.address || readiness.loading || readiness.error || !readiness.codeId || !readiness.binding) {
     const gate = !account?.address
