@@ -21,7 +21,7 @@ export default function CreatorStudioPage() {
         <div className="mx-auto w-full max-w-[1320px] px-4 sm:px-8">
           <header className="max-w-3xl pb-8 pt-5 sm:pb-10 sm:pt-8">
             <div className="cs-eyebrow">Creator Studio</div>
-            <h1 className="mt-4 max-w-[760px] text-balance font-display text-[clamp(2.35rem,6vw,5.3rem)] font-[700] leading-[0.98] tracking-[-0.072em] text-[var(--cs-text)]">
+            <h1 className="mt-4 max-w-[760px] text-balance font-display text-[clamp(2.15rem,4.2vw,4.15rem)] font-[700] leading-[1.02] tracking-[-0.064em] text-[var(--cs-text)]">
               Make the call. Let the market answer.
             </h1>
             <p className="mt-5 max-w-[58ch] text-pretty text-[14px] leading-relaxed text-[var(--cs-muted)] sm:text-[16px]">
