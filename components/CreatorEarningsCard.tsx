@@ -361,10 +361,10 @@ export default function CreatorEarningsCard() {
                 </div>
                 <a
                   href="/creator/studio"
-                  className="group/first-card mt-5 flex min-h-11 w-full items-center justify-between rounded-full bg-white py-2 pl-5 pr-2 font-display text-[11px] font-[700] text-[#120f0d] transition-[background-color,transform] duration-300 hover:bg-[#f4eee6] active:scale-[0.98]"
+                  className="group/first-card mt-5 flex min-h-12 w-full items-center justify-between rounded-full bg-vermilion py-2 pl-5 pr-2 font-display text-[11px] font-[700] text-white transition-[background-color,transform] duration-300 hover:bg-vermilion-d active:scale-[0.98]"
                 >
                   <span>Create your first card</span>
-                  <span aria-hidden="true" className="grid h-7 w-7 place-items-center rounded-full bg-[#120f0d]/[0.08] transition-transform duration-300 group-hover/first-card:translate-x-0.5">→</span>
+                  <span aria-hidden="true" className="grid h-8 w-8 place-items-center rounded-full bg-white/15 transition-transform duration-300 group-hover/first-card:translate-x-0.5">→</span>
                 </a>
               </>
             )}
