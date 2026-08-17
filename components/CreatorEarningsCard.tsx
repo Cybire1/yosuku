@@ -279,7 +279,7 @@ export default function CreatorEarningsCard() {
       id="creator-mode"
       data-theme="dark"
       aria-labelledby="creator-earnings-title"
-      className="rounded-[30px] bg-[radial-gradient(circle_at_8%_0%,rgba(224,77,38,0.38),rgba(255,255,255,0.09)_34%,rgba(255,255,255,0.035)_72%)] p-px shadow-[0_28px_80px_-48px_rgba(224,77,38,0.72)]"
+      className="rounded-[30px] bg-[#080706]"
     >
       <div className="relative overflow-hidden rounded-[29px] bg-[#080706] px-5 py-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] sm:px-8 sm:py-7">
         <div aria-hidden="true" className="pointer-events-none absolute -right-20 -top-28 h-72 w-72 rounded-full bg-vermilion/[0.055]" />
