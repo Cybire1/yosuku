@@ -292,9 +292,9 @@ export default function CreatorEarningsCard() {
             </span>
             <div>
               <h2 id="creator-earnings-title" className="font-display text-[13px] font-[650] tracking-[-0.02em] text-white">
-                Creator ledger
+                Creator earnings
               </h2>
-              <p className="font-mono text-[8px] uppercase tracking-[0.18em] text-white/35">Protocol-paid · owner controlled</p>
+              <p className="font-mono text-[8px] uppercase tracking-[0.18em] text-white/35">Your share of fees · paid on-chain</p>
             </div>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
@@ -331,7 +331,7 @@ export default function CreatorEarningsCard() {
 
             <div className="mt-6 flex items-center gap-2.5 font-mono text-[9px] uppercase tracking-[0.13em] text-white/40">
               <span aria-hidden="true" className={`h-1.5 w-1.5 rounded-full ${hasEarnings ? 'bg-profit shadow-[0_0_14px_rgba(52,211,153,0.8)]' : 'bg-vermilion shadow-[0_0_14px_rgba(224,77,38,0.65)]'}`} />
-              {hasEarnings ? 'Funds ready for withdrawal' : 'Waiting for the first attributed bet'}
+              {hasEarnings ? 'Earnings ready to claim' : 'Ready — create a card to start earning'}
             </div>
           </div>
 
@@ -339,8 +339,8 @@ export default function CreatorEarningsCard() {
             {hasEarnings ? (
               <>
                 <div>
-                  <div className="font-display text-lg font-[650] tracking-[-0.035em] text-white">Ready when you are.</div>
-                  <p className="mt-2 text-[11px] leading-relaxed text-white/40">Your wallet signs the claim. The protocol pays it directly; Yosuku never takes custody.</p>
+                  <div className="font-display text-lg font-[650] tracking-[-0.035em] text-white">Your earnings are ready.</div>
+                  <p className="mt-2 text-[11px] leading-relaxed text-white/40">Claim them directly to your wallet. Yosuku never holds the payout.</p>
                 </div>
                 <button
                   onClick={claim}
@@ -355,13 +355,17 @@ export default function CreatorEarningsCard() {
             ) : (
               <>
                 <div>
-                  <div className="font-display text-lg font-[650] tracking-[-0.035em] text-white">Your code is live.</div>
-                  <p className="mt-2 text-[11px] leading-relaxed text-white/40">Every attributed bet adds its creator fee here automatically.</p>
+                  <div className="font-mono text-[8px] uppercase tracking-[0.18em] text-vermilion">Your next step</div>
+                  <div className="mt-2 text-balance font-display text-lg font-[650] tracking-[-0.035em] text-white">Create a card. Share your prediction.</div>
+                  <p className="mt-2 max-w-[38ch] text-pretty text-[11px] leading-relaxed text-white/45">When someone bets from your card, your share of the fee appears in this balance automatically.</p>
                 </div>
-                <div className="mt-5 space-y-3 border-t border-white/[0.06] pt-4 font-mono text-[9px] uppercase tracking-[0.12em] text-white/35">
-                  <div className="flex items-center justify-between gap-4"><span>Code status</span><span className="text-profit">Active</span></div>
-                  <div className="flex items-center justify-between gap-4"><span>Next action</span><span className="text-white/60">Share a call</span></div>
-                </div>
+                <a
+                  href="/creator/studio"
+                  className="group/first-card mt-5 flex min-h-11 w-full items-center justify-between rounded-full bg-white py-2 pl-5 pr-2 font-display text-[11px] font-[700] text-[#120f0d] transition-[background-color,transform] duration-300 hover:bg-[#f4eee6] active:scale-[0.98]"
+                >
+                  <span>Create your first card</span>
+                  <span aria-hidden="true" className="grid h-7 w-7 place-items-center rounded-full bg-[#120f0d]/[0.08] transition-transform duration-300 group-hover/first-card:translate-x-0.5">→</span>
+                </a>
               </>
             )}
           </aside>
@@ -378,9 +382,9 @@ export default function CreatorEarningsCard() {
 
         <footer className="relative grid grid-cols-1 gap-3 border-t border-white/[0.07] pt-4 sm:grid-cols-3 sm:gap-5">
           {[
-            ['Ownership', 'Your creator code'],
+            ['Ownership', 'Owned by you'],
             ['Recovery', recoveryLabel],
-            ['Settlement', 'Direct on-chain'],
+            ['Fee payout', 'Direct to this balance'],
           ].map(([label, value]) => (
             <div key={label} className="flex items-center justify-between gap-4 sm:block">
               <div className="font-mono text-[8px] uppercase tracking-[0.17em] text-white/25">{label}</div>
