@@ -19,14 +19,8 @@ export default function CreatorStudioPage() {
 
       <main className="creator-studio min-h-[100dvh] pb-20 pt-[96px] sm:pb-28 sm:pt-[122px]">
         <div className="mx-auto w-full max-w-[1320px] px-4 sm:px-8">
-          <header className="max-w-3xl pb-8 pt-5 sm:pb-10 sm:pt-8">
+          <header className="pb-5 pt-2 sm:pb-6 sm:pt-3">
             <div className="cs-eyebrow">Creator Studio</div>
-            <h1 className="mt-4 max-w-[760px] text-balance font-display text-[clamp(2.15rem,4.2vw,4.15rem)] font-[700] leading-[1.02] tracking-[-0.064em] text-[var(--cs-text)]">
-              Make the call. Let the market answer.
-            </h1>
-            <p className="mt-5 max-w-[58ch] text-pretty text-[14px] leading-relaxed text-[var(--cs-muted)] sm:text-[16px]">
-              Choose a Bitcoin line, share the card on X, and earn when your audience trades it.
-            </p>
           </header>
 
           <CreatorCardStudio />
