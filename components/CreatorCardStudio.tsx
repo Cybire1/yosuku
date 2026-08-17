@@ -143,9 +143,10 @@ export default function CreatorCardStudio() {
       const sorted = [...(next.markets || [])].sort(
         (a, b) => (cadenceOrder[a.cadence] ?? 9) - (cadenceOrder[b.cadence] ?? 9),
       );
+      const defaultMarket = sorted.find((market) => market.cadence === '5m') ?? sorted[0];
       const normalized = { ...next, markets: sorted };
       setOptions(normalized);
-      setMarketId((current) => sorted.some((market) => market.id === current) ? current : (sorted[0]?.id || ''));
+      setMarketId((current) => sorted.some((market) => market.id === current) ? current : (defaultMarket?.id || ''));
       setStrike((current) => current || String(next.coinflip));
       if (!sorted.length) setPreview(null);
     } catch (reason) {
