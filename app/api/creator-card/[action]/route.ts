@@ -116,9 +116,17 @@ export async function POST(
     );
   }
 
-  const body = await req.json().catch(() => null) as { marketId?: unknown; strikeUsd?: unknown } | null;
+  const body = await req.json().catch(() => null) as {
+    marketId?: unknown; strikeUsd?: unknown; creatorHandle?: unknown;
+  } | null;
   const marketId = typeof body?.marketId === 'string' ? body.marketId : '';
   const strikeUsd = Number(body?.strikeUsd);
+  // The handle is drawn onto the card, so it is untrusted display text reaching an image
+  // renderer. Constrain it to what X actually allows rather than passing it through: 1-15
+  // characters, letters, digits and underscore. Anything else is dropped, not rejected, so a
+  // bad handle costs the creator their byline and never their card.
+  const rawHandle = typeof body?.creatorHandle === 'string' ? body.creatorHandle.replace(/^@/, '') : '';
+  const creatorHandle = /^[A-Za-z0-9_]{1,15}$/.test(rawHandle) ? rawHandle : undefined;
   if (!/^0x[0-9a-fA-F]{64}$/.test(marketId)) {
     return NextResponse.json({ error: 'Choose a live market.' }, { status: 400, headers: noStoreHeaders });
   }
@@ -129,6 +137,6 @@ export async function POST(
   return forward('preview', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ marketId, strikeUsd: Math.round(strikeUsd) }),
+    body: JSON.stringify({ marketId, strikeUsd: Math.round(strikeUsd), creatorHandle }),
   });
 }

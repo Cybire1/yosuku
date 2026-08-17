@@ -182,7 +182,13 @@ export default function CreatorCardStudio() {
         const response = await fetch('/api/creator-card/preview', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ marketId, strikeUsd: strikeNumber }),
+          // Send the linked X handle so the card carries a "CALLED BY @them" byline. A card that
+          // markets the creator gets shared; one that only markets us does not.
+          body: JSON.stringify({
+            marketId,
+            strikeUsd: strikeNumber,
+            creatorHandle: readiness.binding?.handle ?? undefined,
+          }),
           cache: 'no-store',
         });
         const data = await response.json().catch(() => ({}));
@@ -198,7 +204,10 @@ export default function CreatorCardStudio() {
       }
     }, 320);
     return () => window.clearTimeout(timer);
-  }, [marketId, ready, strike]);
+    // readiness.binding.handle is in the deps on purpose: it loads asynchronously, and without it
+    // the first preview renders before the handle arrives and never re-renders, so the creator
+    // silently gets a card with no byline.
+  }, [marketId, ready, strike, readiness.binding?.handle]);
 
   const selectedMarket = useMemo(
     () => options?.markets.find((market) => market.id === marketId) ?? null,
