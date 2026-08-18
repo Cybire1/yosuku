@@ -516,15 +516,16 @@ const SLIDES: { id: string; section: string; paper?: string; render: () => React
     render: () => (
       <div className="w-full h-full flex flex-col justify-center">
         <Kicker>How this pays, long term</Kicker>
-        <M variants={rise} className={`${H1}`} style={DENSE}>Free to bet.<br />Paid at <Emph delay={0.85}>scale</Emph>.</M>
+        <M variants={rise} className={`${H1}`} style={DENSE}>The rail is <Emph delay={0.85}>already on</Emph>.</M>
         <div className="mt-8 flex gap-12" style={{ maxWidth: 1000 }}>
           <SpecPanel title="THE MODEL" w={430} rows={[
-            ['Take rate', '0.3% of notional'],
-            ['Per user', '~$2,500 traded / yr'],
-            ['Revenue', '~$8 / user / yr', true],
-            ['Base bet', 'Always free', true],
+            ['Rail', "DeepBook's own builder code"],
+            ['Rate', 'min(10% of trade fee, 0.5% size)'],
+            ['Set by', 'the protocol, not us', true],
+            ['Status', 'Live, collecting today', true],
           ]} />
           <SpecPanel title="ANNUAL REVENUE AT SCALE" badge="ILLUSTRATIVE" badgeTone="verm" w={430} rows={[
+            ['Assumes', '~0.3% effective take'],
             ['10,000 users', '~$80k / yr'],
             ['100,000 users', '~$800k / yr'],
             ['1,000,000 users', '~$8M / yr', true],
@@ -532,7 +533,7 @@ const SLIDES: { id: string; section: string; paper?: string; render: () => React
           ]} />
         </div>
         <M variants={rise} className="mt-7 font-mono" style={{ maxWidth: '86ch', fontSize: 14.5, color: BODY, lineHeight: 1.6 }}>
-          Illustrative. Our 0.3% take is a fraction of Kalshi's ~1.14% and sits under DeepBook's builder-fee cap. Base bets stay free, the builder fee flips on at mainnet, and memory passes plus copy-trade subscriptions add marketplace revenue on top.
+          Illustrative. We do not set the rate. DeepBook adds its builder fee on top of the trade and routes it to the code that brought the trade, capped at the smaller of 10% of the trading fee or 0.5% of size, which lands well under Kalshi's ~1.14% take. It is running today, not waiting on mainnet. Creators can hold their own code and are paid the same way, directly, without us in the middle. The scale figures below assume an effective take we do not control, so treat them as a shape, not a forecast. Memory passes and copy-trade subscriptions add marketplace revenue on top.
         </M>
       </div>
     ),
