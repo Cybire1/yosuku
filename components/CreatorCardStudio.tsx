@@ -57,7 +57,11 @@ type Readiness = {
   error: string;
   codeId: string | null;
   binding: XBinding | null;
+  /** Wallet the X account is actually linked to, when it is not the connected one. */
+  mismatch: string | null;
 };
+
+const short = (a: string) => `${a.slice(0, 6)}\u2026${a.slice(-4)}`;
 
 const money = (value: number) => '$' + Math.round(value).toLocaleString('en-US');
 const cadenceName = (value: string) => value === '1h' ? '1 hour' : value === '5m' ? '5 minutes' : value === '1m' ? '1 minute' : value;
@@ -80,6 +84,7 @@ export default function CreatorCardStudio() {
     error: '',
     codeId: null,
     binding: null,
+    mismatch: null,
   });
   const [options, setOptions] = useState<StudioOptions | null>(null);
   const [marketId, setMarketId] = useState('');
@@ -94,7 +99,7 @@ export default function CreatorCardStudio() {
 
   const checkReadiness = useCallback(async () => {
     if (!account?.address) {
-      setReadiness({ loading: false, error: '', codeId: null, binding: null });
+      setReadiness({ loading: false, error: '', codeId: null, binding: null, mismatch: null });
       return;
     }
     setReadiness((current) => ({ ...current, loading: true, error: '' }));
@@ -105,14 +110,21 @@ export default function CreatorCardStudio() {
         fetch(`/api/claim/x/me?wallet=${encodeURIComponent(account.address)}`, { cache: 'no-store' }),
       ]);
       const xData = xResponse.ok ? await xResponse.json() as { binding?: XBinding | null } : null;
-      const binding = xData?.binding?.address?.toLowerCase() === account.address.toLowerCase()
-        ? xData.binding
-        : null;
+      // Gate on the handle, the way XWalletCard, StrategyXBar and xHandle.ts already do.
+      // Requiring binding.address === connected wallet locked out accounts that ARE linked: the
+      // on-chain HandleRegistry stores the signing wallet while the relay reports the trading
+      // account, so the two disagree. The address is kept as `mismatch` so anyone genuinely on
+      // the wrong wallet is told which one to switch to, instead of being told to link an
+      // account they already linked.
+      const raw = xData?.binding ?? null;
+      const binding = raw?.handle ? raw : null;
+      const sameWallet = raw?.address?.toLowerCase() === account.address.toLowerCase();
       setReadiness({
         loading: false,
         error: '',
         codeId: recovery?.builderCode ?? directCode,
         binding,
+        mismatch: raw && !binding && raw.address && !sameWallet ? raw.address : null,
       });
     } catch (reason) {
       setReadiness({
@@ -120,6 +132,7 @@ export default function CreatorCardStudio() {
         error: reason instanceof Error ? reason.message : 'Could not check creator mode.',
         codeId: null,
         binding: null,
+        mismatch: null,
       });
     }
   }, [account?.address, client]);
@@ -315,7 +328,11 @@ export default function CreatorCardStudio() {
               }
             : {
                 title: 'Link the X account you publish from.',
-                body: 'The relay uses this link to route every attributed fee to your creator code.',
+                body: readiness.mismatch
+                  ? `That X account is linked to ${short(readiness.mismatch)}. `
+                    + `You are connected as ${short(account.address)}. `
+                    + 'Switch to the linked wallet, or link this one.'
+                  : 'The relay uses this link to route every attributed fee to your creator code.',
                 action: <a href="/portfolio#x-wallet" className="cs-primary-button">Link X in Portfolio</a>,
               };
 
