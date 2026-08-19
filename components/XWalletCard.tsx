@@ -73,6 +73,8 @@ export default function XWalletCard() {
   const [needsFaucet, setNeedsFaucet] = useState(false);
   const [needsWalletReconnect, setNeedsWalletReconnect] = useState(false);
   const reconnectWalletRef = useRef(currentWallet);
+  // read inside fund() without adding a dep that would rebuild the callback mid-flight
+  const walletMismatchRef = useRef(false);
 
   // Enoki keeps exposing the deterministic zkLogin address after its signing session expires.
   // Reads still work, but a later write tries to open Google auth after transaction preparation,
@@ -153,6 +155,12 @@ export default function XWalletCard() {
     if (!address || busy) return;
     setErr(''); setOk(''); setNeedsFaucet(false); setBusy('fund');
     try {
+      // Refuse at the source, not just in the UI. A deposit into a wallet the X account does not
+      // route to is money the relay can never spend and the user cannot reach without switching
+      // wallets. The banner explains it; this makes it impossible to do by accident.
+      if (walletMismatchRef.current) {
+        throw new Error('This X account bets from a different wallet. Connect that wallet before funding.');
+      }
       if (needsWalletReconnect) throw new Error('Your Google wallet session expired. Reconnect it, then try again.');
       const n = parseFloat(amount || '0');
       if (!Number.isFinite(n) || n <= 0) throw new Error('Enter an amount to fund.');
@@ -266,6 +274,18 @@ export default function XWalletCard() {
   // touch the balance. Until then, the old route remains live and the funds remain unchanged.
   const needsLink = !!address && !!me?.signedIn && (!routed || !sessionMatchesBinding);
 
+  // THE MONEY-LOSING CASE. The relay routes a reply by X account, and that account points at ONE
+  // wallet. Fund a different wallet and the deposit lands in a ledger the relay will never spend
+  // from: the balance reads fine on screen, every reply still fails, and the only way back out is
+  // to reconnect the other wallet. So when the binding names a wallet that is not the connected
+  // one, funding is blocked outright and the user is told which wallet to connect, or offered the
+  // unlink. Never let them deposit into the wrong side of a mismatch.
+  const boundWallet = me?.binding?.address || null;
+  const walletMismatch = Boolean(
+    address && boundWallet && boundWallet.toLowerCase() !== address.toLowerCase(),
+  );
+  walletMismatchRef.current = walletMismatch;
+
   const link = useCallback(async () => {
     if (!address || !me?.authorId || busy) return;
     setErr(''); setOk(''); setBusy('link');
@@ -376,7 +396,25 @@ export default function XWalletCard() {
         {/* WHO this balance bets for. The relay routes a reply by X account, so the binding is the
             thing that makes a funded balance reachable from a tweet. It used to sit in small gray
             type UNDER the fund controls, which read as a footnote instead of the first step. */}
-        {!loadingMe && (needsLink ? (
+        {!loadingMe && (walletMismatch ? (
+          // Hard stop. This X account routes to a different wallet, so anything funded here is
+          // stranded: visible on screen, unreachable by every reply. Name the wallet they need
+          // and give them the two ways out. Funding stays disabled until one of them is taken.
+          <div className="mb-4 rounded-lg border border-[#E04D26]/40 bg-[#E04D26]/[0.09] px-3.5 py-3">
+            <div className="text-[13px] font-bold text-[#1A1612]">
+              Wrong wallet for @{me?.binding?.handle || 'this X account'}.
+            </div>
+            <p className="mt-1 text-[12px] leading-snug text-[#6B6353]">
+              It bets from <span className="font-mono text-[#1A1612]">{short(boundWallet!)}</span>, and you are
+              connected as <span className="font-mono text-[#1A1612]">{short(address!)}</span>. Funding this one
+              would leave the money where no reply can spend it.
+            </p>
+            <p className="mt-2 text-[12px] leading-snug text-[#6B6353]">
+              Switch to <span className="font-mono text-[#1A1612]">{short(boundWallet!)}</span> in your wallet to
+              fund and cash out. Unlinking has to be signed by that wallet too, so it cannot be done from here.
+            </p>
+          </div>
+        ) : needsLink ? (
           // Signed in with X, but the relay does not route this wallet yet. The dangerous state:
           // funding here produces a balance no tweet can spend, and until now nothing said so.
           <div className="mb-4 rounded-lg border border-[#E04D26]/30 bg-[#E04D26]/[0.07] px-3.5 py-3">
