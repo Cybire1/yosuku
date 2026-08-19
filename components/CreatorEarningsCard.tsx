@@ -104,7 +104,7 @@ export default function CreatorEarningsCard() {
         // A normal wallet already has its own portable recovery method, so direct ownership is
         // correct. The signer remains the immutable fee owner.
         await submit(() => buildCreateCreatorCodeTx());
-        toast('Creator code minted — it is yours, not ours');
+        toast('Creator code minted. It is yours, not ours');
         await refresh();
         return;
       }
@@ -331,7 +331,7 @@ export default function CreatorEarningsCard() {
 
             <div className="mt-6 flex items-center gap-2.5 font-mono text-[9px] uppercase tracking-[0.13em] text-white/40">
               <span aria-hidden="true" className={`h-1.5 w-1.5 rounded-full ${hasEarnings ? 'bg-profit shadow-[0_0_14px_rgba(52,211,153,0.8)]' : 'bg-vermilion shadow-[0_0_14px_rgba(224,77,38,0.65)]'}`} />
-              {hasEarnings ? 'Earnings ready to claim' : 'Ready — create a card to start earning'}
+              {hasEarnings ? 'Earnings ready to claim' : 'Create a card to start earning'}
             </div>
           </div>
 
