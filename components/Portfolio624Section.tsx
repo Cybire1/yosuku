@@ -411,14 +411,7 @@ export default function Portfolio624Section() {
           // WALLET, not the account, so it needs no wrapper, and it is exactly what someone with
           // no balance is here to do. Hiding it until an account exists put the one useful action
           // behind the thing it helps you get.
-          <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-6">
-            <a
-              href="/beta"
-              className="font-mono text-[11px] uppercase tracking-[0.14em] text-vermilion hover:text-white transition-colors"
-              data-cursor="hover"
-            >
-              Set it up on the beta wing →
-            </a>
+          <div className="flex flex-wrap items-center gap-3 px-5 py-6">
             <CrossChainDeposit />
           </div>
         ) : (
