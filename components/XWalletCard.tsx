@@ -3,11 +3,14 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Twitter, ArrowUpRight, ChevronDown, RefreshCw, Unlink } from 'lucide-react';
 import {
+  useAccounts,
   useConnectWallet,
   useCurrentAccount,
   useCurrentWallet,
   useDisconnectWallet,
   useSignPersonalMessage,
+  useSwitchAccount,
+  useWallets,
 } from '@mysten/dapp-kit';
 import { getSession, isEnokiWallet } from '@mysten/enoki';
 import { useSmartSubmit } from '@/lib/sui/useSmartSubmit';
@@ -53,6 +56,11 @@ export default function XWalletCard() {
   const { currentWallet } = useCurrentWallet();
   const { mutateAsync: disconnectWallet } = useDisconnectWallet();
   const { mutateAsync: connectWallet } = useConnectWallet();
+  const { mutateAsync: switchAccount } = useSwitchAccount();
+  // Everything the browser already knows about the user's wallets. Used to answer "which wallet
+  // is that address?" by name, instead of handing them a hex string to match by eye.
+  const wallets = useWallets();
+  const accounts = useAccounts();
   // No fallback address. A hardcoded one was left here as an audit scaffold, and because it is
   // an address that exists but holds nothing, every read below silently answered about IT rather
   // than about the person looking at the screen: balance $0.00, no coins, and "Not enough DUSDC
@@ -286,6 +294,29 @@ export default function XWalletCard() {
   );
   walletMismatchRef.current = walletMismatch;
 
+  // Find the bound wallet FOR them. If it is an account in this browser we can name the wallet and
+  // switch to it in one click; if it is merely authorized we can still say which wallet holds it.
+  // Only when nothing knows the address do we fall back to showing hex and asking them to look.
+  const boundLower = boundWallet?.toLowerCase() ?? null;
+  const boundAccount = boundLower
+    ? accounts.find((a) => a.address.toLowerCase() === boundLower) ?? null
+    : null;
+  const boundWalletName = boundLower
+    ? wallets.find((w) => w.accounts.some((a) => a.address.toLowerCase() === boundLower))?.name ?? null
+    : null;
+
+  const switchToBound = useCallback(async () => {
+    if (!boundAccount || busy) return;
+    setErr(''); setOk('');
+    try {
+      await switchAccount({ account: boundAccount });
+      await refreshMe();
+      await refreshBalance();
+    } catch (e) {
+      setErr(friendlyWalletError(e instanceof Error ? e.message : String(e)));
+    }
+  }, [boundAccount, busy, refreshBalance, refreshMe, switchAccount]);
+
   const link = useCallback(async () => {
     if (!address || !me?.authorId || busy) return;
     setErr(''); setOk(''); setBusy('link');
@@ -405,13 +436,39 @@ export default function XWalletCard() {
               Wrong wallet for @{me?.binding?.handle || 'this X account'}.
             </div>
             <p className="mt-1 text-[12px] leading-snug text-[#6B6353]">
-              It bets from <span className="font-mono text-[#1A1612]">{short(boundWallet!)}</span>, and you are
-              connected as <span className="font-mono text-[#1A1612]">{short(address!)}</span>. Funding this one
-              would leave the money where no reply can spend it.
+              It bets from{' '}
+              {boundWalletName
+                ? <><span className="font-bold text-[#1A1612]">{boundWalletName}</span>{' '}
+                    <span className="font-mono text-[#1A1612]">{short(boundWallet!)}</span></>
+                : <span className="font-mono text-[#1A1612]">{short(boundWallet!)}</span>}
+              , and you are connected as <span className="font-mono text-[#1A1612]">{short(address!)}</span>.
+              Funding this one would leave the money where no reply can spend it.
             </p>
-            <p className="mt-2 text-[12px] leading-snug text-[#6B6353]">
-              Switch to <span className="font-mono text-[#1A1612]">{short(boundWallet!)}</span> in your wallet to
-              fund and cash out. Unlinking has to be signed by that wallet too, so it cannot be done from here.
+            <div className="mt-2.5 flex flex-wrap items-center gap-2">
+              {boundAccount ? (
+                <button
+                  onClick={switchToBound}
+                  disabled={!!busy}
+                  className="inline-flex items-center gap-2 rounded-xl border border-[#E04D26]/45 px-4 py-2 text-[12px] font-bold text-[#E04D26] transition-colors hover:bg-[#E04D26]/10 disabled:opacity-60"
+                >
+                  Switch to {boundWalletName || 'that wallet'}
+                </button>
+              ) : (
+                <button
+                  onClick={() => { void navigator.clipboard?.writeText(boundWallet!); setOk('Address copied.'); }}
+                  className="inline-flex items-center gap-2 rounded-xl border border-[#C9BFA6]/60 px-4 py-2 text-[12px] font-bold text-[#1A1612] transition-colors hover:bg-[#E04D26]/[0.06]"
+                >
+                  Copy {short(boundWallet!)}
+                </button>
+              )}
+            </div>
+            <p className="mt-2 text-[11px] leading-snug text-[#6B6353]">
+              {boundAccount
+                ? 'One click switches you. Your balance is untouched either way.'
+                : boundWalletName
+                  ? `Open ${boundWalletName} and select that address.`
+                  : 'That wallet is not connected in this browser. Open the wallet that holds it and connect it here.'}
+              {' '}Unlinking has to be signed by that wallet too, so it cannot be done from here.
             </p>
           </div>
         ) : needsLink ? (
