@@ -236,9 +236,9 @@ export default function XWalletCard() {
     try {
       const r = await fetch('/api/faucet', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ address }) });
       const j = await r.json().catch(() => ({}));
-      if (j?.alreadyFunded) { setOk('You already have test DUSDC. Hit Fund X wallet.'); setNeedsFaucet(false); return; }
+      if (j?.alreadyFunded) { setOk('You already have test DUSDC. Hit Fund X-Predict wallet.'); setNeedsFaucet(false); return; }
       if (!r.ok && !j?.ok) throw new Error(j?.error ? String(j.error).slice(0, 120) : 'Faucet is tapped out, try again shortly.');
-      setOk('Test DUSDC on the way. Give it a few seconds, then Fund X wallet.');
+      setOk('Test DUSDC on the way. Give it a few seconds, then Fund X-Predict wallet.');
       setNeedsFaucet(false);
     } catch (e) {
       setErr(friendlyWalletError(e instanceof Error ? e.message : String(e)));
@@ -369,7 +369,7 @@ export default function XWalletCard() {
     <section id="x-wallet">
       <div className="mb-3 flex items-center gap-2">
         <Twitter className="h-4 w-4 text-[#E04D26]" />
-        <h2 className="font-display text-sm font-[700] uppercase tracking-wide text-[#1A1612]">X wallet</h2>
+        <h2 className="font-display text-sm font-[700] uppercase tracking-wide text-[#1A1612]">X-Predict wallet</h2>
       </div>
 
       <div className="ledger-plate">
