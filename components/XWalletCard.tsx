@@ -51,7 +51,7 @@ function friendlyWalletError(raw: string): string {
   return raw.slice(0, 160);
 }
 
-export default function XWalletCard() {
+export default function XWalletCard({ compact = false }: { compact?: boolean } = {}) {
   const account = useCurrentAccount();
   const { currentWallet } = useCurrentWallet();
   const { mutateAsync: disconnectWallet } = useDisconnectWallet();
@@ -194,27 +194,28 @@ export default function XWalletCard() {
         total += c.balance;
       }
 
-      if (total < micro) {
-        if (held >= micro) {
-          // Held but not spendable HERE: the balance lives in the address balance, and this
-          // transaction merges and splits explicit coin objects. Say that, rather than send
-          // someone to the faucet they do not need. Fixing it properly means spending via
-          // coinWithBalance, which injects coin::redeem_funds / send_funds and so needs those
-          // targets whitelisted in the yosuku-vault-624 gas policy first.
-          throw new Error(
-            `Your ${(Number(held) / DUSDC_MUL).toFixed(2)} DUSDC is sitting in your account balance rather than in spendable coins, so this top-up can't reach it yet. Send yourself any amount of DUSDC to turn it into a coin, then try again.`,
-          );
-        }
+      // Coin objects came up short. That is NOT the same as being broke: cashing out of the
+      // 6-24 trading account credits the address balance, so the most ordinary route into this
+      // screen arrives holding real money with nothing to merge. This used to dead-end with an
+      // instruction to go send yourself a coin. Spend the balance directly instead.
+      const fromAddressBalance = total < micro;
+      if (fromAddressBalance && held < micro) {
         setNeedsFaucet(true);
         throw new Error('Not enough DUSDC in your wallet. Grab some test DUSDC first.');
       }
-      await submit(() =>
-        buildEnableTweetTrading624({
-          coinIds: picked.map((c) => c.coinObjectId),
-          amountMicro: micro,
-          maxMarginMicro: micro,
-          maxLeverage1e9: TWEET_MAX_LEVERAGE_1E9,
-        }),
+      await submit(
+        () =>
+          buildEnableTweetTrading624({
+            coinIds: picked.map((c) => c.coinObjectId),
+            amountMicro: micro,
+            maxMarginMicro: micro,
+            maxLeverage1e9: TWEET_MAX_LEVERAGE_1E9,
+            fromAddressBalance,
+          }),
+        // An address-balance spend injects coin::redeem_funds, which the yosuku-vault-624 gas
+        // policy does not allowlist. Sponsorship would decline it after the signature, so pay
+        // from the wallet and keep it to a single popup.
+        { walletOnly: fromAddressBalance },
       );
       setOk(`Funded $${(Number(micro) / DUSDC_MUL).toFixed(2)}. Reply YES or NO to a live line to bet it.`);
     } catch (e) {
@@ -418,12 +419,16 @@ export default function XWalletCard() {
 
   return (
     <section id="x-wallet">
-      <div className="mb-3 flex items-center gap-2">
-        <Twitter className="h-4 w-4 text-[#E04D26]" />
-        <h2 className="font-display text-sm font-[700] uppercase tracking-wide text-[#1A1612]">X-Predict wallet</h2>
-      </div>
+      {/* Nested in the portfolio plate this heading is a card-in-a-card and the balance below it
+          repeats the row that opened it, so both are dropped in compact mode. */}
+      {!compact && (
+        <div className="mb-3 flex items-center gap-2">
+          <Twitter className="h-4 w-4 text-[#E04D26]" />
+          <h2 className="font-display text-sm font-[700] uppercase tracking-wide text-[#1A1612]">X-Predict wallet</h2>
+        </div>
+      )}
 
-      <div className="ledger-plate">
+      <div className={compact ? '' : 'ledger-plate'}>
         {/* WHO this balance bets for. The relay routes a reply by X account, so the binding is the
             thing that makes a funded balance reachable from a tweet. It used to sit in small gray
             type UNDER the fund controls, which read as a footnote instead of the first step. */}
@@ -532,8 +537,15 @@ export default function XWalletCard() {
             )}
           </div>
         ) : (
-          <div className="mb-4 rounded-lg border border-[#E04D26]/30 bg-[#E04D26]/[0.07] px-3.5 py-3">
-            <div className="text-[13px] font-bold text-[#1A1612]">Connect X first, then fund.</div>
+          // An alarm-coloured slab for a state that is not an error, with copy that told a funded
+          // user to fund. Quiet inline line now, and it only says "then fund" when the balance is
+          // actually empty; with money already here the missing step is the link, not the money.
+          <div className={balNum && balNum > 0
+            ? 'mb-4'
+            : 'mb-4 rounded-lg border border-[#E04D26]/30 bg-[#E04D26]/[0.07] px-3.5 py-3'}>
+            <div className="text-[13px] font-bold text-[#1A1612]">
+              {balNum && balNum > 0 ? 'Link your X account to bet with this.' : 'Connect X first, then fund.'}
+            </div>
             {/* explicit hex, not text-black/text-[#1A1612]: the theme maps those onto the foreground
                 colour, which rendered this button white-on-white in dark mode. */}
             <a
@@ -567,17 +579,22 @@ export default function XWalletCard() {
           !needsWalletReconnect && <div className="text-sm text-[#6B6353]">Connect your Sui wallet to fund your X betting balance.</div>
         ) : (
           <>
-            {/* balance + cash out */}
+            {/* balance + cash out. In compact mode the figure is dropped: the row that expanded
+                this already shows the same number, and printing it twice made the section read as
+                a second balance rather than the controls for the one above. */}
             <div className="flex items-end justify-between gap-4">
               <div>
-                <span className="font-mono text-[9px] tracking-[0.16em] uppercase" style={{ color: '#6B6353' }}>
-                  Your X betting balance
-                </span>
-                <div className="font-mono text-3xl font-semibold mt-1 tabular-nums" style={{ color: '#E04D26' }}>
-                  {balNum == null ? '0.00' : balNum.toFixed(2)}
-                  <span className="text-sm ml-2" style={{ color: '#6B6353' }}>DUSDC</span>
-                </div>
-
+                {!compact && (
+                  <>
+                    <span className="font-mono text-[9px] tracking-[0.16em] uppercase" style={{ color: '#6B6353' }}>
+                      Your X betting balance
+                    </span>
+                    <div className="font-mono text-3xl font-semibold mt-1 tabular-nums" style={{ color: '#E04D26' }}>
+                      {balNum == null ? '0.00' : balNum.toFixed(2)}
+                      <span className="text-sm ml-2" style={{ color: '#6B6353' }}>DUSDC</span>
+                    </div>
+                  </>
+                )}
               </div>
               {balMicro != null && balMicro > 0n && (
                 <button

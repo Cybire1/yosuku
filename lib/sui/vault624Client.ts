@@ -19,9 +19,9 @@
 // cursor-paginated GraphQL events; writes are
 // wallet-signed Transaction builders.
 
-import { Transaction } from '@mysten/sui/transactions';
+import { Transaction, coinWithBalance } from '@mysten/sui/transactions';
 import { GRAPHQL_URL, grpc, simulateReturnU64s } from './modernClients';
-import { DUSDC_MULTIPLIER, CLOCK_ID } from './constants';
+import { DUSDC_MULTIPLIER, CLOCK_ID, DUSDC_TYPE } from './constants';
 import { PREDICT624 } from './predict624Client';
 
 // ─── deployment constants (published + proven 2026-07-03) ───
@@ -213,13 +213,27 @@ export function buildEnableTweetTrading624(p: {
   amountMicro: bigint;
   maxMarginMicro: bigint;
   maxLeverage1e9: bigint;
+  /** Spend the sender's ADDRESS BALANCE instead of their coin objects.
+   *
+   *  A Sui address holds DUSDC in two places and only one of them is a coin object. Cashing
+   *  out of the 6-24 trading account credits the address balance, so the most ordinary route
+   *  into this screen — withdraw, then fund X replies — arrives with real money and zero coins
+   *  to merge, and the old builder threw 'no DUSDC coins to deposit' at someone holding 154.
+   *  coinWithBalance covers both pools: it spends coins when they exist and injects
+   *  coin::redeem_funds when the money is in the balance. */
+  fromAddressBalance?: boolean;
 }): Transaction {
   const tx = new Transaction();
   if (p.amountMicro > 0n) {
-    if (p.coinIds.length === 0) throw new Error('no DUSDC coins to deposit');
-    const primary = tx.object(p.coinIds[0]);
-    if (p.coinIds.length > 1) tx.mergeCoins(primary, p.coinIds.slice(1).map((id) => tx.object(id)));
-    const [pay] = tx.splitCoins(primary, [tx.pure.u64(p.amountMicro)]);
+    if (!p.fromAddressBalance && p.coinIds.length === 0) throw new Error('no DUSDC coins to deposit');
+    let pay;
+    if (p.fromAddressBalance) {
+      pay = coinWithBalance({ type: DUSDC_TYPE, balance: p.amountMicro });
+    } else {
+      const primary = tx.object(p.coinIds[0]);
+      if (p.coinIds.length > 1) tx.mergeCoins(primary, p.coinIds.slice(1).map((id) => tx.object(id)));
+      [pay] = tx.splitCoins(primary, [tx.pure.u64(p.amountMicro)]);
+    }
     tx.moveCall({
       target: `${VAULT624_TWEET.pkg}::vault624::deposit`,
       arguments: [

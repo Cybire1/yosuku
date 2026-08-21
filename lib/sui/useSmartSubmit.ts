@@ -28,6 +28,17 @@ export interface SubmitResult {
 
 type TxFactory = () => Transaction | Promise<Transaction>;
 
+export interface SubmitOptions {
+  /** Skip the sponsor and go straight to wallet-paid gas.
+   *
+   *  The fallback below is transparent but not free: a policy decline happens SERVER-side,
+   *  after the user has already signed, so a tx we know the allowlist won't match costs them
+   *  a doomed signature popup before the real one. Callers that know their PTB contains an
+   *  un-whitelisted call (address-balance spends inject coin::redeem_funds) set this and get
+   *  one popup instead of two. */
+  walletOnly?: boolean;
+}
+
 // Pin ONE random gas coin from the sponsor's pool for a sponsored bet.
 //
 // Why this is required for concurrency: a Sui sponsored tx signs the gas coins INTO the
@@ -74,13 +85,13 @@ export function useSmartSubmit() {
   }, []);
 
   const submit = useCallback(
-    async (build: TxFactory): Promise<SubmitResult> => {
+    async (build: TxFactory, opts?: SubmitOptions): Promise<SubmitResult> => {
       const address = account?.address;
       if (!address) throw new Error('Connect a wallet first');
 
       // 1) Try sponsored (gas-free) — only if the station is up. The user signs to
       //    authorize; Onara policy-checks, co-signs as gas owner, and executes.
-      if (sponsor) {
+      if (sponsor && !opts?.walletOnly) {
         try {
           const tx = await build();
           tx.setSender(address);
