@@ -21,6 +21,14 @@ const SEAL_SERVERS = [
 const WALRUS_AGG = 'https://aggregator.walrus-testnet.walrus.space/v1/blobs';
 // Seal-encrypted playbook capsules per listing (seal identity = the listing id; blob on Walrus).
 // Off-chain map for the curated beta; production: store the blob id on the listing.
+/** Does the capsule still exist on Walrus? Blobs expire, and an expired one is indistinguishable
+ *  from one that was never written, so ask before promising a reader anything. */
+async function capsuleIsLive(blobId: string | undefined): Promise<boolean> {
+  if (!blobId) return false;
+  try { return (await fetch(`${WALRUS_AGG}/${blobId}`, { method: 'HEAD' })).ok; }
+  catch { return false; }
+}
+
 const CAPSULES: Record<string, string> = {
   '0x0a4958cec2e2289e86b4ec99df558ac2a745d0d95874c560842d108c645bbcb1': 'zSaNpUhNm7FkBMtMxW38XQnnUF0axn7f2E8mjPndTfA',
 };
@@ -89,7 +97,10 @@ export async function fetchMemoryMarket(strategyId: string, owner: string | null
       passesSold: Number(f.passes_sold),
       ownsPass,
       passId,
-      hasCapsule: !!CAPSULES[listingId],
+      // Liveness, not just presence. The blob for the one listing in this map expired off Walrus,
+      // and because hasCapsule only asked "is there an entry", every one of the 18 people who paid
+      // 0.5 DUSDC still got an enabled "Read the playbook" button that could only throw.
+      hasCapsule: await capsuleIsLive(CAPSULES[listingId]),
     };
   } catch {
     return null;

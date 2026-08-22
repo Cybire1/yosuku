@@ -487,6 +487,70 @@ async function queryEvents(type: string, last = 50): Promise<EvNode[]> {
   return out.slice(0, last);
 }
 
+// Desk activity, read from the TRANSACTIONS that touched this vault, not from the event index.
+//
+// Two problems with the event index here, and this one query fixes both. It prunes: on 2026-08-22 a
+// type-filtered query for this desk's AgentTraded returned ZERO while the desk had 3 real trades, so
+// the public record silently emptied itself about a week after each trade. And it is package-scoped
+// with no vault field on the event, so the tweet vault's trades were being counted as this desk's.
+// A transaction that touched the vault object is, by construction, this vault's.
+const VAULT_TXS_Q = `query VaultTxs($o: SuiAddress!, $last: Int!, $before: String) {
+  transactions(last: $last, before: $before, filter: { affectedObject: $o }) {
+    pageInfo { hasPreviousPage startCursor }
+    nodes {
+      digest
+      effects { timestamp events { nodes { contents { type { repr } json } } } }
+    }
+  }
+}`;
+
+type VaultTxNode = {
+  digest: string;
+  effects: {
+    timestamp: string | null;
+    events: { nodes: { contents: { type: { repr: string }; json: Record<string, unknown> } }[] } | null;
+  } | null;
+};
+
+/** Every vault624 event of `name` emitted by a tx that touched THIS vault, newest last. */
+async function queryVaultEventsByObject(name: string, last: number): Promise<EvNode[]> {
+  const out: EvNode[] = [];
+  let before: string | null = null;
+  const pages = Math.min(20, Math.max(1, Math.ceil(last / 25)));
+  for (let page = 0; page < pages && out.length < last; page++) {
+    try {
+      const response = await fetch(GRAPHQL_URL, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ query: VAULT_TXS_Q, variables: { o: VAULT624.vaultId, last: 25, before } }),
+      });
+      if (!response.ok) break;
+      const body = (await response.json()) as {
+        data?: { transactions?: { pageInfo?: { hasPreviousPage?: boolean; startCursor?: string | null }; nodes?: VaultTxNode[] } } | null;
+        errors?: unknown[];
+      };
+      if (body.errors?.length || !body.data?.transactions) break;
+      const conn = body.data.transactions;
+      for (const tx of conn.nodes ?? []) {
+        for (const ev of tx.effects?.events?.nodes ?? []) {
+          if (!new RegExp(`::vault624::${name}$`).test(ev.contents?.type?.repr ?? '')) continue;
+          out.push({
+            timestamp: tx.effects?.timestamp ?? null,
+            contents: { json: ev.contents?.json ?? {} },
+            transaction: { digest: tx.digest },
+          });
+        }
+      }
+      const info = conn.pageInfo;
+      if (!info?.hasPreviousPage || !info.startCursor) break;
+      before = info.startCursor;
+    } catch {
+      break;
+    }
+  }
+  return out.slice(-last);
+}
+
 async function queryVaultEventLineage(name: string, last: number): Promise<EvNode[]> {
   const packages = [...new Set([VAULT624.originPkg, VAULT624.pkg])];
   const pages = await Promise.all(
@@ -519,10 +583,10 @@ function baseRow(n: EvNode): Pick<VaultEvent624, 'digest' | 'ts'> {
  *  vault624 event streams. */
 export async function fetchVaultTrades624(limit = 40): Promise<VaultEvent624[]> {
   const [trades, settles, deposits, withdraws] = await Promise.all([
-    queryVaultEventLineage('AgentTraded', limit),
-    queryVaultEventLineage('Settled', limit),
-    queryVaultEventLineage('Deposited', limit),
-    queryVaultEventLineage('Withdrawn', limit),
+    queryVaultEventsByObject('AgentTraded', limit),
+    queryVaultEventsByObject('Settled', limit),
+    queryVaultEventsByObject('Deposited', limit),
+    queryVaultEventsByObject('Withdrawn', limit),
   ]);
   const rows: VaultEvent624[] = [
     ...trades.map((n): VaultEvent624 => {
@@ -574,5 +638,24 @@ export async function fetchVaultTrades624(limit = 40): Promise<VaultEvent624[]> 
       };
     }),
   ];
-  return rows.sort((a, b) => b.ts - a.ts).slice(0, limit);
+  // Keep only THIS desk's activity.
+  //
+  // vault624 events carry no vault field and the query is package-scoped, so the tweet vault
+  // 0xf1a1ca5a (same package, different agent) was being merged into the copy desk's public record:
+  // 5 of 8 trades and 4 of 7 settles shown were the tweet vault's, including the largest payout,
+  // which dominated the sparkline. The desk advertised 4 wins / 3 losses; its real record was 1/2.
+  //
+  // AgentTraded carries `agent`, so trades filter exactly. Settled carries only user + order_id, so
+  // it is joined back through the order ids this desk actually opened. Deposits and withdrawals
+  // carry neither, so they are kept only for users this desk has traded for.
+  const deskAgent = VAULT624.enclaveAgent.toLowerCase();
+  const deskTrades = rows.filter((r) => r.kind === 'trade' && (r.agent ?? '').toLowerCase() === deskAgent);
+  const deskOrders = new Set(deskTrades.map((r) => r.orderId).filter(Boolean));
+  const deskUsers = new Set(deskTrades.map((r) => r.user.toLowerCase()).filter(Boolean));
+  const mine = rows.filter((r) => {
+    if (r.kind === 'trade') return (r.agent ?? '').toLowerCase() === deskAgent;
+    if (r.kind === 'settle') return !!r.orderId && deskOrders.has(r.orderId);
+    return deskUsers.has(r.user.toLowerCase());
+  });
+  return mine.sort((a, b) => b.ts - a.ts).slice(0, limit);
 }

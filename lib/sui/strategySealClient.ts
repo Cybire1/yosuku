@@ -32,6 +32,9 @@ const SEAL_SERVERS = [
 
 const WALRUS_AGG = 'https://aggregator.walrus-testnet.walrus.space/v1/blobs';
 const WALRUS_PUB = 'https://publisher.walrus-testnet.walrus.space/v1/blobs';
+// Match lib/sui/takes.ts TAKE_EPOCHS. The seal path having taken the short number was not a
+// decision, it was drift, and it cost 18 paying readers their playbook.
+const CAPSULE_EPOCHS = Number(process.env.NEXT_PUBLIC_CAPSULE_EPOCHS || 30);
 
 type SignPersonalMessage = (a: { message: Uint8Array }) => Promise<{ signature: string }>;
 
@@ -72,10 +75,11 @@ export async function sealPlaybook(opts: {
     data: new TextEncoder().encode(playbook),
   });
 
-  // 5 epochs: long enough to outlive a subscription cycle on testnet. A capsule whose blob has
-  // expired is indistinguishable from one that never existed, so this wants renewing, not
-  // setting once and forgetting.
-  const res = await fetch(`${WALRUS_PUB}?epochs=5`, { method: 'PUT', body: encryptedObject });
+  // 5 epochs was not "long enough to outlive a subscription cycle": the memory-market playbook
+  // stored that way is now a 404 with 18 people having paid 0.5 DUSDC for it. Match the takes path
+  // (30) and treat renewal as owed work, not a nicety. A capsule whose blob has expired is
+  // indistinguishable from one that never existed, which is what makes this failure so quiet.
+  const res = await fetch(`${WALRUS_PUB}?epochs=${CAPSULE_EPOCHS}`, { method: 'PUT', body: encryptedObject });
   if (!res.ok) throw new Error(`Walrus refused the capsule (${res.status}).`);
   const json = (await res.json()) as {
     newlyCreated?: { blobObject?: { blobId?: string } };
@@ -189,12 +193,19 @@ export async function readOwnPlaybook(opts: {
 
 const b64url = (b: Uint8Array) => toBase64(b).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 
+// LITTLE-endian, verified empirically on 2026-08-22 rather than reasoned about: a probe blob stored
+// at publisher.walrus-testnet came back as q_xW47OrNJYUMYStvxGLORf7PhFAEW5kymP6mOh5DPI, and its own
+// Blob object on chain carried blob_id 109481752904053867761222893474424620329207541669368658542517748334094661909675.
+// Little-endian reproduces that string exactly; big-endian gives 8gx56Jj6Y8pkbhFAET77FzmLEb-thDEUljSrs-NW_Ks.
+// Both helpers were big-endian, so they round-tripped through each other and looked correct while
+// being wrong against Walrus. u256 is BCS, and BCS integers are little-endian.
+
 /** u256 decimal string (as stored on the Strategy) -> Walrus blob id. "0" means none. */
 export function blobIdFromU256(dec: string): string | null {
   if (!dec || dec === '0') return null;
   let v = BigInt(dec);
   const out = new Uint8Array(32);
-  for (let i = 31; i >= 0; i--) { out[i] = Number(v & 0xffn); v >>= 8n; }
+  for (let i = 0; i < 32; i++) { out[i] = Number(v & 0xffn); v >>= 8n; }
   return b64url(out);
 }
 
@@ -203,6 +214,15 @@ export function u256FromBlobId(blobId: string): bigint {
   const pad = blobId.replace(/-/g, '+').replace(/_/g, '/');
   const bytes = fromBase64(pad + '='.repeat((4 - (pad.length % 4)) % 4));
   let v = 0n;
-  for (const b of bytes) v = (v << 8n) | BigInt(b);
+  for (let i = bytes.length - 1; i >= 0; i--) v = (v << 8n) | BigInt(bytes[i]);
   return v;
+}
+
+/** Is this capsule still retrievable? An expired blob and a never-written one look identical to a
+ *  reader, so callers should ask before rendering an Open button that can only throw. */
+export async function capsuleIsLive(blobId: string): Promise<boolean> {
+  try {
+    const r = await fetch(`${WALRUS_AGG}/${blobId}`, { method: 'HEAD' });
+    return r.ok;
+  } catch { return false; }
 }

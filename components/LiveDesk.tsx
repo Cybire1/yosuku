@@ -58,9 +58,21 @@ import { Share2 } from 'lucide-react';
 
 const M = DUSDC_MULTIPLIER;
 const DEFAULT_CAP = 2; // suggested per-fill guardrail — always user-editable
-// Keeper floor: it can only place a trade when ledger/1.15 clears the on-chain 1.4 DUSDC min premium
-// (≈ 1.61). Below this the keeper silently skips the subscriber forever, so we don't let them join under it.
-const MIN_LEDGER = 1.7;
+
+// The keeper's REAL gate, mirrored exactly: it commits min(max_margin, ledger x 100/115) and refuses
+// below the venue's 1.4 DUSDC minimum net premium. Anything approximate here is worse than useless,
+// because a user who tops up to clear our warning and not the keeper's stays silently frozen.
+const KEEPER_MIN_COST = 1.4;
+const KEEPER_CAP_ROOM = 100 / 115;
+const keeperCanTrade = (ledger: number, capDusdc: number) =>
+  Math.min(capDusdc > 0 ? capDusdc : ledger, ledger * KEEPER_CAP_ROOM) >= KEEPER_MIN_COST;
+
+// Joining floor. The old value was 1.7, which clears the floor for exactly one fill and then strands
+// you: every subscriber on this desk filled once, dropped under, and has not traded since. So ask for
+// enough to survive several trades at what they actually cost right now.
+const MIN_TRADES_OF_RUNWAY = 3;
+const joinFloor = (typicalCost: number) =>
+  Math.max(KEEPER_MIN_COST / KEEPER_CAP_ROOM, (typicalCost || KEEPER_MIN_COST) * 1.15 * MIN_TRADES_OF_RUNWAY);
 
 // ── dev-only forced states for design review (?desk-preview=fresh|joined) ──
 // The NODE_ENV check is inlined at build time, so this whole branch is dead
@@ -228,7 +240,15 @@ export default function LiveDesk() {
   const exposureLimit = (risk?.maxTotalExposureMicro ?? 0) / M;
   const dailyUsed = (risk?.spentTodayMicro ?? 0) / M;
   const dailyLimit = risk?.maxDailySpendMicro == null ? null : risk.maxDailySpendMicro / M;
-  const capValue = (() => { const c = parseFloat(capStr.replace(',', '.')); return Number.isFinite(c) && c > 0 ? c : DEFAULT_CAP; })();
+  // Blank field means "leave it alone", not "reset to 2". capStr is never seeded from the live
+  // subscription, so Save on an untouched Limits panel used to write max_margin = 2 while the
+  // placeholder beside it displayed the real cap. Falling back to the current cap makes the quiet
+  // path a no-op; DEFAULT_CAP still applies at join, where there is no subscription yet.
+  const capValue = (() => {
+    const c = parseFloat(capStr.replace(',', '.'));
+    if (Number.isFinite(c) && c > 0) return c;
+    return subCap > 0 ? subCap : DEFAULT_CAP;
+  })();
   const depositValue = (() => { const d = parseFloat(depositStr.replace(',', '.')); return Number.isFinite(d) && d > 0 ? d : 0; })();
   const effLedger = ledger + depositValue; // what the desk can actually trade with the moment you join
   const riskTerms = useCallback((balance: number, requestedMargin = capValue) => {
@@ -242,14 +262,18 @@ export default function LiveDesk() {
       maxDailySpendMicro: BigInt(Math.round(Math.max(balance, maxMargin) * M)),
     };
   }, [capValue, riskPreset]);
-  const belowFloor = effLedger < MIN_LEDGER; // too little for the keeper to ever place a trade
+  const MIN_LEDGER = joinFloor(stats.typicalCost); // enough for several trades, not just the first
+  const belowFloor = effLedger < MIN_LEDGER; // too little for the keeper to keep placing trades
   const addChip = (set: (fn: (s: string) => string) => void) => (n: number) =>
     set((s) => String(Math.max(0, (parseFloat(s || '0') || 0) + n)));
   const addDeposit = addChip(setDepositStr);
 
   // Underfunded truth-telling: "copying" while the desk can't afford you is a lie.
-  const underfundedBalance = copying && stats.typicalCost > 0 && ledger < stats.typicalCost;
-  const underfundedCap = copying && !underfundedBalance && stats.typicalCost > 0 && subCap < stats.typicalCost;
+  const frozen = copying && !keeperCanTrade(ledger, subCap); // the keeper will skip you, every time
+  const underfundedBalance = frozen && ledger * KEEPER_CAP_ROOM < KEEPER_MIN_COST; // balance is the binding one
+  const underfundedCap = frozen && !underfundedBalance;                            // otherwise the cap is
+  // Top-up target: clears the keeper AND leaves runway, so nobody has to come back tomorrow.
+  const topUpTo = joinFloor(stats.typicalCost);
 
   // ── inline faucet: the no-funds path never dead-ends ──
   async function getTestUsdc() {
@@ -540,7 +564,21 @@ export default function LiveDesk() {
                   </div>
                 )}
 
-                {/* truth-telling: "copying" while unaffordable is a lie — say so */}
+                {/* truth-telling: "copying" while unaffordable is a lie — say so.
+                    This one was computed and rendered nowhere, which is how three subscribers sat
+                    reading "Copying · watching Bitcoin" for ten days while the keeper skipped every
+                    signal. The balance case is the one that strands people, so it leads. */}
+                {underfundedBalance && (
+                  <div className="border border-vermilion/40 bg-vermilion/[0.06] px-4 py-3 max-w-md">
+                    <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-vermilion mb-1">Your copying is paused</p>
+                    <p className="text-[12px] text-white/70 leading-snug break-words">
+                      You have {fmtDusdc(ledger)} on the desk. Trades cost about {fmtDusdc(stats.typicalCost || KEEPER_MIN_COST)},
+                      so the desk is skipping every one. Top up to about {fmtDusdc(topUpTo)} and it starts trading for you again.
+                    </p>
+                    <button onClick={() => setManage('add')} className="mt-2 rounded-md border border-vermilion/50 px-2.5 py-0.5 font-mono text-[10px] text-vermilion hover:text-white hover:border-vermilion transition-colors">Top up to resume →</button>
+                  </div>
+                )}
+
                 {underfundedCap && (
                   <div className="border border-white/15 bg-white/[0.02] px-4 py-3 max-w-md">
                     <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/60 mb-1">Your cap sits below recent trades</p>

@@ -288,6 +288,26 @@ export async function fetchSocialVaultBalance(owner: string): Promise<number> {
   return Number(balance ?? BigInt(0));
 }
 
+/**
+ * Take your money back out of the retired social vault.
+ *
+ * The strategy exchange moved on and this vault stopped being a place anyone deposits into, but
+ * balances left in it are still real and still yours: `social_vault::withdraw` asserts
+ * `ctx.sender()` owns the balance and pays out to the caller, so no operator key is involved and
+ * nobody but you can move it. There was simply no button. Amount is in DUSDC micro units; the coin
+ * lands in your wallet.
+ */
+export function buildSocialVaultWithdrawTx(amountMicro: bigint, owner: string): Transaction {
+  const tx = new Transaction();
+  const coin = tx.moveCall({
+    target: `${STRATEGY_PKG}::social_vault::withdraw`,
+    typeArguments: [DUSDC_TYPE],
+    arguments: [tx.object(SOCIAL_VAULT_ID), tx.pure.u64(amountMicro)],
+  });
+  tx.transferObjects([coin], tx.pure.address(owner));
+  return tx;
+}
+
 /** A creator's executing agent, aggregated across its strategies. Ranked by the
  *  capital subscribers have entrusted to it and the copy-trades it has actually run —
  *  NOT win-rate. (Verified realized-PnL track records populate as positions settle.) */
@@ -513,15 +533,69 @@ async function fetchRealizedByStrategy(copyTrades: CopyTrade[]): Promise<Map<str
   return realized;
 }
 
+// Subscription is a SHARED object, so it cannot be listed by owner, but it CAN be listed by type,
+// and that listing is not windowed the way the event index is. This is the same failure that once
+// showed /strategies as empty while 11 Strategy objects and 12 Subscriptions sat on chain: read the
+// objects, and a subscription from six months ago is as visible as one from this morning.
+const SUBSCRIPTION_TYPE = `${STRATEGY_PKG}::social_vault::Subscription`;
+const SUBSCRIPTION_OBJECTS_Q = `query Subs($t: String!, $after: String) {
+  objects(first: 50, after: $after, filter: { type: $t }) {
+    pageInfo { hasNextPage endCursor }
+    nodes { address asMoveObject { contents { json } } }
+  }
+}`;
+
+async function subscriptionsFromObjects(): Promise<StrategySubscription[]> {
+  const out: StrategySubscription[] = [];
+  let after: string | null = null;
+  for (let page = 0; page < 20; page++) {
+    try {
+      const res = await fetch(GRAPHQL_URL, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ query: SUBSCRIPTION_OBJECTS_Q, variables: { t: SUBSCRIPTION_TYPE, after } }),
+      });
+      if (!res.ok) break;
+      const body = (await res.json()) as {
+        data?: { objects?: { pageInfo?: { hasNextPage?: boolean; endCursor?: string | null }; nodes?: { address: string; asMoveObject?: { contents?: { json?: Record<string, unknown> } } }[] } } | null;
+        errors?: unknown[];
+      };
+      if (body.errors?.length || !body.data?.objects) break;
+      for (const node of body.data.objects.nodes ?? []) {
+        const j = node.asMoveObject?.contents?.json ?? {};
+        out.push({
+          // The object's own address IS the subscription id; the event carried it as a field.
+          id: node.address,
+          vault: String(j.vault ?? ''),
+          subscriber: String(j.subscriber ?? ''),
+          agent: String(j.agent ?? ''),
+          strategy: String(j.strategy ?? ''),
+          maxLeverageBps: num(j.max_leverage_bps),
+          maxMargin: num(j.max_margin) / DUSDC_MULTIPLIER,
+        });
+      }
+      const info = body.data.objects.pageInfo;
+      if (!info?.hasNextPage || !info.endCursor) break;
+      after = info.endCursor;
+    } catch {
+      break;
+    }
+  }
+  return out;
+}
+
 /** Live, uncancelled copy-trading permissions. Filter by owner for the connected wallet. */
 export async function fetchStrategySubscriptions(owner?: string, limit = 100): Promise<StrategySubscription[]> {
-  const [subs, cancels] = await Promise.all([
+  const [fromObjects, subs, cancels] = await Promise.all([
+    subscriptionsFromObjects(),
     queryEvents(SOCIAL_SUBSCRIBED, limit),
     queryEvents(SOCIAL_UNSUBSCRIBED, limit),
   ]);
   const cancelled = new Set(cancels.map((n) => String(n.contents?.json?.subscription ?? '')).filter(Boolean));
   const byId = new Map<string, StrategySubscription>();
-  for (const sub of subs.map(toSubscription)) {
+  // Objects first (complete), then events on top (they can only add what objects already covered,
+  // but keep them so a brand-new subscription shows before the object index catches up).
+  for (const sub of [...fromObjects, ...subs.map(toSubscription)]) {
     if (!sub.id || cancelled.has(sub.id)) continue;
     if (owner && sub.subscriber.toLowerCase() !== owner.toLowerCase()) continue;
     byId.set(sub.id, sub);

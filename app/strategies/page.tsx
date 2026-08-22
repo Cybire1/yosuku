@@ -24,6 +24,7 @@ import {
   buildCancelSubscriptionTx,
   buildStrategyShareText,
   fetchSocialVaultBalance,
+  buildSocialVaultWithdrawTx,
   strategyIdFromDigest,
   recordAgentSpec,
   describeSpec,
@@ -181,6 +182,7 @@ export default function StrategiesPage() {
   const [subscribingId, setSubscribingId] = useState<string | null>(null);
   const [cancelingId, setCancelingId] = useState<string | null>(null);
   const [socialVaultBalance, setSocialVaultBalance] = useState(0);
+  const [withdrawingVault, setWithdrawingVault] = useState(false);
 
   const [tab, setTab] = useState<TabKey>('all');
   const [showArchive, setShowArchive] = useState(false);
@@ -266,6 +268,19 @@ export default function StrategiesPage() {
   const walletDusdc = dusdcCoins.reduce((s, c) => s + c.balance, BigInt(0));
   const walletDusdcNum = Number(walletDusdc) / DUSDC_MULTIPLIER;
   const currentVaultDusdc = socialVaultBalance / DUSDC_MULTIPLIER;
+
+  async function withdrawSocialVault() {
+    if (!address || withdrawingVault || socialVaultBalance <= 0) return;
+    setWithdrawingVault(true);
+    try {
+      await submit(() => buildSocialVaultWithdrawTx(BigInt(Math.floor(socialVaultBalance)), address));
+      setSocialVaultBalance(await fetchSocialVaultBalance(address).catch(() => 0));
+    } catch (e) {
+      console.error('social vault withdraw failed', e);
+    } finally {
+      setWithdrawingVault(false);
+    }
+  }
   const tabCount = (k: TabKey) => filterSort(strategies, k).length;
 
   function postToX(text: string) {
@@ -451,6 +466,28 @@ export default function StrategiesPage() {
       <GrainOverlay />
 
       <main className="container pt-[120px] pb-12">
+        {/* Money left in the retired social vault. It only ever appeared inside the copy drawer,
+            which does not open for someone who is not subscribed, so anyone who stopped copying
+            had a balance with no surface and no way out. withdraw() is owner-gated on chain: this
+            button is the missing door, not a new permission. */}
+        {address && socialVaultBalance > 0 && (
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border border-vermilion/30 bg-vermilion/[0.05] px-4 py-3">
+            <div>
+              <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-vermilion mb-0.5">You have funds in the older desk</p>
+              <p className="text-[12px] text-white/70">
+                {fmtDusdc(currentVaultDusdc)} DUSDC is sitting in the retired strategy vault. Only you can move it.
+              </p>
+            </div>
+            <button
+              onClick={withdrawSocialVault}
+              disabled={withdrawingVault}
+              className="shrink-0 rounded-md border border-vermilion/50 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-vermilion hover:text-white hover:border-vermilion transition-colors disabled:opacity-50"
+            >
+              {withdrawingVault ? 'Withdrawing…' : 'Withdraw to wallet →'}
+            </button>
+          </div>
+        )}
+
         {/* live counts */}
         <div className="border-t border-white/10 pt-3 flex items-center gap-2 font-mono text-[10px] md:text-[11px] uppercase tracking-[0.28em] text-white/40 tabular-nums">
           <span className="text-white">{strategies.length}</span> listed
@@ -1234,6 +1271,15 @@ function CopyDrawer(props: {
                   >
                     {readingMemory ? 'Decrypting…' : 'Read the playbook →'}
                   </button>
+                )}
+                {/* Paid, but the capsule is no longer on Walrus. Saying so is the only honest option:
+                    the alternative is a button that throws, which reads as our bug rather than a
+                    missing file, and leaves the reader with no idea whether to wait or ask. */}
+                {!memoryInfo.hasCapsule && !memoryText && (
+                  <p className="text-[12px] leading-snug text-amber-200/70 border border-amber-300/20 bg-amber-300/[0.04] px-3 py-2">
+                    You own this pass, but the playbook is no longer stored. We have been told, and
+                    you keep the pass: it unlocks the copy again the moment it is restored.
+                  </p>
                 )}
                 {memoryText && (
                   <pre className="mt-1 whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-gray-300 border border-white/10 rounded p-3 bg-black/30">{memoryText}</pre>
