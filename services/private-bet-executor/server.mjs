@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { SuiJsonRpcClient } from '@mysten/sui/jsonRpc';
 import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-import { Transaction } from '@mysten/sui/transactions';
+import { Transaction, coinWithBalance } from '@mysten/sui/transactions';
 import { issueTicket, decodeTicket, verifyTicketSignature } from './enclaveTicket.mjs';
 import { verifyOpenAuthorization } from './openAuth.mjs';
 
@@ -279,29 +279,20 @@ async function createAccount() {
   return { digest: res.digest, managerId: created.objectId };
 }
 
-async function getDusdcCoins(owner) {
-  const coins = [];
-  let cursor = null;
-  do {
-    const page = await client.getCoins({ owner, coinType: cfg.dusdcType, cursor, limit: 50 });
-    coins.push(...page.data);
-    cursor = page.hasNextPage ? page.nextCursor : null;
-  } while (cursor);
-  return coins;
-}
 
 async function buildFundAndMintTx({ managerId, stakeMicro, oracleId, expiry, strike, isUp, quantity }) {
-  const coins = await getDusdcCoins(sessionAddress);
-  const total = coins.reduce((sum, coin) => sum + BigInt(coin.balance), 0n);
-  if (total < stakeMicro) {
-    throw new Error(`executor has ${(Number(total) / 1e6).toFixed(2)} DUSDC, needs ${(Number(stakeMicro) / 1e6).toFixed(2)}`);
+  // A Sui address holds DUSDC in two places and only one of them is a coin object. getCoins is
+  // blind to the address balance, so gating on it called this desk broke while it was holding
+  // 200 DUSDC with 0.25 of that in objects, and every private bet would have died on the first
+  // stake. getBalance counts both, and coinWithBalance spends both: it uses coins where they
+  // exist and injects coin::redeem_funds where the money sits in the balance.
+  const held = BigInt((await client.getBalance({ owner: sessionAddress, coinType: cfg.dusdcType })).totalBalance);
+  if (held < stakeMicro) {
+    throw new Error(`executor has ${(Number(held) / 1e6).toFixed(2)} DUSDC, needs ${(Number(stakeMicro) / 1e6).toFixed(2)}`);
   }
 
   const tx = new Transaction();
-  const primary = tx.object(coins[0].coinObjectId);
-  const rest = coins.slice(1).map((coin) => tx.object(coin.coinObjectId));
-  if (rest.length) tx.mergeCoins(primary, rest);
-  const [stakeCoin] = tx.splitCoins(primary, [tx.pure.u64(stakeMicro)]);
+  const stakeCoin = coinWithBalance({ type: cfg.dusdcType, balance: stakeMicro });
 
   const authDep = tx.moveCall({ target: `${cfg.accountPackage}::account::generate_auth`, arguments: [] });
   tx.moveCall({
