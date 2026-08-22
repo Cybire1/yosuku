@@ -432,7 +432,10 @@ export default function TradePanel({
         : privateStatus.maxStakeDusdc && amountMicro > privateStatus.maxStakeDusdc * DUSDC_MULTIPLIER
           ? `For now, private bets are capped at ${privateStatus.maxStakeDusdc.toFixed(2)} DUSDC each.`
         : !privateStatus.ready
-          ? privateStatus.reasons[0] ?? 'Private mode is not ready yet.'
+          // reasons[0] is written for whoever runs the desk, not for whoever is betting:
+          // "EXECUTOR_PRIVATE_KEY missing", "health failed: 502", "aborted due to timeout".
+          // None of that is actionable from here, so it stays in the console.
+          ? 'Private mode is not available right now.'
           : '';
   const privateRouteReady = privacyMode === 'public' || privateRouteIssue === '';
   const privateRouteButtonLabel = privateRouteIssue.startsWith('Beta limit')
@@ -1578,7 +1581,10 @@ function PrivateTicketLedger({
       <p className="text-[11px] leading-relaxed text-gray-500">
         Placed without linking to your main wallet. When you cash out, the winnings go straight to your Trading Balance.
       </p>
-      {tickets.slice(0, 3).map((ticket) => {
+      {/* All of them, not the newest three. Cashing out is per ticket and this list is the only
+          place it can be done, so capping the render at 3 put the money in ticket four out of
+          reach of the UI entirely. */}
+      {tickets.map((ticket) => {
         const settled = ticket.status === 'settled' || ticket.status === 'credited';
         const open = ticket.status === 'open';
         return (

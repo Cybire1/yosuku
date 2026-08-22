@@ -23,8 +23,11 @@ type XIdentity = { handle: string; authorId: string; account: ClaimAccount | nul
 
 // Attested claim: sign-in runs INSIDE the enclave (it proves your handle AND signs your wallet in-TEE),
 // so no operator key can bind your account to anyone. Flag-gated; when off, the original path is used.
-const ATTESTED = process.env.NEXT_PUBLIC_ATTESTED_BIND === '1';
-const ENCLAVE_OAUTH = process.env.NEXT_PUBLIC_ENCLAVE_OAUTH_URL || 'https://contemporary-necessary-text-let.trycloudflare.com';
+const ATTESTED = process.env.NEXT_PUBLIC_ATTESTED_BIND === '1' && !!process.env.NEXT_PUBLIC_ENCLAVE_OAUTH_URL;
+// No fallback. The old default was an ephemeral Cloudflare quick tunnel fronting a box that no
+// longer exists, so flipping NEXT_PUBLIC_ATTESTED_BIND on without also setting this would have
+// sent people to a hostname that does not resolve. Empty means the button below is not offered.
+const ENCLAVE_OAUTH = process.env.NEXT_PUBLIC_ENCLAVE_OAUTH_URL || '';
 
 function ClaimInner() {
   const params = useSearchParams();

@@ -222,7 +222,9 @@ export function friendlyMintAbort(raw: string): string {
         ? 'Too small for the venue — raise the payout (≥ 2 DUSDC at 1×).'
         : /abort code:?\s*0/.test(raw)
           ? 'Minting is paused on this market — pick another.'
-          : raw.slice(0, 160);
+          // Unmapped. The raw string is a Move abort or an operator message and neither is
+          // something a bettor can act on, so it goes to the console and they get a sentence.
+          : (console.warn('[mint] unmapped abort:', raw), 'That did not go through. Nothing was charged, so you can try again.');
 }
 
 // ─── the account half of the ticket ───

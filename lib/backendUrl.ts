@@ -14,8 +14,14 @@ export function getResolverBackendUrl(sourceUrl?: string): string {
     return trimSlash(configured);
   }
 
+  // :3001 was the old box's socat bridge to the enclave. Guessing it in production meant
+  // every resolver call went to https://yosuku.xyz:3001, which has never served anything, and
+  // spent a 5 second timeout before returning 502. Guess it only where it could plausibly be
+  // true, which is a local dev machine, and say so plainly otherwise.
   const url = sourceUrl ? new URL(sourceUrl) : null;
   const hostname = url?.hostname || 'localhost';
-  const protocol = url?.protocol || (LOCAL_HOSTS.has(hostname) ? 'http:' : 'https:');
-  return `${protocol}//${hostname}:3001`;
+  if (!LOCAL_HOSTS.has(hostname)) {
+    throw new Error('BACKEND_URL is not configured.');
+  }
+  return `http://${hostname}:3001`;
 }
