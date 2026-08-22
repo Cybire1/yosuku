@@ -33,6 +33,12 @@ export interface NetworkConfig {
   keeperAddress: string;
   strategyPackage: string; // yolev upgrade #2 — strategy + social_vault copy-trade
   socialVaultId: string;   // the shared no-divert social vault
+  /** The copy-trading stack republished on the 7-29 lineage (2026-08-22). Published fresh rather
+   *  than upgraded, because the original lineage is un-upgradable from its own source. Held
+   *  alongside the legacy ids on purpose: the catalogue and every existing balance still live on
+   *  the old package, so cutting over is a deliberate act, not a constant swap. */
+  strategyPackage729: string;
+  socialVault729: string;
   tradingVaultPackage: string; // fresh Trading Balance package; separated from old underwrite package
   marginDeskId: string;    // borrow-and-liquidate margin desk used by TradingVault
   tradingVaultId: string;  // shared TradingVault<DUSDC>; set after deployment
@@ -60,6 +66,8 @@ const TESTNET: NetworkConfig = {
   keeperAddress: '0xaa50ec0fe985825bd45fcc65d301da096a487349d6993fe8f9305890284a7244',
   strategyPackage: '0x47d3c108b2165cb1190eefd0b67f73a386e8ca71b870f87a9afb096056795388',
   socialVaultId: '0xbe9e96fb8cb6be797c00529fc1f4fe1119192299579167140a084d946851e07b',
+  strategyPackage729: '0x031c0ef96355a835a5ebc04a54e34c358c788261f9bee8720674faee74a0a175',
+  socialVault729: '0xf2c785eb21dcd39581cf287d6c6a57d6300d7a2ff4e618532617f99445e3960a',
   // Web margin desk + prefunded Trading Balance vault (deployed testnet 2026-06-23,
   // e2e-proven). Hardcoded fallbacks (same pattern as parlayClient / vault624Client) so a
   // fresh clone runs cash-out without needing env vars; NEXT_PUBLIC_* still override.
@@ -98,6 +106,8 @@ const MAINNET: NetworkConfig = {
   keeperAddress: '0xaa50ec0fe985825bd45fcc65d301da096a487349d6993fe8f9305890284a7244',
   strategyPackage: '',
   socialVaultId: '',
+  strategyPackage729: '',
+  socialVault729: '',
   tradingVaultPackage: '',
   marginDeskId: '',
   tradingVaultId: '',

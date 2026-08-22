@@ -30,7 +30,12 @@ async function capsuleIsLive(blobId: string | undefined): Promise<boolean> {
 }
 
 const CAPSULES: Record<string, string> = {
-  '0x0a4958cec2e2289e86b4ec99df558ac2a745d0d95874c560842d108c645bbcb1': 'zSaNpUhNm7FkBMtMxW38XQnnUF0axn7f2E8mjPndTfA',
+  // Reissued 2026-08-22 at 30 epochs. The original blob's storage term ran out and the ciphertext
+  // was unrecoverable: 404 on Walrus, MemWal's relayer unreachable, and the memory account object
+  // the listing points at no longer exists on chain. Restored from the agent's own seeded corpus.
+  // Seal encrypts to a POLICY, not with a creator secret, so re-encrypting under the same package
+  // and identity means every pass already sold still opens it. Nobody has to re-buy anything.
+  '0x0a4958cec2e2289e86b4ec99df558ac2a745d0d95874c560842d108c645bbcb1': '51hVdeMyC6lwL88tJOi3vr49hGPoExcQ7kEjvVnaRGQ',
 };
 type SignPersonalMessage = (input: { message: Uint8Array }) => Promise<{ signature: string }>;
 
