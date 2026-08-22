@@ -17,7 +17,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from 'react';
 import { ConnectButton } from '@mysten/dapp-kit';
-import { Minus, Plus, RotateCcw, X } from 'lucide-react';
+import { EyeOff, Globe, Minus, Plus, RotateCcw, X } from 'lucide-react';
 import { drawPriceLine } from '@/lib/charts/canvasChart';
 import { useToast } from '@/components/Toast';
 import BetPlacedCard from '@/components/BetPlacedCard';
@@ -134,25 +134,42 @@ export default function Ticket624Drawer({
   const [privStatus, setPrivStatus] = useState<PrivateBetStatus | null>(null);
   const { mutateAsync: signPersonalMessage } = useSignPersonalMessage();
   const [privErr, setPrivErr] = useState<string | null>(null);
+  // Distinct from privErr: null means "still asking". Without it the control rendered its
+  // failure copy to every user on every open, for the second or two before the first answer
+  // came back, then swapped. A false "not available" is worse than no control at all.
+  const [privProbing, setPrivProbing] = useState(true);
+  const probeRef = useRef<(() => void) | null>(null);
   useEffect(() => {
     let live = true;
     let tries = 0;
-    // Retry once. A single failed probe used to hide the control completely, which looks
-    // identical to "this feature does not exist" and is impossible to tell from a stale tab.
     const probe = () => {
+      setPrivProbing(true);
       getPrivateBetStatus()
-        .then((st) => { if (!live) return; setPrivStatus(st); setPrivErr(st.ready ? null : (st.reasons?.[0] ?? 'Private desk is not ready.')); })
+        .then((st) => {
+          if (!live) return;
+          setPrivProbing(false);
+          setPrivStatus(st);
+          setPrivErr(st.ready ? null : (st.reasons?.[0] ?? 'not ready'));
+        })
         .catch((e) => {
           if (!live) return;
           if (tries++ < 1) { window.setTimeout(probe, 2500); return; }
+          setPrivProbing(false);
           setPrivStatus(null);
-          setPrivErr(e instanceof Error ? e.message : 'Could not reach the private desk.');
+          setPrivErr(e instanceof Error ? e.message : 'unreachable');
         });
     };
+    // A manual retry, because the automatic one gives up after a single attempt and the copy
+    // used to tell people to "check back" with nothing in the UI able to act on that.
+    probeRef.current = () => { tries = 0; probe(); };
     probe();
-    return () => { live = false; };
+    return () => { live = false; probeRef.current = null; };
   }, []);
   const privReady = !!privStatus?.ready;
+  // The desk refuses anything over its own cap, and the drawer used to let the stake through
+  // and surface the refusal as a raw string in a toast. Gate the tile instead. The stake is
+  // never clamped: the amount stays the user's, the option is what goes away.
+  const privCap = privStatus?.maxStakeDusdc ?? 0;
   useEffect(() => { if (!privReady && priv) setPriv(false); }, [privReady, priv]);
 
   const [dir, setDir] = useState<Dir624 | null>(side ?? 'up'); // a side is ALWAYS preselected — no dead "Call UP or DOWN" state
@@ -162,6 +179,11 @@ export default function Ticket624Drawer({
   const [rangeDragging, setRangeDragging] = useState(false);
   const [stakeStr, setStakeStr] = useState(''); // what you BET (the amount you pay) — user-owned
   const [lev, setLev] = useState(1);
+  // The private rail mints at 1x: openPrivateBet sends no leverage and the desk has no concept
+  // of it. Leaving 3x selected quoted a 3x return on a position that would open at 1x, so the
+  // ticket promised a payout the chain would never pay. Snap it, and disable the chips with a
+  // reason rather than silently ignoring the choice.
+  useEffect(() => { if (priv && lev !== 1) setLev(1); }, [priv, lev]);
   const [fundStr, setFundStr] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [placed, setPlaced] = useState<Placed | null>(null);
@@ -208,6 +230,13 @@ export default function Ticket624Drawer({
     const n = parseFloat(stakeStr.replace(',', '.'));
     return Number.isFinite(n) && n > 0 ? n : 0;
   }, [stakeStr]);
+  // Over the desk's cap, so Private is not an option for this amount. Lives here rather than
+  // beside privCap because it needs the stake. The stake itself is never clamped: the amount
+  // stays the user's, the option is what goes away.
+  const privOverCap = privReady && privCap > 0 && stake > privCap;
+  // Typing past the cap with Private already on would otherwise keep a selection the desk will
+  // refuse, and the refusal only showed up as a raw string after the signature.
+  useEffect(() => { if (privOverCap && priv) setPriv(false); }, [privOverCap, priv]);
   const addStake = (n: number) => setStakeStr((s) => String(Math.max(0, (parseFloat(s || '0') || 0) + n)));
   const addFund = (n: number) => setFundStr((s) => String(Math.max(0, (parseFloat(s || '0') || 0) + n)));
 
@@ -536,6 +565,10 @@ export default function Ticket624Drawer({
     if (blocker || !address || !wrapperId || !market || spot == null || busy) return;
     setBusy('mint');
     try {
+      // Fail CLOSED, same rule as place(). This path funds the account from the wallet, which
+      // is public by construction, so it can never serve a private bet. The CTA routes around
+      // it now; this is here so it stays impossible if the routing is ever edited.
+      if (priv) throw new Error('Private bets do not use your trading account. Turn Private off to top up and bet publicly.');
       const base = {
         submit: sponsoredSubmit,
         address,
@@ -898,7 +931,9 @@ export default function Ticket624Drawer({
                     <button
                       key={v}
                       onClick={() => setLev(v)}
-                      className={`min-w-10 rounded border px-2 py-1 font-mono text-[9px] transition-colors ${lev === v ? 'border-vermilion/70 bg-vermilion/[0.08] text-vermilion' : 'border-white/[0.1] text-white/45 hover:text-white'}`}
+                      disabled={priv && v !== 1}
+                      title={priv && v !== 1 ? 'Private bets are placed at 1x.' : undefined}
+                      className={`min-w-10 rounded border px-2 py-1 font-mono text-[9px] transition-colors ${lev === v ? 'border-vermilion/70 bg-vermilion/[0.08] text-vermilion' : 'border-white/[0.1] text-white/45 hover:text-white'} ${priv && v !== 1 ? 'cursor-not-allowed opacity-35 hover:text-white/45' : ''}`}
                       aria-pressed={lev === v}
                       data-cursor="hover"
                     >
@@ -992,9 +1027,116 @@ export default function Ticket624Drawer({
               </div>
             )}
 
+            {/* How this bet shows up.
+                Public vs Private is a choice made WITH the bet, so it sits in the decision path
+                ABOVE the CTA at the weight of the leverage chips. The old control was a 9px
+                word and a 24px toggle placed AFTER the primary button, and in light mode its
+                track used bg-white/15, which globals.css never maps, so it rendered cream on
+                cream. Missing it was the default outcome.
+
+                Both reasons are readable without tapping. That contrast is the point: someone
+                betting for the first time does not know their bets are public at all, so
+                "Private" alone answers a question they were never given a reason to ask. */}
+            {!isRange && (
+              <div className="mb-4">
+                <span className="mb-2 block font-mono text-[9px] uppercase tracking-[0.16em] text-white/45">
+                  How this bet shows up
+                </span>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPriv(false)}
+                    aria-pressed={!priv}
+                    className={`rounded border px-2.5 py-2 text-left transition-colors active:scale-95 ${
+                      !priv ? 'border-white/25 bg-white/[0.08]' : 'border-white/[0.1] hover:border-white/25'
+                    }`}
+                    data-cursor="hover"
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <Globe className={`h-3 w-3 shrink-0 ${!priv ? 'text-white' : 'text-white/45'}`} aria-hidden />
+                      <span className={`font-mono text-[10px] uppercase tracking-[0.14em] ${!priv ? 'text-white' : 'text-white/45'}`}>
+                        Public
+                      </span>
+                    </span>
+                    <span className="mt-1 block font-mono text-[8.5px] leading-snug text-white/35">
+                      Anyone can look it up.
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setPriv(true)}
+                    disabled={!privReady || privOverCap}
+                    aria-pressed={priv}
+                    className={`rounded border px-2.5 py-2 text-left transition-colors active:scale-95 disabled:cursor-not-allowed disabled:active:scale-100 ${
+                      priv
+                        ? 'border-vermilion/70 bg-vermilion/[0.08]'
+                        : privReady && !privOverCap
+                          ? 'border-white/[0.1] hover:border-white/25'
+                          : 'border-white/[0.07] bg-white/[0.02]'
+                    }`}
+                    data-cursor="hover"
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <EyeOff
+                        className={`h-3 w-3 shrink-0 ${priv ? 'text-vermilion' : privReady && !privOverCap ? 'text-white/45' : 'text-white/20'}`}
+                        aria-hidden
+                      />
+                      <span
+                        className={`font-mono text-[10px] uppercase tracking-[0.14em] ${
+                          priv ? 'text-vermilion' : privReady && !privOverCap ? 'text-white/45' : 'text-white/25'
+                        }`}
+                      >
+                        Private
+                      </span>
+                    </span>
+                    <span className={`mt-1 block font-mono text-[8.5px] leading-snug ${privReady && !privOverCap ? 'text-white/35' : 'text-white/25'}`}>
+                      {privProbing
+                        ? 'Checking.'
+                        : privOverCap
+                          ? `Up to ${fmt2(privCap)} DUSDC for now.`
+                          : privReady
+                            ? 'Harder to link back to you.'
+                            : 'Not available right now.'}
+                    </span>
+                  </button>
+                </div>
+
+                {/* Only when there is something to say. The default needs no defending, and a
+                    sentence explaining Public on every single bet is a tax on the 95% who never
+                    wanted this decision. privErr never reaches the screen: it is operator
+                    vocabulary ("executor offline", "aborted due to timeout") and there is
+                    nothing a bettor can do with it. */}
+                {!privProbing && (!privReady || priv) && (
+                  <p className="mt-2 font-mono text-[8.5px] leading-relaxed text-white/35">
+                    {!privReady ? (
+                      <>
+                        Private bets are not available right now. Place this one as usual, or{' '}
+                        <button
+                          type="button"
+                          onClick={() => probeRef.current?.()}
+                          className="underline underline-offset-2 hover:text-white/60"
+                          data-cursor="hover"
+                        >
+                          check again
+                        </button>
+                        .
+                      </>
+                    ) : (
+                      'Placed apart from your account, so it is harder to link back to you. Placed at 1x, and you cash it out from this device.'
+                    )}
+                  </p>
+                )}
+              </div>
+            )}
+
             {/* place */}
             <button
-              onClick={needsAccount ? placeFirst : canOneTapTopUp ? placeTopUp : place}
+              // priv FIRST. The private route opens through the desk's own manager and never
+              // touches the trading account, so the account-funding paths are not just wrong
+              // here, they are the one outcome the user explicitly asked against: placeTopUp
+              // had no priv guard and would have placed this publicly under a "privately" label.
+              onClick={priv ? place : needsAccount ? placeFirst : canOneTapTopUp ? placeTopUp : place}
               disabled={!!blocker || busy === 'mint'}
               className={`w-full py-3 text-sm font-semibold transition-all rounded ${
                 !blocker && busy !== 'mint'
@@ -1011,41 +1153,9 @@ export default function Ticket624Drawer({
                 ? 'Placing…'
                 : blocker ??
                   (isRange
-                    ? `Place RANGE — ${lowerUsd != null && higherUsd != null ? `${fmtUsd0(lowerUsd)}–${fmtUsd0(higherUsd)}` : ''} →`
+                    ? `Place RANGE ${lowerUsd != null && higherUsd != null ? `${fmtUsd0(lowerUsd)} to ${fmtUsd0(higherUsd)}` : ''} →`
                     : `Bet ${dir === 'up' ? 'UP' : 'DOWN'}${priv ? ' privately' : ''} →`)}
             </button>
-
-            {/* Private route. Hidden until the desk is ready and only for Up/Down, so it is
-                never a control that looks available and then refuses. */}
-            {!privReady && !isRange && privErr && (
-              <div style={{}} className="mt-2.5 rounded-lg border border-white/[0.07] bg-white/[0.02] px-2.5 py-2">
-                <span className="font-mono text-[9px] uppercase tracking-[0.18em] text-white/25">
-                  Private unavailable — {privErr}
-                </span>
-              </div>
-            )}
-            {privReady && !isRange && (
-              <button
-                type="button"
-                onClick={() => setPriv((v) => !v)}
-                className={`mt-2.5 flex w-full items-center justify-between rounded-lg border px-2.5 py-2 text-left transition-colors ${
-                  priv ? 'border-profit/30 bg-profit/[0.06]' : 'border-white/[0.07] bg-white/[0.02] hover:border-white/15'
-                }`}
-                data-cursor="hover"
-              >
-                <span className={`font-mono text-[9px] uppercase tracking-[0.18em] ${priv ? 'text-profit' : 'text-white/40'}`}>
-                  Private
-                </span>
-                <span className={`relative h-3.5 w-6 rounded-full transition-colors ${priv ? 'bg-profit/70' : 'bg-white/15'}`}>
-                  <span className={`absolute top-0.5 h-2.5 w-2.5 rounded-full bg-black transition-all ${priv ? 'left-3' : 'left-0.5'}`} />
-                </span>
-              </button>
-            )}
-            {priv && (
-              <p className="font-mono text-[8.5px] leading-relaxed text-white/35 mt-1.5">
-                Kept separate from this wallet, so it isn&apos;t tied to your public history.
-              </p>
-            )}
 
             <p className="font-mono text-[8.5px] leading-relaxed text-white/25 mt-2.5">
               Gas-free · settles on its own, right on the price.
