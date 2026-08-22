@@ -407,11 +407,11 @@ export default function LiveDesk() {
     } finally { setBusy(null); }
   }
 
-  const chipCls = 'rounded-md border border-white/15 px-2 py-0.5 font-mono text-[10px] text-gray-300 hover:border-vermilion/50 hover:text-white transition-colors';
+  const chipCls = 'desk-chip rounded-md border px-2 py-0.5 font-mono text-[10px] hover:border-vermilion/50 transition-colors';
   const manageChip = (key: 'add' | 'withdraw' | 'caps', label: string) => (
     <button key={key} onClick={() => setManage((m) => (m === key ? null : key))}
       className={`rounded-full border px-4 py-2 font-mono text-[11px] uppercase tracking-[0.12em] transition-colors ${
-        manage === key ? 'border-vermilion text-vermilion bg-vermilion/[0.06]' : 'border-white/15 text-gray-300 hover:text-white hover:border-white/30'
+        manage === key ? 'border-vermilion text-vermilion bg-vermilion/[0.06]' : 'desk-chip hover:border-vermilion/50'
       }`}>
       {label}
     </button>
@@ -692,7 +692,7 @@ export default function LiveDesk() {
                   <AmountRow
                     value={depositStr} onChange={setDepositStr}
                     hint={walletDusdc <= 0
-                      ? <span className="inline-flex flex-wrap items-center gap-1.5">Wallet empty — no problem: {faucetChip}</span>
+                      ? <span className="inline-flex flex-wrap items-center gap-1.5">Wallet empty, no problem: {faucetChip}</span>
                       : <span>Wallet: {fmtDusdc(walletDusdc)} DUSDC</span>}
                     chips={[1, 5]} onChip={addDeposit} chipCls={chipCls}
                   />
@@ -771,17 +771,17 @@ function AmountRow(props: {
   const { value, onChange, hint, chips, onChip, chipCls, extra, action } = props;
   return (
     <div className="flex flex-col sm:flex-row sm:items-stretch gap-3">
-      <div className="flex-1 sm:max-w-xs min-w-0 rounded-xl border border-white/[0.08] bg-black/30 px-4 py-2 transition-colors focus-within:border-vermilion/50">
+      <div className="desk-amount flex-1 sm:max-w-xs min-w-0 rounded-xl border px-4 py-2 transition-colors focus-within:border-vermilion/50">
         <div className="flex items-center justify-between">
           <input
             inputMode="decimal" placeholder="0.00" value={value}
             onChange={(e) => onChange(e.target.value.replace(/[^0-9.]/g, ''))}
-            className="w-full min-w-0 bg-transparent font-display text-xl font-bold text-white outline-none placeholder:text-gray-600"
+            className="desk-amount-input w-full min-w-0 bg-transparent font-display text-xl font-bold outline-none"
           />
-          <span className="font-mono text-[10px] font-semibold text-gray-300 shrink-0">DUSDC</span>
+          <span className="desk-amount-unit font-mono text-[10px] font-semibold shrink-0">DUSDC</span>
         </div>
         <div className="mt-1.5 flex items-center justify-between gap-2">
-          <span className="font-mono text-[9px] text-gray-600 min-w-0">{hint}</span>
+          <span className="desk-amount-hint font-mono text-[9px] min-w-0">{hint}</span>
           <div className="flex gap-1.5 shrink-0">
             {chips.map((n) => (
               <button key={n} onClick={() => onChip(n)} className={chipCls}>+{n}</button>

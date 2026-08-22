@@ -5820,3 +5820,24 @@ body.view-list .mc-badge { position: static; align-self: center; margin-left: 16
 [data-theme="light"] .live-desk .text-white\/35 { color: rgba(26,22,19,0.5) !important; }
 [data-theme="light"] .live-desk [class*="bg-white/["] { background: rgba(20,18,16,0.035) !important; }
 [data-theme="light"] .live-desk [class*="border-white/["] { border-color: rgba(20,18,16,0.12) !important; }
+
+/* ── copy desk: money controls ──────────────────────────────────────────────
+   These carried hardcoded dark values (bg-black/30, text-white, text-gray-300)
+   that the light theme has no rule for, so on cream the deposit box rendered as
+   a grey slab with an invisible amount in it and the +1/+5 chips all but
+   disappeared. Defaults stay dark; light gets real values rather than a remap. */
+.desk-amount { border-color: rgba(255, 255, 255, 0.08); background: rgba(0, 0, 0, 0.30); }
+.desk-amount-input { color: #fff; }
+.desk-amount-input::placeholder { color: rgba(255, 255, 255, 0.35); }
+.desk-amount-unit { color: #d1d5db; }
+.desk-amount-hint { color: rgba(255, 255, 255, 0.45); }
+.desk-chip { border-color: rgba(255, 255, 255, 0.15); color: #d1d5db; }
+.desk-chip:hover { color: #fff; }
+
+[data-theme="light"] .desk-amount { border-color: rgba(20, 18, 16, 0.14); background: #FFFDF8; }
+[data-theme="light"] .desk-amount-input { color: #1A1612; }
+[data-theme="light"] .desk-amount-input::placeholder { color: rgba(26, 22, 18, 0.30); }
+[data-theme="light"] .desk-amount-unit { color: #6B6353; }
+[data-theme="light"] .desk-amount-hint { color: #6B6353; }
+[data-theme="light"] .desk-chip { border-color: rgba(20, 18, 16, 0.20); color: #4A423A; }
+[data-theme="light"] .desk-chip:hover { color: #1A1612; }
