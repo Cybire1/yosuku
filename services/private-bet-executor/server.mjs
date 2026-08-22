@@ -11,13 +11,41 @@ import { verifyOpenAuthorization } from './openAuth.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+// predict-testnet-7-29. The desk used to be written against 4-16, whose whole custody model
+// (PredictManager, market_key, predict::mint) was replaced. Those five modules do not exist on
+// this package at all, so every private bet the UI offered would have aborted on chain no
+// matter how the box was configured. Addresses mirror lib/sui/predict624Client.ts, which is the
+// proven path; a branch is REDEPLOYED IN PLACE, so re-read the manifest rather than trusting an
+// older copy of these.
 const TESTNET = {
-  rpcUrl: 'https://fullnode.testnet.sui.io:443',
-  predictPackage: '0xf5ea2b3749c65d6e56507cc35388719aadb28f9cab873696a2f8687f5c785138',
-  predictObject: '0xc8736204d12f0a7277c86388a68bf8a194b0a14c5538ad13f22cbd8e2a38028a',
+  // fullnode.testnet.sui.io no longer serves JSON-RPC.
+  rpcUrl: 'https://sui-testnet-rpc.publicnode.com',
+  predictPackage: '0xfe742239a3b033f7d52ed5275f238c17d27498ca0ee5ea5672ea732eb3f4dbbb',
+  accountPackage: '0xbdbb60b00f2d4f30daeff62f2c642b18433a8fcdfbebccc808df578df2a0c203',
+  protocolConfig: '0x43703ceee4d5f5a9e8cbf728071c34dc65961dd6e878fafd9ac36d86a9a4ce5b',
+  accountRegistry: '0x21a7ed28397363b5550853c1f08795731257de81028cd1bf87f20c0752c8ca2f',
+  oracleRegistry: '0xc1dffc5f7a5404cb002ba3bd7c50d6a2dbe8bb6afd40080cd663965deff9d577',
+  pythFeed: '0xccafaa6c5a41f0493585cf268f2b4dc14c91ed798362444144cac2c745db8dde',
+  // THREE feeds, not four: 7-29 collapsed spot and forward into one BlockScholesValueStore.
+  bsValuesFeed: '0x6d9de17954f4c1a2f01fdd97c0bb8a2e682c1fea0f8f048dcd127d543a6ac051',
+  bsSviFeed: '0x83c2d6307fd3591228052fc0d24c4f00a698b0eb4fef5e6083a213ca0d54bd35',
+  accumulatorRoot: '0x0000000000000000000000000000000000000000000000000000000000000acc',
   dusdcType: '0xe95040085976bfd54a1a07225cd46c8a2b4e8e2b6732f140a0fc49850ba73e1a::dusdc::DUSDC',
   clock: '0x6',
 };
+
+// Ticks, not dollars. 7-29 prices a band between two ticks at 100 per dollar, and an
+// UP/DOWN bet is that band with one side open.
+const TICKS_PER_USD = 100n;
+const NEG_INF_TICK = 0n;
+const POS_INF_TICK = (1n << 30n) - 1n;
+const ONE_X_1E9 = 1_000_000_000n;
+const usdToTick = (usd) => BigInt(Math.round(Number(usd))) * TICKS_PER_USD;
+/** UP wins above the strike, DOWN wins below it. */
+function bandTicks(strike, isUp) {
+  const t = usdToTick(strike);
+  return isUp ? [t, POS_INF_TICK] : [NEG_INF_TICK, t];
+}
 
 const cfg = {
   host: process.env.PRIVATE_BET_EXECUTOR_HOST ?? '127.0.0.1',
@@ -25,7 +53,9 @@ const cfg = {
   rpcUrl: process.env.SUI_RPC_URL ?? TESTNET.rpcUrl,
   network: process.env.NEXT_PUBLIC_SUI_NETWORK === 'mainnet' ? 'mainnet' : 'testnet',
   packageId: process.env.PREDICT_PACKAGE_ID ?? TESTNET.predictPackage,
-  predictId: process.env.PREDICT_OBJECT_ID ?? TESTNET.predictObject,
+  accountPackage: process.env.PREDICT_ACCOUNT_PACKAGE ?? TESTNET.accountPackage,
+  protocolConfig: process.env.PREDICT_PROTOCOL_CONFIG ?? TESTNET.protocolConfig,
+  accountRegistry: process.env.PREDICT_ACCOUNT_REGISTRY ?? TESTNET.accountRegistry,
   dusdcType: process.env.DUSDC_TYPE ?? TESTNET.dusdcType,
   // Trading Balance vault — private-bet winnings settle straight here (no separate "Private Balance").
   tradingVaultPkg: process.env.TRADING_VAULT_PACKAGE ?? '0x3b76383b2bb9bc411dc56c571a1da22f348b3c19518115ae958fe96e031cf30e',
@@ -121,11 +151,19 @@ function assertReadyForOpen(owner, stakeMicro) {
   }
 }
 
-function marketKey(tx, oracleId, expiry, strike, isUp) {
-  const target = isUp ? `${cfg.packageId}::market_key::up` : `${cfg.packageId}::market_key::down`;
+/** 7-29 prices every mint through a Pricer built in the same PTB. Seven objects, not eight. */
+function loadLivePricer(tx, marketId) {
   return tx.moveCall({
-    target,
-    arguments: [tx.pure.id(oracleId), tx.pure.u64(expiry), tx.pure.u64(strike)],
+    target: `${cfg.packageId}::expiry_market::load_live_pricer`,
+    arguments: [
+      tx.object(marketId),
+      tx.object(cfg.protocolConfig),
+      tx.object(TESTNET.oracleRegistry),
+      tx.object(TESTNET.pythFeed),
+      tx.object(TESTNET.bsValuesFeed),
+      tx.object(TESTNET.bsSviFeed),
+      tx.object(TESTNET.clock),
+    ],
   });
 }
 
@@ -144,7 +182,7 @@ async function signAndExecute(tx, gasBudget = 120_000_000) {
   const res = await client.signAndExecuteTransaction({
     signer,
     transaction: tx,
-    options: { showEffects: true, showObjectChanges: true },
+    options: { showEffects: true, showObjectChanges: true, showEvents: true },
   });
   await client.waitForTransaction({ digest: res.digest });
   if (res.effects?.status?.status !== 'success') {
@@ -192,19 +230,53 @@ async function signAndExecuteSponsored(tx, gasBudget) {
   await client.waitForTransaction({ digest });
   return client.getTransactionBlock({
     digest,
-    options: { showEffects: true, showObjectChanges: true },
+    options: { showEffects: true, showObjectChanges: true, showEvents: true },
   });
 }
 
-async function createManager() {
+/**
+ * The u256 order id 7-29 assigns to a minted position.
+ *
+ * 4-16 let a redeem rebuild its own market_key from strike and side, so nothing had to be
+ * remembered between opening and cashing out. 7-29 addresses a position by this id instead, so
+ * if it is not captured here the position is only reachable by scanning the account, and the
+ * ticket becomes un-redeemable through this desk. It is not identifying, so it is safe to keep
+ * in the on-disk record alongside the rest.
+ */
+function orderIdFromMint(res) {
+  for (const ev of res?.events ?? []) {
+    if (!String(ev.type ?? '').includes('OrderMinted')) continue;
+    const j = ev.parsedJson ?? {};
+    const id = j.order_id ?? j.orderId ?? j.id ?? j.position_id;
+    if (id != null) return String(id);
+  }
+  return null;
+}
+
+/**
+ * A fresh account per bet. This is the whole unlinkability primitive: the position lives in an
+ * account that has never held anything of the user's, so nothing on chain joins it to their
+ * wallet. 4-16 spelled this `predict::create_manager`; 7-29 replaced the manager with an
+ * AccountWrapper from the account registry, created here and shared so it survives the tx.
+ *
+ * The account is owned by this desk's session address, exactly as the manager was, so private
+ * bets remain unlinkable to the BETTOR but are linkable to each other. `new_self_owned` would
+ * bind each account to an object instead and break even that link; it is the upgrade, not a
+ * blocker, and it needs a per-bet on-chain object to hang the account off.
+ */
+async function createAccount() {
   const tx = new Transaction();
-  tx.moveCall({ target: `${cfg.packageId}::predict::create_manager` });
-  const res = await signAndExecute(tx, 60_000_000);
-  const manager = res.objectChanges?.find((change) => {
-    return change.type === 'created' && typeof change.objectType === 'string' && change.objectType.includes('PredictManager');
+  const wrapper = tx.moveCall({
+    target: `${cfg.accountPackage}::account_registry::new`,
+    arguments: [tx.object(cfg.accountRegistry)],
   });
-  if (!manager?.objectId) throw new Error('PredictManager object was not created');
-  return { digest: res.digest, managerId: manager.objectId };
+  tx.moveCall({ target: `${cfg.accountPackage}::account::share`, arguments: [wrapper] });
+  const res = await signAndExecute(tx, 60_000_000);
+  const created = res.objectChanges?.find(
+    (c) => c.type === 'created' && typeof c.objectType === 'string' && c.objectType.includes('AccountWrapper'),
+  );
+  if (!created?.objectId) throw new Error('AccountWrapper was not created');
+  return { digest: res.digest, managerId: created.objectId };
 }
 
 async function getDusdcCoins(owner) {
@@ -231,58 +303,100 @@ async function buildFundAndMintTx({ managerId, stakeMicro, oracleId, expiry, str
   if (rest.length) tx.mergeCoins(primary, rest);
   const [stakeCoin] = tx.splitCoins(primary, [tx.pure.u64(stakeMicro)]);
 
+  const authDep = tx.moveCall({ target: `${cfg.accountPackage}::account::generate_auth`, arguments: [] });
   tx.moveCall({
-    target: `${cfg.packageId}::predict_manager::deposit`,
-    typeArguments: [cfg.dusdcType],
-    arguments: [tx.object(managerId), stakeCoin],
-  });
-
-  const key = marketKey(tx, oracleId, expiry, strike, isUp);
-  tx.moveCall({
-    target: `${cfg.packageId}::predict::mint`,
+    target: `${cfg.accountPackage}::account::deposit_funds`,
     typeArguments: [cfg.dusdcType],
     arguments: [
-      tx.object(cfg.predictId),
-      tx.object(managerId),
-      tx.object(oracleId),
-      key,
-      tx.pure.u64(quantity),
-      tx.object(TESTNET.clock),
+      tx.object(managerId), authDep, stakeCoin,
+      tx.object(TESTNET.accumulatorRoot), tx.object(TESTNET.clock),
+    ],
+  });
+
+  // 7-29 mints a band between two ticks rather than a market_key, and prices it off a Pricer
+  // built in this same PTB.
+  const [lower, higher] = bandTicks(strike, isUp);
+  const premiumMicro = (stakeMicro * 9n) / 10n;
+  const pricer = loadLivePricer(tx, oracleId);
+  const authMint = tx.moveCall({ target: `${cfg.accountPackage}::account::generate_auth`, arguments: [] });
+  tx.moveCall({
+    target: `${cfg.packageId}::expiry_market::mint_exact_amount`,
+    arguments: [
+      tx.object(oracleId), tx.object(managerId), authMint, tx.object(cfg.protocolConfig), pricer,
+      // lower_tick, higher_tick, max_premium, min_quantity, leverage, max_cost
+      tx.pure.u64(lower),
+      tx.pure.u64(higher),
+      // Premium, NOT the whole stake. 7-29 charges the trading and builder fees on top of the
+      // premium and then checks the all-in total against max_cost, so premium == max_cost
+      // leaves nothing for fees and aborts inside mint_prepared every time. Verified against
+      // the live venue: premium 2.00 with cost 2.00 aborts, premium 1.80 with cost 2.00 fills
+      // at 1.85 all-in. A tenth is comfortable headroom at the observed fee of roughly 3%.
+      tx.pure.u64(premiumMicro),
+      tx.pure.u64(BigInt(quantity)),
+      // 1x, always. The desk has no margin and never had: the old rail minted plain positions
+      // too. The ticket UI now says so out loud instead of quoting a leveraged return.
+      tx.pure.u64(ONE_X_1E9),
+      // The stake is a HARD ceiling on what can leave the account, so an unfavourable fill
+      // reverts the whole PTB rather than spending more than the user agreed to.
+      tx.pure.u64(stakeMicro),
+      tx.object(TESTNET.accumulatorRoot), tx.object(TESTNET.clock),
     ],
   });
 
   return tx;
 }
 
-function redeemTx({ managerId, oracleId, expiry, strike, isUp, quantity }) {
+/**
+ * Redeem a settled position back into its own account.
+ *
+ * 7-29 identifies a position by the u256 order id the mint emitted, not by reconstructing a
+ * market_key from strike and side, so `orderId` has to have been captured at open time. It is
+ * permissionless: no Auth, and the proceeds are credited to the account that holds the
+ * position, which is this bet's own throwaway account.
+ */
+function redeemTx({ managerId, oracleId, orderId, quantity }) {
+  if (orderId == null) throw new Error('this ticket predates order-id capture and cannot be redeemed automatically');
   const tx = new Transaction();
-  const key = marketKey(tx, oracleId, expiry, strike, isUp);
   tx.moveCall({
-    target: `${cfg.packageId}::predict::redeem`,
-    typeArguments: [cfg.dusdcType],
+    target: `${cfg.packageId}::expiry_market::redeem_settled_permissionless`,
     arguments: [
-      tx.object(cfg.predictId),
-      tx.object(managerId),
       tx.object(oracleId),
-      key,
-      tx.pure.u64(quantity),
+      tx.object(cfg.accountRegistry),
+      tx.object(managerId),
+      tx.object(cfg.protocolConfig),
+      tx.pure.u256(BigInt(orderId)),
+      tx.pure.u64(BigInt(quantity)),
+      tx.object(TESTNET.accumulatorRoot),
       tx.object(TESTNET.clock),
     ],
   });
   return tx;
 }
 
+/**
+ * What this bet's account is holding.
+ *
+ * 4-16 kept balances in a bag under the manager and this walked its dynamic fields. 7-29's
+ * AccountWrapper carries the figure directly, so read it off the object and fall back to the
+ * dynamic-field walk only if the shape is not what we expect, rather than reporting zero and
+ * making a real balance look spent.
+ */
 async function managerDusdcBalance(managerId) {
   const obj = await client.getObject({ id: managerId, options: { showContent: true } });
   const content = obj.data?.content;
   if (content?.dataType !== 'moveObject') return 0n;
-  const bagId = content.fields?.balance_manager?.fields?.balances?.fields?.id?.id;
+  const f = content.fields ?? {};
+  const direct =
+    f.account?.fields?.balance ??
+    f.balance ??
+    f.account?.fields?.balances?.fields?.value;
+  if (direct != null && typeof direct !== 'object') return BigInt(direct);
+  const bagId =
+    f.account?.fields?.balances?.fields?.id?.id ??
+    f.balances?.fields?.id?.id;
   if (!bagId) return 0n;
   const fields = await client.getDynamicFields({ parentId: bagId });
-  const entry = fields.data.find((field) => {
-    const type = typeof field.name?.type === 'string' ? field.name.type : '';
-    return type.includes('dusdc::DUSDC');
-  });
+  const entry = fields.data.find((x) => String(x.name?.type ?? '').includes('dusdc::DUSDC'));
   if (!entry) return 0n;
   const fieldObj = await client.getObject({ id: entry.objectId, options: { showContent: true } });
   const value = fieldObj.data?.content?.fields?.value;
@@ -291,11 +405,19 @@ async function managerDusdcBalance(managerId) {
 
 function withdrawManyTx(items, owner) {
   const tx = new Transaction();
-  const coins = items.map(({ managerId, amount }) => tx.moveCall({
-    target: `${cfg.packageId}::predict_manager::withdraw`,
-    typeArguments: [cfg.dusdcType],
-    arguments: [tx.object(managerId), tx.pure.u64(amount)],
-  }));
+  // Each account authorises its own withdrawal. generate_auth reads the tx sender, and this
+  // desk owns every throwaway account it created, so one PTB can drain several at once.
+  const coins = items.map(({ managerId, amount }) => {
+    const auth = tx.moveCall({ target: `${cfg.accountPackage}::account::generate_auth`, arguments: [] });
+    return tx.moveCall({
+      target: `${cfg.accountPackage}::account::withdraw_funds`,
+      typeArguments: [cfg.dusdcType],
+      arguments: [
+        tx.object(managerId), auth, tx.pure.u64(amount),
+        tx.object(TESTNET.accumulatorRoot), tx.object(TESTNET.clock),
+      ],
+    });
+  });
   tx.transferObjects(coins, tx.pure.address(owner));
   return tx;
 }
@@ -412,7 +534,7 @@ async function openPrivateBet(body) {
   // before createManager, before the mint, before a cent moves
   await assertEnclaveReady();
 
-  const { digest: entryDigest, managerId } = await createManager();
+  const { digest: entryDigest, managerId } = await createAccount();
   const tx = await buildFundAndMintTx({
     managerId,
     stakeMicro,
@@ -423,6 +545,13 @@ async function openPrivateBet(body) {
     quantity,
   });
   const mint = await signAndExecute(tx, 100_000_000);
+  const orderId = orderIdFromMint(mint);
+  if (!orderId) {
+    // Loud, not silent. The bet is open and the money is spent; what is missing is the handle
+    // needed to cash it out automatically later, and finding that out at redeem time would be
+    // far worse than finding it out now.
+    console.error('[private-bet] no OrderMinted order id in', mint.digest, '- this ticket will need manual redemption');
+  }
 
   // The enclave issues the only claim that counts. It runs its own guard, so a tampered host
   // cannot raise the cap or backdate an expiry here; it can only be refused.
@@ -452,6 +581,7 @@ async function openPrivateBet(body) {
     status: 'open',
     entryDigest,
     openedAt: issuedAtMs,
+    orderId,
     mode: 'attested-session-manager',
   });
 
@@ -502,10 +632,11 @@ async function cashoutPrivateBet(body) {
       // every parameter comes from the signed claim, so the redeem cannot be steered by the
       // caller or by anything an operator edited on disk
       oracleId: claim.oracleId,
-      expiry: claim.expiry,
-      strike: claim.strike,
-      isUp: claim.isUp,
       quantity: claim.quantity,
+      // NOT from the claim: the enclave ticket predates 7-29 and has no field for it, and the
+      // order id is not a permission, it is an address. The claim still decides WHETHER this
+      // redeem may happen; this only says which position it lands on.
+      orderId: tickets[digest]?.orderId ?? null,
     }),
     140_000_000,
   );
@@ -518,10 +649,14 @@ async function cashoutPrivateBet(body) {
   let creditDigest = null;
   if (balance > 0n) {
     const tx = new Transaction();
+    const auth = tx.moveCall({ target: `${cfg.accountPackage}::account::generate_auth`, arguments: [] });
     const coin = tx.moveCall({
-      target: `${cfg.packageId}::predict_manager::withdraw`,
+      target: `${cfg.accountPackage}::account::withdraw_funds`,
       typeArguments: [cfg.dusdcType],
-      arguments: [tx.object(managerId), tx.pure.u64(balance)],
+      arguments: [
+        tx.object(managerId), auth, tx.pure.u64(balance),
+        tx.object(TESTNET.accumulatorRoot), tx.object(TESTNET.clock),
+      ],
     });
     tx.moveCall({
       target: `${cfg.tradingVaultPkg}::trading_vault::credit_available_for`,
